@@ -103,5 +103,82 @@ class StagedTrainingTests(unittest.TestCase):
         )
 
 
+class CurriculumTheoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.budget = pb.compute_budget(pb.TIERS["middle"])
+        self.joint = pb.flops_joint(self.budget, 50e9)
+
+    def test_dense_encoder_cheaper_than_moe_encoder(self) -> None:
+        dense = pb.encoder_active_no_emb(self.budget, dense=True)
+        moe = pb.encoder_active_no_emb(self.budget, dense=False)
+        self.assertLess(dense, moe)
+        # 16 × MiniCPM SwiGLU vs 16 × 7 experts.
+        self.assertAlmostEqual(dense, 16 * (self.budget.attn.self_attn + pb.DENSE_FFN))
+
+    def test_delayed_curriculum_dominates_freeze_moe(self) -> None:
+        c1 = pb.flops_curriculum(self.budget, 50e9, delayed=False)
+        c2 = pb.flops_curriculum(self.budget, 50e9, delayed=True)
+        self.assertLess(c2, c1)
+        self.assertLessEqual(c2, 0.80 * self.joint)
+        self.assertLessEqual(c1, 0.85 * self.joint)
+
+    def test_freeze_enc_dense_cheaper_than_freeze_enc_moe(self) -> None:
+        self.assertLess(
+            pb.flops_freeze_encoder(self.budget, 50e9, encoder_dense=True),
+            pb.flops_freeze_encoder(self.budget, 50e9, encoder_dense=False),
+        )
+
+    def test_detach_and_tied_emb_boundaries(self) -> None:
+        b0, b1, b2 = pb.FREEZE_BOUNDARIES
+        self.assertTrue(b0.detach_at_cache and b1.detach_at_cache)
+        self.assertFalse(b2.detach_at_cache)
+        self.assertEqual(b0.tied_emb, "freeze_tied")
+        self.assertEqual(b1.tied_emb, "freeze_tied")
+        self.assertIn("tied_emb", b0.frozen)
+        self.assertIn("tied_emb", b1.frozen)
+        self.assertIn("cache_proj", b0.trainable)
+        self.assertIn("encoder", b0.frozen)
+        self.assertNotIn("train_tied", (b0.tied_emb, b1.tied_emb))
+
+    def test_b1_optimizer_tracks_decoder_share(self) -> None:
+        tr, _fr = pb.phase_param_counts(self.budget, "B1", delayed=False)
+        b2, _ = pb.phase_param_counts(self.budget, "B2", delayed=False)
+        ratio = pb.optimizer_state_bytes(tr) / pb.optimizer_state_bytes(b2)
+        self.assertGreater(ratio, 0.55)
+        self.assertLess(ratio, 0.65)
+
+    def test_c2_b0_stores_fewer_frozen_params(self) -> None:
+        _tr1, fr_c1 = pb.phase_param_counts(self.budget, "B0", delayed=False)
+        _tr2, fr_c2 = pb.phase_param_counts(self.budget, "B0", delayed=True)
+        self.assertLess(fr_c2, fr_c1)
+
+    def test_valid_splits_stay_under_85_percent(self) -> None:
+        for delayed in (False, True):
+            for label, _flops, ratio, valid in pb.curriculum_split_table(
+                self.budget, delayed=delayed
+            ):
+                if valid:
+                    self.assertLessEqual(ratio, 0.85, msg=label)
+                else:
+                    self.assertTrue(label.startswith("no B2"))
+
+    def test_default_b2_at_least_10b(self) -> None:
+        self.assertGreaterEqual(pb.DEFAULT_CURRICULUM_SPLIT[2], 10e9)
+        self.assertAlmostEqual(sum(pb.DEFAULT_CURRICULUM_SPLIT), 50e9)
+
+    def test_cache_proj_in_new_modules(self) -> None:
+        n_new = pb.n_new_modules(self.budget)
+        cross = self.budget.dec.layers * self.budget.attn.cross_attn
+        self.assertEqual(n_new, cross + pb.CACHE_PROJ)
+        self.assertGreater(pb.CACHE_PROJ, 0)
+
+    def test_activation_keep_is_decoder_layers(self) -> None:
+        self.assertEqual(pb.activation_keep_frac(), 24 / 40)
+
+    def test_curriculum_claims_pass(self) -> None:
+        failed = [c for c in pb.claims_curriculum(self.budget) if not c.ok]
+        self.assertEqual(failed, [], msg=[c.name for c in failed])
+
+
 if __name__ == "__main__":
     unittest.main()

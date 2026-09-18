@@ -255,14 +255,17 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
 
 YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decoder**，loss 在 Decoder 顶。Encoder 与 Decoder 的表示在 MiniCPM 40 层里已经联合训过；定理 A（[`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)）说 gate=0 的 16/24 切分 **就是** 那条残差流。把两栈当成两个独立 LM 分别训再拼接，等于扔掉这份对齐。
 
-中间档 50B token、emb 计一次（`python3 scripts/param_budget.py --staged`）：
+完整冻结边界、梯度截断、tied embedding、延迟 Encoder MoE、优化器/激活显存与 split 敏感性见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。数字：`python3 scripts/param_budget.py --staged --curriculum`。
+
+中间档 50B token、emb 计一次：
 
 | 做法 | H100-h | vs 联合 50B |
-| --- | ---: | --- |
+| --- | ---: | ---: |
 | 两栈一起训（基线） | 1,354 | 100% |
-| **Encoder 冻结，只训 Decoder + cross-attn** | **1,035** | **76%（约省 24%）** |
-| 只训新模块（cross-attn；骨干冻结） | 779 | 58% |
-| **解冻课程 8B 新模块 → 27B 冻 Encoder → 15B 短联合** | **1,090** | **80%（约省 20%）** |
+| Encoder 冻结，只训 Decoder + cross-attn（全程；不共同适应） | 1,035 | 76% |
+| 只训新模块（cross-attn + \(W_K/W_V\)；骨干冻结） | 779 | 58% |
+| C1 解冻课程 8+27+15B（两栈都先 MoE，B0/B1 冻 Encoder） | 1,090 | 81% |
+| **C2 延迟 Encoder MoE 8+27+15B（推荐）** | **1,044** | **77%** |
 | Encoder 当独立 LM 50B + 冻 Encoder 训 Decoder 50B + 20B 拼接恢复 | 2,054 | **152%（更贵）** |
 | Encoder 先当 LM 25B 再联合 25B | 916 | 68%（**质量赌博**：联合 token 减半是否够恢复） |
 
@@ -270,54 +273,70 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 1. **「先分开训两个模型再焊在一起」不省算力。** 同样 50B/栈再加拼接恢复，是联合训练的 1.5×。把 Encoder 隐状态缓存下来给 Decoder 用也不现实（50B token × \(d\) × 2 bytes ≈ 230 TB）。
 2. **「同一套切开的权重上，按可训练子集分层解冻」才省。** 省的是 Encoder 的反向（以及新模块阶段 Decoder 骨干的权重梯度），不是少跑 Encoder 前向——YOCO 的 CE 在 Decoder 上，Encoder 前向省不掉。
-3. 冻结 Encoder 大约省 **24%**，但 Encoder 不再为 Decoder 的 query 改写记忆（write/read 不共同适应）。PDSA 的「无写入时信号」也提示：只训 reader、永远冻 writer，检索上限会卡住。所以冻 Encoder 只能当 **Phase B 的中段**，结尾必须有一段短联合。
+3. 冻结 Encoder 大约省 **24% FLOPs**，但 Encoder 不再为 Decoder 的 query 改写记忆（write/read 不共同适应）。PDSA 的「无写入时信号」也提示：只训 reader、永远冻 writer，检索上限会卡住。所以冻 Encoder 只能当 **Phase B 的中段**，结尾必须有一段短联合（B2 ≥ 10B，默认 15B）。
 4. 只训 cross-attn / indexer（Phase A 热身、Phase C 第 1 步）最省（约 42%+），这是已经写进 Phase C 的做法，不是新发明。
 5. 贪心逐层加层（2 层 → 冻 → 再加 2 层）在 LLM 上没有稳定省算力的证据，还要最终联合微调，**不做**。
 6. DeepSeek 式「分域专家各自 SFT+RL 再蒸馏」只适用于 **Phase F/G 后训练**，不适用于这套 12B 预训练骨架。
+7. **C2 优于 C1：** Encoder 在 B0/B1 保持 MiniCPM dense（每层 39.81M < 7×14.16M 激活专家），定理 A 对 Encoder 精确成立到 B2；C1 过早 upcycle 再冻住，专家副本直到 B2 才特化，还白付 MoE 前向。C1 仅当 Phase A 已经两栈都 upcycled 时回退。
 
-**推荐（预算紧时，用解冻课程替换「Phase B 50B 全程联合」）：**
+**冻结规则（定理 D/E，默认 C2；实现时写进 trainer，不是口头约定）：**
 
-| 子阶段 | token | 可训练 | gate |
-| --- | ---: | --- | --- |
-| B0 | 5–10B | 新模块（cross-attn、router、压缩器）+ LN；骨干冻结 | 0 → 0.3 |
-| B1 | 20–40B | 解冻 Decoder；**Encoder 冻结** | → 1 |
-| B2 | 10–20B | 两栈都解冻，LR 更小 | 1 |
+| 项 | B0 / B1 | B2 |
+| --- | --- | --- |
+| 全局 cache | `X^{16}.detach()` 再乘 \(W_K,W_V\) | **去掉** detach |
+| \(W_K,W_V\) | 新模块，可训练（上界 \(2d^2=10.62\mathrm{M}\)） | 可训练 |
+| Tied embedding \(E\) | **冻结**（或解绑后只训 LM head / LP-FT） | 解冻 tied \(E\) |
+| Encoder 权重 | 冻结 | 解冻；C2 在本阶段开始时 virtual-group 上采样 |
+| Decoder | B0 冻骨干、只训 cross-attn；B1 解冻 self-attn+MoE | 解冻 |
 
-总 token 仍约 50B，算力约 **80% 联合**。质量不稳就把 B2 加长，而不是回去做两个独立 LM。Phase C 的「冻主干、只训 indexer」仍然叠在这套课程后面。
+禁止：Encoder 冻结时仍训练 tied \(E\)（输入分布漂，定理 E）。
+
+**推荐（预算紧时，用 C2 解冻课程替换「Phase B 50B 全程联合」）：**
+
+| 子阶段 | token | 可训练 | Encoder FFN（C2） | gate |
+| --- | ---: | --- | --- | --- |
+| B0 | 8B（5–10B） | 新模块（cross-attn、\(W_K/W_V\)、gate、新 LN）；骨干 + tied \(E\) 冻结 | MiniCPM dense | 0 → 0.3 |
+| B1 | 27B（20–40B） | 解冻 Decoder；**Encoder + tied \(E\) 仍冻**；cache 仍 detach | MiniCPM dense | → 1 |
+| B2 | 15B（10–20B） | 两栈都解冻，LR 更小；**先离线 upcycle Encoder，再联合** | virtual-group MoE | 1 |
+
+总 token 仍约 50B，算力约 **77% 联合**（C1 为 81%）。Adam 状态在 B1 只有联合的 **60%**；detach 丢掉 Encoder 激活约 **40%**。质量不稳就把 B2 加长，而不是回去做两个独立 LM。Phase C 的「冻主干、只训 indexer」仍然叠在这套课程**后面**（层内 KL，不是穿过 cache 的 CE）。
 
 ### Phase A — 架构手术与初始化（离线）
 
 0. **切分为 Encoder / Decoder 两栈（YOCO 化）**：把 MiniCPM-2B 的 40 个 dense 层映射到 **Encoder 16 层 + Decoder 24 层**。
    推荐方案：Encoder 取底座**前 16 层**权重、Decoder 取**后 24 层**权重（保持层深语义）；共享同一份 tie embedding / LM head。
    Decoder 每层**新增 cross-attn 子层**（初始 gate≈0 旁路，见 §2.4），使初始前向≈原 decoder-only 行为，便于恢复。
-1. **MoE 上采样（dense FFN → 细粒度 MoE）**，对 Encoder、Decoder **各自**执行，采用 Megatron-LM `upcycling_utils.py`：
+1. **MoE 上采样（dense FFN → 细粒度 MoE）**，采用 Megatron-LM `upcycling_utils.py`。
+   **C2（默认）：本阶段只上采样 Decoder**；Encoder 保持 MiniCPM 第 1–16 层 dense，推迟到 Phase B2 边界再 virtual-group（见 §4.0 与 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) §6）。
+   **C1（回退）：** 对 Encoder、Decoder **各自**执行（若已经两栈都 upcycled，B0/B1 冻 Encoder 即可）：
    - 把 dense FFN 的中间维切成 G 段、每段复制成多个专家（**virtual-group 初始化**：保证转换瞬间 top-k 恰好选到每个分片的一份副本，等价于原 dense 函数）。
    - **权重缩放**：SwiGLU 专家投影按 `(E·G²/T)^(1/3)` 量级缩放（论文验证约降 1.5% loss）。
    - **路由**：`softmax-then-topK`（优于 topK-then-softmax）；亲和度打分用 **Sqrt(Softplus(·))**（V4 做法）。
    - 每栈**首层保留 dense**（DeepSeekMoE 惯例：首层负载收敛慢）。规格表按全 MoE 记账为 12.05B；首层 dense 后总参约 11.62B，把 Encoder routed **17→19**（top-k 不变）即可补回 12.04B，激活仍为 ≈2.23B / ≈4.40B。
    - **μP**：残差乘子继续用 `scale_depth/√40`，不要按 16/24 重算（见理论验证 §9）。
-   - **Hash-MoE bootstrap**：每栈最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。
+   - **Hash-MoE bootstrap**：Decoder 最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。C2 的 Encoder 此时还不是 MoE，Hash-MoE 放到 B2 上采样之后；C1 若 Encoder 已冻，Encoder 上的哈希路由是多余的。
 2. **注意力改造**：继承 `q/k/v/o`（或 SVD 到 MLA 低秩）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。
 3. **保留 MiniCPM μP 缩放常量**（emb 乘子、`scale_depth`、logits 缩放）。
 4. **可选 mHC**：先用普通残差跑通 Phase B/C，稳定后再切 mHC（把残差映射约束到 Birkhoff 多胞形/双随机矩阵，谱范数 ≤1）。
 
-> Encoder/Decoder 交界：Encoder 顶层输出经一个（可学习的）投影得到全局 `K̂,V̂` 供所有 cross-decoder 层复用（YOCO 单次缓存）。
+> Encoder/Decoder 交界：Encoder 顶层输出经一个（可学习的）投影 \(W_K,W_V\) 得到全局 `K̂,V̂` 供所有 cross-decoder 层复用（YOCO 单次缓存）。\(W_K,W_V\) 是新模块。B0/B1 必须 `X^{16}.detach()` **之后**再乘投影（定理 D）；B2 去掉 detach。
 
 ### Phase B — 上采样恢复性继续预训练
 
 - **目的**：让 MoE 化 + 注意力改造 + encoder-decoder 化后的模型恢复语言建模能力（含 cross-attn 逐步打开）。
 - 序列长度 4K，注意力仍为 dense/滑窗（未稀疏），数据用通用预训练混合（见 §5）。
-- **逐步打开 cross-attn**：Decoder cross-attn 的 gate 从 0 线性升到 1（前 ~5–10B token），让 decoder 平滑学会利用 encoder 全局 cache。
+- **逐步打开 cross-attn**：Decoder cross-attn 的 gate 从 0 线性升到 1。解冻课程下：B0（~8B）只升到 0.3，B1 升到 1，避免在冻结骨干上把 \(g\) 拉满。
 - **蒸馏加速**：以 **MiniCPM-2B（dense，teacher）** 做 logit KD（KL(teacher‖student)，温度 1–2，权重 0.5→0 线性衰减），大幅缩短恢复期。
-- **MoE 负载均衡**：aux-loss-free 偏置法（`e_score_correction_bias`，按各专家负载更新偏置，更新率如 1e-3）+ **轻量 sequence-wise balance loss**（权重 ~1e-3）防单序列极端不均衡。
-- 学习率：**WSD**（Warmup-Stable-Decay）——短 warmup（0.5–1B token），进入 stable 段（LR ≈ MiniCPM 预训练峰值的 30–50%，因为是继续训练）。此阶段保持 stable 不衰减。
-- **预算紧时不要改成两个独立 LM**：用 §4.0 的解冻课程（B0 新模块 → B1 冻 Encoder → B2 短联合），同样 ~50B token，算力约 80%。
+- **MoE 负载均衡**：aux-loss-free 偏置法（`e_score_correction_bias`，按各专家负载更新偏置，更新率如 1e-3）+ **轻量 sequence-wise balance loss**（权重 ~1e-3）防单序列极端不均衡。C2 的 Encoder 专家从 B2 才出现，负载监控从 B2 起算 Encoder。
+- 学习率：**WSD**（Warmup-Stable-Decay）——短 warmup（0.5–1B token），进入 stable 段（LR ≈ MiniCPM 预训练峰值的 30–50%，因为是继续训练）。此阶段保持 stable 不衰减。B2 解冻 Encoder 时 LR 再降一档。
+- **Tied embedding**：B0/B1 冻结（或解绑后只训 LM head）；禁止 Encoder 冻着还训 tied \(E\)（定理 E）。
+- **预算紧时不要改成两个独立 LM**：用 §4.0 的 **C2** 解冻课程（B0 新模块 → B1 冻 Encoder → B2 上采样 Encoder 并短联合），同样 ~50B token，算力约 **77%**（C1 回退为 81%）。
 
 ### Phase C — 注意力稀疏化对齐（关键、易翻车）
 
 遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩：
 
-1. **Indexer 稠密对齐**：冻结主干，仅训练 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（对 indexer 输出与真实注意力分布做 KL/MSE 对齐）。此步不改变主输出，只教 indexer "该选谁"。
+1. **Indexer 稠密对齐**：冻结主干，仅训练 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（对 indexer 输出与真实注意力分布做 KL/MSE 对齐）。此步不改变主输出，只教 indexer "该选谁"。监督是**层内**的，叠在 B2 **之后**；不是穿过 YOCO cache 的 CE，也不要用这步永远冻住 Encoder。
 2. **打开 CSA top-k**：把 CSA 层从"全可见"切到"top-`index_topk`"，小步继续训练让主干适应稀疏。
 3. **打开 HCA 压缩**：启用 `m'=128` 强压缩 + 稠密压缩注意力。
 4. **打开 8K 滑窗**：确认滑窗分支与压缩分支 concat/mask 正确，端到端联训。
@@ -398,6 +417,7 @@ BBH（推理），IFEval（指令遵循）。
 7. **是否引入 KDA 及 KDA:CSA:HCA 比例**（如纯 CSA/HCA vs 3:1 KDA混合 vs 6:1）——重点看 RULER/多跳中段召回是否**因加 KDA 而下降**（预期线性层会略降精确召回，需 full/CSA 锚点补偿）与长上下文吞吐/KV cache 收益；
 8. 上采样 vs 从底座 dense 直接继续训练（验证 upcycling 收益）；
 9. Muon vs AdamW；mHC vs 普通残差；cross-attn gate 渐开 vs 直接开；full 锚点层 NoPE vs RoPE。
+10. **解冻课程**：C2 vs C1 vs 全程联合 vs **非法** B2=0（课程篇 §9；看恢复 PPL 与 RULER，不是只看 FLOPs）。
 
 ---
 
@@ -569,7 +589,7 @@ BBH（推理），IFEval（指令遵循）。
 
 1. **upcycling**（复用 MiniCPM 权重，绝不 from-scratch）；2. **蒸馏**（teacher=MiniCPM，减 tokens）；
 3. **高稀疏 MoE**（减激活参数=减 FLOPs）；4. **4K 上下文占训练大头**，长上下文只短暂一段；
-5. **解冻课程**（§4.0：冻 Encoder / 只训新模块，约省 20–40% Phase B 算力，结尾必须短联合）；
+5. **解冻课程**（§4.0 / [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)：默认 **C2** 延迟 Encoder MoE，约省 23% Phase B FLOPs、B1 Adam 状态 60%、Encoder 激活 ~40%；结尾必须短联合 B2≥10B）；
 6. **FP8**；7. **Muon**（减步数）；8. **新模块全训 + 其余 LoRA**（减优化器显存，能上更小/更少卡）；
 9. **关键短跑租 spot GPU**（不必自购）；10. seq packing + 激活重计算（塞进更少卡）。
 

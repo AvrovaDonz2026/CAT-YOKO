@@ -9,12 +9,13 @@ Default spec (**middle compute tier**): ≈12B total, Encoder ≈2.3B active / i
 - [`docs/TRAINING_PLAN.md`](docs/TRAINING_PLAN.md) — architecture, staged upcycling recipe, data, optimizer, eval
 - [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — middle-tier parameter / FLOPs / KV / μP ledger
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — causality, residual-cut equivalence, M1/M2/M3 cache interface
+- [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum: detach, tied embedding, delayed encoder MoE
 
 ## Recalculate / verify
 
 ```bash
-python3 scripts/param_budget.py --verify     # middle-tier budget ledger
-python3 scripts/param_budget.py --staged     # freeze-curriculum vs independent-merge FLOPs
+python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum ledger
+python3 scripts/param_budget.py --staged --curriculum
 python3 scripts/arch_verify.py --verify      # architecture invariants
 python3 -m unittest tests.test_param_budget tests.test_arch_verify
 ```

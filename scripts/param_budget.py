@@ -13,6 +13,10 @@ The default attention term is the plan's *placeholder* (1.25x MHA) until the
 real CSA/HCA/MLA projection dims are frozen. A MiniCPM-native CSA/HCA MQA-64
 estimate is available via ``--attn csa_mqa64`` as a sensitivity check; it
 does not change the published middle-tier spec.
+
+Freeze-curriculum (Phase B): ``--staged`` for FLOPs vs joint; ``--curriculum``
+for freeze boundaries, Adam/activation memory, and token-split sensitivity.
+Default recipe is C2 (delayed encoder MoE). Do not franken-merge two LMs.
 """
 
 from __future__ import annotations
@@ -41,6 +45,16 @@ DENSE_FFN = 3 * D * DENSE_INT
 MHA = 4 * D * D
 PLACEHOLDER_SELF_ATTN = int(1.25 * MHA)
 PLACEHOLDER_CROSS_ATTN = MHA
+# YOCO cache projections (W_K, W_V) at encoder top. Upper bound d_kv = d;
+# MLA-576 is smaller. Not in the published 12.05B stack total (~0.01B).
+CACHE_PROJ = 2 * D * D
+# Mixed-precision AdamW footprint (bytes / parameter). No fp32 master copy.
+ADAM_STATE_BYTES = 8  # m, v in fp32
+GRAD_BYTES = 2  # bf16 gradients
+WEIGHT_BYTES = 2  # bf16 weights
+TRAINABLE_FOOTPRINT = WEIGHT_BYTES + GRAD_BYTES + ADAM_STATE_BYTES  # 12
+FROZEN_FOOTPRINT = WEIGHT_BYTES  # 2
+DEFAULT_CURRICULUM_SPLIT = (8e9, 27e9, 15e9)  # B0 + B1 + B2 = 50B
 
 # Hardware for GPU-hour estimates (plan §15.1): 40% MFU.
 H100_BF16_EFF = 4.0e14  # ~989 TFLOPS peak * 0.40
@@ -295,12 +309,40 @@ class StagedRecipe:
 
 
 def _n_parts(budget: ModelBudget) -> tuple[int, int, int, int]:
-    """emb, encoder-no-emb, decoder-no-emb, cross-attn (new module proxy)."""
+    """emb, encoder-no-emb, decoder-no-emb, new-module proxy.
+
+    New modules = 24× cross-attn + cache W_K/W_V. Cache proj is ~0.01B
+    and does not change published 12.05B at two decimals.
+    """
     n_emb = budget.emb
     n_e = budget.enc.active_no_emb
     n_d = budget.dec.active_no_emb
-    n_new = budget.dec.layers * budget.attn.cross_attn
+    n_new = n_new_modules(budget)
     return n_emb, n_e, n_d, n_new
+
+
+def n_new_modules(budget: ModelBudget) -> int:
+    """Cross-attn (all decoder layers) + cache projections W_K, W_V."""
+    return budget.dec.layers * budget.attn.cross_attn + CACHE_PROJ
+
+
+def encoder_active_no_emb(budget: ModelBudget, *, dense: bool = False) -> int:
+    """Encoder activation excluding embedding.
+
+    ``dense=True`` is delayed-encoder-MoE (C2): MiniCPM SwiGLU on all 16
+    layers, same self-attn accounting as the MoE budget. Dense FFN is fully
+    active, so this equals encoder stack total.
+    """
+    if not dense:
+        return budget.enc.active_no_emb
+    return budget.enc.layers * (budget.attn.self_attn + DENSE_FFN)
+
+
+def encoder_stack_total(budget: ModelBudget, *, dense: bool = False) -> int:
+    """Encoder stored params excluding embedding (all experts, not top-k)."""
+    if not dense:
+        return budget.enc.stack_total
+    return encoder_active_no_emb(budget, dense=True)
 
 
 def flops_joint(budget: ModelBudget, tokens: float) -> float:
@@ -314,41 +356,73 @@ def flops_encoder_lm(budget: ModelBudget, tokens: float) -> float:
     return 6.0 * (n_emb + n_e) * tokens
 
 
-def flops_freeze_encoder(budget: ModelBudget, tokens: float) -> float:
+def flops_freeze_encoder(
+    budget: ModelBudget, tokens: float, *, encoder_dense: bool = False
+) -> float:
     """YOCO LM loss, encoder frozen (fwd only), decoder+cross-attn trainable.
 
     Backward stops at the global cache: encoder has no weight or activation grads.
+    ``encoder_dense`` is delayed-encoder-MoE (C2): encoder FFN is MiniCPM dense.
     """
-    n_emb, n_e, n_d, _ = _n_parts(budget)
+    n_emb, _, n_d, _ = _n_parts(budget)
+    n_e = encoder_active_no_emb(budget, dense=encoder_dense)
     return (2.0 * (n_emb + n_e) + 6.0 * n_d) * tokens
 
 
-def flops_new_modules(budget: ModelBudget, tokens: float) -> float:
-    """Freeze inherited MiniCPM stacks; train cross-attn (and later indexer).
+def flops_new_modules(
+    budget: ModelBudget, tokens: float, *, encoder_dense: bool = False
+) -> float:
+    """Freeze inherited MiniCPM stacks; train cross-attn + cache proj.
 
     Forward still runs both stacks. Activation backward runs through the decoder
     (chain rule to the new residual branch) but not the encoder.
     """
-    n_emb, n_e, n_d, n_new = _n_parts(budget)
+    n_emb, _, n_d, n_new = _n_parts(budget)
+    n_e = encoder_active_no_emb(budget, dense=encoder_dense)
     fwd = 2.0 * (n_emb + n_e + n_d)
     bwd_w = 2.0 * n_new
     bwd_act = 2.0 * n_d
     return (fwd + bwd_w + bwd_act) * tokens
 
 
+def _scale_split(
+    tokens: float, split: tuple[float, float, float] = DEFAULT_CURRICULUM_SPLIT
+) -> tuple[float, float, float]:
+    base = split[0] + split[1] + split[2]
+    if abs(base - tokens) <= 1.0:
+        return split
+    return (split[0] / base * tokens, split[1] / base * tokens, split[2] / base * tokens)
+
+
+def flops_curriculum(
+    budget: ModelBudget,
+    tokens: float = 50e9,
+    *,
+    split: tuple[float, float, float] = DEFAULT_CURRICULUM_SPLIT,
+    delayed: bool = False,
+) -> float:
+    """B0 new-modules + B1 freeze-enc + B2 joint. B2 always uses MoE encoder.
+
+    ``delayed=True`` (C2): MiniCPM-dense encoder in B0/B1; virtual-group
+    encoder MoE starts at B2. ``delayed=False`` (C1): encoder already MoE,
+    frozen through B0/B1. If ``split`` does not sum to ``tokens`` it is
+    scaled (keeps the 8:27:15 ratio).
+    """
+    t0, t1, t2 = _scale_split(tokens, split)
+    return (
+        flops_new_modules(budget, t0, encoder_dense=delayed)
+        + flops_freeze_encoder(budget, t1, encoder_dense=delayed)
+        + flops_joint(budget, t2)
+    )
+
+
 def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedRecipe]:
     """Compare independent-merge vs freeze-curriculum vs joint, same 50B envelope."""
     half = tokens / 2.0
-    t1, t2, t3 = 0.16 * tokens, 0.54 * tokens, 0.30 * tokens  # 8/27/15 of 50B
     independent = (
         flops_encoder_lm(budget, tokens)
         + flops_freeze_encoder(budget, tokens)
         + flops_joint(budget, 0.4 * tokens)
-    )
-    curriculum = (
-        flops_new_modules(budget, t1)
-        + flops_freeze_encoder(budget, t2)
-        + flops_joint(budget, t3)
     )
     return [
         StagedRecipe("joint both stacks", flops_joint(budget, tokens), tokens, "baseline"),
@@ -359,6 +433,12 @@ def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedReci
             "saves enc backward; write/read don't co-adapt",
         ),
         StagedRecipe(
+            "freeze-enc dense (delayed, all tokens)",
+            flops_freeze_encoder(budget, tokens, encoder_dense=True),
+            tokens,
+            "C2 encoder FFN = MiniCPM dense; still no co-adapt",
+        ),
+        StagedRecipe(
             "new-modules only (cross-attn)",
             flops_new_modules(budget, tokens),
             tokens,
@@ -366,9 +446,15 @@ def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedReci
         ),
         StagedRecipe(
             "unfreeze curriculum 8+27+15B",
-            curriculum,
+            flops_curriculum(budget, tokens, delayed=False),
             tokens,
-            "new-mod → freeze-enc → short joint; same 50B",
+            "C1: MoE both stacks, freeze enc in B0/B1",
+        ),
+        StagedRecipe(
+            "delayed-enc-MoE curriculum 8+27+15B",
+            flops_curriculum(budget, tokens, delayed=True),
+            tokens,
+            "C2: dense encoder in B0/B1, virtual-group MoE at B2",
         ),
         StagedRecipe(
             "independent enc LM + freeze-enc dec + 20B stitch",
@@ -381,6 +467,213 @@ def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedReci
             flops_encoder_lm(budget, half) + flops_joint(budget, half),
             tokens,
             "saves only if half joint tokens suffice — quality bet",
+        ),
+    ]
+
+
+@dataclass(frozen=True)
+class FreezeBoundary:
+    """What may receive gradients in one curriculum phase.
+
+    Names are module groups, not parameter counts. Counts live in
+    ``phase_param_counts``. Tied-embedding policy is part of the boundary
+    because MiniCPM shares E as input and LM head (Theorem E).
+    """
+
+    phase: str
+    frozen: tuple[str, ...]
+    trainable: tuple[str, ...]
+    detach_at_cache: bool
+    tied_emb: str
+    gate: str
+    note: str = ""
+
+
+# Default freeze-curriculum (ULMFiT-style). Alternative tied policy is
+# ``untie_train_head`` (LP-FT); leaky ``train_tied`` while encoder is frozen
+# is forbidden.
+FREEZE_BOUNDARIES: tuple[FreezeBoundary, ...] = (
+    FreezeBoundary(
+        phase="B0",
+        frozen=("encoder", "decoder_backbone", "tied_emb"),
+        trainable=("cross_attn", "cache_proj", "cross_ln", "gate"),
+        detach_at_cache=True,
+        tied_emb="freeze_tied",
+        gate="0→0.3",
+        note="new modules only; encoder FFN = dense (C2) or frozen MoE copies (C1)",
+    ),
+    FreezeBoundary(
+        phase="B1",
+        frozen=("encoder", "tied_emb"),
+        trainable=("decoder_self_attn", "decoder_moe", "cross_attn", "cache_proj", "gate"),
+        detach_at_cache=True,
+        tied_emb="freeze_tied",
+        gate="→1",
+        note="unfreeze reader; writer + tied head stay MiniCPM-16",
+    ),
+    FreezeBoundary(
+        phase="B2",
+        frozen=(),
+        trainable=("encoder", "decoder", "tied_emb", "cross_attn", "cache_proj"),
+        detach_at_cache=False,
+        tied_emb="train_tied",
+        gate="1",
+        note="short joint; C2 virtual-group upcycles encoder FFN here",
+    ),
+)
+
+
+# (label, t0, t1, t2, valid). Invalid = B2=0, write/read never co-adapt.
+CURRICULUM_SPLITS: tuple[tuple[str, float, float, float, bool], ...] = (
+    ("default 8+27+15", 8e9, 27e9, 15e9, True),
+    ("short B2 5+35+10", 5e9, 35e9, 10e9, True),
+    ("long B2 10+20+20", 10e9, 20e9, 20e9, True),
+    ("short B0 5+25+20", 5e9, 25e9, 20e9, True),
+    ("skip B0 0+35+15", 0e9, 35e9, 15e9, True),
+    ("no B2 8+42+0", 8e9, 42e9, 0e9, False),
+)
+
+
+def phase_param_counts(
+    budget: ModelBudget, phase: str, *, delayed: bool
+) -> tuple[int, int]:
+    """(n_trainable, n_frozen) stored params, not active-FLOP params.
+
+    Decoder ``stack_total`` includes cross-attn. B0 moves that block into
+    the trainable set; cache proj is never inside either stack total.
+    B2 always stores the MoE encoder (C2 upcycles at the B2 boundary).
+    """
+    n_emb = budget.emb
+    n_cross = budget.dec.layers * budget.attn.cross_attn
+    n_dec = budget.dec.stack_total
+    if phase == "B2":
+        n_enc = budget.enc.stack_total
+    else:
+        n_enc = encoder_stack_total(budget, dense=delayed)
+    if phase == "B0":
+        train = n_new_modules(budget)
+        frozen = n_emb + n_enc + (n_dec - n_cross)
+        return train, frozen
+    if phase == "B1":
+        return n_dec + CACHE_PROJ, n_emb + n_enc
+    if phase == "B2":
+        return n_emb + n_enc + n_dec + CACHE_PROJ, 0
+    raise ValueError(f"unknown phase {phase}")
+
+
+def optimizer_state_bytes(n_trainable: int) -> int:
+    return n_trainable * ADAM_STATE_BYTES
+
+
+def param_footprint_bytes(n_trainable: int, n_frozen: int) -> int:
+    return n_trainable * TRAINABLE_FOOTPRINT + n_frozen * FROZEN_FOOTPRINT
+
+
+def activation_keep_frac() -> float:
+    """Layer-count model: detach drops encoder activations (16/40)."""
+    return TIERS["middle"].ld / (TIERS["middle"].le + TIERS["middle"].ld)
+
+
+def curriculum_split_table(
+    budget: ModelBudget, *, delayed: bool
+) -> list[tuple[str, float, float, bool]]:
+    """label, flops, vs-joint, valid."""
+    joint = flops_joint(budget, 50e9)
+    rows = []
+    for label, t0, t1, t2, valid in CURRICULUM_SPLITS:
+        flops = flops_curriculum(
+            budget, t0 + t1 + t2, split=(t0, t1, t2), delayed=delayed
+        )
+        rows.append((label, flops, flops / joint, valid))
+    return rows
+
+
+def claims_curriculum(budget: ModelBudget) -> list[Claim]:
+    """Freeze-curriculum ledger (Theorems D/E, C1 vs C2, memory, splits)."""
+    joint = flops_joint(budget, 50e9)
+    c1 = flops_curriculum(budget, 50e9, delayed=False)
+    c2 = flops_curriculum(budget, 50e9, delayed=True)
+    n_e_moe = encoder_active_no_emb(budget, dense=False)
+    n_e_dense = encoder_active_no_emb(budget, dense=True)
+    b1_tr, b1_fr = phase_param_counts(budget, "B1", delayed=False)
+    b2_tr, _ = phase_param_counts(budget, "B2", delayed=False)
+    opt_ratio = optimizer_state_bytes(b1_tr) / optimizer_state_bytes(b2_tr)
+    dec_ratio = (budget.dec.stack_total + CACHE_PROJ) / (
+        budget.emb + budget.enc.stack_total + budget.dec.stack_total + CACHE_PROJ
+    )
+    b0, b1, b2 = FREEZE_BOUNDARIES
+    valid_c1 = curriculum_split_table(budget, delayed=False)
+    valid_c2 = curriculum_split_table(budget, delayed=True)
+    no_b2 = next(r for r in valid_c1 if r[0].startswith("no B2"))
+    return [
+        Claim(
+            "C2 delayed-enc-MoE cheaper than C1 at same split",
+            c2 < c1,
+            f"C2 {c2 / joint:.0%} < C1 {c1 / joint:.0%}",
+            "C2 < C1",
+        ),
+        Claim(
+            "C2 delayed-enc-MoE curriculum ≤80% of joint 50B",
+            c2 <= 0.80 * joint,
+            f"{c2 / joint:.0%}",
+            "≤80%",
+        ),
+        Claim(
+            "dense encoder FFN active < MoE encoder FFN active",
+            n_e_dense < n_e_moe,
+            f"{b(n_e_dense)} < {b(n_e_moe)}",
+            "MiniCPM 16× dense < 16×7 experts",
+        ),
+        Claim(
+            "B0/B1 detach cache; B2 does not",
+            b0.detach_at_cache and b1.detach_at_cache and not b2.detach_at_cache,
+            f"B0={b0.detach_at_cache} B1={b1.detach_at_cache} B2={b2.detach_at_cache}",
+            "True, True, False",
+        ),
+        Claim(
+            "tied emb frozen with encoder in B0/B1",
+            b0.tied_emb == "freeze_tied" and b1.tied_emb == "freeze_tied",
+            f"{b0.tied_emb}/{b1.tied_emb}",
+            "freeze_tied (or untie_train_head)",
+            note="train_tied while encoder frozen leaks X^0 (Theorem E)",
+        ),
+        Claim(
+            "B1 Adam states ≈ decoder/total (~60%)",
+            _close(opt_ratio, dec_ratio, rel=0.02),
+            f"{opt_ratio:.0%}",
+            f"~{dec_ratio:.0%}",
+        ),
+        Claim(
+            "detach drops encoder activations (keep 24/40)",
+            abs(activation_keep_frac() - 0.6) < 1e-12,
+            f"{activation_keep_frac():.0%}",
+            "60%",
+        ),
+        Claim(
+            "all valid 50B splits stay ≤85% joint (C1 and C2)",
+            all(r[2] <= 0.85 for r in valid_c1 if r[3])
+            and all(r[2] <= 0.85 for r in valid_c2 if r[3]),
+            f"C1 max {max(r[2] for r in valid_c1 if r[3]):.0%}; "
+            f"C2 max {max(r[2] for r in valid_c2 if r[3]):.0%}",
+            "≤85%",
+        ),
+        Claim(
+            "B2=0 is cheaper but invalid (no write/read co-adapt)",
+            (not no_b2[3]) and no_b2[2] < c1 / joint,
+            f"{no_b2[2]:.0%} vs C1 {c1 / joint:.0%}, valid={no_b2[3]}",
+            "invalid",
+        ),
+        Claim(
+            "cache proj is a new module (trainable in B0)",
+            CACHE_PROJ > 0 and "cache_proj" in b0.trainable,
+            m(CACHE_PROJ),
+            "W_K, W_V after encoder.detach()",
+        ),
+        Claim(
+            "default B2 ≥10B (encoder expert entropy / co-adapt)",
+            DEFAULT_CURRICULUM_SPLIT[2] >= 10e9,
+            f"{DEFAULT_CURRICULUM_SPLIT[2] / 1e9:.0f}B",
+            "≥10B",
         ),
     ]
 
@@ -612,7 +905,7 @@ def verify(budget: ModelBudget | None = None) -> list[Claim]:
     budget = budget or compute_budget(TIERS[DEFAULT_TIER])
     if budget.tier.key != "middle" or budget.first_dense or budget.attn.name != "placeholder 1.25×MHA":
         raise ValueError("--verify is defined on the published middle-tier placeholder budget")
-    return claims_middle_placeholder(budget)
+    return claims_middle_placeholder(budget) + claims_curriculum(budget)
 
 
 def print_budget(budget: ModelBudget) -> None:
@@ -673,6 +966,58 @@ def print_staged(budget: ModelBudget, tokens: float = 50e9) -> None:
             f"  {r.name:48s}  {r.h100_h():6.0f} H100-h  "
             f"{ratio:5.0%} vs joint ({delta})  # {r.note}"
         )
+
+
+def print_curriculum(budget: ModelBudget, tokens: float = 50e9) -> None:
+    print("-- Freeze boundary (default C2; C1 differs only in encoder FFN) --")
+    print(
+        f"  {'phase':<4s} {'detach':<7s} {'tied_emb':<16s} {'gate':<8s} "
+        f"{'frozen':<42s} {'trainable'}"
+    )
+    for fb in FREEZE_BOUNDARIES:
+        print(
+            f"  {fb.phase:<4s} {str(fb.detach_at_cache):<7s} {fb.tied_emb:<16s} "
+            f"{fb.gate:<8s} {','.join(fb.frozen) or '—':<42s} {','.join(fb.trainable)}"
+        )
+        print(f"       # {fb.note}")
+
+    print("-- Stored-param memory (bf16 weights + bf16 grads + Adam m,v; no activations) --")
+    print(
+        f"  {'phase':<6s} {'variant':<8s} {'train':>8s} {'frozen':>8s} "
+        f"{'Adam':>10s} {'footprint':>10s} {'vs B2 Adam'}"
+    )
+    b2_tr, _ = phase_param_counts(budget, "B2", delayed=False)
+    b2_adam = optimizer_state_bytes(b2_tr)
+    for delayed, variant in ((False, "C1"), (True, "C2")):
+        for phase in ("B0", "B1", "B2"):
+            tr, fr = phase_param_counts(budget, phase, delayed=delayed)
+            adam = optimizer_state_bytes(tr)
+            foot = param_footprint_bytes(tr, fr)
+            print(
+                f"  {phase:<6s} {variant:<8s} {b(tr):>8s} {b(fr):>8s} "
+                f"{gb(adam):>10s} {gb(foot):>10s} {adam / b2_adam:5.0%}"
+            )
+    print(
+        f"  detach drops encoder layer activations: keep "
+        f"{activation_keep_frac():.0%} (24/40); save ~40% vs joint"
+    )
+    print(
+        f"  cache W_K/W_V upper bound (d_kv=d)     : {m(CACHE_PROJ)}  "
+        f"(trainable in B0, after encoder.detach())"
+    )
+    print(
+        f"  encoder FFN C1 MoE active / C2 dense   : "
+        f"{b(encoder_active_no_emb(budget, dense=False))} / "
+        f"{b(encoder_active_no_emb(budget, dense=True))}"
+    )
+
+    print(f"-- Token-split sensitivity @ {tokens/1e9:.0f}B envelope --")
+    print(f"  {'split':<22s} {'C1 vs joint':>12s} {'C2 vs joint':>12s} {'valid'}")
+    c1_rows = {r[0]: r for r in curriculum_split_table(budget, delayed=False)}
+    for label, _flops, ratio_c2, valid in curriculum_split_table(budget, delayed=True):
+        ratio_c1 = c1_rows[label][2]
+        flag = "yes" if valid else "NO (write/read never co-adapt)"
+        print(f"  {label:<22s} {ratio_c1:11.0%} {ratio_c2:11.0%}   {flag}")
 
 
 def print_kv(lengths: Sequence[int] = (8_192, 32_768, 131_072, 262_144, 1_000_000)) -> None:
@@ -820,14 +1165,14 @@ def print_mup() -> None:
 
 def print_claims(cs: Iterable[Claim]) -> int:
     cs = list(cs)
-    print("-- Claim ledger (published middle tier, placeholder attn, all-MoE) --")
+    print("-- Claim ledger (middle tier + freeze-curriculum, placeholder attn, all-MoE) --")
     failed = 0
     for c in cs:
         mark = "PASS" if c.ok else "FAIL"
         if not c.ok:
             failed += 1
         extra = f"  # {c.note}" if c.note else ""
-        print(f"  [{mark}] {c.name:42s}  observed={c.observed:16s}  expected={c.expected}{extra}")
+        print(f"  [{mark}] {c.name:56s}  observed={c.observed:28s}  expected={c.expected}{extra}")
     print(f"  {len(cs) - failed}/{len(cs)} passed")
     return failed
 
@@ -855,13 +1200,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--verify",
         action="store_true",
-        help="assert published middle-tier claims; exit 1 on failure",
+        help="assert published middle-tier + freeze-curriculum claims; exit 1 on failure",
     )
     p.add_argument("--full", action="store_true", help="print KV / attention-complexity / μP sections")
     p.add_argument(
         "--staged",
         action="store_true",
         help="print freeze-curriculum vs independent-merge FLOPs",
+    )
+    p.add_argument(
+        "--curriculum",
+        action="store_true",
+        help="print freeze boundaries, optimizer memory, token-split sensitivity",
     )
     return p
 
@@ -882,9 +1232,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         budget = compute_budget(TIERS[key], attn=attn, first_dense=args.first_dense)
         print_budget(budget)
         print_compute(budget, tokens=args.tokens)
-        if args.staged and key == keys[-1]:
+        if (args.staged or args.curriculum) and key == keys[-1]:
             print()
-            print_staged(budget, tokens=args.tokens)
+            if args.staged:
+                print_staged(budget, tokens=args.tokens)
+            if args.curriculum:
+                if args.staged:
+                    print()
+                print_curriculum(budget, tokens=args.tokens)
 
     if args.full:
         print()
@@ -902,9 +1257,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print()
         print_staged(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
         print()
+        print_curriculum(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
+        print()
         if args.tier in ("middle", "all") and args.attn == "placeholder" and not args.first_dense:
             print_claims(verify())
-    elif args.staged and args.tier == "all":
+    elif args.curriculum and not args.staged:
         pass
     return 0
 
