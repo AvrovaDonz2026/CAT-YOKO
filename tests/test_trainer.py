@@ -111,6 +111,63 @@ class LoopTests(unittest.TestCase):
             ).run()
             self.assertEqual(out.step, 2)
 
+    def test_latest_hardlinks_matching_step_ckpt(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg, "B0", "cpu", steps=1, accum=1, save_dir=save, save_every=1, seed=1
+            ).run()
+            step = save / "step_1.pt"
+            latest = save / "latest.pt"
+            self.assertTrue(step.is_file())
+            self.assertTrue(latest.samefile(step))
+
+    def test_latest_is_fresh_save_when_step_lags(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg, "B0", "cpu", steps=3, accum=1, save_dir=save, save_every=2, seed=1
+            ).run()
+            self.assertTrue((save / "step_2.pt").is_file())
+            self.assertFalse((save / "step_3.pt").is_file())
+            latest = save / "latest.pt"
+            self.assertTrue(latest.is_file())
+            self.assertFalse(latest.samefile(save / "step_2.pt"))
+            ckpt = torch.load(latest, map_location="cpu", weights_only=False)
+            self.assertEqual(ckpt["extra"]["step"], 3)
+
+    def test_resume_directory_without_latest_uses_step(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg, "B0", "cpu", steps=1, accum=1, save_dir=save, save_every=1, seed=1
+            ).run()
+            (save / "latest.pt").unlink()
+            self.assertTrue((save / "step_1.pt").is_file())
+            out = Trainer(
+                self.cfg, "B0", "cpu", steps=2, accum=1, resume=save, seed=1
+            ).run()
+            self.assertEqual(out.step, 2)
+
+    def test_keep_last_latest_shares_inode_with_newest_step(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                steps=3,
+                accum=1,
+                save_dir=save,
+                save_every=1,
+                save_keep=2,
+            ).run()
+            self.assertEqual(
+                [p.name for p in sorted(save.glob("step_*.pt"))],
+                ["step_2.pt", "step_3.pt"],
+            )
+            self.assertTrue((save / "latest.pt").samefile(save / "step_3.pt"))
+
     def test_resume_b0_into_b1_starts_new_phase(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             save = Path(td)
@@ -397,6 +454,45 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertTrue((td / "run" / "latest.pt").is_file())
             self.assertTrue((td / "m.jsonl").is_file())
+
+    def test_cli_resume_from_dir_when_latest_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            run = td / "run"
+            code = main(
+                [
+                    "--config",
+                    "tiny",
+                    "--phase",
+                    "B0",
+                    "--steps",
+                    "1",
+                    "--accum",
+                    "1",
+                    "--save-dir",
+                    str(run),
+                    "--save-every",
+                    "1",
+                ]
+            )
+            self.assertEqual(code, 0)
+            (run / "latest.pt").unlink()
+            code = main(
+                [
+                    "--config",
+                    "tiny",
+                    "--phase",
+                    "B0",
+                    "--steps",
+                    "2",
+                    "--accum",
+                    "1",
+                    "--resume",
+                    str(run),
+                ]
+            )
+            self.assertEqual(code, 0)
+            self.assertTrue((run / "step_1.pt").is_file())
 
     def test_12b_refuses_full_envelope(self) -> None:
         with self.assertRaises(SystemExit):

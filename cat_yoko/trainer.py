@@ -14,10 +14,13 @@ import torch
 from torch import nn
 
 from cat_yoko.checkpoint import (
+    cleanup_save_tmp,
     load_checkpoint,
     load_model_state,
     load_optimizer_state,
     prune_step_checkpoints,
+    publish_latest,
+    resolve_resume_path,
     save_checkpoint,
 )
 from cat_yoko.config import CATYokoConfig
@@ -175,6 +178,8 @@ class Trainer:
         self.save_dir = Path(save_dir) if save_dir else None
         self.save_every = save_every
         self.resume = Path(resume) if resume else None
+        if self.resume is not None:
+            self.resume = resolve_resume_path(self.resume)
         self.log_every = max(log_every, 1)
         self.log_path = Path(log_path) if log_path else None
         self.eval_every = eval_every
@@ -246,8 +251,16 @@ class Trainer:
     def _maybe_save(self, model: nn.Module, opt, extra: dict, tag: str) -> None:
         if self.save_dir is None or not is_rank0(self.rank):
             return
+        dest = self.save_dir / tag
+        if tag == "latest.pt":
+            step = extra.get("step")
+            step_path = self.save_dir / f"step_{int(step)}.pt" if step else None
+            if step_path is not None and step_path.is_file():
+                # 12B: do not torch.save 23GiB a second time (fills /tmp).
+                publish_latest(step_path, dest)
+                return
         save_checkpoint(
-            self.save_dir / tag,
+            dest,
             model=model,
             optimizer=opt,
             extra=extra,
@@ -418,6 +431,16 @@ class Trainer:
             self.save_optim = self.cfg.name != "CAT-YOKO-12B"
         else:
             self.save_optim = bool(self.save_optim_arg)
+        if self.save_dir is not None:
+            cleanup_save_tmp(self.save_dir)
+            if self.cfg.name == "CAT-YOKO-12B":
+                root = self.save_dir.resolve()
+                if root == Path("/tmp") or Path("/tmp") in root.parents:
+                    print(
+                        f"warning: 12B checkpoints under {root} often fill the overlay; "
+                        "prefer a large volume (e.g. /root/autodl-tmp)",
+                        flush=True,
+                    )
         if self.offload_blocks and self.accum > 1:
             raise RuntimeError(
                 "B2 --offload-blocks Adams each layer during backward and cannot "

@@ -94,7 +94,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ddp", action="store_true", help="DDP (also auto when WORLD_SIZE>1)")
     p.add_argument("--save-dir", type=Path, default=None)
     p.add_argument("--save-every", type=int, default=0)
-    p.add_argument("--resume", type=Path, default=None)
+    p.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help="checkpoint file, or directory (latest.pt else newest step_*.pt)",
+    )
     p.add_argument("--log", type=Path, default=None, help="jsonl metrics path")
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--eval-every", type=int, default=0)
@@ -178,6 +183,13 @@ def main(argv: list[str] | None = None) -> int:
     args.c1_smoke = bool(args.c1_smoke or args.c1)
     if args.c1_smoke and args.resume is not None:
         p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
+    if args.resume is not None:
+        from cat_yoko.checkpoint import resolve_resume_path
+
+        try:
+            args.resume = resolve_resume_path(args.resume)
+        except FileNotFoundError as exc:
+            p.error(str(exc))
     if args.c1_smoke and args.tokens is not None:
         p.error("--c1-smoke is step-limited; do not pass --tokens")
     if args.config == "12b" and not str(args.device).startswith("cuda"):

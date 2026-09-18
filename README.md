@@ -43,6 +43,9 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # python3 -m cat_yoko.train --config 12b --device cuda --c1-smoke --steps 1 --seq-len 64
 # 12B 默认 micro-batch=1、grad-ckpt、bf16、weights-only ckpt
 # python3 -m cat_yoko.train --config 12b --device cuda --c1 --steps 1 --seq-len 64 --save-dir runs/c1
+# 12B ckpt 不要放 /tmp（23GiB×2 会写满 overlay）。save_every 命中末步时 latest.pt 是 step_N 的 hardlink：
+# python3 -m cat_yoko.gpu_smoke --middle --save-dir /root/autodl-tmp/b0ckpt
+# python3 -m cat_yoko.gpu_smoke --middle --steps 2 --resume /root/autodl-tmp/b0ckpt
 python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,8 @@ from torch import nn
 from torch.optim import Optimizer
 
 from cat_yoko.optim import unwrap
+
+_SAVE_MARGIN = 1 << 30  # 1 GiB headroom so 12B pickle does not fill the volume mid-write.
 
 
 def _is_fsdp(model: nn.Module) -> bool:
@@ -37,6 +41,107 @@ def _cpu_copy(obj: Any) -> Any:
     if isinstance(obj, tuple):
         return tuple(_cpu_copy(v) for v in obj)
     return obj
+
+
+def _nbytes(obj: Any) -> int:
+    if torch.is_tensor(obj):
+        return int(obj.numel() * obj.element_size())
+    if isinstance(obj, dict):
+        return sum(_nbytes(v) for v in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return sum(_nbytes(v) for v in obj)
+    return 0
+
+
+def cleanup_save_tmp(save_dir: Path | None) -> None:
+    """Drop leftover ``*.pt.tmp`` from a crashed 12B ``torch.save``."""
+    if save_dir is None:
+        return
+    root = Path(save_dir)
+    if not root.is_dir():
+        return
+    for p in root.glob("*.pt.tmp"):
+        p.unlink(missing_ok=True)
+
+
+def newest_step_checkpoint(save_dir: Path) -> Path | None:
+    files: list[tuple[int, Path]] = []
+    for p in Path(save_dir).glob("step_*.pt"):
+        try:
+            files.append((int(p.stem.split("_", 1)[1]), p))
+        except (IndexError, ValueError):
+            continue
+    if not files:
+        return None
+    files.sort()
+    return files[-1][1]
+
+
+def resolve_resume_path(path: Path | str) -> Path:
+    """File as-is; directory prefers ``latest.pt`` then newest ``step_*.pt``.
+
+    A 12B run that filled the volume while writing ``latest.pt`` still has
+    ``step_N.pt``; resume that file or the save directory.
+    """
+    path = Path(path)
+    if path.is_file():
+        return path
+    if path.is_dir():
+        latest = path / "latest.pt"
+        if latest.is_file():
+            return latest
+        step = newest_step_checkpoint(path)
+        if step is not None:
+            return step
+        raise FileNotFoundError(f"no latest.pt or step_*.pt in {path}")
+    raise FileNotFoundError(str(path))
+
+
+def require_free_bytes(directory: Path, nbytes: int, *, what: str) -> None:
+    """Fail before ``torch.save`` if the volume cannot hold ``nbytes`` + 1 GiB."""
+    if nbytes <= 0:
+        return
+    try:
+        free = shutil.disk_usage(directory).free
+    except OSError:
+        return
+    need = nbytes + _SAVE_MARGIN
+    if free >= need:
+        return
+    raise OSError(
+        f"not enough disk for {what}: need {need / 2**30:.1f}GiB "
+        f"(payload {nbytes / 2**30:.1f}GiB + 1GiB), have {free / 2**30:.1f}GiB free in {directory}. "
+        "12B checkpoints belong on a large volume (e.g. /root/autodl-tmp), not /tmp. "
+        "If step_N.pt already exists, resume from that file or the save directory."
+    )
+
+
+def publish_latest(step_path: Path, latest_path: Path | None = None) -> Path:
+    """Point ``latest.pt`` at ``step_N.pt`` without a second 23GiB ``torch.save``.
+
+    Same-directory hardlink when the FS allows it (nlink=2, no extra bytes).
+    Copy only if ``os.link`` fails. Unlink a leftover ``latest.pt.tmp`` first.
+    """
+    step_path = Path(step_path)
+    if not step_path.is_file():
+        raise FileNotFoundError(str(step_path))
+    latest = Path(latest_path) if latest_path is not None else step_path.parent / "latest.pt"
+    tmp = latest.with_name(latest.name + ".tmp")
+    tmp.unlink(missing_ok=True)
+    if latest.exists() or latest.is_symlink():
+        try:
+            if latest.is_file() and step_path.is_file() and latest.samefile(step_path):
+                return latest
+        except OSError:
+            pass
+        latest.unlink()
+    try:
+        os.link(step_path, latest)
+        return latest
+    except OSError:
+        require_free_bytes(latest.parent, step_path.stat().st_size, what=str(latest))
+        shutil.copy2(step_path, latest)
+        return latest
 
 
 def model_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
@@ -87,6 +192,8 @@ def save_checkpoint(
         "extra": extra,
     }
     tmp = path.with_name(path.name + ".tmp")
+    tmp.unlink(missing_ok=True)
+    require_free_bytes(path.parent, _nbytes(payload), what=str(path))
     torch.save(payload, tmp)
     tmp.replace(path)
 

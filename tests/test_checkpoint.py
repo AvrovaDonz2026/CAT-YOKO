@@ -12,7 +12,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
 
-from cat_yoko.checkpoint import load_checkpoint, save_checkpoint
+from cat_yoko.checkpoint import (
+    cleanup_save_tmp,
+    load_checkpoint,
+    newest_step_checkpoint,
+    publish_latest,
+    require_free_bytes,
+    resolve_resume_path,
+    save_checkpoint,
+)
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
@@ -78,6 +86,72 @@ class CheckpointCpuTests(unittest.TestCase):
         for t, ptr in zip(live, live_ptrs):
             self.assertEqual(t.device.type, "cpu")
             self.assertEqual(t.data_ptr(), ptr)
+
+    def test_publish_latest_hardlinks_same_inode(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            step = td / "step_1.pt"
+            step.write_bytes(b"ckpt-bytes")
+            latest = publish_latest(step)
+            self.assertTrue(latest.is_file())
+            self.assertTrue(latest.samefile(step))
+            self.assertEqual(step.stat().st_nlink, 2)
+            leftover = td / "latest.pt.tmp"
+            leftover.write_bytes(b"stale")
+            publish_latest(step)
+            self.assertFalse(leftover.exists())
+            self.assertTrue(latest.samefile(step))
+
+    def test_resolve_resume_prefers_latest_then_step(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            step = td / "step_1.pt"
+            step.write_bytes(b"a")
+            self.assertEqual(resolve_resume_path(td), step)
+            self.assertEqual(newest_step_checkpoint(td), step)
+            latest = td / "latest.pt"
+            latest.write_bytes(b"b")
+            self.assertEqual(resolve_resume_path(td), latest)
+            self.assertEqual(resolve_resume_path(latest), latest)
+            with self.assertRaises(FileNotFoundError):
+                resolve_resume_path(td / "missing")
+
+    def test_cleanup_save_tmp_drops_leftovers(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            stale = td / "latest.pt.tmp"
+            stale.write_bytes(b"x")
+            (td / "step_1.pt").write_bytes(b"y")
+            cleanup_save_tmp(td)
+            self.assertFalse(stale.exists())
+            self.assertTrue((td / "step_1.pt").is_file())
+
+    def test_require_free_bytes_errors_when_volume_is_tiny(self) -> None:
+        from unittest.mock import patch
+
+        fake = type("U", (), {"free": 128})()
+        with patch("cat_yoko.checkpoint.shutil.disk_usage", return_value=fake):
+            with self.assertRaises(OSError) as ctx:
+                require_free_bytes(Path("/tmp"), 1 << 20, what="ckpt")
+        self.assertIn("not enough disk", str(ctx.exception))
+        self.assertIn("autodl-tmp", str(ctx.exception))
+
+    def test_save_checkpoint_refuses_full_disk(self) -> None:
+        from unittest.mock import patch
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        fake = type("U", (), {"free": 0})()
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ckpt.pt"
+            with patch("cat_yoko.checkpoint.shutil.disk_usage", return_value=fake):
+                with self.assertRaises(OSError) as ctx:
+                    save_checkpoint(
+                        path, model=model, optimizer=None, extra={}, save_optimizer=False
+                    )
+            self.assertIn("not enough disk", str(ctx.exception))
+            self.assertFalse(path.exists())
+            self.assertFalse(path.with_name("ckpt.pt.tmp").exists())
 
 
 if __name__ == "__main__":

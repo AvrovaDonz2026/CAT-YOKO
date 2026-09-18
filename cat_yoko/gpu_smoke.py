@@ -322,6 +322,8 @@ def run_middle_12b_phase(
     steps: int = 1,
     micro_batch: int = 1,
     reuse_model: CATYokoForCausalLM | None = None,
+    save_dir: Path | None = None,
+    resume: Path | None = None,
 ) -> dict:
     """One C1 step of the real 12B graph. Auto encoder-offload / CPU Adam / block offload.
 
@@ -371,6 +373,10 @@ def run_middle_12b_phase(
                 seq_len=sl,
                 seed=0,
                 reuse_model=model,
+                save_dir=save_dir,
+                save_every=1 if save_dir is not None else 0,
+                resume=resume,
+                save_optim=False,
             )
             out = trainer.run()
             peak = out.peak_mib / 1024.0 if out.peak_mib else torch.cuda.max_memory_allocated() / 1024**3
@@ -385,6 +391,14 @@ def run_middle_12b_phase(
                 "ok": ok,
                 "model": model,
             }
+            if save_dir is not None:
+                latest = Path(save_dir) / "latest.pt"
+                step_p = Path(save_dir) / f"step_{out.step}.pt"
+                result["latest"] = latest.is_file()
+                result["step_ckpt"] = step_p.is_file()
+                if latest.is_file() and step_p.is_file():
+                    result["latest_hardlink"] = latest.stat().st_ino == step_p.stat().st_ino
+                    result["latest_nlink"] = latest.stat().st_nlink
             trainer.reuse_model = None
             del trainer, opt
             return result
@@ -406,9 +420,11 @@ def run_middle_12b_phase(
     raise last_err
 
 
-def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
+def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1, save_dir: Path | None = None, resume: Path | None = None) -> dict:
     """One C1 B0 step of the real 12B graph. Needs ~24GiB weights + a little activation."""
-    result = run_middle_12b_phase("B0", seq_len=seq_len, steps=steps, micro_batch=micro_batch)
+    result = run_middle_12b_phase(
+        "B0", seq_len=seq_len, steps=steps, micro_batch=micro_batch, save_dir=save_dir, resume=resume
+    )
     model = result.pop("model", None)
     del model
     _teardown_cuda(result)
@@ -489,7 +505,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--phase", choices=["B0", "B1", "B2"], default="B0")
     p.add_argument("--seq-len", type=int, default=64, help="12B smoke sequence length")
+    p.add_argument(
+        "--save-dir",
+        type=Path,
+        default=None,
+        help="12B --middle: write step_N.pt and hardlink latest.pt (use a large volume, not /tmp)",
+    )
+    p.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help="12B --middle: resume file or directory (latest.pt else newest step_*.pt)",
+    )
     args = p.parse_args(argv)
+    if args.save_dir is not None and not args.middle:
+        p.error("--save-dir is for --middle 12B smoke")
+    if args.resume is not None and not args.middle:
+        p.error("--resume is for --middle 12B smoke")
     info = cuda_info()
     if not info.get("cuda"):
         print("SKIP: no CUDA")
@@ -515,7 +547,13 @@ def main(argv: list[str] | None = None) -> int:
             _teardown_cuda(result)
     if args.middle:
         steps = 1 if args.steps is None else args.steps
-        result = run_middle_12b_phase(args.phase, seq_len=args.seq_len, steps=steps)
+        result = run_middle_12b_phase(
+            args.phase,
+            seq_len=args.seq_len,
+            steps=steps,
+            save_dir=args.save_dir,
+            resume=args.resume,
+        )
         model = result.pop("model", None)
         del model
         try:
@@ -526,6 +564,11 @@ def main(argv: list[str] | None = None) -> int:
                     f"12b {result['phase']} {result['info']['device']} nll={result['nll']:.4f} "
                     f"seq={result['seq_len']} peak_gib={result['peak_gib']} ok={result['ok']}"
                 )
+                if result.get("latest"):
+                    print(
+                        f"  ckpt latest={result.get('latest')} step={result.get('step_ckpt')} "
+                        f"hardlink={result.get('latest_hardlink')} nlink={result.get('latest_nlink')}"
+                    )
             return 0 if result["ok"] else 1
         finally:
             _teardown_cuda(result)
