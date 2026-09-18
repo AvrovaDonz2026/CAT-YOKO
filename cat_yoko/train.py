@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos
@@ -14,6 +17,32 @@ from cat_yoko.recipe import MINICPM5_HF, assert_minicpm5_id
 from cat_yoko.teacher import DummyTeacher, load_teacher
 from cat_yoko.trainer import Trainer, build_model, print_meta, run_c1_chain, train_loop
 from cat_yoko.upcycle import dummy_minicpm_state
+
+TIGHT_12B_GPU_GIB = 40.0
+
+
+def twelve_b_cli_errors(
+    *,
+    seq_len: int | None,
+    teacher_hf: bool,
+    gpu_gib: float,
+) -> list[str]:
+    """Foot-guns on a 32GB card: default seq=4096 and MiniCPM5 teacher+student."""
+    errs: list[str] = []
+    if gpu_gib >= TIGHT_12B_GPU_GIB:
+        return errs
+    if seq_len is None:
+        errs.append(
+            f"12b on a {gpu_gib:.1f}GiB GPU needs --seq-len 64 (default 4096 OOMs activations); "
+            "RTX 4080 SUPER peaks were measured at seq=64"
+        )
+    if teacher_hf:
+        errs.append(
+            f"12b + MiniCPM5 teacher needs >{TIGHT_12B_GPU_GIB:.0f}GiB GPU "
+            f"(student ~23–28GiB + teacher ~5GiB); this card is {gpu_gib:.1f}GiB. "
+            "Drop --teacher-hf."
+        )
+    return errs
 
 
 def _tokens_offset(phase: str, explicit: float | None) -> float:
@@ -194,6 +223,17 @@ def main(argv: list[str] | None = None) -> int:
         p.error("--c1-smoke is step-limited; do not pass --tokens")
     if args.config == "12b" and not str(args.device).startswith("cuda"):
         p.error("12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron only)")
+    if args.config == "12b" and str(args.device).startswith("cuda"):
+        import torch
+
+        if torch.cuda.is_available():
+            gpu_gib = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            for err in twelve_b_cli_errors(
+                seq_len=args.seq_len,
+                teacher_hf=args.teacher_hf is not None,
+                gpu_gib=gpu_gib,
+            ):
+                p.error(err)
     if args.steps is None and args.tokens is None:
         if args.c1_smoke:
             args.steps = 1

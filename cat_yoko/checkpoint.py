@@ -97,6 +97,37 @@ def resolve_resume_path(path: Path | str) -> Path:
     raise FileNotFoundError(str(path))
 
 
+def require_host_bytes(nbytes: int, *, what: str) -> None:
+    """Fail before the 23GiB CPU copy if the cgroup cannot hold it."""
+    if nbytes <= 0:
+        return
+    from cat_yoko.optim import host_memory_limit_bytes, host_memory_used_bytes
+
+    limit = host_memory_limit_bytes()
+    if limit is None:
+        return
+    used = host_memory_used_bytes()
+    extra = (2 << 30) if nbytes >= 8 * (1 << 30) else (64 << 20)
+    if used + nbytes + extra <= limit:
+        return
+    raise OSError(
+        f"not enough host RAM for {what}: need {(nbytes + extra) / 2**30:.1f}GiB extra "
+        f"(cgroup used {used / 2**30:.1f} / limit {limit / 2**30:.1f}GiB). "
+        "12B save is ~23GiB CPU tensors; do not combine with B1 CPU Adam moments. "
+        "Use --no-save-optim (default) and --steps 1 on a 62GiB cgroup."
+    )
+
+
+def _live_param_nbytes(model: nn.Module) -> int:
+    n = 0
+    raw = unwrap(model)
+    for p in raw.parameters():
+        n += int(p.numel() * p.element_size())
+    for b in raw.buffers():
+        n += int(b.numel() * b.element_size())
+    return n
+
+
 def require_free_bytes(directory: Path, nbytes: int, *, what: str) -> None:
     """Fail before ``torch.save`` if the volume cannot hold ``nbytes`` + 1 GiB."""
     if nbytes <= 0:
@@ -180,6 +211,10 @@ def save_checkpoint(
 ) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    est = _live_param_nbytes(model)
+    if save_optimizer and optimizer is not None:
+        est *= 2
+    require_host_bytes(est, what=str(path))
     model_sd = model_state_dict(model)
     # FSDP already offloads via FullStateDictConfig; still pin every tensor on CPU.
     model_sd = _cpu_copy(model_sd)

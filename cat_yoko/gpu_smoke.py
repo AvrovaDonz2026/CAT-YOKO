@@ -5,8 +5,11 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import os
 import sys
 import tempfile
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 from dataclasses import replace
 from pathlib import Path
 

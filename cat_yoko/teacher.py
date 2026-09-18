@@ -53,20 +53,11 @@ def load_teacher(source: str | Path, device: str) -> nn.Module:
             return place_teacher(obj, device)
         raise RuntimeError(f"{path} is not a pickled nn.Module; use --teacher-hf for MiniCPM5")
     from cat_yoko.recipe import assert_minicpm5_hf_config, assert_minicpm5_id
+    from cat_yoko.hf_minicpm import load_causal_lm_cpu
 
     assert_minicpm5_id(str(source), kind="teacher")
-    try:
-        from transformers import AutoModelForCausalLM
-    except ImportError as exc:
-        raise ImportError(
-            "MiniCPM5 teacher needs transformers: pip install 'cat-yoko[data]'"
-        ) from exc
     dt = teacher_param_dtype(device)
-    model = AutoModelForCausalLM.from_pretrained(
-        str(source),
-        torch_dtype=dt,
-        low_cpu_mem_usage=True,
-    )
+    model = load_causal_lm_cpu(str(source), dt)
     assert_minicpm5_hf_config(model.config)
     return place_teacher(model, device)
 

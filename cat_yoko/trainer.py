@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import time
 from contextlib import nullcontext
@@ -50,6 +51,15 @@ from cat_yoko.optim import CPUOffloadAdamW, build_optimizer, plan_cpu_adam, trim
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
+def enable_expandable_segments() -> str:
+    """Set before the CUDA caching allocator starts. B1 is ~28.4/32GiB."""
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    return os.environ["PYTORCH_CUDA_ALLOC_CONF"]
+
+
+enable_expandable_segments()
+
+
 def seed_all(seed: int) -> None:
     random.seed(seed)
     torch.manual_seed(seed)
@@ -58,6 +68,7 @@ def seed_all(seed: int) -> None:
 
 
 def configure_cuda() -> None:
+    enable_expandable_segments()
     if not torch.cuda.is_available():
         return
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -477,6 +488,16 @@ class Trainer:
                 f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None}",
                 flush=True,
             )
+            if (
+                self.save_dir is not None
+                and self.cfg.name == "CAT-YOKO-12B"
+                and adam_state in {"fp16", "fp32"}
+            ):
+                print(
+                    "warning: 12B checkpoint adds ~23GiB host tensors on top of CPU Adam "
+                    "moments; --steps 1 or omit --save-dir on a 62GiB cgroup",
+                    flush=True,
+                )
         opt = build_optimizer(
             model,
             self.cfg,

@@ -93,6 +93,24 @@ class MiniCPM5IdTests(unittest.TestCase):
                 ]
             )
 
+    def test_load_causal_lm_cpu_requests_cpu_device_map(self) -> None:
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        from cat_yoko.hf_minicpm import load_causal_lm_cpu
+
+        fake_mod = MagicMock()
+        fake_model = MagicMock()
+        param = MagicMock()
+        param.device.type = "cpu"
+        fake_model.parameters.return_value = iter([param])
+        fake_mod.AutoModelForCausalLM.from_pretrained.return_value = fake_model
+        with patch.dict(sys.modules, {"transformers": fake_mod}):
+            load_causal_lm_cpu("openbmb/MiniCPM5-2B-Base")
+        kwargs = fake_mod.AutoModelForCausalLM.from_pretrained.call_args.kwargs
+        self.assertEqual(kwargs.get("device_map"), "cpu")
+        self.assertTrue(kwargs.get("low_cpu_mem_usage"))
+
 
 class MiniCPM5UpcyleShapeTests(unittest.TestCase):
     def setUp(self) -> None:

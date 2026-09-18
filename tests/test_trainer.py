@@ -432,6 +432,26 @@ class LoopTests(unittest.TestCase):
 
 
 class CliTests(unittest.TestCase):
+    def test_twelve_b_cli_errors_on_32gib_card(self) -> None:
+        from cat_yoko.train import twelve_b_cli_errors
+
+        self.assertTrue(
+            any("seq-len 64" in e for e in twelve_b_cli_errors(seq_len=None, teacher_hf=False, gpu_gib=31.48))
+        )
+        self.assertEqual(twelve_b_cli_errors(seq_len=64, teacher_hf=False, gpu_gib=31.48), [])
+        te = twelve_b_cli_errors(seq_len=64, teacher_hf=True, gpu_gib=31.48)
+        self.assertTrue(any("teacher" in e for e in te))
+        self.assertEqual(twelve_b_cli_errors(seq_len=None, teacher_hf=True, gpu_gib=80.0), [])
+
+    def test_expandable_segments_env_is_set(self) -> None:
+        import os
+
+        from cat_yoko.trainer import enable_expandable_segments
+
+        got = enable_expandable_segments()
+        self.assertIn("expandable_segments:True", got)
+        self.assertEqual(os.environ.get("PYTORCH_CUDA_ALLOC_CONF"), got)
+
     def test_tiny_save_and_log(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)

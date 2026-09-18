@@ -18,6 +18,7 @@ from cat_yoko.checkpoint import (
     newest_step_checkpoint,
     publish_latest,
     require_free_bytes,
+    require_host_bytes,
     resolve_resume_path,
     save_checkpoint,
 )
@@ -135,6 +136,15 @@ class CheckpointCpuTests(unittest.TestCase):
                 require_free_bytes(Path("/tmp"), 1 << 20, what="ckpt")
         self.assertIn("not enough disk", str(ctx.exception))
         self.assertIn("autodl-tmp", str(ctx.exception))
+
+    def test_require_host_bytes_errors_when_cgroup_is_tiny(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cat_yoko.optim.host_memory_limit_bytes", return_value=1 << 30):
+            with patch("cat_yoko.optim.host_memory_used_bytes", return_value=0):
+                with self.assertRaises(OSError) as ctx:
+                    require_host_bytes(20 << 30, what="ckpt")
+        self.assertIn("host RAM", str(ctx.exception))
 
     def test_save_checkpoint_refuses_full_disk(self) -> None:
         from unittest.mock import patch
