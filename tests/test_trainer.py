@@ -257,6 +257,25 @@ class LoopTests(unittest.TestCase):
         groups = adamw_param_groups(model, 0.1)
         self.assertEqual(len(groups), 2)
 
+    def test_adamw_router_nodecay_not_swiglu_gate(self) -> None:
+        from cat_yoko.freeze import apply_freeze
+        from cat_yoko.model import CATYokoForCausalLM
+
+        model = CATYokoForCausalLM(self.cfg)
+        apply_freeze(model, "B1")
+        groups = adamw_param_groups(model, 0.1)
+        nodecay = {id(p) for p in groups[1]["params"]}
+        decay = {id(p) for p in groups[0]["params"]}
+        self.assertIn(id(model.decoder[0].mlp.router.weight), nodecay)
+        self.assertIn(id(model.decoder[0].mlp.experts[0].gate_proj.weight), decay)
+
+    def test_dummy_stream_ignores_packed_kind(self) -> None:
+        from cat_yoko.data import DummyStream
+
+        stream = DummyStream(self.cfg.vocab_size, self.cfg.seq_len, seed=0)
+        before = stream.gen.get_state().clone()
+        stream.load_state_dict({"kind": "packed", "i": 9})
+        self.assertTrue(torch.equal(stream.gen.get_state(), before))
 
     def test_two_rank_gloo_one_step(self) -> None:
         from cat_yoko.ddp_smoke import run_gloo_ddp
@@ -266,6 +285,23 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(row["step"], 1)
         self.assertEqual(row["world"], 2)
         self.assertGreater(row["nll"], 0)
+
+    def test_two_rank_gloo_accum(self) -> None:
+        from cat_yoko.ddp_smoke import run_gloo_ddp
+
+        row = run_gloo_ddp(device="cpu", world=2, steps=1, accum=2)
+        self.assertTrue(row["ok"], msg=row)
+        self.assertEqual(row["accum"], 2)
+
+    def test_two_rank_gloo_c1_chain(self) -> None:
+        from cat_yoko.ddp_smoke import run_gloo_c1
+
+        row = run_gloo_c1(device="cpu", world=2, steps=1)
+        self.assertTrue(row["ok"], msg=row)
+        self.assertEqual(row["phase"], "C1")
+        self.assertGreater(row["b0"], 0)
+        self.assertGreater(row["b1"], 0)
+        self.assertGreater(row["b2"], 0)
 
 
 class CliTests(unittest.TestCase):

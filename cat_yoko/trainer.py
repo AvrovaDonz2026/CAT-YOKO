@@ -22,7 +22,14 @@ from cat_yoko.checkpoint import (
 )
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import open_stream, resolve_eos, resolve_seq_len, sidecar_meta
-from cat_yoko.dist_util import barrier, init_distributed, is_rank0, reduce_mean, wrap_distributed
+from cat_yoko.dist_util import (
+    barrier,
+    backward_sync_ctx,
+    init_distributed,
+    is_rank0,
+    reduce_mean,
+    wrap_distributed,
+)
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
@@ -136,6 +143,7 @@ class Trainer:
         log_every: int = 1,
         log_path: Path | None = None,
         eval_every: int = 0,
+        eval_batches: int = 2,
         dtype: str = "fp32",
         global_tokens_offset: float = 0.0,
         grad_ckpt: bool = False,
@@ -167,6 +175,7 @@ class Trainer:
         self.log_every = max(log_every, 1)
         self.log_path = Path(log_path) if log_path else None
         self.eval_every = eval_every
+        self.eval_batches = max(int(eval_batches), 1)
         self.dtype = dtype
         self.global_tokens_offset = global_tokens_offset
         self.grad_ckpt = grad_ckpt
@@ -181,7 +190,7 @@ class Trainer:
         self.save_optim_arg = save_optim
         self.save_keep = max(int(save_keep), 0)
         self.initial_stream = initial_stream
-        self.device, self.rank, self.world = init_distributed(device)
+        self.device, self.rank, self.world = init_distributed(device, force=bool(fsdp))
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
             if packed is not None and int(packed) != int(seq_len):
@@ -270,21 +279,25 @@ class Trainer:
         )
 
     @torch.no_grad()
-    def _eval_nll(self, model: nn.Module, batches: int = 2) -> float:
-        if self.eval_data is None and batches <= 0:
+    def _eval_nll(self, model: nn.Module, batches: int | None = None) -> float:
+        n_batches = self.eval_batches if batches is None else batches
+        if self.eval_data is None and n_batches <= 0:
             return float("nan")
         stream = self._open(self.eval_data, self.seed + 1 + self.rank)
-        raw = unwrap(model)
-        raw.eval()
+        was_train = model.training
+        model.eval()
         total = 0.0
         n = 0
-        for _ in range(max(batches, 1)):
-            batch = stream.batch(self.micro_batch, self.device)
-            with self._amp():
-                out = raw(**batch)
-            total += float(out["nll"])
-            n += 1
-        raw.train()
+        try:
+            for _ in range(max(n_batches, 1)):
+                batch = stream.batch(self.micro_batch, self.device)
+                with self._amp():
+                    out = model(**batch)
+                total += float(out["nll"])
+                n += 1
+        finally:
+            if was_train:
+                model.train()
         return total / max(n, 1)
 
     def _resolve_offload(self) -> None:
@@ -390,15 +403,14 @@ class Trainer:
                 "gradient-accumulate; use --accum 1, or ZeRO/multi-GPU for the 4M-token batch"
             )
         if self.reuse_model is not None:
-            model = self.reuse_model
+            model = unwrap(self.reuse_model)
         else:
             model = build_model(self.cfg, self.device, dtype=self.dtype)
             if self.upcycle_src is not None:
                 upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
         apply_freeze(unwrap(model), self.phase)
         self._apply_runtime_flags(model)
-        if self.reuse_model is None:
-            model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
+        model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
         trainable = [p for p in model.parameters() if p.requires_grad]
         n_train = sum(p.numel() for p in trainable)
         adam_state = "gpu"
@@ -490,27 +502,29 @@ class Trainer:
                 step_aux = 0.0
                 step_tokens = 0
                 t0 = time.perf_counter()
-                for _ in range(self.accum):
+                for micro_i in range(self.accum):
                     batch = stream.batch(self.micro_batch, self.device)
                     step_tokens += int(batch["input_ids"].numel())
-                    with self._amp():
-                        out = model(**batch)
-                        loss = out["loss"] / self.accum
-                    if self.teacher is not None:
-                        with torch.no_grad():
-                            t_logits = self.teacher(batch["input_ids"])["logits"]
-                        w = kd_weight(
-                            step,
-                            max_steps or 1,
-                            self.cfg.kd_weight_start,
-                        )
-                        if w > 0:
-                            loss = loss + w * kd_kl(
-                                out["logits"][:, :-1],
-                                t_logits[:, :-1],
-                                self.cfg.kd_temperature,
+                    last_micro = micro_i == self.accum - 1
+                    with backward_sync_ctx(model, last_micro=last_micro, world=self.world):
+                        with self._amp():
+                            out = model(**batch)
+                            loss = out["loss"] / self.accum
+                        if self.teacher is not None:
+                            with torch.no_grad():
+                                t_logits = self.teacher(batch["input_ids"])["logits"]
+                            w = kd_weight(
+                                step,
+                                max_steps or 1,
+                                self.cfg.kd_weight_start,
                             )
-                    loss.backward()
+                            if w > 0:
+                                loss = loss + w * kd_kl(
+                                    out["logits"][:, :-1],
+                                    t_logits[:, :-1],
+                                    self.cfg.kd_temperature,
+                                )
+                        loss.backward()
                     moe_stats = moe_utilization(unwrap(model))
                     unwrap(model).step_router_bias()
                     step_nll += float(out["nll"].detach()) / self.accum

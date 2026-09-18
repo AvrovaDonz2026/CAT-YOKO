@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.ddp_smoke import run_gloo_ddp
+from cat_yoko.ddp_smoke import run_fsdp_one, run_gloo_ddp
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
@@ -227,6 +227,8 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     out["b0_encoder_frozen"] = {"ok": enc_ok}
     ddp = run_gloo_ddp(device="cpu", world=2, steps=1)
     out["ddp_gloo"] = ddp
+    out["ddp_cuda"] = run_gloo_ddp(device="cuda", world=2, steps=1)
+    out["fsdp"] = run_fsdp_one(device="cuda", steps=1)
     out["peak_mib"] = round(torch.cuda.max_memory_allocated() / 1024**2, 1)
     out["ok"] = all(
         [
@@ -245,6 +247,8 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             out["eval"]["ok"],
             out["b0_encoder_frozen"]["ok"],
             out["ddp_gloo"]["ok"],
+            out["ddp_cuda"]["ok"],
+            out["fsdp"]["ok"],
             out["fp8_policy"]["b1_autocast"] is True,
             out["fp8_policy"]["b0_autocast"] is False,
         ]
@@ -466,6 +470,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  b2_block_offload ok={result['b2_block_offload']['ok']}")
         print(f"  c1_chain ok={result['c1_chain']['ok']} ckpts ok={result['c1_ckpts']['ok']}")
         print(f"  ddp_gloo ok={result['ddp_gloo']['ok']}")
+        print(f"  ddp_cuda ok={result['ddp_cuda']['ok']}")
+        print(f"  fsdp ok={result['fsdp']['ok']}")
         print(f"  overall ok={result['ok']}")
     return 0 if result["ok"] else 1
 

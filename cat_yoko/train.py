@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--log", type=Path, default=None, help="jsonl metrics path")
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--eval-every", type=int, default=0)
+    p.add_argument("--eval-batches", type=int, default=2, help="micro-batches per eval tick")
     p.add_argument("--seq-len", type=int, default=None, help="override cfg seq_len; must match packed .bin")
     p.add_argument("--grad-ckpt", action="store_true", help="activation checkpoint encoder/decoder blocks")
     p.add_argument(
@@ -210,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         log_every=args.log_every,
         log_path=args.log,
         eval_every=args.eval_every,
+        eval_batches=args.eval_batches,
         dtype=args.dtype,
         grad_ckpt=args.grad_ckpt,
         seq_len=args.seq_len,

@@ -240,6 +240,7 @@ class TrainerOffloadTests(unittest.TestCase):
 
         src = inspect.getsource(fsdp_mod.wrap_fsdp)
         self.assertIn("device_id", src)
+        self.assertIn("use_orig_params", src)
 
 
 class CliOffloadTests(unittest.TestCase):

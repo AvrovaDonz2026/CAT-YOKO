@@ -113,6 +113,8 @@ class DummyStream:
         return {"kind": "dummy", "gen": self.gen.get_state()}
 
     def load_state_dict(self, st: dict) -> None:
+        if st.get("kind") not in (None, "dummy"):
+            return
         if st.get("gen") is not None:
             self.gen.set_state(st["gen"].cpu())
 
@@ -201,6 +203,8 @@ class FileStream:
         return {"kind": "file", "i": self._i, "stride": self.stride}
 
     def load_state_dict(self, st: dict) -> None:
+        if st.get("kind") not in (None, "file", "packed"):
+            return
         if "i" in st:
             self._i = int(st["i"])
 
@@ -259,6 +263,8 @@ class PackedBinStream:
         return {"kind": "packed", "i": self._i, "stride": self.stride, "nseq": self.nseq}
 
     def load_state_dict(self, st: dict) -> None:
+        if st.get("kind") not in (None, "packed", "file"):
+            return
         if "i" in st:
             self._i = int(st["i"])
 

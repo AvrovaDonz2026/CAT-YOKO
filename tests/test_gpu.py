@@ -124,11 +124,25 @@ class GpuTinyTests(unittest.TestCase):
         result = run_tiny_cuda(steps=1, micro_batch=2)
         self.assertTrue(result["ok"], msg=result)
         self.assertTrue(result["ddp_gloo"]["ok"], msg=result)
+        self.assertTrue(result["ddp_cuda"]["ok"], msg=result)
+        self.assertTrue(result["fsdp"]["ok"], msg=result)
 
     def test_gloo_ddp_cpu_from_cuda_process(self) -> None:
         from cat_yoko.ddp_smoke import run_gloo_ddp
 
         row = run_gloo_ddp(device="cpu", world=2, steps=1)
+        self.assertTrue(row["ok"], msg=row)
+
+    def test_ddp_two_rank_cuda(self) -> None:
+        from cat_yoko.ddp_smoke import run_gloo_ddp
+
+        row = run_gloo_ddp(device="cuda", world=2, steps=1)
+        self.assertTrue(row["ok"], msg=row)
+
+    def test_fsdp_one_rank_cuda(self) -> None:
+        from cat_yoko.ddp_smoke import run_fsdp_one
+
+        row = run_fsdp_one(device="cuda", steps=1)
         self.assertTrue(row["ok"], msg=row)
 
 

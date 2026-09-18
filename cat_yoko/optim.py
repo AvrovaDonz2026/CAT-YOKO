@@ -28,13 +28,23 @@ def unwrap(module: nn.Module) -> nn.Module:
     return module
 
 
+def _no_weight_decay_name(name: str) -> bool:
+    """Norms, bias, and the MoE router. Not SwiGLU ``gate_proj`` (substring 'gate')."""
+    parts = name.split(".")
+    if parts[-1] == "bias":
+        return True
+    if any("norm" in p for p in parts):
+        return True
+    return "router" in parts
+
+
 def adamw_param_groups(model: nn.Module, weight_decay: float) -> list[dict]:
     decay: list = []
     nodecay: list = []
     for name, p in unwrap(model).named_parameters():
         if not p.requires_grad:
             continue
-        if p.ndim < 2 or any(k in name for k in ("norm", "bias", "gate")):
+        if p.ndim < 2 or _no_weight_decay_name(name):
             nodecay.append(p)
         else:
             decay.append(p)

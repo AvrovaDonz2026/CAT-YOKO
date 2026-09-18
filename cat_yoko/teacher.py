@@ -40,10 +40,12 @@ def load_teacher(source: str | Path, device: str) -> nn.Module:
         raise ImportError(
             "MiniCPM teacher needs transformers: pip install 'cat-yoko[data]'"
         ) from exc
+    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available()
+    dt = torch.bfloat16 if want_cuda else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
         str(source),
         trust_remote_code=True,
-        torch_dtype=torch.float32,
+        torch_dtype=dt,
         low_cpu_mem_usage=True,
     )
     model.to(device)
