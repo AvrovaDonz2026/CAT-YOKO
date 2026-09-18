@@ -39,12 +39,35 @@ def configure_cuda() -> None:
     torch.backends.cudnn.allow_tf32 = True
 
 
-def build_model(cfg: CATYokoConfig, device: str) -> CATYokoForCausalLM:
+def _as_dtype(dtype: str | torch.dtype | None) -> torch.dtype:
+    if dtype is None:
+        return torch.float32
+    if isinstance(dtype, torch.dtype):
+        return dtype
+    if dtype == "bf16":
+        return torch.bfloat16
+    if dtype == "fp32":
+        return torch.float32
+    raise ValueError(f"unsupported dtype {dtype}")
+
+
+def build_model(
+    cfg: CATYokoConfig,
+    device: str,
+    dtype: str | torch.dtype | None = None,
+) -> CATYokoForCausalLM:
+    """Factory on ``device``. 12B must be built in bf16 on CUDA — never fp32-then-cast."""
     if device == "meta":
         with torch.device("meta"):
             return CATYokoForCausalLM(cfg)
-    model = CATYokoForCausalLM(cfg)
-    return model.to(device)
+    dt = _as_dtype(dtype)
+    prev = torch.get_default_dtype()
+    try:
+        torch.set_default_dtype(dt)
+        with torch.device(device):
+            return CATYokoForCausalLM(cfg)
+    finally:
+        torch.set_default_dtype(prev)
 
 
 def print_meta(cfg: CATYokoConfig) -> None:
@@ -223,13 +246,22 @@ class Trainer:
         return total / max(n, 1)
 
     def run(self) -> TrainResult:
+        if self.cfg.name == "CAT-YOKO-12B" and not str(self.device).startswith("cuda"):
+            raise RuntimeError("CAT-YOKO-12B weights need --device cuda --dtype bf16 (CPU is --meta only)")
         seed_all(self.seed + self.rank)
         configure_cuda()
         if str(self.device).startswith("cuda") and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
-        model = build_model(self.cfg, self.device)
-        model = self._cast(model)
+        model = build_model(self.cfg, self.device, dtype=self.dtype)
         unwrap(model).grad_checkpoint = self.grad_ckpt
+        if is_rank0(self.rank) and str(self.device).startswith("cuda") and torch.cuda.is_available():
+            alloc = torch.cuda.memory_allocated() / 1024**3
+            print(
+                f"built {self.cfg.name} on {self.device} dtype={self.dtype} "
+                f"params={unwrap(model).param_count():,} alloc={alloc:.2f}GiB "
+                f"grad_ckpt={self.grad_ckpt} seq={self.seq_len}",
+                flush=True,
+            )
         if self.upcycle_src is not None:
             upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
         apply_freeze(unwrap(model), self.phase)

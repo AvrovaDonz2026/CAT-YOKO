@@ -108,11 +108,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.meta:
         print_meta(cfg)
         return 0
+    if args.config == "12b" and not str(args.device).startswith("cuda"):
+        p.error("12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron only)")
     if args.steps is None and args.tokens is None:
         if args.config == "tiny":
             args.steps = 3
         else:
             p.error("12b training needs --steps or --tokens (this VM cannot run the 8B-token B0 envelope)")
+    if args.config == "12b":
+        if args.dtype != "bf16":
+            args.dtype = "bf16"
+        if not args.grad_ckpt:
+            args.grad_ckpt = True
+        if args.accum == 0 and args.tokens is None:
+            # do not expand a smoke --steps run into the 4M-token global batch
+            args.accum = 1
     n_up = sum(x is not None for x in (True if args.dummy_upcycle else None, args.upcycle, args.upcycle_hf))
     if n_up > 1:
         p.error("pick one of --dummy-upcycle / --upcycle / --upcycle-hf")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CUDA tests for the C1 trainer. Skip on CPU; never allocate 12B on GPU."""
+"""CUDA tests for the C1 trainer. Skip on CPU. 12B B0 needs ≥28GiB."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import torch
 
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.fp8 import should_autocast
-from cat_yoko.gpu_smoke import cuda_info, main as gpu_smoke_main, run_tiny_cuda
+from cat_yoko.gpu_smoke import cuda_info, enough_vram_for_12b, main as gpu_smoke_main, run_middle_12b_b0, run_tiny_cuda
 from cat_yoko.train import main as train_main
 from cat_yoko.trainer import train_loop
 
@@ -75,6 +75,17 @@ class GpuTinyTests(unittest.TestCase):
     def test_full_tiny_bundle(self) -> None:
         result = run_tiny_cuda(steps=1, micro_batch=2)
         self.assertTrue(result["ok"], msg=result)
+
+
+@unittest.skipUnless(torch.cuda.is_available(), "CUDA GPU required")
+class GpuTwelveBTests(unittest.TestCase):
+    def test_12b_b0_one_step(self) -> None:
+        if not enough_vram_for_12b():
+            self.skipTest("12B B0 smoke needs ≥28GiB GPU")
+        result = run_middle_12b_b0(seq_len=64, steps=1, micro_batch=1)
+        self.assertTrue(result["ok"], msg=result)
+        self.assertEqual(result["step"], 1)
+        self.assertLess(result["peak_gib"], 32.0)
 
 
 if __name__ == "__main__":

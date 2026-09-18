@@ -192,6 +192,10 @@ class CliTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(["--config", "12b", "--phase", "B0"])
 
+    def test_12b_cpu_steps_need_cuda(self) -> None:
+        with self.assertRaises(SystemExit):
+            main(["--config", "12b", "--phase", "B0", "--steps", "1"])
+
 
 if __name__ == "__main__":
     unittest.main()

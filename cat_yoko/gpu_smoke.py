@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import sys
 import tempfile
@@ -128,15 +129,94 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     return out
 
 
+TWELVE_B_MIN_GIB = 28.0
+
+
+def enough_vram_for_12b(min_gib: float = TWELVE_B_MIN_GIB) -> bool:
+    info = cuda_info()
+    return bool(info.get("cuda") and info.get("total_gib", 0) >= min_gib)
+
+
+def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
+    """One C1 B0 step of the real 12B graph. Needs ~24GiB weights + a little activation.
+
+    Full Adam on all 12B params still will not fit 32GB; B0 only trains new modules.
+    """
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for 12B GPU smoke")
+    info = cuda_info()
+    if info["total_gib"] < TWELVE_B_MIN_GIB:
+        raise RuntimeError(
+            f"12B B0 smoke needs ≥{TWELVE_B_MIN_GIB}GiB, got {info['total_gib']}"
+        )
+    cfg = CATYokoConfig.middle_12b()
+    last_err: BaseException | None = None
+    tried: list[int] = []
+    for sl in (seq_len, 32, 16):
+        if sl in tried:
+            continue
+        tried.append(sl)
+        gc.collect()
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        try:
+            out = Trainer(
+                cfg,
+                "B0",
+                "cuda",
+                steps=steps,
+                micro_batch=micro_batch,
+                accum=1,
+                dtype="bf16",
+                grad_ckpt=True,
+                seq_len=sl,
+                seed=0,
+            ).run()
+            peak = torch.cuda.max_memory_allocated() / 1024**3
+            ok = _finite(out.nll) and out.nll > 0 and out.step == steps
+            return {
+                "info": info,
+                "nll": float(out.nll),
+                "step": int(out.step),
+                "seq_len": sl,
+                "peak_gib": round(peak, 2),
+                "ok": ok,
+            }
+        except torch.cuda.OutOfMemoryError as exc:
+            last_err = exc
+            gc.collect()
+            torch.cuda.empty_cache()
+    assert last_err is not None
+    raise last_err
+
+
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="CAT-YOKO tiny CUDA smoke (never builds 12B on GPU)")
+    p = argparse.ArgumentParser(description="CAT-YOKO CUDA smoke (tiny, or 12B B0 with --middle)")
     p.add_argument("--steps", type=int, default=2)
     p.add_argument("--json", action="store_true")
+    p.add_argument(
+        "--middle",
+        action="store_true",
+        help="one CAT-YOKO-12B B0 step on CUDA bf16 (needs ≥28GiB; not full-Adam B2)",
+    )
+    p.add_argument("--seq-len", type=int, default=64, help="12B smoke sequence length")
     args = p.parse_args(argv)
     info = cuda_info()
     if not info.get("cuda"):
         print("SKIP: no CUDA")
         return 0
+    if args.middle:
+        result = run_middle_12b_b0(seq_len=args.seq_len, steps=1)
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print(
+                f"12b B0 {result['info']['device']} nll={result['nll']:.4f} "
+                f"seq={result['seq_len']} peak_gib={result['peak_gib']} ok={result['ok']}"
+            )
+        gc.collect()
+        torch.cuda.empty_cache()
+        return 0 if result["ok"] else 1
     result = run_tiny_cuda(steps=args.steps)
     if args.json:
         print(json.dumps(result, indent=2))

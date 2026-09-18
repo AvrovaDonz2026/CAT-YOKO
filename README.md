@@ -34,9 +34,14 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # python3 -m cat_yoko.train --config 12b --phase B0 \
 #   --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin \
 #   --dtype bf16 --grad-ckpt --device cuda --steps N --save-dir runs/b0
+# 12B 图在 ≥28GiB GPU 上跑 C1 B0 一步（bf16 直接建图，不经 CPU fp32）：
+# python3 -m cat_yoko.gpu_smoke --middle
+# python3 -m cat_yoko.train --config 12b --device cuda --dtype bf16 --grad-ckpt \
+#   --steps 1 --accum 1 --micro-batch 1 --seq-len 64
 python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke
+python3 -m cat_yoko.gpu_smoke --middle
 python3 -m unittest tests.test_gpu
 ```
 
