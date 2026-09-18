@@ -9,7 +9,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
-from torch.optim import AdamW
+from torch.optim import AdamW, Optimizer
 
 def trim_host_allocator() -> None:
     """Return freed Python / glibc arenas to the cgroup (PyTorch CPU cache)."""
@@ -108,23 +108,30 @@ def plan_cpu_adam(
     return torch.float32, False, "ephemeral"
 
 
-class CPUOffloadAdamW(AdamW):
+class CPUOffloadAdamW(Optimizer):
     """AdamW whose exp_avg / exp_avg_sq live on CPU (optional fp16 / ephemeral).
 
-    Parameters may sit on CUDA (B1 encoder-offload) or CPU (B2 block offload).
+    Subclass Optimizer, not AdamW — PyTorch 2.8 AdamW.__init__ can eagerly
+    allocate fused/foreach state for 12B params and get the 62GiB cgroup killed.
     """
 
     def __init__(
         self,
         params,
         *,
+        lr: float = 1e-4,
+        betas: tuple[float, float] = (0.9, 0.95),
+        eps: float = 1e-8,
+        weight_decay: float = 0.1,
         state_dtype: torch.dtype = torch.float32,
         retain_state: bool = True,
-        **kwargs,
     ) -> None:
         self.state_dtype = state_dtype
         self.retain_state = retain_state
-        super().__init__(params, **kwargs)
+        super().__init__(
+            params,
+            dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay),
+        )
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -212,14 +219,18 @@ def build_optimizer(
     cpu_offload: bool = False,
     state_dtype: torch.dtype = torch.float32,
     retain_state: bool = True,
-) -> AdamW:
+) -> Optimizer:
     groups = [g for g in adamw_param_groups(model, cfg.weight_decay) if g["params"]]
-    kw = _adamw_kwargs(cfg)
     if cpu_offload:
         return CPUOffloadAdamW(
-            groups, state_dtype=state_dtype, retain_state=retain_state, **kw
+            groups,
+            lr=cfg.lr,
+            betas=(cfg.adam_beta1, cfg.adam_beta2),
+            weight_decay=cfg.weight_decay,
+            state_dtype=state_dtype,
+            retain_state=retain_state,
         )
-    return AdamW(groups, **kw)
+    return AdamW(groups, **_adamw_kwargs(cfg))
 
 
 def wsd_lr(tokens_seen: float, cfg: CATYokoConfig, phase: str) -> float:

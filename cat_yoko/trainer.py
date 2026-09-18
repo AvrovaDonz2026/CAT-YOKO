@@ -330,6 +330,8 @@ class Trainer:
             state_dtype=state_dtype,
             retain_state=retain_state,
         )
+        if is_rank0(self.rank) and self.cfg.name == "CAT-YOKO-12B":
+            print(f"optimizer ready {type(opt).__name__}", flush=True)
         stream = self._open(self.data, self.seed + self.rank)
         step = 0
         tokens_in_phase = 0.0
@@ -404,6 +406,8 @@ class Trainer:
                 with self._amp():
                     out = model(**batch)
                     loss = out["loss"] / self.accum
+                if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
+                    print(f"forward done phase={self.phase}", flush=True)
                 if self.teacher is not None:
                     with torch.no_grad():
                         t_logits = self.teacher(batch["input_ids"])["logits"]
@@ -419,6 +423,8 @@ class Trainer:
                             self.cfg.kd_temperature,
                         )
                 loss.backward()
+                if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
+                    print(f"backward done phase={self.phase}", flush=True)
                 unwrap(model).step_router_bias()
                 step_nll += float(out["nll"].detach()) / self.accum
                 step_loss += float(out["loss"].detach()) / self.accum
