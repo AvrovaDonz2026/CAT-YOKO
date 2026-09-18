@@ -210,7 +210,7 @@ Decoder self-attn：全部 sliding（或以后的 KDA 混合），**不要**默�
 
 - 非对称激活来自**两个栈的层数与 top-k**，不是同一层上按 token 改 k。与定理 A 兼容：FFN 被换成 MoE 后等价被打破，所以 virtual-group 上采样要单独恢复（Phase B）。
 - 每栈首层 dense：路由在第 1 层不稳定（DeepSeekMoE 惯例），与注意力 bootstrap 同构——都是「先别上最险的归纳偏置」。预算篇：首层 dense 后 Enc routed 17→19 补回 12.05B。
-- Hash-MoE：冻结 `token_id→expert_id`，无学习路由，不进入注意力因果。C1 下 Encoder 的 Hash-MoE 放到 B2 解冻之后（课程篇 §5）。
+- Hash-MoE：冻结 `token_id→expert_id`，无学习路由，不进入注意力因果。Encoder 的 Hash-MoE 放到 B2 解冻之后（课程篇 §5）。
 - μP：残差乘子锁 \(1.4/\sqrt{40}\)（预算篇 §9）。与 YOCO 切分正交：切的是层，不是尺度。
 
 mHC / Muon / MTP 不进入本篇因果核验。mHC 是残差谱约束，关了不影响 YOCO/CSA 合法性。
@@ -277,9 +277,9 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 定理 D：B0/B1 在 \(X^{16}\) 上 `.detach()`，Encoder 无权重/激活梯度；\(W_K,W_V\) 挂在 detach 之后，是新模块。  
 定理 E：tied \(E\) 必须随 Encoder 冻结（或解绑只训 head），否则冻结 Encoder 的输入分布会漂。
 
-默认 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM-16；B2 才让 Encoder 专家特化）。C2（Encoder 保持 dense 直到 B2）是可选的再省一档，不是默认。
+定稿 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM-16；B2 才让 Encoder 专家特化）。
 
-数字：C1 约 **81%** 联合 50B，可选 C2 约 **77%**；独立拼接 **152%**。B1 Adam 状态约联合的 **60%**。冻结边界与 split 敏感性见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0；`python3 scripts/param_budget.py --staged --curriculum`。
+数字：C1 约 **81%** 联合 50B；独立拼接 **152%**。B1 Adam 状态约联合的 **60%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0；`python3 scripts/param_budget.py --staged --curriculum`。
 
 复算：
 
@@ -287,5 +287,5 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 python3 scripts/arch_verify.py --verify
 python3 -m unittest tests.test_arch_verify
 python3 scripts/param_budget.py --verify                 # 中间档 + 解冻课程账本
-python3 scripts/param_budget.py --staged --curriculum    # C1/C2 / 冻结边界 / 显存
+python3 scripts/param_budget.py --staged --curriculum    # C1 定稿 / 冻结边界 / 显存
 ```

@@ -14,11 +14,10 @@ real CSA/HCA/MLA projection dims are frozen. A MiniCPM-native CSA/HCA MQA-64
 estimate is available via ``--attn csa_mqa64`` as a sensitivity check; it
 does not change the published middle-tier spec.
 
-Freeze-curriculum (Phase B): ``--staged`` for FLOPs vs joint; ``--curriculum``
-for freeze boundaries, Adam/activation memory, and token-split sensitivity.
-Default recipe is C1 (MoE both stacks at Phase A, freeze encoder in
-B0/B1). C2 delayed encoder MoE is an optional extra save. Do not
-franken-merge two LMs.
+Freeze-curriculum (Phase B) is **frozen as C1**: MoE both stacks at
+Phase A, freeze encoder in B0/B1, short joint B2. Delayed encoder MoE
+is a sensitivity check only (``--curriculum``); it does not change the
+published recipe. Do not franken-merge two LMs.
 """
 
 from __future__ import annotations
@@ -57,8 +56,8 @@ WEIGHT_BYTES = 2  # bf16 weights
 TRAINABLE_FOOTPRINT = WEIGHT_BYTES + GRAD_BYTES + ADAM_STATE_BYTES  # 12
 FROZEN_FOOTPRINT = WEIGHT_BYTES  # 2
 DEFAULT_CURRICULUM_SPLIT = (8e9, 27e9, 15e9)  # B0 + B1 + B2 = 50B
-# C1 = both stacks MoE at Phase A, freeze encoder in B0/B1 (plan of record).
-# C2 = delayed encoder MoE (encoder_dense=True); optional extra save.
+# C1 = both stacks MoE at Phase A, freeze encoder in B0/B1 (FROZEN spec).
+# Delayed encoder MoE (encoder_dense=True) is sensitivity only.
 DEFAULT_DELAYED_ENCODER_MOE = False
 
 # Hardware for GPU-hour estimates (plan §15.1): 40% MFU.
@@ -453,13 +452,13 @@ def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedReci
             "unfreeze curriculum 8+27+15B",
             flops_curriculum(budget, tokens, delayed=DEFAULT_DELAYED_ENCODER_MOE),
             tokens,
-            "C1 (default): MoE both stacks, freeze enc in B0/B1",
+            "C1 (frozen spec): MoE both stacks, freeze enc in B0/B1",
         ),
         StagedRecipe(
             "delayed-enc-MoE curriculum 8+27+15B",
             flops_curriculum(budget, tokens, delayed=True),
             tokens,
-            "C2: dense encoder in B0/B1, virtual-group MoE at B2",
+            "sensitivity: dense encoder in B0/B1 (not the frozen spec)",
         ),
         StagedRecipe(
             "independent enc LM + freeze-enc dec + 20B stitch",
@@ -505,7 +504,7 @@ FREEZE_BOUNDARIES: tuple[FreezeBoundary, ...] = (
         detach_at_cache=True,
         tied_emb="freeze_tied",
         gate="0→0.3",
-        note="new modules only; encoder FFN = frozen MoE copies (C1 default) or dense (C2)",
+        note="new modules only; encoder FFN = frozen MoE copies (C1)",
     ),
     FreezeBoundary(
         phase="B1",
@@ -523,7 +522,7 @@ FREEZE_BOUNDARIES: tuple[FreezeBoundary, ...] = (
         detach_at_cache=False,
         tied_emb="train_tied",
         gate="1",
-        note="short joint; C1 unfreezes already-MoE encoder; C2 upcycles then unfreezes",
+        note="short joint; unfreeze the already-MoE encoder",
     ),
 )
 
@@ -681,10 +680,10 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
             "≥10B",
         ),
         Claim(
-            "default recipe is C1 (not delayed encoder MoE)",
+            "frozen spec is C1 (not delayed encoder MoE)",
             DEFAULT_DELAYED_ENCODER_MOE is False,
             str(DEFAULT_DELAYED_ENCODER_MOE),
-            "False (C1: both stacks MoE, freeze enc)",
+            "False (C1 frozen: both stacks MoE, freeze enc)",
         ),
     ]
 
@@ -980,7 +979,7 @@ def print_staged(budget: ModelBudget, tokens: float = 50e9) -> None:
 
 
 def print_curriculum(budget: ModelBudget, tokens: float = 50e9) -> None:
-    print("-- Freeze boundary (default C1; C2 differs only in encoder FFN) --")
+    print("-- Freeze boundary (C1 frozen spec; delayed-enc-MoE is sensitivity) --")
     print(
         f"  {'phase':<4s} {'detach':<7s} {'tied_emb':<16s} {'gate':<8s} "
         f"{'frozen':<42s} {'trainable'}"

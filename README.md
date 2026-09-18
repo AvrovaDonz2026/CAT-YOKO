@@ -9,7 +9,7 @@ Default spec (**middle compute tier**): ≈12B total, Encoder ≈2.3B active / i
 - [`docs/TRAINING_PLAN.md`](docs/TRAINING_PLAN.md) — architecture, staged upcycling recipe, data, optimizer, eval
 - [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — middle-tier parameter / FLOPs / KV / μP ledger
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — causality, residual-cut equivalence, M1/M2/M3 cache interface
-- [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum (default C1: MoE both stacks, freeze encoder)
+- [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum **C1** (MoE both stacks, freeze encoder in B0/B1)
 
 ## Recalculate / verify
 
