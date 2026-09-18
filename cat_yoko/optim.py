@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import inspect
 import math
 from pathlib import Path
@@ -10,7 +11,15 @@ import torch
 from torch import nn
 from torch.optim import AdamW
 
-from cat_yoko.config import CATYokoConfig
+def trim_host_allocator() -> None:
+    """Return freed Python / glibc arenas to the cgroup (PyTorch CPU cache)."""
+    gc.collect()
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError, ValueError):
+        pass
 
 
 def unwrap(module: nn.Module) -> nn.Module:
@@ -73,9 +82,11 @@ def plan_cpu_adam(
 ) -> tuple[torch.dtype, bool, str]:
     """Pick moment dtype / whether to keep m,v under a RAM cgroup.
 
-    fp32 moments are 8 bytes/param; fp16 are 4. If even fp16 cannot fit the
-    cgroup, a one-step run may drop stored moments (AdamW step-1 math is exact).
+    fp32 moments are 8 bytes/param; fp16 are 4. A one-step run skips stored
+    moments so a 62GiB cgroup can still host B2 grads after B1.
     """
+    if steps is not None and int(steps) <= 1:
+        return torch.float32, False, "ephemeral"
     limit = host_memory_limit_bytes()
     if limit is None:
         return torch.float32, True, "fp32"

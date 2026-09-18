@@ -23,7 +23,7 @@ from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.offload import auto_offload_flags, clip_grad_norm_mixed, move_module
-from cat_yoko.optim import build_optimizer, plan_cpu_adam, unwrap, wsd_lr
+from cat_yoko.optim import build_optimizer, plan_cpu_adam, trim_host_allocator, unwrap, wsd_lr
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
@@ -496,7 +496,7 @@ class Trainer:
         peak = self._mem_mib()
         del opt
         if self.optim_cpu or self.offload_blocks or self.offload_encoder:
-            gc.collect()
+            trim_host_allocator()
             if str(self.device).startswith("cuda") and torch.cuda.is_available():
                 torch.cuda.empty_cache()
         return TrainResult(
@@ -537,7 +537,7 @@ def run_c1_chain(
         out[phase] = tr.run()
         offset = out[phase].tokens_seen
         if str(device).startswith("cuda") and torch.cuda.is_available():
-            gc.collect()
+            trim_host_allocator()
             torch.cuda.empty_cache()
     return out
 
