@@ -18,7 +18,7 @@ python3 -m cat_yoko.b1 --resume checkpoints/b0 --upcycle-hf openbmb/MiniCPM5-2B-
 
 Trainer 会 MiniCPM5 上采样后再 overlay `trainable.pt`。
 
-仓库里的 `checkpoints/b0/trainable.pt` 是 AutoDL RTX 4080 SUPER 上 `python3 -m cat_yoko.b0 --try` 的产物（32 步、seq=64、`--dummy-upcycle`；hf-mirror 拉 MiniCPM5-2B-Base 卡在 20MiB）。**不是** 8B token 包络。B1 接手仍走 MiniCPM5 上采样 + overlay。
+仓库里的 `checkpoints/b0/trainable.pt` 是 AutoDL RTX 4080 SUPER 上 `python3 -m cat_yoko.b0 --try` 的产物（32 步、seq=64、`--dummy-upcycle`；hf-mirror 拉 MiniCPM5-2B-Base 卡在 20MiB）。**不是** 8B token 包络。B1 接手仍走 MiniCPM5 上采样 + overlay。训练日志：`train.log`；GPU 烟测 JSON：[`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md)。
 
 32GB 试跑（不能跑完 8B token）：
 

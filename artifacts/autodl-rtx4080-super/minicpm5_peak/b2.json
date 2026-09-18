@@ -1,0 +1,20 @@
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=1.00GiB grad_ckpt=True seq=64 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=12250.38M reuse=True
+CAT-YOKO-12B B2 step 1/1 nll=11.8909 ppl=145928.6 aux=0.0558 gate=1.000 gn=15.67 moe_cv=0.52 trainable=12250.38M lr=3.00e-08 fp8=True tok=64 tok/s=0 mem=2662MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phase": "B2",
+  "nll": 11.890872955322266,
+  "step": 1,
+  "seq_len": 64,
+  "peak_gib": 2.6,
+  "ok": true
+}

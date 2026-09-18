@@ -1,0 +1,213 @@
+/bin/bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+=== START 2026-09-18T21:16:03+08:00 ===
+ALLOC expandable_segments:True
+INFO {'cuda': True, 'device': 'NVIDIA GeForce RTX 4080 SUPER', 'index': 0, 'capability': '8.9', 'total_gib': 31.48, 'bf16': True, 'torch': '2.8.0+cu128', 'cuda_runtime': '12.8', 'alloc_conf': 'expandable_segments:True'}
+=== TINY ===
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/2 nll=4.9867 ppl=146.5 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=56 mem=18MiB
+tiny B0 step 2/2 nll=4.8941 ppl=133.5 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=699 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/2 nll=4.9899 ppl=146.9 aux=0.0011 gate=0.650 gn=1.66 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=496 mem=18MiB
+tiny B1 step 2/2 nll=4.8979 ppl=134.0 aux=0.0010 gate=1.000 gn=1.69 moe_cv=0.25 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=527 mem=19MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/2 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=367 mem=20MiB
+tiny B2 step 2/2 nll=4.8980 ppl=134.0 aux=0.0032 gate=1.000 gn=1.90 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False tok=64 tok/s=393 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=151 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9911 ppl=147.1 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=True tok=32 tok/s=486 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=242 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9750 ppl=144.7 aux=0.0010 gate=1.000 gn=1.67 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=405 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=0.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=4.9750 ppl=144.7 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.14 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=101 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9979 ppl=148.1 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=438 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9318 ppl=138.6 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.26 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=339 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=5.1130 ppl=166.2 aux=0.0031 gate=1.000 gn=1.91 moe_cv=0.17 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=238 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/2 nll=4.9729 ppl=144.4 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=512 mem=17MiB
+tiny B0 step 2/2 nll=4.8943 ppl=133.5 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=644 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.7927 ppl=120.6 aux=0.0000 gate=0.301 gn=0.02 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=664 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=651 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9041 ppl=134.8 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=715 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 2/2 nll=4.9997 ppl=148.4 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=717 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=654 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=506 mem=17MiB
+[Gloo] Rank [Gloo] Rank 01 is connected to  is connected to 11 peer ranks. Expected number of connected peer ranks is :  peer ranks. 1Expected number of connected peer ranks is : 
+1
+[rank1]:[W918 21:16:21.001908942 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 21:16:21.105881516 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=5.2238 ppl=185.6 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=19 mem=0MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+[rank0]:[W918 21:16:27.013771179 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 21:16:27.022107747 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9255 ppl=137.8 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=48 mem=17MiB
+[Gloo] Rank [Gloo] Rank 10 is connected to  is connected to 11 peer ranks.  peer ranks. Expected number of connected peer ranks is : Expected number of connected peer ranks is : 11
+
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+[rank1]:[W918 21:16:33.440793417 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 21:16:33.467017428 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=5.0385 ppl=154.2 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.16 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=45 mem=17MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.8516 ppl=127.9 aux=0.0012 gate=1.000 gn=1.66 moe_cv=0.28 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=257 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=4.8969 ppl=133.9 aux=0.0033 gate=1.000 gn=1.81 moe_cv=0.12 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=288 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.8448 ppl=127.1 aux=0.0000 gate=0.301 gn=0.08 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=16 tok/s=24 mem=17MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8",
+    "alloc_conf": "expandable_segments:True"
+  },
+  "phases": {
+    "B0": {
+      "nll": 4.894075393676758,
+      "ok": true
+    },
+    "B1": {
+      "nll": 4.897915840148926,
+      "ok": true
+    },
+    "B2": {
+      "nll": 4.897969722747803,
+      "ok": true
+    }
+  },
+  "bf16": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "fp8_policy": {
+    "b1_autocast": true,
+    "b0_autocast": false
+  },
+  "b1_fp8_autocast": {
+    "nll": 4.991145610809326,
+    "ok": true
+  },
+  "grad_ckpt": {
+    "nll": 4.990365505218506,
+    "ok": true
+  },
+  "b1_offload": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "b2_block_offload": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "c1_ckpts": {
+    "ok": true
+  },
+  "c1_chain": {
+    "B0": {
+      "nll": 4.9979166984558105,
+      "step": 1,
+      "ok": true
+    },
+    "B1": {
+      "nll": 4.9317708015441895,
+      "step": 1,
+      "ok": true
+    },
+    "B2": {
+      "nll": 5.113020896911621,
+      "step": 1,
+      "ok": true
+    },
+    "ok": true
+  },
+  "kd": {
+    "nll": 4.894270896911621,
+    "ok": true
+  },
+  "upcycle": {
+    "nll": 4.792708396911621,
+    "ok": true
+  },
+  "eval": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "packed_resume": {
+    "first_nll": 4.904074192047119,
+    "second_step": 2,
+    "ok": true
+  },
+  "b0_to_b1": {
+    "b0_nll": 4.974999904632568,
+    "b1_step": 1,
+    "b1_phase": "B1",
+    "ok": true
+  },
+  "b0_encoder_frozen": {
+    "ok": true
+  },
+  "ddp_gloo": {
+    "nll": 5.223781108856201,
+    "step": 1,
+    "world": 2,
+    "phase": "B0",
+    "device": "cpu",
+    "mode": "ddp",
+    "accum": 1,
+    "ok": true
+  },
+  "ddp_cuda": {
+    "nll": 4.925520896911621,
+    "step": 1,
+    "world": 2,
+    "phase": "B0",
+    "device": "cuda",
+    "mode": "ddp",
+    "accum": 1,
+    "ok": true
+  },
+  "ddp_cuda_c1": {
+    "nll": 4.896875381469727,
+    "step": 1,
+    "world": 2,
+    "phase": "C1",
+    "b0": 5.038541793823242,
+    "b1": 4.8515625,
+    "b2": 4.896875381469727,
+    "device": "cuda",
+    "ok": true
+  },
+  "fsdp": {
+    "nll": 4.844791889190674,
+    "step": 1,
+    "world": 1,
+    "phase": "B0",
+    "device": "cuda",
+    "mode": "fsdp",
+    "accum": 1,
+    "ok": true
+  },
+  "peak_mib": 17.5,
+  "ok": true
+}
+TINY_EXIT:0
+=== IDLE ===
+1 MiB
+=== DONE 2026-09-18T21:16:40+08:00 ===

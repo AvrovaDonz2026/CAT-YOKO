@@ -1,0 +1,5 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+=== B0 try 2026-09-18T13:43:50Z ===
+NVIDIA GeForce RTX 4080 SUPER, 32230 MiB
+/dev/md0         50G  1.9M   50G   1% /root/autodl-tmp
+Fetching 10 files:   0%|          | 0/10 [00:00<?, ?it/s]Fetching 10 files:  10%|█         | 1/10 [00:01<00:10,  1.15s/it]Fetching 10 files:  20%|██        | 2/10 [00:01<00:05,  1.37it/s]Fetching 10 files:  30%|███       | 3/10 [00:02<00:05,  1.30it/s]Fetching 10 files:  40%|████      | 4/10 [00:02<00:04,  1.44it/s]Fetching 10 files:  50%|█████     | 5/10 [00:03<00:03,  1.43it/s]Fetching 10 files:  60%|██████    | 6/10 [00:03<00:02,  1.80it/s]Fetching 10 files:  70%|███████   | 7/10 [00:04<00:01,  1.67it/s]Fetching 10 files:  80%|████████  | 8/10 [00:05<00:01,  1.22it/s]Fetching 10 files:  90%|█████████ | 9/10 [00:09<00:01,  1.78s/it]Fetching 10 files:  90%|█████████ | 9/10 [00:09<00:01,  1.78s/it]
