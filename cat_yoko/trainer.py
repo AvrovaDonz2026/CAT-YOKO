@@ -13,14 +13,21 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from cat_yoko.checkpoint import load_checkpoint, load_model_state, load_optimizer_state, save_checkpoint
+from cat_yoko.checkpoint import (
+    load_checkpoint,
+    load_model_state,
+    load_optimizer_state,
+    prune_step_checkpoints,
+    save_checkpoint,
+)
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import open_stream, resolve_eos, resolve_seq_len, sidecar_meta
-from cat_yoko.dist_util import barrier, init_distributed, is_rank0, wrap_distributed
+from cat_yoko.dist_util import barrier, init_distributed, is_rank0, reduce_mean, wrap_distributed
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
-from cat_yoko.loss import kd_kl, kd_weight
+from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
+from cat_yoko.moe import moe_utilization
 from cat_yoko.offload import (
     auto_offload_flags,
     clip_grad_norm_mixed,
@@ -101,6 +108,7 @@ class TrainResult:
     tokens_seen: float
     phase: str = ""
     peak_mib: float = 0.0
+    stream: dict | None = None
 
 
 class Trainer:
@@ -136,6 +144,9 @@ class Trainer:
         offload_encoder: bool | None = None,
         offload_blocks: bool | None = None,
         optim_cpu: bool | None = None,
+        save_optim: bool | None = None,
+        save_keep: int = 0,
+        initial_stream: dict | None = None,
     ) -> None:
         self.cfg = cfg
         self.phase = phase
@@ -167,6 +178,9 @@ class Trainer:
         self.offload_blocks = False
         self.optim_cpu = False
         self.adam_state = "gpu"
+        self.save_optim_arg = save_optim
+        self.save_keep = max(int(save_keep), 0)
+        self.initial_stream = initial_stream
         self.device, self.rank, self.world = init_distributed(device)
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
@@ -203,8 +217,9 @@ class Trainer:
             return
         line = (
             f"{row['name']} {row['phase']} step {row['step']}/{row['steps_or_inf']} "
-            f"nll={row['nll']:.4f} aux={row['aux']:.4f} gate={row['gate']:.3f} "
-            f"gn={row['grad_norm']:.2f} trainable={row['trainable_m']:.2f}M "
+            f"nll={row['nll']:.4f} ppl={row.get('ppl', 0):.1f} aux={row['aux']:.4f} "
+            f"gate={row['gate']:.3f} gn={row['grad_norm']:.2f} "
+            f"moe_cv={row.get('moe_cv', 0):.2f} trainable={row['trainable_m']:.2f}M "
             f"lr={row['lr']:.2e} fp8={row['fp8']} tok={row['tokens_seen']:.0f} "
             f"tok/s={row['tok_s']:.0f} mem={row['mem_mib']:.0f}MiB"
         )
@@ -222,7 +237,10 @@ class Trainer:
             model=model,
             optimizer=opt,
             extra=extra,
+            save_optimizer=self.save_optim,
         )
+        if tag.startswith("step_") and self.save_keep:
+            prune_step_checkpoints(self.save_dir, self.save_keep)
 
     def _clip(self, model: nn.Module, trainable: list) -> float:
         if hasattr(model, "clip_grad_norm_") and type(model).__name__ == "FullyShardedDataParallel":
@@ -344,6 +362,10 @@ class Trainer:
         if str(self.device).startswith("cuda") and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
         self._resolve_offload()
+        if self.save_optim_arg is None:
+            self.save_optim = self.cfg.name != "CAT-YOKO-12B"
+        else:
+            self.save_optim = bool(self.save_optim_arg)
         if self.offload_blocks and self.accum > 1:
             raise RuntimeError(
                 "B2 --offload-blocks Adams each layer during backward and cannot "
@@ -393,6 +415,8 @@ class Trainer:
         tokens_seen = self.global_tokens_offset
         if self.resume is not None:
             step, tokens_in_phase, tokens_seen = self._load_resume(model, opt, stream)
+        elif self.initial_stream is not None:
+            stream.load_state_dict(self.initial_stream)
 
         if self.teacher is not None:
             self.teacher.to(self.device)
@@ -427,6 +451,12 @@ class Trainer:
                 if phase_budget is not None and tokens_in_phase >= phase_budget:
                     break
                 gn_parts.clear()
+                moe_stats: dict[str, float] = {
+                    "moe_cv": 0.0,
+                    "moe_max": 0.0,
+                    "moe_min": 0.0,
+                    "moe_layers": 0,
+                }
                 progress = 0.0
                 if max_steps:
                     progress = (step + 1) / max_steps
@@ -463,10 +493,14 @@ class Trainer:
                                 self.cfg.kd_temperature,
                             )
                     loss.backward()
+                    moe_stats = moe_utilization(unwrap(model))
                     unwrap(model).step_router_bias()
                     step_nll += float(out["nll"].detach()) / self.accum
                     step_loss += float(out["loss"].detach()) / self.accum
                     step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
+                step_nll = reduce_mean(step_nll, device=str(self.device), world=self.world)
+                step_loss = reduce_mean(step_loss, device=str(self.device), world=self.world)
+                step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
                 if not math.isfinite(step_nll):
                     raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
                 if self.offload_blocks:
@@ -503,6 +537,7 @@ class Trainer:
                         "step": step,
                         "steps_or_inf": max_steps if max_steps is not None else "-",
                         "nll": last,
+                        "ppl": safe_ppl(last),
                         "loss": step_loss,
                         "aux": step_aux,
                         "gate": extra["gate"],
@@ -520,12 +555,19 @@ class Trainer:
                         "offload_blocks": self.offload_blocks,
                         "optim_cpu": self.optim_cpu,
                         "adam": self.adam_state,
+                        **moe_stats,
                     }
+                    if self.eval_every and step % self.eval_every == 0:
+                        ev = self._eval_nll(model)
+                        ev = reduce_mean(ev, device=str(self.device), world=self.world)
+                        row["eval_nll"] = ev
+                        row["eval_ppl"] = safe_ppl(ev)
                     self._log(row)
-                if self.eval_every and step % self.eval_every == 0:
+                elif self.eval_every and step % self.eval_every == 0:
                     ev = self._eval_nll(model)
+                    ev = reduce_mean(ev, device=str(self.device), world=self.world)
                     if is_rank0(self.rank):
-                        print(f"eval nll={ev:.4f}")
+                        print(f"eval nll={ev:.4f} ppl={safe_ppl(ev):.1f}")
                 if self.save_every and step % self.save_every == 0:
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                 if max_steps is None and phase_budget is None:
@@ -551,7 +593,12 @@ class Trainer:
                 if str(self.device).startswith("cuda") and torch.cuda.is_available():
                     torch.cuda.empty_cache()
             return TrainResult(
-                nll=last, step=step, tokens_seen=tokens_seen, phase=self.phase, peak_mib=peak
+                nll=last,
+                step=step,
+                tokens_seen=tokens_seen,
+                phase=self.phase,
+                peak_mib=peak,
+                stream=stream.state_dict(),
             )
         finally:
             set_after_block_backward(None)
@@ -565,8 +612,14 @@ def run_c1_chain(
     reuse_model: nn.Module | None = None,
     **kwargs,
 ) -> dict[str, TrainResult]:
-    """One (or N) optimizer step of B0, then B1, then B2 on the same weights."""
+    """B0 then B1 then B2 on the same weights. Packed cursor continues across phases.
+
+    ``save_dir`` becomes ``save_dir/{B0,B1,B2}/latest.pt`` so a later
+    ``--phase B1 --resume save_dir/B0/latest.pt`` handoff still works.
+    """
     dtype = kwargs.pop("dtype", "bf16" if str(device).startswith("cuda") else "fp32")
+    save_root = kwargs.pop("save_dir", None)
+    stream_state = kwargs.pop("initial_stream", None)
     if reuse_model is None:
         reuse_model = build_model(cfg, device, dtype=dtype)
         upcycle_src = kwargs.pop("upcycle_src", None)
@@ -577,6 +630,7 @@ def run_c1_chain(
     out: dict[str, TrainResult] = {}
     offset = float(kwargs.pop("global_tokens_offset", 0.0))
     for phase in ("B0", "B1", "B2"):
+        phase_dir = Path(save_root) / phase if save_root is not None else None
         tr = Trainer(
             cfg,
             phase,
@@ -585,10 +639,13 @@ def run_c1_chain(
             dtype=dtype,
             reuse_model=reuse_model,
             global_tokens_offset=offset,
+            save_dir=phase_dir,
+            initial_stream=stream_state,
             **kwargs,
         )
         out[phase] = tr.run()
         offset = out[phase].tokens_seen
+        stream_state = out[phase].stream
         if str(device).startswith("cuda") and torch.cuda.is_available():
             trim_host_allocator()
             torch.cuda.empty_cache()

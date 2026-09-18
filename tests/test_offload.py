@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -230,6 +231,27 @@ class CliOffloadTests(unittest.TestCase):
     def test_tiny_c1_smoke(self) -> None:
         code = main(["--config", "tiny", "--c1-smoke", "--steps", "1", "--accum", "1"])
         self.assertEqual(code, 0)
+
+    def test_tiny_c1_alias_writes_phase_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            code = main(
+                [
+                    "--config",
+                    "tiny",
+                    "--c1",
+                    "--steps",
+                    "1",
+                    "--accum",
+                    "1",
+                    "--save-dir",
+                    str(td / "run"),
+                    "--no-save-optim",
+                ]
+            )
+            self.assertEqual(code, 0)
+            for phase in ("B0", "B1", "B2"):
+                self.assertTrue((td / "run" / phase / "latest.pt").is_file(), msg=phase)
 
     def test_12b_c1_smoke_cpu_refuses(self) -> None:
         with self.assertRaises(SystemExit):

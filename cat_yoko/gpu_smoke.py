@@ -97,9 +97,23 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
         dtype="bf16",
     )
     out["b2_block_offload"] = {"nll": float(nll_blk), "ok": _finite(nll_blk) and nll_blk > 0}
-    chain = run_c1_chain(
-        cfg, device, steps=1, accum=1, micro_batch=micro_batch, dtype="bf16", grad_ckpt=True
-    )
+    chain = None
+    with tempfile.TemporaryDirectory() as c1td:
+        c1_root = Path(c1td)
+        chain = run_c1_chain(
+            cfg,
+            device,
+            steps=1,
+            accum=1,
+            micro_batch=micro_batch,
+            dtype="bf16",
+            grad_ckpt=True,
+            save_dir=c1_root,
+            save_optim=False,
+        )
+        out["c1_ckpts"] = {
+            "ok": all((c1_root / p / "latest.pt").is_file() for p in ("B0", "B1", "B2"))
+        }
     out["c1_chain"] = {
         phase: {"nll": float(r.nll), "step": int(r.step), "ok": _finite(r.nll) and r.step == 1}
         for phase, r in chain.items()
@@ -220,6 +234,7 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             out["b1_offload"]["ok"],
             out["b2_block_offload"]["ok"],
             out["c1_chain"]["ok"],
+            out["c1_ckpts"]["ok"],
             out["packed_resume"]["ok"],
             out["b0_to_b1"]["ok"],
             out["kd"]["ok"],
@@ -438,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  grad_ckpt ok={result['grad_ckpt']['ok']}")
         print(f"  b1_offload ok={result['b1_offload']['ok']}")
         print(f"  b2_block_offload ok={result['b2_block_offload']['ok']}")
-        print(f"  c1_chain ok={result['c1_chain']['ok']}")
+        print(f"  c1_chain ok={result['c1_chain']['ok']} ckpts ok={result['c1_ckpts']['ok']}")
         print(f"  overall ok={result['ok']}")
     return 0 if result["ok"] else 1
 

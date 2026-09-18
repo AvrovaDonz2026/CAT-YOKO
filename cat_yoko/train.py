@@ -73,7 +73,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--c1-smoke",
         action="store_true",
-        help="one step each of B0→B1→B2 on the same weights (ignores --phase)",
+        help="B0→B1→B2 on the same weights (ignores --phase); writes --save-dir/{B0,B1,B2}",
+    )
+    p.add_argument(
+        "--c1",
+        action="store_true",
+        help="alias of --c1-smoke",
+    )
+    p.add_argument("--save-optim", action="store_true", help="store Adam moments in checkpoints")
+    p.add_argument(
+        "--no-save-optim",
+        action="store_true",
+        help="weights-only checkpoints (default for 12B)",
+    )
+    p.add_argument(
+        "--keep-last",
+        type=int,
+        default=0,
+        help="keep only N step_*.pt files (0 = keep all); latest.pt is always kept",
     )
     p.add_argument("--offload-encoder", action="store_true", help="force B0/B1 encoder CPU offload")
     p.add_argument("--no-offload-encoder", action="store_true", help="disable encoder CPU offload")
@@ -125,6 +142,9 @@ def main(argv: list[str] | None = None) -> int:
         p.error("pick one of --offload-blocks / --no-offload-blocks")
     if args.optim_cpu and args.no_optim_cpu:
         p.error("pick one of --optim-cpu / --no-optim-cpu")
+    if args.save_optim and args.no_save_optim:
+        p.error("pick one of --save-optim / --no-save-optim")
+    args.c1_smoke = bool(args.c1_smoke or args.c1)
     if args.c1_smoke and args.resume is not None:
         p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
     if args.c1_smoke and args.tokens is not None:
@@ -151,6 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     offload_encoder = True if args.offload_encoder else (False if args.no_offload_encoder else None)
     offload_blocks = True if args.offload_blocks else (False if args.no_offload_blocks else None)
     optim_cpu = True if args.optim_cpu else (False if args.no_optim_cpu else None)
+    save_optim = True if args.save_optim else (False if args.no_save_optim else None)
     n_up = sum(x is not None for x in (True if args.dummy_upcycle else None, args.upcycle, args.upcycle_hf))
     if n_up > 1:
         p.error("pick one of --dummy-upcycle / --upcycle / --upcycle-hf")
@@ -195,6 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         offload_encoder=offload_encoder,
         offload_blocks=offload_blocks,
         optim_cpu=optim_cpu,
+        save_optim=save_optim,
+        save_keep=args.keep_last,
     )
     if args.c1_smoke:
         run_c1_chain(

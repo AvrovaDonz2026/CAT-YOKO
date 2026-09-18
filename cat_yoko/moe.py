@@ -111,3 +111,35 @@ class MoE(nn.Module):
         else:
             self.last_load = None
         return (shared_out + _like(shared_out, routed)).view(b, s, d)
+
+
+def moe_utilization(model: nn.Module) -> dict[str, float]:
+    """Layer-mean coefficient of variation of routed expert load (before bias step)."""
+    cvs: list[float] = []
+    maxs: list[float] = []
+    mins: list[float] = []
+    n_layers = 0
+    encoder = getattr(model, "encoder", None)
+    decoder = getattr(model, "decoder", None)
+    blocks = list(encoder or []) + list(decoder or [])
+    for blk in blocks:
+        mlp = getattr(blk, "mlp", None)
+        load = getattr(mlp, "last_load", None)
+        if load is None:
+            continue
+        p = load.detach().float().reshape(-1)
+        if p.numel() == 0:
+            continue
+        n_layers += 1
+        mean = float(p.mean().clamp_min(1e-12))
+        cvs.append(float(p.std(unbiased=False) / mean))
+        maxs.append(float(p.max()))
+        mins.append(float(p.min()))
+    if not cvs:
+        return {"moe_cv": 0.0, "moe_max": 0.0, "moe_min": 0.0, "moe_layers": 0}
+    return {
+        "moe_cv": sum(cvs) / len(cvs),
+        "moe_max": max(maxs),
+        "moe_min": min(mins),
+        "moe_layers": n_layers,
+    }

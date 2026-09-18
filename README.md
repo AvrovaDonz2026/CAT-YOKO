@@ -41,7 +41,8 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # python3 -m cat_yoko.train --config 12b --device cuda --dtype bf16 --grad-ckpt \
 #   --steps 1 --accum 1 --micro-batch 1 --seq-len 64
 # python3 -m cat_yoko.train --config 12b --device cuda --c1-smoke --steps 1 --seq-len 64
-# 12B 默认 micro-batch=1、grad-ckpt、bf16；B1 `--resume runs/b0/latest.pt` 只接手权重
+# 12B 默认 micro-batch=1、grad-ckpt、bf16、weights-only ckpt
+# python3 -m cat_yoko.train --config 12b --device cuda --c1 --steps 1 --seq-len 64 --save-dir runs/c1
 python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke

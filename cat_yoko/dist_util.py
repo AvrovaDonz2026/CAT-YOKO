@@ -61,3 +61,17 @@ def barrier() -> None:
 
     if dist.is_available() and dist.is_initialized():
         dist.barrier()
+
+
+def reduce_mean(value: float, *, device: str, world: int) -> float:
+    """Average a scalar across DDP ranks. No-op when world==1."""
+    if world <= 1:
+        return float(value)
+    import torch.distributed as dist
+
+    if not dist.is_available() or not dist.is_initialized():
+        return float(value)
+    dev = device if str(device).startswith("cuda") and torch.cuda.is_available() else "cpu"
+    t = torch.tensor([float(value)], device=dev)
+    dist.all_reduce(t, op=dist.ReduceOp.SUM)
+    return float(t.item()) / world

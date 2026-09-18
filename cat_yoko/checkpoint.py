@@ -45,15 +45,33 @@ def save_checkpoint(
     model: nn.Module,
     optimizer: Optimizer | None,
     extra: dict[str, Any],
+    save_optimizer: bool = True,
 ) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "model": model_state_dict(model),
-        "optimizer": optimizer.state_dict() if optimizer is not None else None,
+        "optimizer": optimizer.state_dict() if (save_optimizer and optimizer is not None) else None,
         "extra": extra,
     }
-    torch.save(payload, path)
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(payload, tmp)
+    tmp.replace(path)
+
+
+def prune_step_checkpoints(save_dir: Path, keep: int) -> None:
+    """Keep the newest ``step_*.pt`` files; ``latest.pt`` is not touched."""
+    if keep <= 0:
+        return
+    files = []
+    for p in Path(save_dir).glob("step_*.pt"):
+        try:
+            files.append((int(p.stem.split("_", 1)[1]), p))
+        except (IndexError, ValueError):
+            continue
+    files.sort()
+    for _, old in files[:-keep]:
+        old.unlink(missing_ok=True)
 
 
 def load_checkpoint(path: Path, map_location: str = "cpu") -> dict[str, Any]:

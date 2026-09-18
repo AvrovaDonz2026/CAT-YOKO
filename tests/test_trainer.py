@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import struct
 import sys
 import tempfile
@@ -160,6 +161,72 @@ class LoopTests(unittest.TestCase):
             self.assertIn("tok_s", row)
             self.assertIn("aux", row)
             self.assertEqual(row["adam"], "gpu")
+            self.assertIn("ppl", row)
+            self.assertIn("moe_cv", row)
+            self.assertGreater(row["ppl"], 1.0)
+
+    def test_eval_nll_lands_in_jsonl(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "m.jsonl"
+            Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, log_path=log, eval_every=1).run()
+            row = json.loads(log.read_text().splitlines()[0])
+            self.assertIn("eval_nll", row)
+            self.assertGreater(row["eval_nll"], 0)
+
+    def test_weights_only_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                steps=1,
+                accum=1,
+                save_dir=save,
+                save_every=1,
+                save_optim=False,
+            ).run()
+            ckpt = torch.load(save / "latest.pt", map_location="cpu", weights_only=False)
+            self.assertIsNone(ckpt["optimizer"])
+            self.assertTrue(ckpt["model"])
+
+    def test_keep_last_prunes_step_ckpts(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                steps=3,
+                accum=1,
+                save_dir=save,
+                save_every=1,
+                save_keep=2,
+            ).run()
+            steps = sorted(save.glob("step_*.pt"))
+            self.assertEqual([p.name for p in steps], ["step_2.pt", "step_3.pt"])
+            self.assertTrue((save / "latest.pt").is_file())
+
+    def test_c1_chain_continues_packed_cursor(self) -> None:
+        from cat_yoko.trainer import run_c1_chain
+
+        toks = list(range(96))
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "tok.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            save = Path(td) / "c1"
+            out = run_c1_chain(
+                self.cfg,
+                "cpu",
+                steps=1,
+                accum=1,
+                micro_batch=1,
+                data=path,
+                save_dir=save,
+            )
+            self.assertEqual(out["B2"].stream["i"], 3)
+            for phase in ("B0", "B1", "B2"):
+                self.assertTrue((save / phase / "latest.pt").is_file(), msg=phase)
 
     def test_wsd_b1_offset_skips_warmup(self) -> None:
         lr = wsd_lr(8e9, self.cfg, "B1")
@@ -169,6 +236,13 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(kd_weight(0, 1, 0.5), 0.0)
         self.assertGreater(kd_weight(0, 8, 0.5), 0.3)
         self.assertEqual(kd_kl(torch.zeros(2, 4), torch.zeros(2, 4), 2.0).shape, ())
+
+    def test_safe_ppl_caps(self) -> None:
+        from cat_yoko.loss import safe_ppl
+
+        self.assertAlmostEqual(safe_ppl(0.0), 1.0)
+        self.assertEqual(safe_ppl(float("nan")), float("inf"))
+        self.assertLess(safe_ppl(99.0), math.exp(21))
 
     def test_auto_accum_tiny(self) -> None:
         self.assertEqual(auto_accum(self.cfg, micro_batch=2, world=1), 4)
