@@ -122,9 +122,11 @@ def probe() -> dict:
                 recipe = NVFP4BlockScaling(disable_rht=True, disable_2d_quantization=True)
             except TypeError:
                 recipe = NVFP4BlockScaling()
-            layer = tep.Linear(64, 64, bias=False, params_dtype=torch.bfloat16)
+            # TE FP8/NVFP4: product of leading dims % 8 == 0, last dim % 16 == 0.
+            # A 4×64 probe trips that check and is not a kernel failure.
+            layer = tep.Linear(128, 128, bias=False, params_dtype=torch.bfloat16)
             layer = layer.to(device)
-            x = torch.randn(4, 64, device=device, dtype=torch.bfloat16)
+            x = torch.randn(8, 128, device=device, dtype=torch.bfloat16)
             with tep.autocast(enabled=True, recipe=recipe):
                 y = layer(x)
                 loss = y.float().sum()

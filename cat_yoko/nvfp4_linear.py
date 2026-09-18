@@ -76,9 +76,10 @@ def te_available() -> bool:
 def hw_nvfp4_gemm_available() -> bool:
     """True when this PyTorch build can cast to float4 and run ``_scaled_mm``.
 
-    torch 2.8.0+cu128 on sm_120 exposes ``torch.float4_e2m1fn_x2`` but
-    ``copy_`` is NotImplemented. Nightly cu130 (``venv-nightly``) is the
-    probe target; see ``scripts/upgrade_torch_te_nightly_autodl.sh``.
+    torch 2.8.0+cu128 and 2.15.0.dev20260918+cu130 on sm_120 both expose
+    ``torch.float4_e2m1fn_x2`` but ``copy_`` still raises. Nightly still
+    unlocks ``transformer_engine.pytorch`` (missing on 2.8). Probe with
+    ``scripts/probe_nvfp4_hw.py`` / ``venv-nightly``.
     """
     if not torch.cuda.is_available():
         return False
