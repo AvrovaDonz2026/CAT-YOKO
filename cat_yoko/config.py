@@ -30,7 +30,8 @@ class CATYokoConfig:
     compress_m_hca: int = 128
     index_topk: int = 256
     hash_moe_decoder_layers: int = 2
-    # MiniCPM5 is Llama: no MiniCPM-2B μP. Keep fields so the trainer API stays.
+    # MiniCPM5 is Llama. μP fields exist only so a mistaken MiniCPM-2B copy
+    # cannot silently divide logits; published 12B keeps use_mup=False.
     use_mup: bool = False
     scale_emb: float = 1.0
     dim_model_base: int = 2048
@@ -74,7 +75,13 @@ class CATYokoConfig:
         return self.scale_depth / math.sqrt(self.base_layers)
 
     @property
+    def embed_scale(self) -> float:
+        return float(self.scale_emb) if self.use_mup else 1.0
+
+    @property
     def logit_scale(self) -> float:
+        if not self.use_mup:
+            return 1.0
         return self.hidden_size / self.dim_model_base
 
     @property
@@ -118,8 +125,9 @@ class CATYokoConfig:
             lr=3e-4,
             use_fp8=False,
             global_batch_tokens=128,
+            # Tiny is test-only. Match MiniCPM5 RMS; keep short-rope for seq_len=16.
             rope_theta=10_000.0,
-            rms_eps=1e-5,
+            rms_eps=1e-6,
         )
 
 

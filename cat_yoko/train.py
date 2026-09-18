@@ -10,7 +10,7 @@ from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos
 from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.parallel import ParallelPlan, validate_parallel
-from cat_yoko.recipe import MINICPM_HF
+from cat_yoko.recipe import MINICPM5_HF, assert_minicpm5_id
 from cat_yoko.teacher import DummyTeacher, load_teacher
 from cat_yoko.trainer import Trainer, build_model, print_meta, run_c1_chain, train_loop
 from cat_yoko.upcycle import dummy_minicpm_state
@@ -42,22 +42,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--eval-data", type=Path, default=None)
     p.add_argument("--eos", type=int, default=None, help="document break id for packed .bin")
     p.add_argument("--meta", action="store_true", help="12B param count on meta device")
-    p.add_argument("--upcycle", type=Path, default=None, help="MiniCPM state_dict (.pt) or local HF dir")
+    p.add_argument("--upcycle", type=Path, default=None, help="MiniCPM5-2B state_dict (.pt) or local HF dir")
     p.add_argument(
         "--upcycle-hf",
         nargs="?",
-        const=MINICPM_HF,
+        const=MINICPM5_HF,
         default=None,
-        help="MiniCPM Hub id or HF dir (default openbmb/MiniCPM5-2B-Base)",
+        help="MiniCPM5-2B Hub id or HF dir (default openbmb/MiniCPM5-2B-Base)",
     )
     p.add_argument("--dummy-upcycle", action="store_true")
     p.add_argument("--teacher", type=Path, default=None, help="pickled nn.Module teacher")
     p.add_argument(
         "--teacher-hf",
         nargs="?",
-        const=MINICPM_HF,
+        const=MINICPM5_HF,
         default=None,
-        help="MiniCPM teacher Hub id / HF dir for logit KD",
+        help="MiniCPM5-2B teacher Hub id / HF dir for logit KD",
     )
     p.add_argument("--dummy-teacher", action="store_true", help="logit KD against a dummy teacher")
     p.add_argument("--fsdp", action="store_true", help="FSDP (torch backend; requires dist init)")
@@ -181,6 +181,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     if n_t > 1:
         p.error("pick one of --dummy-teacher / --teacher / --teacher-hf")
+    if args.upcycle_hf is not None:
+        try:
+            assert_minicpm5_id(str(args.upcycle_hf), kind="upcycle")
+        except ValueError as exc:
+            p.error(str(exc))
+    if args.teacher_hf is not None:
+        try:
+            assert_minicpm5_id(str(args.teacher_hf), kind="teacher")
+        except ValueError as exc:
+            p.error(str(exc))
     src = None
     if args.dummy_upcycle:
         src = dummy_minicpm_state(cfg)

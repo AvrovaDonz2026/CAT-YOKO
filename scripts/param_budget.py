@@ -285,7 +285,7 @@ def compute_budget(
     attn: AttnAccounting | None = None,
     first_dense: bool = False,
 ) -> ModelBudget:
-    attn = attn or attn_accounting("placeholder")
+    attn = attn or attn_accounting("gqa")
     enc = _stack(tier.le, tier.ns_e, tier.tk_e, tier.nr_e, attn.self_attn, 0, first_dense)
     dec = _stack(
         tier.ld, tier.ns_d, tier.tk_d, tier.nr_d, attn.self_attn, attn.cross_attn, first_dense
@@ -1169,7 +1169,7 @@ def print_budget(budget: ModelBudget) -> None:
     t = budget.tier
     print(f"embedding (untied + lm_head) : {b(budget.emb)} + {b(budget.lm_head)}")
     print(f"expert (single)          : {m(EXPERT)}")
-    print(f"dense FFN (MiniCPM)      : {m(DENSE_FFN)}")
+    print(f"dense FFN (MiniCPM5)     : {m(DENSE_FFN)}")
     print(f"attn accounting          : {budget.attn.name}  self={m(budget.attn.self_attn)} cross={m(budget.attn.cross_attn)}")
     print(f"first-layer dense        : {budget.first_dense}")
     print(f"-- Encoder (self-decoder) --")
@@ -1453,10 +1453,10 @@ def retune_routed(
 
 def print_retune() -> None:
     print("-- Nr retune to 12.25B (top-k unchanged ⇒ activations almost unchanged) --")
-    attn_ph = attn_accounting("placeholder")
+    attn_gqa = attn_accounting("gqa")
     attn_csa = attn_accounting("csa_mqa64")
     for label, first_dense, attn in (
-        ("first-dense + placeholder attn", True, attn_ph),
+        ("first-dense + GQA attn", True, attn_gqa),
         ("all-MoE + CSA/HCA MQA-64", False, attn_csa),
         ("first-dense + CSA/HCA MQA-64", True, attn_csa),
     ):
@@ -1502,7 +1502,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--attn",
         choices=["gqa", "placeholder", "csa_mqa64"],
         default="gqa",
-        help="self-attn parameter accounting (placeholder is an alias of gqa)",
+        help="self-attn parameter accounting (placeholder is a deprecated alias of gqa)",
     )
     p.add_argument(
         "--first-dense",

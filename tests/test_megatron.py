@@ -59,6 +59,9 @@ class MappingTests(unittest.TestCase):
         self.assertEqual(dec["moe_ffn_hidden_size"], 2048)
         self.assertEqual(enc["moe_shared_expert_intermediate_size"], 2048)
         self.assertFalse(self.bp["yoco"]["tied_embeddings"])
+        self.assertEqual(self.bp["yoco"]["scale_emb"], 1)
+        self.assertEqual(self.bp["yoco"]["logit_scale"], 1)
+        self.assertEqual(self.bp["yoco"]["residual_scale"], 1)
         self.assertTrue(self.bp["training"]["untie_embeddings_and_output_weights"])
 
     def test_router_matches_frozen_spec(self) -> None:

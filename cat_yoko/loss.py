@@ -1,4 +1,4 @@
-"""CE is in the model; KD is optional when a MiniCPM teacher is present."""
+"""CE is in the model; KD is optional when a MiniCPM5 teacher is present."""
 
 from __future__ import annotations
 

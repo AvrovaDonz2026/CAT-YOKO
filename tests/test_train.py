@@ -36,8 +36,22 @@ class ConfigFrozenTests(unittest.TestCase):
         self.assertEqual(c.num_kv_heads, 2)
         self.assertFalse(c.tie_embeddings)
         self.assertEqual(c.vocab_size, 130560)
+        self.assertEqual(c.dense_intermediate_size, 6144)
+        self.assertEqual(c.rms_eps, 1e-6)
+        self.assertEqual(c.rope_theta, 5_000_000.0)
+        self.assertEqual(c.embed_scale, 1)
+        self.assertEqual(c.base_layers, 42)
         kinds = [encoder_layer_kind(i) for i in range(16)]
         self.assertEqual((kinds.count("sliding"), kinds.count("csa"), kinds.count("hca")), (2, 7, 7))
+
+    def test_mup_off_ignores_minicpm2b_dim_model_base(self) -> None:
+        from dataclasses import replace
+
+        c = replace(CATYokoConfig.middle_12b(), dim_model_base=256, scale_emb=12.0)
+        self.assertFalse(c.use_mup)
+        self.assertEqual(c.logit_scale, 1)
+        self.assertEqual(c.embed_scale, 1)
+        self.assertEqual(c.residual_scale, 1)
 
     def test_gqa_projections_use_kv_dim(self) -> None:
         c = CATYokoConfig.middle_12b()

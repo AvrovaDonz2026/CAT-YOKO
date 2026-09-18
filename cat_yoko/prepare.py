@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterator
 
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.recipe import MINICPM_TOKENIZER, Source, mix_named
+from cat_yoko.recipe import MINICPM5_TOKENIZER, Source, mix_named
 from cat_yoko.tokenizer import HashTokenizer, Tokenizer, load_tokenizer
 
 
@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", choices=["12b", "tiny"], default="12b")
     p.add_argument(
         "--tokenizer",
-        default=MINICPM_TOKENIZER,
+        default=MINICPM5_TOKENIZER,
         help="HF id, or 'dummy' for tests",
     )
     p.add_argument("--seed", type=int, default=0)

@@ -40,7 +40,7 @@ class CATYokoForCausalLM(nn.Module):
         self.lm_head = nn.Linear(d, v, bias=False)
         if cfg.tie_embeddings:
             self.lm_head.weight = self.embed.weight
-        self.scale_emb = cfg.scale_emb
+        self.scale_emb = cfg.embed_scale
         self.logit_scale = cfg.logit_scale
         self.detach_cache = True
         self.grad_checkpoint = False

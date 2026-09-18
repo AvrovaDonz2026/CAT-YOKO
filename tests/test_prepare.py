@@ -181,7 +181,7 @@ class PrepareTrainTests(unittest.TestCase):
                     "64",
                 ]
             )
-            weights = td / "minicpm.pt"
+            weights = td / "minicpm5.pt"
             torch.save(dummy_minicpm_state(cfg), weights)
             code = train_main(
                 [

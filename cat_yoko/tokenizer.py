@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.recipe import MINICPM_TOKENIZER
+from cat_yoko.recipe import MINICPM5_TOKENIZER, assert_minicpm5_id
 
 
 class Tokenizer(Protocol):
@@ -36,15 +36,18 @@ class HashTokenizer:
         return ids
 
 
-class MiniCPMTokenizer:
-    def __init__(self, name: str = MINICPM_TOKENIZER) -> None:
+class MiniCPM5Tokenizer:
+    """MiniCPM5-2B tokenizer (Llama, no custom modeling code)."""
+
+    def __init__(self, name: str = MINICPM5_TOKENIZER) -> None:
+        assert_minicpm5_id(name, kind="tokenizer")
         try:
             from transformers import AutoTokenizer
         except ImportError as exc:
             raise ImportError(
-                "MiniCPM tokenizer needs transformers: pip install 'cat-yoko[data]'"
+                "MiniCPM5 tokenizer needs transformers: pip install 'cat-yoko[data]'"
             ) from exc
-        self.tok = AutoTokenizer.from_pretrained(name, trust_remote_code=True)
+        self.tok = AutoTokenizer.from_pretrained(name)
         eos = self.tok.eos_token_id
         self.eos_id = int(eos) if eos is not None else 2
         self.vocab_size = int(getattr(self.tok, "vocab_size", None) or len(self.tok))
@@ -63,4 +66,13 @@ def load_tokenizer(name: str, cfg: CATYokoConfig | None = None) -> Tokenizer:
     if name in {"dummy", "hash"}:
         vocab = cfg.vocab_size if cfg is not None else 128
         return HashTokenizer(vocab)
-    return MiniCPMTokenizer(name)
+    tok = MiniCPM5Tokenizer(name)
+    if cfg is not None and cfg.vocab_size >= 1000 and tok.vocab_size != cfg.vocab_size:
+        raise ValueError(
+            f"tokenizer {name} vocab_size={tok.vocab_size} is not MiniCPM5-2B "
+            f"(want {cfg.vocab_size})"
+        )
+    return tok
+
+
+MiniCPMTokenizer = MiniCPM5Tokenizer

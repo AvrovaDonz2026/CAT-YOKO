@@ -128,7 +128,7 @@ def yoco_extras(cfg: CATYokoConfig, phase: str) -> dict:
         "architecture": "yoco_causal_encoder_decoder",
         "detach_cache": phase != "B2",
         "gate_schedule": {"B0": [0.0, 0.3], "B1": [0.3, 1.0], "B2": [1.0, 1.0]}[phase],
-        "scale_emb": cfg.scale_emb,
+        "scale_emb": cfg.embed_scale,
         "residual_scale": cfg.residual_scale,
         "logit_scale": cfg.logit_scale,
         "tied_embeddings": cfg.tie_embeddings,
