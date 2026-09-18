@@ -35,10 +35,28 @@ def kd_kl(
     return token_kl.mean()
 
 
-def kd_weight(step: int, steps: int, start: float) -> float:
-    if steps <= 1:
+def kd_weight(
+    step: int,
+    steps: int | None,
+    start: float,
+    *,
+    tokens_in_phase: float = 0.0,
+    phase_budget: float | None = None,
+) -> float:
+    """Linear decay from ``start`` → 0 over the phase.
+
+    Prefer ``(step+1)/steps``. When ``steps`` is None (``--tokens`` without
+    ``--steps``), use ``tokens_in_phase/phase_budget`` like ``gate_schedule``.
+    """
+    if steps is not None:
+        if steps <= 1:
+            return 0.0
+        progress = (step + 1) / steps
+    elif phase_budget is not None and phase_budget > 1:
+        progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
+    else:
         return 0.0
-    return start * max(1.0 - (step + 1) / steps, 0.0)
+    return start * max(1.0 - progress, 0.0)
 
 
 def safe_ppl(nll: float) -> float | None:

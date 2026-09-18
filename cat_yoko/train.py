@@ -26,6 +26,36 @@ def _tokens_offset(phase: str, explicit: float | None) -> float:
     return C1_SPLIT["B0"] + C1_SPLIT["B1"]
 
 
+def resolve_12b_accum(
+    accum: int,
+    *,
+    tokens: float | None,
+    offload_blocks: bool | None,
+    phase: str,
+    c1: bool,
+) -> int:
+    """Clamp 12B accum so B2/C1 block offload never auto-expands to 4M tokens.
+
+    ``accum==0`` means auto. The offload path (explicit ``--offload-blocks`` or
+    B2 / ``--c1`` default) uses 1 unless the user passed ``--accum >= 1``
+    together with ``--no-offload-blocks``. Raising means both offload and
+    accum>1, which B2 per-layer Adam cannot do.
+    """
+    offload_will = offload_blocks is True or (
+        offload_blocks is None and (phase == "B2" or c1)
+    )
+    if offload_will:
+        if accum > 1:
+            raise ValueError(
+                "B2 offload cannot 4M-token batch (accum>1); "
+                "use --accum 1, or --no-offload-blocks for the 4M-token batch"
+            )
+        return 1 if accum <= 0 else accum
+    if accum == 0 and tokens is None:
+        return 1
+    return accum
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="CAT-YOKO-12B C1 trainer")
     p.add_argument("--config", choices=["12b", "tiny"], default="tiny")
@@ -161,18 +191,25 @@ def main(argv: list[str] | None = None) -> int:
             p.error("12b training needs --steps or --tokens (this VM cannot run the 8B-token B0 envelope)")
     if args.micro_batch is None:
         args.micro_batch = 1 if args.config == "12b" else 2
+    offload_encoder = True if args.offload_encoder else (False if args.no_offload_encoder else None)
+    offload_blocks = True if args.offload_blocks else (False if args.no_offload_blocks else None)
+    optim_cpu = True if args.optim_cpu else (False if args.no_optim_cpu else None)
+    save_optim = True if args.save_optim else (False if args.no_save_optim else None)
     if args.config == "12b":
         if args.dtype != "bf16":
             args.dtype = "bf16"
         if not args.grad_ckpt:
             args.grad_ckpt = True
-        if args.accum == 0 and args.tokens is None:
-            # do not expand a smoke --steps run into the 4M-token global batch
-            args.accum = 1
-    offload_encoder = True if args.offload_encoder else (False if args.no_offload_encoder else None)
-    offload_blocks = True if args.offload_blocks else (False if args.no_offload_blocks else None)
-    optim_cpu = True if args.optim_cpu else (False if args.no_optim_cpu else None)
-    save_optim = True if args.save_optim else (False if args.no_save_optim else None)
+        try:
+            args.accum = resolve_12b_accum(
+                args.accum,
+                tokens=args.tokens,
+                offload_blocks=offload_blocks,
+                phase=args.phase,
+                c1=args.c1_smoke,
+            )
+        except ValueError as exc:
+            p.error(str(exc))
     n_up = sum(x is not None for x in (True if args.dummy_upcycle else None, args.upcycle, args.upcycle_hf))
     if n_up > 1:
         p.error("pick one of --dummy-upcycle / --upcycle / --upcycle-hf")

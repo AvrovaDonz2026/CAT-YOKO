@@ -284,7 +284,7 @@ class Trainer:
     @torch.no_grad()
     def _eval_nll(self, model: nn.Module, batches: int | None = None) -> float:
         n_batches = self.eval_batches if batches is None else batches
-        if self.eval_data is None and n_batches <= 0:
+        if self.eval_data is None:
             return float("nan")
         stream = self._open(self.eval_data, self.seed + 1 + self.rank)
         was_train = model.training
@@ -429,6 +429,7 @@ class Trainer:
             model = build_model(self.cfg, self.device, dtype=self.dtype)
             if self.upcycle_src is not None:
                 upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
+                del self.upcycle_src
         apply_freeze(unwrap(model), self.phase)
         self._apply_runtime_flags(model)
         model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
@@ -526,7 +527,13 @@ class Trainer:
                 step_n_valid = 0.0
                 kd_w = 0.0
                 if self.teacher is not None:
-                    kd_w = kd_weight(step, max_steps or 1, self.cfg.kd_weight_start)
+                    kd_w = kd_weight(
+                        step,
+                        max_steps,
+                        self.cfg.kd_weight_start,
+                        tokens_in_phase=tokens_in_phase,
+                        phase_budget=phase_budget,
+                    )
                 t0 = time.perf_counter()
                 for micro_i in range(self.accum):
                     batch = stream.batch(self.micro_batch, self.device)
@@ -609,13 +616,13 @@ class Trainer:
                         "n_valid": step_n_valid,
                         **moe_stats,
                     }
-                    if self.eval_every and step % self.eval_every == 0:
+                    if self.eval_every and self.eval_data is not None and step % self.eval_every == 0:
                         ev = self._eval_nll(model)
                         ev = reduce_mean(ev, device=str(self.device), world=self.world)
                         row["eval_nll"] = ev
                         row["eval_ppl"] = safe_ppl(ev)
                     self._log(row)
-                elif self.eval_every and step % self.eval_every == 0:
+                elif self.eval_every and self.eval_data is not None and step % self.eval_every == 0:
                     ev = self._eval_nll(model)
                     ev = reduce_mean(ev, device=str(self.device), world=self.world)
                     if is_rank0(self.rank):
@@ -669,6 +676,7 @@ def run_c1_chain(
         upcycle_src = kwargs.pop("upcycle_src", None)
         if upcycle_src is not None:
             upcycle_from_minicpm(unwrap(reuse_model), upcycle_src, cfg)
+            del upcycle_src
     else:
         kwargs.pop("upcycle_src", None)
     out: dict[str, TrainResult] = {}

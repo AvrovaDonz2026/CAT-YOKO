@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import struct
 import sys
 import tempfile
@@ -18,8 +19,10 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import FileStream, PackedBinStream, pack_documents, sidecar_meta
 from cat_yoko.loss import kd_kl, kd_weight
 from cat_yoko.optim import adamw_param_groups, wsd_lr
-from cat_yoko.train import main
+from cat_yoko.teacher import DummyTeacher
+from cat_yoko.train import main, resolve_12b_accum
 from cat_yoko.trainer import Trainer, auto_accum, train_loop
+from cat_yoko.upcycle import dummy_minicpm_state
 
 
 class PackTests(unittest.TestCase):
@@ -170,10 +173,34 @@ class LoopTests(unittest.TestCase):
             self.assertEqual(row["world"], 1)
             self.assertGreater(row["n_valid"], 0)
 
-    def test_eval_nll_lands_in_jsonl(self) -> None:
+    def test_eval_every_without_eval_data_skips_dummy_stream(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             log = Path(td) / "m.jsonl"
             Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, log_path=log, eval_every=1).run()
+            row = json.loads(log.read_text().splitlines()[0])
+            ev = row.get("eval_nll")
+            self.assertTrue(
+                ev is None or (isinstance(ev, float) and math.isnan(ev)),
+                msg=row,
+            )
+
+    def test_eval_nll_lands_in_jsonl(self) -> None:
+        toks = list(range(64))
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            log = td / "m.jsonl"
+            data = td / "tok.bin"
+            data.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                steps=1,
+                accum=1,
+                log_path=log,
+                eval_every=1,
+                eval_data=data,
+            ).run()
             row = json.loads(log.read_text().splitlines()[0])
             self.assertIn("eval_nll", row)
             self.assertGreater(row["eval_nll"], 0)
@@ -245,6 +272,40 @@ class LoopTests(unittest.TestCase):
         self.assertAlmostEqual(float(identical), 0.0)
         ignore = torch.full((2, 3), -100)
         self.assertEqual(float(kd_kl(torch.ones(2, 3, 4), torch.zeros(2, 3, 4), 2.0, ignore=ignore)), 0.0)
+
+    def test_kd_weight_on_token_budget(self) -> None:
+        self.assertEqual(kd_weight(0, None, 0.5), 0.0)
+        self.assertGreater(
+            kd_weight(0, None, 0.5, tokens_in_phase=0.0, phase_budget=15e9),
+            0.4,
+        )
+        late = kd_weight(0, None, 0.5, tokens_in_phase=14e9, phase_budget=15e9)
+        self.assertGreater(late, 0.0)
+        self.assertLess(late, 0.1)
+
+    def test_kd_w_logged_when_tokens_without_steps(self) -> None:
+        teacher = DummyTeacher(self.cfg.vocab_size, self.cfg.hidden_size)
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "m.jsonl"
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                tokens=64,
+                steps=None,
+                accum=1,
+                micro_batch=2,
+                teacher=teacher,
+                log_path=log,
+            ).run()
+            row = json.loads(log.read_text().splitlines()[0])
+            self.assertGreater(row["kd_w"], 0)
+
+    def test_upcycle_src_dropped_after_copy(self) -> None:
+        src = dummy_minicpm_state(self.cfg)
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, upcycle_src=src)
+        tr.run()
+        self.assertFalse(hasattr(tr, "upcycle_src"))
 
     def test_safe_ppl_caps(self) -> None:
         from cat_yoko.loss import safe_ppl
@@ -344,6 +405,69 @@ class CliTests(unittest.TestCase):
     def test_12b_cpu_steps_need_cuda(self) -> None:
         with self.assertRaises(SystemExit):
             main(["--config", "12b", "--phase", "B0", "--steps", "1"])
+
+    def test_12b_b2_tokens_forces_accum_one(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(0, tokens=15e9, offload_blocks=None, phase="B2", c1=False),
+            1,
+        )
+
+    def test_12b_b2_tokens_no_offload_keeps_auto(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(0, tokens=15e9, offload_blocks=False, phase="B2", c1=False),
+            0,
+        )
+
+    def test_12b_b2_explicit_accum_without_no_offload_errors(self) -> None:
+        with self.assertRaises(ValueError):
+            resolve_12b_accum(1024, tokens=15e9, offload_blocks=None, phase="B2", c1=False)
+
+    def test_12b_b2_explicit_accum_with_no_offload_ok(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(1024, tokens=15e9, offload_blocks=False, phase="B2", c1=False),
+            1024,
+        )
+
+    def test_12b_b0_tokens_keeps_auto(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(0, tokens=8e9, offload_blocks=None, phase="B0", c1=False),
+            0,
+        )
+
+    def test_12b_smoke_steps_accum_one(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(0, tokens=None, offload_blocks=None, phase="B0", c1=False),
+            1,
+        )
+
+    def test_12b_c1_forces_accum_one(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(0, tokens=None, offload_blocks=None, phase="B0", c1=True),
+            1,
+        )
+
+    def test_12b_explicit_offload_blocks_on_b0_forces_accum_one(self) -> None:
+        self.assertEqual(
+            resolve_12b_accum(0, tokens=8e9, offload_blocks=True, phase="B0", c1=False),
+            1,
+        )
+
+    def test_12b_cli_b2_accum_without_no_offload_errors(self) -> None:
+        with self.assertRaises(SystemExit):
+            main(
+                [
+                    "--config",
+                    "12b",
+                    "--phase",
+                    "B2",
+                    "--tokens",
+                    "15e9",
+                    "--accum",
+                    "4",
+                    "--device",
+                    "cuda",
+                ]
+            )
 
 
 if __name__ == "__main__":
