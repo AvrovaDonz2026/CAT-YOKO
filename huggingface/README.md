@@ -70,7 +70,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | --- | --- | --- |
 | `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 | `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
-| `checkpoints/b0-full/trainable.pt` | 6000D 发布档 B0 进行中（8e9 信封，seq=4096） | step **1480**；`tokens_in_phase=5,933,056`；sha256 `33442cffc09d62a05c31c3b80e3aea454a3d102a30d71bc96a100e61f32d3c86`。torch nightly `2.15.0.dev20260918+cu130` + batched MoE。同阶段 resume 可接。 |
+| `checkpoints/b0-full/trainable.pt` | 6000D 发布档 B0 进行中（8e9 信封，seq=4096） | step **9720**；`tokens_in_phase=39,684,096`（≈0.50%）；sha256 `faba210cd24da6b331fd93fe1fb37f6fc128c1c4c05da8a6138f1cb75ddb2a5f`。torch nightly `2.15.0.dev20260918+cu130` + batched MoE。同阶段 resume 可接。不是终局。 |
 | `checkpoints/b1/trainable.pt` | 6000D B1 `--try`（等 GPU） | decoder + `lm_head` + 最终 RMSNorm；resume B0 overlay + MiniCPM5。尚未上传 |
 | `checkpoints/b2/` | 6000D B2 `--try`（待 GPU） | 全模型 overlay；resume B1 + MiniCPM5 encoder/embed。指针 [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
 
