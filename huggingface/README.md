@@ -70,11 +70,11 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | --- | --- | --- |
 | `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 | `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
-| `checkpoints/b0-full/` | 6000D 发布档 B0（8e9，seq=4096） | 进行中 / 见 GitHub `checkpoints/b0-full/README.md` |
+| `checkpoints/b0-full/trainable.pt` | 6000D 发布档 B0 进行中（8e9 信封，seq=4096） | step **900**；`tokens_in_phase=3,557,376`；sha256 `c52d01029ec25d2f77c11c05cf815773a65cda2d14284cc4b728a5f6c82a72fc`。同阶段 resume 可接。 |
 | `checkpoints/b1/trainable.pt` | 6000D B1 `--try`（等 GPU） | decoder + `lm_head` + 最终 RMSNorm；resume B0 overlay + MiniCPM5。尚未上传 |
 | `checkpoints/b2/` | 6000D B2 `--try`（待 GPU） | 全模型 overlay；resume B1 + MiniCPM5 encoder/embed。指针 [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
 
-这些 overlay **都不是** 8B/27B/15B token 信封。尚未上传全图。GitHub 不存权重、不用 Git LFS。日志在 GitHub [`artifacts/autodl-rtx6000d/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx6000d)。
+这些 overlay 里，`checkpoints/b0/` 与 `checkpoints/b0-nvfp4-try/` **不是** 8B token 信封（只是 `--try`）。`checkpoints/b0-full/trainable.pt` 是发布信封 **进行中** 的 B0 overlay（尚未跑完 8e9）。尚未上传 23GiB 全图。GitHub 不存权重、不用 Git LFS。日志在 GitHub [`artifacts/autodl-rtx6000d/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx6000d)。
 
 无公开评测分数。
 
