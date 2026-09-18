@@ -23,7 +23,7 @@ from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.offload import auto_offload_flags, clip_grad_norm_mixed, move_module
-from cat_yoko.optim import build_optimizer, unwrap, wsd_lr
+from cat_yoko.optim import build_optimizer, plan_cpu_adam, unwrap, wsd_lr
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
@@ -301,6 +301,17 @@ class Trainer:
                 upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
         apply_freeze(unwrap(model), self.phase)
         self._apply_runtime_flags(model)
+        if self.reuse_model is None:
+            model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
+        trainable = [p for p in model.parameters() if p.requires_grad]
+        n_train = sum(p.numel() for p in trainable)
+        adam_state = "gpu"
+        state_dtype = torch.float32
+        retain_state = True
+        if self.optim_cpu:
+            state_dtype, retain_state, adam_state = plan_cpu_adam(
+                n_train, steps=self.steps
+            )
         if is_rank0(self.rank) and str(self.device).startswith("cuda") and torch.cuda.is_available():
             alloc = torch.cuda.memory_allocated() / 1024**3
             print(
@@ -308,12 +319,17 @@ class Trainer:
                 f"params={unwrap(model).param_count():,} alloc={alloc:.2f}GiB "
                 f"grad_ckpt={self.grad_ckpt} seq={self.seq_len} "
                 f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
-                f"optim_cpu={self.optim_cpu} reuse={self.reuse_model is not None}",
+                f"optim_cpu={self.optim_cpu} adam={adam_state} "
+                f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None}",
                 flush=True,
             )
-        if self.reuse_model is None:
-            model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
-        opt = build_optimizer(model, self.cfg, cpu_offload=self.optim_cpu)
+        opt = build_optimizer(
+            model,
+            self.cfg,
+            cpu_offload=self.optim_cpu,
+            state_dtype=state_dtype,
+            retain_state=retain_state,
+        )
         stream = self._open(self.data, self.seed + self.rank)
         step = 0
         tokens_in_phase = 0.0

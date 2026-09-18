@@ -105,7 +105,7 @@
 
 - 把 `GPTModel` / 双向 T5 encoder 当 YOCO；实现 EP/TP 训练循环（等装上 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 再填 provider）。
 - 自研 CSA kernel / FP4 / **把 50B 语料检进 git** / 评测套件 / Phase C indexer 训练循环。数据接口吃 prepare 产出的 mmap `.bin`，或 jsonl `tokens`。
-- 在本机 CPU 上分配 12B 权重（约 48GB fp32 / 24GB bf16），或在 CI / 小 VM 上下载 Ultra-FineWeb / MiniCPM 权重。`--config 12b --meta` 只建 meta 图。12B 开训必须 `--device cuda --dtype bf16`，并显式 `--steps` 或 `--tokens`。单卡 32GB：B0 一步可直接跑；B1 靠冻结 Encoder 卸载；B2 靠逐层 offload + CPU Adam（host 需要约 90GiB 动量）。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
+- 在本机 CPU 上分配 12B 权重（约 48GB fp32 / 24GB bf16），或在 CI / 小 VM 上下载 Ultra-FineWeb / MiniCPM 权重。`--config 12b --meta` 只建 meta 图。12B 开训必须 `--device cuda --dtype bf16`，并显式 `--steps` 或 `--tokens`。单卡 32GB：B0 一步可直接跑；B1 靠冻结 Encoder 卸载 + CPU Adam（host cgroup 不够 fp32 动量时自动改 fp16 动量）；B2 靠逐层 offload，host 不够存动量时一步 smoke 走 ephemeral AdamW。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
 
 Megatron 约束（已写进 `cat_yoko.parallel`）：
 

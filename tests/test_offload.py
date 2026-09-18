@@ -122,6 +122,22 @@ class CpuAdamTests(unittest.TestCase):
         after = next(p for p in model.parameters() if p.requires_grad)
         self.assertFalse(torch.equal(before, after))
 
+    def test_cpu_adam_fp16_and_ephemeral(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        ids = torch.randint(0, cfg.vocab_size, (2, cfg.seq_len))
+        for kwargs in (
+            {"cpu_offload": True, "state_dtype": torch.float16, "retain_state": True},
+            {"cpu_offload": True, "state_dtype": torch.float32, "retain_state": False},
+        ):
+            model = CATYokoForCausalLM(cfg)
+            apply_freeze(model, "B1")
+            opt = build_optimizer(model, cfg, **kwargs)
+            before = next(p for p in model.parameters() if p.requires_grad).detach().clone()
+            model(input_ids=ids, labels=ids)["loss"].backward()
+            opt.step()
+            after = next(p for p in model.parameters() if p.requires_grad)
+            self.assertFalse(torch.equal(before, after), msg=kwargs)
+
     def test_clip_mixed_scales(self) -> None:
         p = torch.nn.Parameter(torch.ones(4))
         p.grad = torch.ones(4)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import math
+from pathlib import Path
 
 import torch
 from torch import nn
@@ -34,12 +35,85 @@ def adamw_param_groups(model: nn.Module, weight_decay: float) -> list[dict]:
     ]
 
 
+def host_memory_limit_bytes() -> int | None:
+    """Cgroup memory.max if it is a finite cap, else None."""
+    for path in (
+        Path("/sys/fs/cgroup/memory.max"),
+        Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"),
+    ):
+        if not path.is_file():
+            continue
+        raw = path.read_text().strip()
+        if raw in {"max", ""}:
+            return None
+        try:
+            n = int(raw)
+        except ValueError:
+            return None
+        if n <= 0 or n >= (1 << 62):
+            return None
+        return n
+    return None
+
+
+def host_memory_used_bytes() -> int:
+    path = Path("/sys/fs/cgroup/memory.current")
+    if path.is_file():
+        try:
+            return int(path.read_text().strip())
+        except ValueError:
+            pass
+    return 0
+
+
+def plan_cpu_adam(
+    n_params: int,
+    *,
+    steps: int | None,
+) -> tuple[torch.dtype, bool, str]:
+    """Pick moment dtype / whether to keep m,v under a RAM cgroup.
+
+    fp32 moments are 8 bytes/param; fp16 are 4. If even fp16 cannot fit the
+    cgroup, a one-step run may drop stored moments (AdamW step-1 math is exact).
+    """
+    limit = host_memory_limit_bytes()
+    if limit is None:
+        return torch.float32, True, "fp32"
+    used = host_memory_used_bytes()
+    slack = 6 * 1024**3
+    room = max(limit - used - slack, 0)
+    need_fp32 = n_params * 8
+    need_fp16 = n_params * 4
+    if need_fp32 <= room:
+        return torch.float32, True, "fp32"
+    if need_fp16 <= room:
+        return torch.float16, True, "fp16"
+    if steps is None or steps > 1:
+        raise RuntimeError(
+            f"CPU AdamW needs {need_fp16 / 1024**3:.1f}GiB fp16 moments "
+            f"(or {need_fp32 / 1024**3:.1f}GiB fp32); cgroup room "
+            f"{room / 1024**3:.1f}GiB. Use ZeRO / more host RAM, or --steps 1."
+        )
+    return torch.float32, False, "ephemeral"
+
+
 class CPUOffloadAdamW(AdamW):
-    """AdamW whose exp_avg / exp_avg_sq live on CPU.
+    """AdamW whose exp_avg / exp_avg_sq live on CPU (optional fp16 / ephemeral).
 
     Parameters may sit on CUDA (B1 encoder-offload) or CPU (B2 block offload).
-    GPU memory only holds one fp32 copy of the current tensor during the step.
     """
+
+    def __init__(
+        self,
+        params,
+        *,
+        state_dtype: torch.dtype = torch.float32,
+        retain_state: bool = True,
+        **kwargs,
+    ) -> None:
+        self.state_dtype = state_dtype
+        self.retain_state = retain_state
+        super().__init__(params, **kwargs)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -59,34 +133,47 @@ class CPUOffloadAdamW(AdamW):
                 p.grad = None
                 p32 = p.detach().to(device="cpu", dtype=torch.float32)
                 state = self.state[p]
-                if len(state) == 0:
-                    state["step"] = 0
-                    state["exp_avg"] = torch.zeros_like(p32)
-                    state["exp_avg_sq"] = torch.zeros_like(p32)
-                else:
-                    if torch.is_tensor(state.get("step")):
+                if self.retain_state:
+                    if len(state) == 0:
+                        state["step"] = 0
+                        state["exp_avg"] = torch.zeros(
+                            p32.shape, dtype=self.state_dtype, device="cpu"
+                        )
+                        state["exp_avg_sq"] = torch.zeros(
+                            p32.shape, dtype=self.state_dtype, device="cpu"
+                        )
+                    elif torch.is_tensor(state.get("step")):
                         state["step"] = int(state["step"].item())
-                    state["exp_avg"] = state["exp_avg"].to(device="cpu", dtype=torch.float32)
-                    state["exp_avg_sq"] = state["exp_avg_sq"].to(device="cpu", dtype=torch.float32)
-                state["step"] += 1
-                t = int(state["step"])
+                    state["step"] = int(state.get("step", 0)) + 1
+                    t = int(state["step"])
+                    exp_avg = state["exp_avg"].float()
+                    exp_avg_sq = state["exp_avg_sq"].float()
+                    exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
+                    exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
+                    state["exp_avg"] = exp_avg.to(dtype=self.state_dtype)
+                    state["exp_avg_sq"] = exp_avg_sq.to(dtype=self.state_dtype)
+                else:
+                    t = 1
+                    exp_avg = grad * (1.0 - beta1)
+                    exp_avg_sq = grad * grad * (1.0 - beta2)
+                    state.clear()
                 if wd != 0.0:
                     p32.mul_(1.0 - lr * wd)
-                exp_avg = state["exp_avg"]
-                exp_avg_sq = state["exp_avg_sq"]
-                exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
-                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
                 denom = exp_avg_sq.sqrt().div_(math.sqrt(1.0 - beta2**t)).add_(eps)
                 p32.addcdiv_(exp_avg, denom, value=-lr / (1.0 - beta1**t))
                 p.copy_(p32.to(device=p.device, dtype=p.dtype))
+                del p32, grad, exp_avg, exp_avg_sq
         return loss
 
     def load_state_dict(self, state_dict):
         super().load_state_dict(state_dict)
         for st in self.state.values():
+            if torch.is_tensor(st.get("step")):
+                st["step"] = int(st["step"].item())
             for k, v in list(st.items()):
-                if torch.is_tensor(v):
-                    st[k] = v.detach().cpu()
+                if k == "step" or not torch.is_tensor(v):
+                    continue
+                st[k] = v.detach().cpu().to(dtype=self.state_dtype)
 
 
 def _adamw_kwargs(cfg: CATYokoConfig) -> dict:
@@ -103,10 +190,21 @@ def _adamw_kwargs(cfg: CATYokoConfig) -> dict:
     return kw
 
 
-def build_optimizer(model: nn.Module, cfg: CATYokoConfig, *, cpu_offload: bool = False) -> AdamW:
+def build_optimizer(
+    model: nn.Module,
+    cfg: CATYokoConfig,
+    *,
+    cpu_offload: bool = False,
+    state_dtype: torch.dtype = torch.float32,
+    retain_state: bool = True,
+) -> AdamW:
     groups = [g for g in adamw_param_groups(model, cfg.weight_decay) if g["params"]]
-    cls = CPUOffloadAdamW if cpu_offload else AdamW
-    return cls(groups, **_adamw_kwargs(cfg))
+    kw = _adamw_kwargs(cfg)
+    if cpu_offload:
+        return CPUOffloadAdamW(
+            groups, state_dtype=state_dtype, retain_state=retain_state, **kw
+        )
+    return AdamW(groups, **kw)
 
 
 def wsd_lr(tokens_seen: float, cfg: CATYokoConfig, phase: str) -> float:
