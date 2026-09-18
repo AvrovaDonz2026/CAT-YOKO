@@ -5,7 +5,7 @@
 > 数字源：`python3 scripts/param_budget.py --full`；断言：`python3 scripts/param_budget.py --verify` 与 `python3 -m unittest tests.test_param_budget`。
 > 架构（因果、切分等价、M1/M2/M3）见 [`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)。
 > 解冻课程（C1 定稿：冻结边界、定理 D/E）见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。
-> FP8 模块策略与 C1 墙钟（定理 G；不改 6NT）见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+> FP8：Phase B 墙钟定稿 **C1+FP8 = 761 H100-h**（定理 G；不改 6NT）见 [`FP8_THEORY.md`](FP8_THEORY.md)。
 
 ---
 
@@ -159,7 +159,7 @@ Kaplan / Hoffmann 口径：训练 FLOPs \(\approx 6 N_{\mathrm{act}} T\)（前�
 | 完整前向（emb×1） | 6.50B | \(1.95\times 10^{21}\) | 1,354 | 4,331 |
 | 仅 Encoder（prefill / early-exit） | 2.29B | \(6.88\times 10^{20}\) | 478 | 1,529 |
 
-1,413 对上计划的 ~1,400。Route B「12B 中间档 ×50B tok ≈ ~1,400 H100-h」是 **bf16 操作数墙钟**。FP8 不改这张 6NT 表，只改墙钟：C1 bf16 1,090 → 定稿策略 **761 H100-h**（联合 bf16 的 56%）。见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+1,413 对上计划的 ~1,400。那是 **联合 bf16、emb×2** 的对照，不是 Phase B 发布墙钟。发布值是 **C1+FP8 = 761 H100-h**（联合 bf16 emb×1 的 56%）。FP8 不改这张 6NT 表。见 [`FP8_THEORY.md`](FP8_THEORY.md)。
 
 **这不是 Chinchilla 预训练。** Hoffmann 最优大约 \(20 N\) tokens（dense）。50B / 6.5B ≈ **7.7 token / 激活参数**，属于上采样恢复 + 继续训练，不是从零训 12B。把 50–150B 写成 Phase B 恢复预算是对的；把它理解成「12B 已经训充分」则过满。
 
@@ -343,7 +343,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 | μP logits 缩放 = 9；残差保持 \(1.4/\sqrt{40}\) | PASS |
 | freeze-enc ≈76% 联合；独立拼接 152%；C1 课程 81% | PASS（见课程篇） |
 
-解冻课程另 12 条（定稿 C1、detach、tied \(E\)、Adam 60%、合法 split ≤85% 等）与中间档 22 条、FP8 12 条合计 **`--verify` 46/46**，见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)、[`FP8_THEORY.md`](FP8_THEORY.md)。
+解冻课程另 12 条（定稿 C1、detach、tied \(E\)、Adam 60%、合法 split ≤85% 等）与中间档 22 条、FP8 13 条合计 **`--verify` 47/47**，见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)、[`FP8_THEORY.md`](FP8_THEORY.md)。
 
 文本层（不进 `--verify`，已在上文展开）：
 
@@ -367,7 +367,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 5. **4K 主训练不要指望 CSA 省算力**；稀疏化放在 Phase C、长上下文放在 Phase D，与 FLOPs 曲线一致。
 6. 投影维数冻结后，用 `python3 scripts/param_budget.py --attn csa_mqa64 --full` 重跑，用 routed / top-\(k\) 补回 12.05B 与 2.3/4.5，不要改层数拆分。
 7. **Phase B 按 C1 定稿**（两栈先 MoE、冻 Encoder、detach cache、freeze_tied、B2≥10B）。不要把两栈当独立 LM 再拼接。
-8. **FP8 按模块定稿**（B1/B2 MoE GEMM + 冻结 Encoder 前向；B0 student / L0 / indexer / 白名单高精度）。发布 1.5× 墙钟，不改 6NT，不发布 2×。
+8. **Phase B 墙钟按 C1+FP8 定稿**（761 H100-h；B1/B2 MoE GEMM + 冻结 Encoder 前向；B0 student / L0 / indexer / 白名单高精度）。发布 1.5×，不改 6NT，不发布 2×。联合 bf16 只作对照。
 
 复算命令：
 

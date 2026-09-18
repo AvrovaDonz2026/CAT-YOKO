@@ -19,9 +19,11 @@ Phase A, freeze encoder in B0/B1, short joint B2. Delayed encoder MoE
 is a sensitivity check only (``--curriculum``); it does not change the
 published recipe. Do not franken-merge two LMs.
 
-FP8 is a wall-clock overlay on C1 (``--fp8``): MoE expert GEMMs + frozen
-encoder forward GEMMs. It does not change Kaplan 6NT. L0 / B0 student /
-indexer stay bf16. Published speedup is 1.5×, not the 2× peak.
+Phase B **wall-clock** is **frozen as C1+FP8**: C1 token split × mixed
+FP8 (B0 student bf16; B1/B2 MoE GEMM + frozen-encoder forward at 1.5×).
+Joint bf16 is the 100% baseline only. All-phase 1.5× and peak 2× are
+sensitivity. FP8 does not change Kaplan 6NT.
+
 """
 
 from __future__ import annotations
@@ -63,6 +65,9 @@ DEFAULT_CURRICULUM_SPLIT = (8e9, 27e9, 15e9)  # B0 + B1 + B2 = 50B
 # C1 = both stacks MoE at Phase A, freeze encoder in B0/B1 (FROZEN spec).
 # Delayed encoder MoE (encoder_dense=True) is sensitivity only.
 DEFAULT_DELAYED_ENCODER_MOE = False
+# Published Phase B wall-clock. Joint bf16 = 100% baseline only.
+# Applying 1.5× to B0 student, or claiming peak 2×, is sensitivity.
+FROZEN_WALLCLOCK = "C1+FP8"
 
 # Hardware for GPU-hour estimates (plan §15.1): 40% MFU.
 H100_BF16_PEAK = 9.89e14  # H100 SXM bf16 tensor-core peak
@@ -760,10 +765,11 @@ def wallclock_c1_fp8_policy(
     *,
     speedup: float = FP8_SPEEDUP_CONSERVATIVE,
 ) -> float:
-    """Frozen FP8 policy hours.
+    """Published Phase B wall-clock (frozen spec C1+FP8).
 
     B0 student stays bf16 (Theorem A neighborhood). Frozen-encoder forward
     GEMM in B0, and all of B1/B2, run at ``speedup``. Does not change 6NT.
+    All-phase 1.5× (B0 student also FP8) and peak 2× are sensitivity.
     """
     t0, _, _ = _scale_split(tokens)
     f0, f1, f2 = curriculum_phase_flops(budget, tokens)
@@ -784,7 +790,7 @@ class Fp8PhasePolicy:
     note: str
 
 
-# Frozen FP8 policy for C1. Student = tensors that receive gradients.
+# Frozen FP8 policy for C1+FP8. Student = tensors that receive gradients.
 FP8_PHASE_POLICY: tuple[Fp8PhasePolicy, ...] = (
     Fp8PhasePolicy(
         "L0",
@@ -864,10 +870,19 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "justifies published 1.5×",
         ),
         Claim(
-            "C1 FP8 policy ≤60% of joint bf16 H100-h",
-            mixed_h <= 0.60 * joint_h,
-            f"{mixed_h / joint_h:.0%} ({mixed_h:.0f} vs {joint_h:.0f})",
-            "≤60%",
+            "frozen wall-clock spec is C1+FP8 mixed",
+            FROZEN_WALLCLOCK == "C1+FP8"
+            and pol["B0"].student == "bf16"
+            and pol["B1"].student == "fp8_moe"
+            and pol["B2"].student == "fp8_moe",
+            FROZEN_WALLCLOCK,
+            "B0 student bf16; B1/B2 fp8_moe (not all-1.5×)",
+        ),
+        Claim(
+            "published C1+FP8 hours ≈761 (≤60% joint bf16)",
+            _close(mixed_h, 761, rel=0.02) and mixed_h <= 0.60 * joint_h,
+            f"{mixed_h:.0f} ({mixed_h / joint_h:.0%} of {joint_h:.0f})",
+            "~761; ≤60% of joint",
         ),
         Claim(
             "B0 student stays bf16 (Theorem A neighborhood)",
@@ -1261,7 +1276,7 @@ def print_fp8(budget: ModelBudget, tokens: float = 50e9) -> None:
     joint_h = wallclock_h100_h(joint)
     c1_h = wallclock_h100_h(c1)
     mixed_h = wallclock_c1_fp8_policy(budget, tokens)
-    print("-- FP8 policy (C1; does not change 6NT) --")
+    print("-- C1+FP8 (frozen Phase B wall-clock; does not change 6NT) --")
     print(f"  H100 peak bf16 / FP8              : {H100_BF16_PEAK/1e12:.0f} / {H100_FP8_PEAK/1e12:.0f} TFLOPS")
     print(f"  peak ratio                        : {FP8_SPEEDUP_PEAK:.2f}×")
     attn_f = (budget.enc.attn_total + budget.dec.attn_total) / budget.fwd_active
@@ -1279,22 +1294,22 @@ def print_fp8(budget: ModelBudget, tokens: float = 50e9) -> None:
         ("joint bf16", joint_h, 1.0),
         ("C1 bf16", c1_h, c1_h / joint_h),
         (
-            "C1 FP8 policy (frozen spec)",
+            "C1+FP8 (frozen spec)",
             mixed_h,
             mixed_h / joint_h,
         ),
         (
-            "C1 FP8 conservative 1.5× all",
+            "C1 all-1.5× (sensitivity)",
             wallclock_h100_h(c1, speedup=FP8_SPEEDUP_CONSERVATIVE),
             wallclock_h100_h(c1, speedup=FP8_SPEEDUP_CONSERVATIVE) / joint_h,
         ),
         (
-            "C1 FP8 MoE-Amdahl all",
+            "C1 MoE-Amdahl all (sensitivity)",
             wallclock_h100_h(c1, speedup=moe_x),
             wallclock_h100_h(c1, speedup=moe_x) / joint_h,
         ),
         (
-            "C1 FP8 peak 2× (upper bound)",
+            "C1 peak 2× (upper bound)",
             wallclock_h100_h(c1, speedup=FP8_SPEEDUP_PEAK),
             wallclock_h100_h(c1, speedup=FP8_SPEEDUP_PEAK) / joint_h,
         ),
@@ -1453,7 +1468,7 @@ def print_mup() -> None:
 
 def print_claims(cs: Iterable[Claim]) -> int:
     cs = list(cs)
-    print("-- Claim ledger (middle tier + freeze-curriculum + FP8, placeholder attn, all-MoE) --")
+    print("-- Claim ledger (middle tier + C1 + C1+FP8, placeholder attn, all-MoE) --")
     failed = 0
     for c in cs:
         mark = "PASS" if c.ok else "FAIL"
@@ -1504,7 +1519,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--fp8",
         action="store_true",
-        help="print FP8 phase policy and C1 wall-clock (does not change 6NT)",
+        help="print C1+FP8 frozen wall-clock (does not change 6NT)",
     )
     return p
 

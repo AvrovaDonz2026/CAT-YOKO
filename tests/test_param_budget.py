@@ -241,14 +241,22 @@ class Fp8TheoryTests(unittest.TestCase):
         t0, t1, t2 = pb.DEFAULT_CURRICULUM_SPLIT
         self.assertGreaterEqual((t1 + t2) / (t0 + t1 + t2), 0.80)
 
+    def test_frozen_wallclock_is_c1_fp8(self) -> None:
+        self.assertEqual(pb.FROZEN_WALLCLOCK, "C1+FP8")
+        mixed = pb.wallclock_c1_fp8_policy(self.budget)
+        c1 = pb.flops_curriculum(self.budget, 50e9, delayed=False)
+        all15 = pb.wallclock_h100_h(c1, speedup=pb.FP8_SPEEDUP_CONSERVATIVE)
+        self.assertGreater(mixed, all15)
+        self.assertAlmostEqual(mixed, 761, delta=15)
+
     def test_fp8_claims_pass(self) -> None:
         failed = [c for c in pb.claims_fp8(self.budget) if not c.ok]
         self.assertEqual(failed, [], msg=[c.name for c in failed])
 
     def test_verify_includes_fp8(self) -> None:
         names = [c.name for c in pb.verify(self.budget)]
-        self.assertTrue(any(n.startswith("FP8") for n in names))
-        self.assertGreaterEqual(len(names), 46)
+        self.assertTrue(any("C1+FP8" in n for n in names))
+        self.assertGreaterEqual(len(names), 47)
 
 
 if __name__ == "__main__":

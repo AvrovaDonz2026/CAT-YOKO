@@ -4,20 +4,20 @@
 > 规格仍是中间档：16/24，≈12B / 2.3B-in / 4.5B-out。不引入新架构，不把两栈拆成两个独立 LM。
 > 可执行断言：`python3 scripts/param_budget.py --verify`（含课程 claim）、`--staged`、`--curriculum`、`--fp8`；`python3 -m unittest tests.test_param_budget`。
 > 理论能证明的是 **FLOPs / 显存 / 梯度流 / 与定理 A 的兼容**；不能证明 12B 上采样后的质量。质量仍走 L0→L1 实验，B2 不够就加长 B2。
-> FP8 墙钟（不改 6NT）见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+> FP8 墙钟（不改 6NT；Phase B 定稿 **C1+FP8 = 761 H100-h**）见 [`FP8_THEORY.md`](FP8_THEORY.md)。
 
 ---
 
 ## 0. 结论（先看这个）
 
-「先分开训两个模型再焊在一起」**更贵且破坏定理 A**。能省的是同一套切开权重上的 **B0 → B1 → B2 解冻课程**。**配方按 C1 定稿。**
+「先分开训两个模型再焊在一起」**更贵且破坏定理 A**。能省的是同一套切开权重上的 **B0 → B1 → B2 解冻课程**。冻结边界按 **C1** 定稿；Phase B **墙钟按 C1+FP8 定稿（761 H100-h）**。
 
-| 做法 | 50B tok H100-h | vs 联合 |
-| --- | ---: | ---: |
-| 两栈一起训（基线） | 1,354 | 100% |
-| **C1 定稿：两栈都先 MoE，B0/B1 冻 Encoder** | **1,090** | **81%** |
-| **C1 + FP8 定稿策略** | **761** | **56%** |
-| 独立 50B+50B+20B 拼接 | 2,054 | **152%（更贵）** |
+| 做法 | 50B tok H100-h | vs 联合 | 角色 |
+| --- | ---: | ---: | --- |
+| 两栈一起训（联合 bf16） | 1,354 | 100% | 对照 |
+| C1：两栈都先 MoE，B0/B1 冻 Encoder | 1,090 | 81% | 操作数账 |
+| **C1+FP8** | **761** | **56%** | **定稿墙钟** |
+| 独立 50B+50B+20B 拼接 | 2,054 | **152%（更贵）** | 不要做 |
 
 还必须钉死的几条：
 
@@ -28,9 +28,9 @@
 5. **C1 相对联合约省 19% FLOPs；Adam 状态在 B1 只有联合的 60%；detach 丢掉 Encoder 激活约 40%。** 塞进更少卡时，显存杠杆可能比 FLOPs 杠杆更有用。
 6. **B2 不能为 0**（write/read 永不共同适应，PDSA 已警告）。默认 B2 = 15B ≥ 10B。质量不稳加长 B2，不要改回两个独立 LM。
 7. Phase C「冻主干、只训 indexer」叠在 B2 **之后**；indexer 对齐是层内 KL，不是穿过 cache 的 LM 反传。
-8. **FP8 叠在 C1 墙上，不改 6NT。** 定稿：B1/B2 MoE GEMM + 冻结 Encoder 前向走 FP8，B0 student / L0 / indexer 保持 bf16。墙钟约 **761 H100-h（联合 bf16 的 56%）**。见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+8. **墙钟敲死为 C1+FP8。** B1/B2 MoE GEMM + 冻结 Encoder 前向走 FP8，B0 student / L0 / indexer 保持 bf16。发布 **761 H100-h（联合 bf16 的 56%）**。见 [`FP8_THEORY.md`](FP8_THEORY.md)。
 
-Claim ledger：中间档 22 条 + 课程 12 条 + FP8 12 条，`--verify` **46/46** 通过。
+Claim ledger：中间档 22 条 + 课程 12 条 + FP8 13 条，`--verify` **47/47** 通过。
 
 ---
 
@@ -223,7 +223,7 @@ B1 的 Adam 状态是联合的 60%（Decoder 总参 / 全体总参，含 cache �
 
 Muon 只在 2D 矩阵上存一份动量，B1/B2 的优化器差距会略小于 Adam 的 8 B/参，方向不变。
 
-这就是 §15.3 把解冻课程排在 FP8 前面的原因：它同时砍反向 FLOPs、Adam 状态、激活。FP8 再乘墙钟（C1 bf16 1,090 → 定稿 **761**），不替代冻结。
+这就是 §15.3 把解冻课程排在 FP8 前面的原因：它同时砍反向 FLOPs、Adam 状态、激活。发布积是 **C1+FP8 = 761**（C1 bf16 1,090 只作操作数账），不替代冻结。
 
 ---
 
@@ -296,7 +296,7 @@ Phase F/G 的分域专家蒸馏与这套预训练课程正交。
 | Encoder dense FFN < MoE FFN（敏感性，不定稿） | PASS（1.06B < 2.01B） |
 | delayed-enc 对照更便宜（敏感性，不定稿） | PASS（77% < 81%） |
 
-C1 ≤85% 仍在中间档账本里（81%）。FP8 另 12 条见 [`FP8_THEORY.md`](FP8_THEORY.md)；合计 `--verify` **46/46**。
+C1 ≤85% 仍在中间档账本里（81%）。FP8 另 13 条见 [`FP8_THEORY.md`](FP8_THEORY.md)；合计 `--verify` **47/47**。墙钟定稿是 **C1+FP8 = 761**。
 
 ---
 
@@ -306,7 +306,7 @@ C1 ≤85% 仍在中间档账本里（81%）。FP8 另 12 条见 [`FP8_THEORY.md`
 2. Phase A：对 Encoder、Decoder **各自** virtual-group。
 3. §15.3 杠杆 #5：C1 约省 19% Phase B FLOPs、B1 Adam 60%、激活 ~40%。
 4. 不写训练代码骨架（按用户要求，理论先闭环）。
-5. FP8 定稿策略见 [`FP8_THEORY.md`](FP8_THEORY.md)；C1 墙钟 1,090 → 761 H100-h。
+5. **墙钟敲死为 C1+FP8**：761 H100-h（[`FP8_THEORY.md`](FP8_THEORY.md)）。联合 bf16 与全阶段 1.5× 不定稿。
 
 复算：
 
