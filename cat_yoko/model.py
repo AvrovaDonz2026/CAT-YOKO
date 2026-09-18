@@ -8,6 +8,7 @@ from torch import nn
 
 from cat_yoko.blocks import DecoderBlock, EncoderBlock
 from cat_yoko.config import CATYokoConfig, encoder_layer_kind
+from cat_yoko.offload import move_module, offload_checkpoint_block
 from cat_yoko.rope import RMSNorm
 
 
@@ -42,9 +43,24 @@ class CATYokoForCausalLM(nn.Module):
         self.logit_scale = cfg.logit_scale
         self.detach_cache = True
         self.grad_checkpoint = False
+        self.offload_encoder = False
+        self.offload_blocks = False
 
     def set_detach(self, flag: bool) -> None:
         self.detach_cache = flag
+
+    def _run_block(self, blk: nn.Module, *tensors: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.offload_blocks:
+            return offload_checkpoint_block(blk, *tensors)
+        ckpt = self.grad_checkpoint and self.training
+        if ckpt and any(t.requires_grad for t in tensors):
+            y = torch.utils.checkpoint.checkpoint(blk, *tensors, use_reentrant=False)
+        else:
+            y = blk(*tensors)
+        aux = getattr(getattr(blk, "mlp", None), "last_aux", None)
+        if aux is None:
+            aux = y.new_zeros(())
+        return y, aux
 
     def forward(
         self,
@@ -52,26 +68,25 @@ class CATYokoForCausalLM(nn.Module):
         labels: torch.Tensor | None = None,
         doc_ids: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
+        if self.offload_encoder and not self.offload_blocks:
+            move_module(self.encoder, input_ids.device)
         x = self.embed(input_ids) * self.scale_emb
         if doc_ids is None:
             doc_ids = torch.zeros_like(input_ids)
-        ckpt = self.grad_checkpoint and self.training
-
-        def _run(blk: nn.Module, *tensors: torch.Tensor) -> torch.Tensor:
-            if ckpt and any(t.requires_grad for t in tensors):
-                return torch.utils.checkpoint.checkpoint(
-                    blk, *tensors, use_reentrant=False
-                )
-            return blk(*tensors)
-
+        aux = x.new_zeros(())
         for blk in self.encoder:
-            x = _run(blk, x, input_ids, doc_ids)
+            x, a = self._run_block(blk, x, input_ids, doc_ids)
+            if not self.detach_cache:
+                aux = aux + a
+        if self.offload_encoder and self.detach_cache and not self.offload_blocks:
+            move_module(self.encoder, "cpu")
         hidden = x.detach() if self.detach_cache else x
         k = self.cache_k(hidden)
         v = self.cache_v(hidden)
         y = hidden
         for blk in self.decoder:
-            y = _run(blk, y, k, v, input_ids, doc_ids)
+            y, a = self._run_block(blk, y, k, v, input_ids, doc_ids)
+            aux = aux + a
         logits = self.lm_head(self.norm(y)) / self.logit_scale
         out: dict[str, torch.Tensor] = {"logits": logits}
         if labels is not None:
@@ -82,12 +97,6 @@ class CATYokoForCausalLM(nn.Module):
                 shift_labels.reshape(-1),
                 ignore_index=-100,
             )
-            aux = logits.new_zeros(())
-            blocks = list(self.decoder) if self.detach_cache else list(self.encoder) + list(self.decoder)
-            for blk in blocks:
-                moe_aux = getattr(blk.mlp, "last_aux", None)
-                if moe_aux is not None:
-                    aux = aux + moe_aux
             out["aux"] = aux
             out["loss"] = nll + aux
             out["nll"] = nll

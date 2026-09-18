@@ -12,7 +12,7 @@ from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.parallel import ParallelPlan, validate_parallel
 from cat_yoko.recipe import MINICPM_HF
 from cat_yoko.teacher import DummyTeacher, load_teacher
-from cat_yoko.trainer import Trainer, build_model, print_meta, train_loop
+from cat_yoko.trainer import Trainer, build_model, print_meta, run_c1_chain, train_loop
 from cat_yoko.upcycle import dummy_minicpm_state
 
 
@@ -71,6 +71,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seq-len", type=int, default=None, help="override cfg seq_len; must match packed .bin")
     p.add_argument("--grad-ckpt", action="store_true", help="activation checkpoint encoder/decoder blocks")
     p.add_argument(
+        "--c1-smoke",
+        action="store_true",
+        help="one step each of B0→B1→B2 on the same weights (ignores --phase)",
+    )
+    p.add_argument("--offload-encoder", action="store_true", help="force B0/B1 encoder CPU offload")
+    p.add_argument("--no-offload-encoder", action="store_true", help="disable encoder CPU offload")
+    p.add_argument("--offload-blocks", action="store_true", help="force per-block CPU offload (B2)")
+    p.add_argument("--no-offload-blocks", action="store_true", help="disable per-block CPU offload")
+    p.add_argument("--optim-cpu", action="store_true", help="force AdamW moments on CPU")
+    p.add_argument("--no-optim-cpu", action="store_true", help="keep AdamW moments on the param device")
+    p.add_argument(
         "--backend",
         choices=["torch", "megatron"],
         default="torch",
@@ -108,10 +119,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.meta:
         print_meta(cfg)
         return 0
+    if args.offload_encoder and args.no_offload_encoder:
+        p.error("pick one of --offload-encoder / --no-offload-encoder")
+    if args.offload_blocks and args.no_offload_blocks:
+        p.error("pick one of --offload-blocks / --no-offload-blocks")
+    if args.optim_cpu and args.no_optim_cpu:
+        p.error("pick one of --optim-cpu / --no-optim-cpu")
+    if args.c1_smoke and args.resume is not None:
+        p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
+    if args.c1_smoke and args.tokens is not None:
+        p.error("--c1-smoke is step-limited; do not pass --tokens")
     if args.config == "12b" and not str(args.device).startswith("cuda"):
         p.error("12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron only)")
     if args.steps is None and args.tokens is None:
-        if args.config == "tiny":
+        if args.c1_smoke:
+            args.steps = 1
+        elif args.config == "tiny":
             args.steps = 3
         else:
             p.error("12b training needs --steps or --tokens (this VM cannot run the 8B-token B0 envelope)")
@@ -123,6 +146,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.accum == 0 and args.tokens is None:
             # do not expand a smoke --steps run into the 4M-token global batch
             args.accum = 1
+    offload_encoder = True if args.offload_encoder else (False if args.no_offload_encoder else None)
+    offload_blocks = True if args.offload_blocks else (False if args.no_offload_blocks else None)
+    optim_cpu = True if args.optim_cpu else (False if args.no_optim_cpu else None)
     n_up = sum(x is not None for x in (True if args.dummy_upcycle else None, args.upcycle, args.upcycle_hf))
     if n_up > 1:
         p.error("pick one of --dummy-upcycle / --upcycle / --upcycle-hf")
@@ -146,32 +172,47 @@ def main(argv: list[str] | None = None) -> int:
     elif args.teacher_hf is not None:
         teacher = load_teacher(args.teacher_hf, args.device)
     eos = resolve_eos(args.data, args.eos)
-    tr = Trainer(
-        cfg,
-        args.phase,
-        args.device,
-        steps=args.steps,
-        tokens=args.tokens,
+    shared = dict(
         micro_batch=args.micro_batch,
         accum=args.accum,
         seed=args.seed,
         data=args.data,
         eval_data=args.eval_data,
         eos_id=eos,
-        upcycle_src=src,
         teacher=teacher,
         fsdp=args.fsdp,
         ddp=args.ddp,
         save_dir=args.save_dir,
         save_every=args.save_every,
-        resume=args.resume,
         log_every=args.log_every,
         log_path=args.log,
         eval_every=args.eval_every,
         dtype=args.dtype,
-        global_tokens_offset=_tokens_offset(args.phase, args.tokens_offset),
         grad_ckpt=args.grad_ckpt,
         seq_len=args.seq_len,
+        offload_encoder=offload_encoder,
+        offload_blocks=offload_blocks,
+        optim_cpu=optim_cpu,
+    )
+    if args.c1_smoke:
+        run_c1_chain(
+            cfg,
+            args.device,
+            steps=args.steps,
+            upcycle_src=src,
+            **shared,
+        )
+        return 0
+    tr = Trainer(
+        cfg,
+        args.phase,
+        args.device,
+        steps=args.steps,
+        tokens=args.tokens,
+        upcycle_src=src,
+        resume=args.resume,
+        global_tokens_offset=_tokens_offset(args.phase, args.tokens_offset),
+        **shared,
     )
     tr.run()
     return 0

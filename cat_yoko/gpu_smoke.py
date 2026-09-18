@@ -1,4 +1,4 @@
-"""CUDA smoke for the C1 trainer. Never allocates the 12B graph on GPU."""
+"""CUDA smoke for the C1 trainer. Tiny always; 12B with --middle / --c1 on ≥28GiB."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.prepare import prepare
 from cat_yoko.tokenizer import HashTokenizer
-from cat_yoko.trainer import Trainer, train_loop
+from cat_yoko.trainer import Trainer, build_model, run_c1_chain, train_loop
 
 
 def cuda_info() -> dict:
@@ -43,7 +43,7 @@ def _finite(x: float) -> bool:
 
 
 def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
-    """B0/B1/B2 + bf16 + packed bin + resume. Tiny graph only."""
+    """B0/B1/B2 + bf16 + packed bin + resume + offload path. Tiny graph only."""
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for gpu_smoke")
     device = "cuda"
@@ -71,6 +71,38 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
         cfg, "B2", steps=1, device=device, accum=1, micro_batch=micro_batch, grad_ckpt=True
     )
     out["grad_ckpt"] = {"nll": float(nll_ckpt), "ok": _finite(nll_ckpt) and nll_ckpt > 0}
+    nll_off = train_loop(
+        cfg,
+        "B1",
+        steps=1,
+        device=device,
+        accum=1,
+        micro_batch=micro_batch,
+        offload_encoder=True,
+        optim_cpu=True,
+        dtype="bf16",
+    )
+    out["b1_offload"] = {"nll": float(nll_off), "ok": _finite(nll_off) and nll_off > 0}
+    nll_blk = train_loop(
+        cfg,
+        "B2",
+        steps=1,
+        device=device,
+        accum=1,
+        micro_batch=micro_batch,
+        offload_blocks=True,
+        optim_cpu=True,
+        dtype="bf16",
+    )
+    out["b2_block_offload"] = {"nll": float(nll_blk), "ok": _finite(nll_blk) and nll_blk > 0}
+    chain = run_c1_chain(
+        cfg, device, steps=1, accum=1, micro_batch=micro_batch, dtype="bf16", grad_ckpt=True
+    )
+    out["c1_chain"] = {
+        phase: {"nll": float(r.nll), "step": int(r.step), "ok": _finite(r.nll) and r.step == 1}
+        for phase, r in chain.items()
+    }
+    out["c1_chain"]["ok"] = all(out["c1_chain"][p]["ok"] for p in ("B0", "B1", "B2"))
     tok = HashTokenizer(cfg.vocab_size)
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
@@ -120,6 +152,9 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             out.get("bf16", {"ok": True})["ok"],
             out["b1_fp8_autocast"]["ok"],
             out["grad_ckpt"]["ok"],
+            out["b1_offload"]["ok"],
+            out["b2_block_offload"]["ok"],
+            out["c1_chain"]["ok"],
             out["packed_resume"]["ok"],
             out["b0_encoder_frozen"]["ok"],
             out["fp8_policy"]["b1_autocast"] is True,
@@ -137,17 +172,27 @@ def enough_vram_for_12b(min_gib: float = TWELVE_B_MIN_GIB) -> bool:
     return bool(info.get("cuda") and info.get("total_gib", 0) >= min_gib)
 
 
-def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
-    """One C1 B0 step of the real 12B graph. Needs ~24GiB weights + a little activation.
+def _teardown_cuda() -> None:
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    Full Adam on all 12B params still will not fit 32GB; B0 only trains new modules.
-    """
+
+def run_middle_12b_phase(
+    phase: str,
+    *,
+    seq_len: int = 64,
+    steps: int = 1,
+    micro_batch: int = 1,
+    reuse_model: CATYokoForCausalLM | None = None,
+) -> dict:
+    """One C1 step of the real 12B graph. Auto encoder-offload / CPU Adam / block offload."""
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for 12B GPU smoke")
     info = cuda_info()
     if info["total_gib"] < TWELVE_B_MIN_GIB:
         raise RuntimeError(
-            f"12B B0 smoke needs ≥{TWELVE_B_MIN_GIB}GiB, got {info['total_gib']}"
+            f"12B GPU smoke needs ≥{TWELVE_B_MIN_GIB}GiB, got {info['total_gib']}"
         )
     cfg = CATYokoConfig.middle_12b()
     last_err: BaseException | None = None
@@ -156,13 +201,17 @@ def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1
         if sl in tried:
             continue
         tried.append(sl)
-        gc.collect()
-        torch.cuda.empty_cache()
+        _teardown_cuda()
         torch.cuda.reset_peak_memory_stats()
+        model = reuse_model
+        built_here = False
         try:
+            if model is None:
+                model = build_model(cfg, "cuda", dtype="bf16")
+                built_here = True
             out = Trainer(
                 cfg,
-                "B0",
+                phase,
                 "cuda",
                 steps=steps,
                 micro_batch=micro_batch,
@@ -171,51 +220,135 @@ def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1
                 grad_ckpt=True,
                 seq_len=sl,
                 seed=0,
+                reuse_model=model,
             ).run()
             peak = torch.cuda.max_memory_allocated() / 1024**3
             ok = _finite(out.nll) and out.nll > 0 and out.step == steps
-            return {
+            result = {
                 "info": info,
+                "phase": phase,
                 "nll": float(out.nll),
                 "step": int(out.step),
                 "seq_len": sl,
                 "peak_gib": round(peak, 2),
                 "ok": ok,
+                "model": model,
             }
+            return result
         except torch.cuda.OutOfMemoryError as exc:
             last_err = exc
-            gc.collect()
-            torch.cuda.empty_cache()
+            if built_here:
+                del model
+            _teardown_cuda()
+            reuse_model = None
     assert last_err is not None
     raise last_err
 
 
+def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
+    """One C1 B0 step of the real 12B graph. Needs ~24GiB weights + a little activation."""
+    result = run_middle_12b_phase("B0", seq_len=seq_len, steps=steps, micro_batch=micro_batch)
+    result.pop("model", None)
+    return result
+
+
+def run_middle_12b_c1(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
+    """B0 then B1 then B2 on one 12B graph. B2 may OOM on 32GB even with block offload."""
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for 12B C1 smoke")
+    info = cuda_info()
+    if info["total_gib"] < TWELVE_B_MIN_GIB:
+        raise RuntimeError(
+            f"12B C1 smoke needs ≥{TWELVE_B_MIN_GIB}GiB, got {info['total_gib']}"
+        )
+    cfg = CATYokoConfig.middle_12b()
+    _teardown_cuda()
+    torch.cuda.reset_peak_memory_stats()
+    model = build_model(cfg, "cuda", dtype="bf16")
+    out: dict = {"info": info, "phases": {}, "seq_len": seq_len}
+    for phase in ("B0", "B1", "B2"):
+        _teardown_cuda()
+        torch.cuda.reset_peak_memory_stats()
+        try:
+            row = run_middle_12b_phase(
+                phase,
+                seq_len=seq_len,
+                steps=steps,
+                micro_batch=micro_batch,
+                reuse_model=model,
+            )
+            model = row.pop("model")
+            out["phases"][phase] = row
+        except torch.cuda.OutOfMemoryError as exc:
+            out["phases"][phase] = {
+                "ok": False,
+                "oom": True,
+                "err": str(exc).split("\n")[0][:240],
+            }
+            if phase == "B2":
+                break
+            raise
+    b0 = out["phases"].get("B0", {})
+    b1 = out["phases"].get("B1", {})
+    b2 = out["phases"].get("B2", {})
+    out["ok"] = bool(b0.get("ok") and b1.get("ok") and b2.get("ok"))
+    out["b1_ok"] = bool(b1.get("ok"))
+    out["b2_oom"] = bool(b2.get("oom"))
+    del model
+    _teardown_cuda()
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="CAT-YOKO CUDA smoke (tiny, or 12B B0 with --middle)")
+    p = argparse.ArgumentParser(
+        description="CAT-YOKO CUDA smoke (tiny, 12B B0 with --middle, C1 chain with --c1)"
+    )
     p.add_argument("--steps", type=int, default=2)
     p.add_argument("--json", action="store_true")
     p.add_argument(
         "--middle",
         action="store_true",
-        help="one CAT-YOKO-12B B0 step on CUDA bf16 (needs ≥28GiB; not full-Adam B2)",
+        help="one CAT-YOKO-12B step on CUDA bf16 (needs ≥28GiB; default phase B0)",
     )
+    p.add_argument(
+        "--c1",
+        action="store_true",
+        help="12B B0→B1→B2 one step each (encoder offload + CPU Adam; B2 block offload)",
+    )
+    p.add_argument("--phase", choices=["B0", "B1", "B2"], default="B0")
     p.add_argument("--seq-len", type=int, default=64, help="12B smoke sequence length")
     args = p.parse_args(argv)
     info = cuda_info()
     if not info.get("cuda"):
         print("SKIP: no CUDA")
         return 0
+    if args.c1:
+        result = run_middle_12b_c1(seq_len=args.seq_len, steps=1)
+        if args.json:
+            print(json.dumps({k: v for k, v in result.items() if k != "model"}, indent=2, default=str))
+        else:
+            print(f"12b C1 {result['info']['device']} seq={result.get('seq_len')} ok={result['ok']}")
+            for phase, row in result["phases"].items():
+                if row.get("oom"):
+                    print(f"  {phase} OOM {row.get('err', '')}")
+                else:
+                    print(
+                        f"  {phase} nll={row['nll']:.4f} seq={row['seq_len']} "
+                        f"peak_gib={row['peak_gib']} ok={row['ok']}"
+                    )
+        _teardown_cuda()
+        return 0 if result["ok"] or (result.get("b1_ok") and result.get("b2_oom")) else 1
     if args.middle:
-        result = run_middle_12b_b0(seq_len=args.seq_len, steps=1)
+        result = run_middle_12b_phase(args.phase, seq_len=args.seq_len, steps=1)
+        result.pop("model", None)
         if args.json:
             print(json.dumps(result, indent=2))
         else:
             print(
-                f"12b B0 {result['info']['device']} nll={result['nll']:.4f} "
+                f"12b {result['phase']} {result['info']['device']} nll={result['nll']:.4f} "
                 f"seq={result['seq_len']} peak_gib={result['peak_gib']} ok={result['ok']}"
             )
-        gc.collect()
-        torch.cuda.empty_cache()
+        _teardown_cuda()
         return 0 if result["ok"] else 1
     result = run_tiny_cuda(steps=args.steps)
     if args.json:
@@ -231,6 +364,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  bf16 nll={result['bf16']['nll']:.4f} ok={result['bf16']['ok']}")
         print(f"  packed_resume ok={result['packed_resume']['ok']} peak_mib={result['peak_mib']}")
         print(f"  grad_ckpt ok={result['grad_ckpt']['ok']}")
+        print(f"  b1_offload ok={result['b1_offload']['ok']}")
+        print(f"  b2_block_offload ok={result['b2_block_offload']['ok']}")
+        print(f"  c1_chain ok={result['c1_chain']['ok']}")
         print(f"  overall ok={result['ok']}")
     return 0 if result["ok"] else 1
 

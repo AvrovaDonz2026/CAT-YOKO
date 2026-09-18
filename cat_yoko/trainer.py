@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import json
 import math
 import random
@@ -21,6 +22,7 @@ from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight
 from cat_yoko.model import CATYokoForCausalLM
+from cat_yoko.offload import auto_offload_flags, clip_grad_norm_mixed, move_module
 from cat_yoko.optim import build_optimizer, unwrap, wsd_lr
 from cat_yoko.upcycle import upcycle_from_minicpm
 
@@ -93,6 +95,8 @@ class TrainResult:
     nll: float
     step: int
     tokens_seen: float
+    phase: str = ""
+    peak_mib: float = 0.0
 
 
 class Trainer:
@@ -124,6 +128,10 @@ class Trainer:
         global_tokens_offset: float = 0.0,
         grad_ckpt: bool = False,
         seq_len: int | None = None,
+        reuse_model: nn.Module | None = None,
+        offload_encoder: bool | None = None,
+        offload_blocks: bool | None = None,
+        optim_cpu: bool | None = None,
     ) -> None:
         self.cfg = cfg
         self.phase = phase
@@ -147,6 +155,13 @@ class Trainer:
         self.dtype = dtype
         self.global_tokens_offset = global_tokens_offset
         self.grad_ckpt = grad_ckpt
+        self.reuse_model = reuse_model
+        self.offload_encoder_arg = offload_encoder
+        self.offload_blocks_arg = offload_blocks
+        self.optim_cpu_arg = optim_cpu
+        self.offload_encoder = False
+        self.offload_blocks = False
+        self.optim_cpu = False
         self.device, self.rank, self.world = init_distributed(device)
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
@@ -207,6 +222,8 @@ class Trainer:
     def _clip(self, model: nn.Module, trainable: list) -> float:
         if hasattr(model, "clip_grad_norm_") and type(model).__name__ == "FullyShardedDataParallel":
             gn = model.clip_grad_norm_(self.cfg.grad_clip)
+        elif self.offload_blocks or self.optim_cpu:
+            gn = clip_grad_norm_mixed(trainable, self.cfg.grad_clip)
         else:
             gn = torch.nn.utils.clip_grad_norm_(trainable, self.cfg.grad_clip)
         return float(gn)
@@ -245,6 +262,29 @@ class Trainer:
         raw.train()
         return total / max(n, 1)
 
+    def _resolve_offload(self) -> None:
+        self.offload_encoder, self.offload_blocks, self.optim_cpu = auto_offload_flags(
+            phase=self.phase,
+            cfg_name=self.cfg.name,
+            device=str(self.device),
+            fsdp=self.fsdp,
+            ddp=self.ddp,
+            offload_encoder=self.offload_encoder_arg,
+            offload_blocks=self.offload_blocks_arg,
+            optim_cpu=self.optim_cpu_arg,
+        )
+
+    def _apply_runtime_flags(self, model: nn.Module) -> None:
+        raw = unwrap(model)
+        raw.grad_checkpoint = self.grad_ckpt
+        raw.offload_encoder = self.offload_encoder
+        raw.offload_blocks = self.offload_blocks
+        if self.offload_blocks:
+            for blk in list(raw.encoder) + list(raw.decoder):
+                move_module(blk, "cpu")
+        elif self.offload_encoder:
+            move_module(raw.encoder, "cpu")
+
     def run(self) -> TrainResult:
         if self.cfg.name == "CAT-YOKO-12B" and not str(self.device).startswith("cuda"):
             raise RuntimeError("CAT-YOKO-12B weights need --device cuda --dtype bf16 (CPU is --meta only)")
@@ -252,21 +292,28 @@ class Trainer:
         configure_cuda()
         if str(self.device).startswith("cuda") and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
-        model = build_model(self.cfg, self.device, dtype=self.dtype)
-        unwrap(model).grad_checkpoint = self.grad_ckpt
+        self._resolve_offload()
+        if self.reuse_model is not None:
+            model = self.reuse_model
+        else:
+            model = build_model(self.cfg, self.device, dtype=self.dtype)
+            if self.upcycle_src is not None:
+                upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
+        apply_freeze(unwrap(model), self.phase)
+        self._apply_runtime_flags(model)
         if is_rank0(self.rank) and str(self.device).startswith("cuda") and torch.cuda.is_available():
             alloc = torch.cuda.memory_allocated() / 1024**3
             print(
                 f"built {self.cfg.name} on {self.device} dtype={self.dtype} "
                 f"params={unwrap(model).param_count():,} alloc={alloc:.2f}GiB "
-                f"grad_ckpt={self.grad_ckpt} seq={self.seq_len}",
+                f"grad_ckpt={self.grad_ckpt} seq={self.seq_len} "
+                f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
+                f"optim_cpu={self.optim_cpu} reuse={self.reuse_model is not None}",
                 flush=True,
             )
-        if self.upcycle_src is not None:
-            upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
-        apply_freeze(unwrap(model), self.phase)
-        model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
-        opt = build_optimizer(model, self.cfg)
+        if self.reuse_model is None:
+            model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
+        opt = build_optimizer(model, self.cfg, cpu_offload=self.optim_cpu)
         stream = self._open(self.data, self.seed + self.rank)
         step = 0
         tokens_in_phase = 0.0
@@ -282,7 +329,8 @@ class Trainer:
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
             self.phase = str(extra.get("phase", self.phase))
             apply_freeze(unwrap(model), self.phase)
-            unwrap(model).grad_checkpoint = self.grad_ckpt
+            self._resolve_offload()
+            self._apply_runtime_flags(model)
             if extra.get("stream") is not None:
                 stream.load_state_dict(extra["stream"])
             if extra.get("rng_torch") is not None:
@@ -402,6 +450,9 @@ class Trainer:
                     "mem_mib": self._mem_mib(),
                     "seq_len": self.seq_len,
                     "grad_ckpt": self.grad_ckpt,
+                    "offload_encoder": self.offload_encoder,
+                    "offload_blocks": self.offload_blocks,
+                    "optim_cpu": self.optim_cpu,
                 }
                 self._log(row)
             if self.eval_every and step % self.eval_every == 0:
@@ -426,7 +477,53 @@ class Trainer:
         }
         self._maybe_save(model, opt, extra, "latest.pt")
         barrier()
-        return TrainResult(nll=last, step=step, tokens_seen=tokens_seen)
+        peak = self._mem_mib()
+        del opt
+        if self.optim_cpu or self.offload_blocks or self.offload_encoder:
+            gc.collect()
+            if str(self.device).startswith("cuda") and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        return TrainResult(
+            nll=last, step=step, tokens_seen=tokens_seen, phase=self.phase, peak_mib=peak
+        )
+
+
+def run_c1_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    """One (or N) optimizer step of B0, then B1, then B2 on the same weights."""
+    dtype = kwargs.pop("dtype", "bf16" if str(device).startswith("cuda") else "fp32")
+    if reuse_model is None:
+        reuse_model = build_model(cfg, device, dtype=dtype)
+        upcycle_src = kwargs.pop("upcycle_src", None)
+        if upcycle_src is not None:
+            upcycle_from_minicpm(unwrap(reuse_model), upcycle_src, cfg)
+    else:
+        kwargs.pop("upcycle_src", None)
+    out: dict[str, TrainResult] = {}
+    offset = float(kwargs.pop("global_tokens_offset", 0.0))
+    for phase in ("B0", "B1", "B2"):
+        tr = Trainer(
+            cfg,
+            phase,
+            device,
+            steps=steps,
+            dtype=dtype,
+            reuse_model=reuse_model,
+            global_tokens_offset=offset,
+            **kwargs,
+        )
+        out[phase] = tr.run()
+        offset = out[phase].tokens_seen
+        if str(device).startswith("cuda") and torch.cuda.is_available():
+            gc.collect()
+            torch.cuda.empty_cache()
+    return out
 
 
 def train_loop(
