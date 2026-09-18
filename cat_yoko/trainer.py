@@ -355,6 +355,7 @@ class Trainer:
                             self.cfg.kd_temperature,
                         )
                 loss.backward()
+                unwrap(model).step_router_bias()
                 step_nll += float(out["nll"].detach()) / self.accum
                 step_loss += float(out["loss"].detach()) / self.accum
                 step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum

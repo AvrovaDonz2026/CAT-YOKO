@@ -93,6 +93,12 @@ class CATYokoForCausalLM(nn.Module):
             out["nll"] = nll
         return out
 
+    def step_router_bias(self) -> None:
+        for blk in list(self.encoder) + list(self.decoder):
+            fn = getattr(blk.mlp, "step_router_bias", None)
+            if callable(fn):
+                fn()
+
     def param_count(self) -> int:
         return sum(p.numel() for p in self.parameters())
 

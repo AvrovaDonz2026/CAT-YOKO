@@ -127,6 +127,20 @@ class TinyTrainTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(hashed).all())
         self.assertTrue(torch.isfinite(routed).all())
 
+    def test_router_bias_updates_after_backward_not_in_forward(self) -> None:
+        from cat_yoko.moe import MoE
+
+        moe = MoE(self.cfg, self.cfg.n_routed_dec, self.cfg.top_k_dec)
+        moe.train()
+        x = torch.randn(2, self.cfg.seq_len, self.cfg.hidden_size, requires_grad=True)
+        before = moe.e_score_correction_bias.clone()
+        y = moe(x)
+        self.assertTrue(torch.equal(before, moe.e_score_correction_bias))
+        y.sum().backward()
+        self.assertTrue(torch.equal(before, moe.e_score_correction_bias))
+        moe.step_router_bias()
+        self.assertFalse(torch.equal(before, moe.e_score_correction_bias))
+
     def test_upcycle_copies_embed(self) -> None:
         model = CATYokoForCausalLM(self.cfg)
         src = dummy_minicpm_state(self.cfg)

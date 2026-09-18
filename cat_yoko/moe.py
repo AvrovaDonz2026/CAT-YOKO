@@ -50,6 +50,17 @@ class MoE(nn.Module):
         self.router = nn.Linear(d, n_routed, bias=False)
         self.register_buffer("e_score_correction_bias", torch.zeros(n_routed))
         self.last_aux: torch.Tensor | None = None
+        self.last_load: torch.Tensor | None = None
+
+    def step_router_bias(self) -> None:
+        """Aux-loss-free bias. Call after backward so checkpoint recompute sees the same routing."""
+        if self.last_load is None:
+            return
+        with torch.no_grad():
+            target = 1.0 / self.n_routed
+            load = self.last_load.to(dtype=self.e_score_correction_bias.dtype)
+            self.e_score_correction_bias += 1e-3 * (target - load)
+        self.last_load = None
 
     def forward(self, x: torch.Tensor, token_ids: torch.Tensor | None = None) -> torch.Tensor:
         b, s, d = x.shape
@@ -66,6 +77,7 @@ class MoE(nn.Module):
                 if mask.any():
                     routed[mask] = _like(routed, self.experts[e](flat[mask]))
             self.last_aux = flat.new_zeros(())
+            self.last_load = None
             return (shared_out + _like(shared_out, routed)).view(b, s, d)
 
         logits = self.router(flat)
@@ -91,7 +103,7 @@ class MoE(nn.Module):
         balance = self.n_routed * (load * load).sum()
         self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
         if self.training:
-            with torch.no_grad():
-                target = 1.0 / self.n_routed
-                self.e_score_correction_bias += 1e-3 * (target - load)
+            self.last_load = load.detach()
+        else:
+            self.last_load = None
         return (shared_out + _like(shared_out, routed)).view(b, s, d)
