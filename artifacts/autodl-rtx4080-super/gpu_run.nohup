@@ -1,0 +1,291 @@
+/bin/bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+===== START 2026-09-18T20:35:59+08:00 =====
+checkpoint <function publish_latest at 0x7fa0cdc967a0> <function resolve_resume_path at 0x7fa0cdc96660>
+===== MOVE OLD /tmp CKPT =====
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  275M   30G   1% /
+/dev/md0         50G   23G   28G  46% /root/autodl-tmp
+overlay          30G  275M   30G   1% /
+total 23G
+-rw-r--r-- 1 root root 23G Sep 18 20:23 step_1.pt
+name, memory.used [MiB], memory.total [MiB]
+NVIDIA GeForce RTX 4080 SUPER, 1 MiB, 32760 MiB
+===== 1. RESUME old CPU step_1.pt (no save) =====
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=False
+CAT-YOKO-12B B0 step 2/2 nll=11.9425 ppl=153654.2 aux=0.0000 gate=0.301 gn=3.23 moe_cv=0.42 trainable=219.21M lr=1.00e-07 fp8=False tok=128 tok/s=8 mem=23378MiB
+RESUME_OLD_EXIT:0
+idle_mib 0
+===== 2. TINY CUDA =====
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9867 ppl=146.5 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=55 mem=18MiB
+tiny B0 step 2/2 nll=4.8941 ppl=133.5 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=681 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/2 nll=4.9899 ppl=146.9 aux=0.0011 gate=0.650 gn=1.66 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=517 mem=18MiB
+tiny B1 step 2/2 nll=4.8979 ppl=134.0 aux=0.0010 gate=1.000 gn=1.69 moe_cv=0.25 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=523 mem=19MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False
+tiny B2 step 1/2 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=357 mem=20MiB
+tiny B2 step 2/2 nll=4.8980 ppl=134.0 aux=0.0032 gate=1.000 gn=1.90 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False tok=64 tok/s=373 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=147 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9911 ppl=147.1 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=True tok=32 tok/s=465 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=254 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9750 ppl=144.7 aux=0.0010 gate=1.000 gn=1.67 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=382 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9750 ppl=144.7 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.14 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=102 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+tiny B0 step 1/1 nll=4.9979 ppl=148.1 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=497 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.9318 ppl=138.6 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.26 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=364 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=5.1130 ppl=166.2 aux=0.0031 gate=1.000 gn=1.91 moe_cv=0.18 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=239 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9729 ppl=144.4 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=473 mem=17MiB
+tiny B0 step 2/2 nll=4.8943 ppl=133.5 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=609 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.7927 ppl=120.6 aux=0.0000 gate=0.301 gn=0.02 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=657 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=673 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9041 ppl=134.8 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=705 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 2/2 nll=4.9997 ppl=148.4 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=708 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=633 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=493 mem=17MiB
+[Gloo] Rank [Gloo] Rank 1 is connected to 10 peer ranks.  is connected to Expected number of connected peer ranks is : 11 peer ranks. Expected number of connected peer ranks is : 
+1
+[rank1]:[W918 20:37:43.600816758 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 20:37:43.201122522 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=12 mem=0MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+[rank1]:[W918 20:37:50.626715101 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 20:37:50.688064695 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.8766 ppl=131.2 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=48 mem=17MiB
+[Gloo] Rank [Gloo] Rank 01 is connected to  is connected to 11 peer ranks.  peer ranks. Expected number of connected peer ranks is : Expected number of connected peer ranks is : 11
+
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+[rank0]:[W918 20:37:55.707777431 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 20:37:55.874132277 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=5.0437 ppl=155.1 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.32 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=43 mem=17MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.9292 ppl=138.3 aux=0.0011 gate=1.000 gn=1.66 moe_cv=0.29 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=256 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=4.8573 ppl=128.7 aux=0.0034 gate=1.000 gn=1.84 moe_cv=0.17 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=257 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.8448 ppl=127.1 aux=0.0000 gate=0.301 gn=0.08 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=16 tok/s=24 mem=17MiB
+gpu NVIDIA GeForce RTX 4080 SUPER 31.48 GiB cap=8.9 torch=2.8.0+cu128
+  B0 nll=4.8941 ok=True
+  B1 nll=4.8979 ok=True
+  B2 nll=4.8980 ok=True
+  bf16 nll=4.9750 ok=True
+  packed_resume ok=True peak_mib=17.5
+  b0_to_b1 ok=True
+  kd ok=True upcycle ok=True eval ok=True
+  grad_ckpt ok=True
+  b1_offload ok=True
+  b2_block_offload ok=True
+  c1_chain ok=True ckpts ok=True
+  ddp_gloo ok=True
+  ddp_cuda ok=True
+  ddp_cuda_c1 ok=True
+  fsdp ok=True
+  overall ok=True
+TINY_EXIT:0
+===== 3. 12B B0 save hardlink on autodl-tmp =====
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=True
+CAT-YOKO-12B B0 step 1/1 nll=11.8462 ppl=139557.3 aux=0.0000 gate=0.301 gn=3.31 moe_cv=0.43 trainable=219.21M lr=1.00e-07 fp8=False tok=64 tok/s=7 mem=23378MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phase": "B0",
+  "nll": 11.846230506896973,
+  "step": 1,
+  "seq_len": 64,
+  "peak_gib": 22.83,
+  "ok": true,
+  "latest": true,
+  "step_ckpt": true,
+  "latest_hardlink": true,
+  "latest_nlink": 2
+}
+SAVE_EXIT:0
+--- ckpt dir ---
+total 46G
+-rw-r--r-- 2 root root 23G Sep 18 20:39 latest.pt
+-rw-r--r-- 2 root root 23G Sep 18 20:39 step_1.pt
+/root/autodl-tmp/b0ckpt/latest.pt ino=6995966017 nlink=2 size=24501855029
+/root/autodl-tmp/b0ckpt/step_1.pt ino=6995966017 nlink=2 size=24501855029
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/md0         50G   46G  4.4G  92% /root/autodl-tmp
+overlay          30G  275M   30G   1% /
+===== 4. 12B B0 resume from directory =====
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=True
+CAT-YOKO-12B B0 step 2/2 nll=11.8472 ppl=139695.8 aux=0.0000 gate=0.301 gn=3.19 moe_cv=0.42 trainable=219.21M lr=1.00e-07 fp8=False tok=128 tok/s=7 mem=23378MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phase": "B0",
+  "nll": 11.847222328186035,
+  "step": 2,
+  "seq_len": 64,
+  "peak_gib": 22.83,
+  "ok": true
+}
+RESUME_DIR_EXIT:0
+===== 5. 12B B1 isolated =====
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=7603.42M reuse=True
+CAT-YOKO-12B B1 step 1/1 nll=11.9534 ppl=155340.2 aux=0.0383 gate=1.000 gn=8.95 moe_cv=0.55 trainable=7603.42M lr=1.00e-07 fp8=True tok=64 tok/s=1 mem=29115MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phase": "B1",
+  "nll": 11.953372955322266,
+  "step": 1,
+  "seq_len": 64,
+  "peak_gib": 28.43,
+  "ok": true
+}
+B1_EXIT:0
+===== 6. 12B B2 isolated =====
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=1.00GiB grad_ckpt=True seq=64 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=12250.38M reuse=True
+CAT-YOKO-12B B2 step 1/1 nll=11.9355 ppl=152590.8 aux=0.0582 gate=1.000 gn=14.40 moe_cv=0.56 trainable=12250.38M lr=3.00e-08 fp8=True tok=64 tok/s=0 mem=2662MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phase": "B2",
+  "nll": 11.935515403747559,
+  "step": 1,
+  "seq_len": 64,
+  "peak_gib": 2.6,
+  "ok": true
+}
+B2_EXIT:0
+===== 7. 12B C1 chain =====
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=True
+CAT-YOKO-12B B0 step 1/1 nll=12.0109 ppl=164540.6 aux=0.0000 gate=0.301 gn=3.33 moe_cv=0.45 trainable=219.21M lr=1.00e-07 fp8=False tok=64 tok/s=7 mem=23378MiB
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=15.09GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=7603.42M reuse=True
+CAT-YOKO-12B B1 step 1/1 nll=11.9573 ppl=155957.9 aux=0.0384 gate=1.000 gn=9.01 moe_cv=0.54 trainable=7603.42M lr=1.00e-07 fp8=True tok=64 tok/s=1 mem=29019MiB
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=1.01GiB grad_ckpt=True seq=64 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=12250.38M reuse=True
+CAT-YOKO-12B B2 step 1/1 nll=11.9563 ppl=155803.3 aux=0.0571 gate=1.000 gn=14.83 moe_cv=0.54 trainable=12250.38M lr=3.00e-08 fp8=True tok=64 tok/s=0 mem=2662MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phases": {
+    "B0": {
+      "info": {
+        "cuda": true,
+        "device": "NVIDIA GeForce RTX 4080 SUPER",
+        "index": 0,
+        "capability": "8.9",
+        "total_gib": 31.48,
+        "bf16": true,
+        "torch": "2.8.0+cu128",
+        "cuda_runtime": "12.8"
+      },
+      "phase": "B0",
+      "nll": 12.010912895202637,
+      "step": 1,
+      "seq_len": 64,
+      "peak_gib": 22.83,
+      "ok": true
+    },
+    "B1": {
+      "info": {
+        "cuda": true,
+        "device": "NVIDIA GeForce RTX 4080 SUPER",
+        "index": 0,
+        "capability": "8.9",
+        "total_gib": 31.48,
+        "bf16": true,
+        "torch": "2.8.0+cu128",
+        "cuda_runtime": "12.8"
+      },
+      "phase": "B1",
+      "nll": 11.957341194152832,
+      "step": 1,
+      "seq_len": 64,
+      "peak_gib": 28.34,
+      "ok": true
+    },
+    "B2": {
+      "info": {
+        "cuda": true,
+        "device": "NVIDIA GeForce RTX 4080 SUPER",
+        "index": 0,
+        "capability": "8.9",
+        "total_gib": 31.48,
+        "bf16": true,
+        "torch": "2.8.0+cu128",
+        "cuda_runtime": "12.8"
+      },
+      "phase": "B2",
+      "nll": 11.95634937286377,
+      "step": 1,
+      "seq_len": 64,
+      "peak_gib": 2.6,
+      "ok": true
+    }
+  },
+  "seq_len": 64,
+  "ok": true,
+  "b1_ok": true,
+  "b2_oom": false
+}
+C1_EXIT:0
+===== END 2026-09-18T20:51:06+08:00 =====
+memory.used [MiB], memory.total [MiB]
+1 MiB, 32760 MiB
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  275M   30G   1% /
+/dev/md0         50G   46G  4.4G  92% /root/autodl-tmp
+overlay          30G  275M   30G   1% /
+total 46G
+-rw-r--r-- 2 root root 23G Sep 18 20:39 latest.pt
+-rw-r--r-- 2 root root 23G Sep 18 20:39 step_1.pt
+DONE

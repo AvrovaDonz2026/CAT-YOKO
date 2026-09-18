@@ -12,6 +12,7 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — causality, residual-cut equivalence, M1/M2/M3 cache interface
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum **C1** (MoE both stacks, freeze encoder in B0/B1)
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — **C1+FP8** frozen Phase B wall-clock (729 H100-h)
+- [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例销毁前迁出）
 
 ## Train (12B graph; tiny for tests)
 

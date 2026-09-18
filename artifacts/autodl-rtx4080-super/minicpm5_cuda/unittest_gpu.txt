@@ -1,0 +1,199 @@
+meta CAT-YOKO-12B: 12,250,381,312 params (12.250B)
+  embed    0.535B
+  encoder  4.380B
+  cache    0.001B
+  decoder  7.335B
+  norm     0.000B
+  other    0.000B
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=48 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=632 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=465 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=4.9990 ppl=148.3 aux=0.0031 gate=1.000 gn=1.98 moe_cv=0.14 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=323 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9869 ppl=146.5 aux=0.0000 gate=0.300 gn=0.13 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=253 mem=18MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+[rank0]:[W918 19:27:11.715040827 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 19:27:11.725824797 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=5.1365 ppl=170.1 aux=0.0000 gate=0.301 gn=0.12 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=38 mem=17MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.9703 ppl=144.1 aux=0.0011 gate=1.000 gn=1.68 moe_cv=0.20 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=236 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=5.2130 ppl=183.6 aux=0.0034 gate=1.000 gn=1.91 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=257 mem=18MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+[rank0]:[W918 19:27:17.791018994 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 19:27:17.801546435 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.8766 ppl=131.2 aux=0.0000 gate=0.301 gn=0.11 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=38 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9867 ppl=146.5 aux=0.0000 gate=0.150 gn=0.12 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=629 mem=18MiB
+tiny B0 step 2/2 nll=4.8941 ppl=133.5 aux=0.0000 gate=0.300 gn=0.12 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=560 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.8448 ppl=127.1 aux=0.0000 gate=0.301 gn=0.16 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=16 tok/s=19 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9869 ppl=146.5 aux=0.0000 gate=0.300 gn=0.13 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=703 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9904 ppl=147.0 aux=0.0011 gate=1.000 gn=1.66 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=537 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=349 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=645 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9911 ppl=147.1 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=True tok=32 tok/s=447 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=243 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9750 ppl=144.7 aux=0.0010 gate=1.000 gn=1.67 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=173 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9750 ppl=144.7 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=98 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+tiny B0 step 1/1 nll=4.9979 ppl=148.1 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=455 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.9318 ppl=138.6 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.26 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=349 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=5.1130 ppl=166.2 aux=0.0031 gate=1.000 gn=1.91 moe_cv=0.18 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=238 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9729 ppl=144.4 aux=0.0000 gate=0.150 gn=0.12 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=448 mem=17MiB
+tiny B0 step 2/2 nll=4.8943 ppl=133.5 aux=0.0000 gate=0.301 gn=0.12 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=588 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.8969 ppl=133.9 aux=0.0000 gate=0.301 gn=0.04 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=648 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=651 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9041 ppl=134.8 aux=0.0000 gate=0.300 gn=0.13 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=697 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 2/2 nll=4.9997 ppl=148.4 aux=0.0000 gate=0.300 gn=0.12 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=654 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=662 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=470 mem=18MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank1]:[W918 19:27:36.901282162 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 19:27:36.901504610 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.12 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=14 mem=0MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+[rank0]:[W918 19:27:42.275892599 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 19:27:42.288645667 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.8766 ppl=131.2 aux=0.0000 gate=0.301 gn=0.11 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=37 mem=17MiB
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+[rank0]:[W918 19:27:48.850666076 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 19:27:48.856726615 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.8427 ppl=126.8 aux=0.0000 gate=0.301 gn=0.11 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=39 mem=17MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.8734 ppl=130.8 aux=0.0011 gate=1.000 gn=1.68 moe_cv=0.24 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=249 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=5.1219 ppl=167.6 aux=0.0033 gate=1.000 gn=1.86 moe_cv=0.21 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=269 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.8448 ppl=127.1 aux=0.0000 gate=0.301 gn=0.16 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=16 tok/s=19 mem=17MiB
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank1]:[W918 19:28:04.701133613 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 19:28:05.710064506 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.12 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=17 mem=0MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9729 ppl=144.4 aux=0.0000 gate=0.150 gn=0.12 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=573 mem=17MiB
+tiny B0 step 2/2 nll=4.8943 ppl=133.5 aux=0.0000 gate=0.301 gn=0.12 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=583 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.13 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=647 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=504 mem=17MiB
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.68GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=True
+======================================================================
+ERROR: test_12b_b1_one_step (tests.test_gpu.GpuTwelveBTests.test_12b_b1_one_step)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/autodl-tmp/CAT-YOKO/tests/test_gpu.py", line 229, in test_12b_b1_one_step
+    result = run_middle_12b_phase("B1", seq_len=64, steps=1, micro_batch=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/gpu_smoke.py", line 406, in run_middle_12b_phase
+    raise last_err
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/gpu_smoke.py", line 361, in run_middle_12b_phase
+    model = build_model(cfg, "cuda", dtype="bf16")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/trainer.py", line 91, in build_model
+    return CATYokoForCausalLM(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/model.py", line 31, in __init__
+    self.decoder = nn.ModuleList(
+                   ^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/container.py", line 355, in __init__
+    self += modules
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/container.py", line 402, in __iadd__
+    return self.extend(modules)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/container.py", line 485, in extend
+    for i, module in enumerate(modules):
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/model.py", line 32, in <genexpr>
+    DecoderBlock(
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/blocks.py", line 54, in __init__
+    self.mlp = MoE(cfg, nr, tk, hash_route=hash_route)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/moe.py", line 49, in __init__
+    self.experts = nn.ModuleList(SwiGLU(d, mid) for _ in range(n_routed))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/container.py", line 355, in __init__
+    self += modules
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/container.py", line 402, in __iadd__
+    return self.extend(modules)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/container.py", line 485, in extend
+    for i, module in enumerate(modules):
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/moe.py", line 49, in <genexpr>
+    self.experts = nn.ModuleList(SwiGLU(d, mid) for _ in range(n_routed))
+                                 ^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/moe.py", line 22, in __init__
+    self.gate_proj = nn.Linear(hidden, intermediate, bias=False)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/linear.py", line 106, in __init__
+    torch.empty((out_features, in_features), **factory_kwargs)
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_device.py", line 103, in __torch_function__
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB. GPU 0 has a total capacity of 31.48 GiB of which 3.69 MiB is free. Including non-PyTorch memory, this process has 31.46 GiB memory in use. Of the allocated memory 31.12 GiB is allocated by PyTorch, and 34.03 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+======================================================================
+ERROR: test_12b_c1_chain (tests.test_gpu.GpuTwelveBTests.test_12b_c1_chain)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/autodl-tmp/CAT-YOKO/tests/test_gpu.py", line 240, in test_12b_c1_chain
+    result = run_middle_12b_c1(seq_len=32, steps=1, micro_batch=1)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/gpu_smoke.py", line 438, in run_middle_12b_c1
+    row = run_middle_12b_phase(
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/gpu_smoke.py", line 406, in run_middle_12b_phase
+    raise last_err
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/gpu_smoke.py", line 361, in run_middle_12b_phase
+    model = build_model(cfg, "cuda", dtype="bf16")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/trainer.py", line 91, in build_model
+    return CATYokoForCausalLM(cfg)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/CAT-YOKO/cat_yoko/model.py", line 20, in __init__
+    self.embed = nn.Embedding(v, d)
+                 ^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/sparse.py", line 169, in __init__
+    torch.empty((num_embeddings, embedding_dim), **factory_kwargs),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/_device.py", line 103, in __torch_function__
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 510.00 MiB. GPU 0 has a total capacity of 31.48 GiB of which 3.69 MiB is free. Including non-PyTorch memory, this process has 31.46 GiB memory in use. Of the allocated memory 31.12 GiB is allocated by PyTorch, and 34.03 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+
+----------------------------------------------------------------------
+Ran 20 tests in 88.535s
+
+FAILED (errors=2, skipped=2)
+CAT-YOKO-12B B0 step 1/1 nll=11.9643 ppl=157044.7 aux=0.0000 gate=0.301 gn=3.31 moe_cv=0.44 trainable=219.21M lr=1.00e-07 fp8=False tok=64 tok/s=6 mem=23386MiB
+EXIT:1

@@ -1,0 +1,197 @@
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9867 ppl=146.5 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=52 mem=18MiB
+tiny B0 step 2/2 nll=4.8941 ppl=133.5 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=693 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/2 nll=4.9899 ppl=146.9 aux=0.0011 gate=0.650 gn=1.66 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=522 mem=18MiB
+tiny B1 step 2/2 nll=4.8979 ppl=134.0 aux=0.0010 gate=1.000 gn=1.69 moe_cv=0.25 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=556 mem=19MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False
+tiny B2 step 1/2 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=355 mem=20MiB
+tiny B2 step 2/2 nll=4.8980 ppl=134.0 aux=0.0032 gate=1.000 gn=1.90 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False tok=64 tok/s=371 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=144 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9911 ppl=147.1 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=True tok=32 tok/s=451 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=246 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.9750 ppl=144.7 aux=0.0010 gate=1.000 gn=1.67 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=406 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=0.21M reuse=False
+tiny B2 step 1/1 nll=4.9750 ppl=144.7 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.14 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=97 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+tiny B0 step 1/1 nll=4.9979 ppl=148.1 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=446 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=4.9318 ppl=138.6 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.26 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=403 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=5.1130 ppl=166.2 aux=0.0031 gate=1.000 gn=1.91 moe_cv=0.18 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=236 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/2 nll=4.9729 ppl=144.4 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=491 mem=17MiB
+tiny B0 step 2/2 nll=4.8943 ppl=133.5 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=627 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.7927 ppl=120.6 aux=0.0000 gate=0.301 gn=0.02 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=643 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=674 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9041 ppl=134.8 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=718 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 2/2 nll=4.9997 ppl=148.4 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=721 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=659 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=503 mem=17MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=14 mem=0MiB
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.8766 ppl=131.2 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=48 mem=17MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True
+tiny B0 step 1/1 nll=4.9828 ppl=145.9 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=46 mem=17MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True
+tiny B1 step 1/1 nll=5.3396 ppl=208.4 aux=0.0011 gate=1.000 gn=1.69 moe_cv=0.18 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=229 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True
+tiny B2 step 1/1 nll=4.9323 ppl=138.7 aux=0.0034 gate=1.000 gn=1.83 moe_cv=0.21 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=255 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False
+tiny B0 step 1/1 nll=4.8448 ppl=127.1 aux=0.0000 gate=0.301 gn=0.08 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=16 tok/s=24 mem=17MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phases": {
+    "B0": {
+      "nll": 4.894075393676758,
+      "ok": true
+    },
+    "B1": {
+      "nll": 4.897915840148926,
+      "ok": true
+    },
+    "B2": {
+      "nll": 4.897969722747803,
+      "ok": true
+    }
+  },
+  "bf16": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "fp8_policy": {
+    "b1_autocast": true,
+    "b0_autocast": false
+  },
+  "b1_fp8_autocast": {
+    "nll": 4.991145610809326,
+    "ok": true
+  },
+  "grad_ckpt": {
+    "nll": 4.990365505218506,
+    "ok": true
+  },
+  "b1_offload": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "b2_block_offload": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "c1_ckpts": {
+    "ok": true
+  },
+  "c1_chain": {
+    "B0": {
+      "nll": 4.9979166984558105,
+      "step": 1,
+      "ok": true
+    },
+    "B1": {
+      "nll": 4.9317708015441895,
+      "step": 1,
+      "ok": true
+    },
+    "B2": {
+      "nll": 5.113020896911621,
+      "step": 1,
+      "ok": true
+    },
+    "ok": true
+  },
+  "kd": {
+    "nll": 4.894270896911621,
+    "ok": true
+  },
+  "upcycle": {
+    "nll": 4.792708396911621,
+    "ok": true
+  },
+  "eval": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "packed_resume": {
+    "first_nll": 4.904074192047119,
+    "second_step": 2,
+    "ok": true
+  },
+  "b0_to_b1": {
+    "b0_nll": 4.974999904632568,
+    "b1_step": 1,
+    "b1_phase": "B1",
+    "ok": true
+  },
+  "b0_encoder_frozen": {
+    "ok": true
+  },
+  "ddp_gloo": {
+    "nll": 4.957737445831299,
+    "step": 1,
+    "world": 2,
+    "phase": "B0",
+    "device": "cpu",
+    "mode": "ddp",
+    "accum": 1,
+    "ok": true
+  },
+  "ddp_cuda": {
+    "nll": 4.876562595367432,
+    "step": 1,
+    "world": 2,
+    "phase": "B0",
+    "device": "cuda",
+    "mode": "ddp",
+    "accum": 1,
+    "ok": true
+  },
+  "ddp_cuda_c1": {
+    "nll": 4.932291507720947,
+    "step": 1,
+    "world": 2,
+    "phase": "C1",
+    "b0": 4.982812404632568,
+    "b1": 5.339583396911621,
+    "b2": 4.932291507720947,
+    "device": "cuda",
+    "ok": true
+  },
+  "fsdp": {
+    "nll": 4.844791889190674,
+    "step": 1,
+    "world": 1,
+    "phase": "B0",
+    "device": "cuda",
+    "mode": "fsdp",
+    "accum": 1,
+    "ok": true
+  },
+  "peak_mib": 17.5,
+  "ok": true
+}
