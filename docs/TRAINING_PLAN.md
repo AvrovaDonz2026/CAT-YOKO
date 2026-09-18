@@ -525,6 +525,45 @@ BBH（推理），IFEval（指令遵循）。
 
 ---
 
+## 16. 1M 上下文可行性
+
+结论分三层，别混为一谈：
+
+### 16.1 推理侧：非常有戏（这套架构就是为 1M 设计的）
+
+关键是 KV cache。**YOCO 只缓存一次（单一全局 cache）+ CSA/HCA 序列压缩**，把 1M 的 KV 从"放不下"压到"零头"：
+
+| 12B 模型在 1M token 的 KV cache | 大小 |
+| --- | --- |
+| decoder-only + MHA（全部 40 层缓存） | ≈369 GB（放不下） |
+| decoder-only + GQA4 / MLA | ≈41 / 46 GB |
+| **YOCO + MLA（单一全局 cache）** | **≈1.15 GB** |
+| **YOCO + MLA + CSA/HCA（÷8 序列压缩）** | **≈0.14 GB** |
+| （加 24 层 8K 滑窗分支，与 N 无关） | +≈0.2 GB |
+
+再叠加 **encoder(self-decoder) 的 prefill early-exit**——超长输入只需跑完 encoder 产出全局 cache，不必跑满全部层——1M **prefill 也便宜**。这正是"输入侧轻(≈2.3B)"的意义。YOCO 原论文在 1M 报告近满分 needle 检索。**所以 1M 推理在中等硬件上都可行。**
+
+### 16.2 训练出"支持 1M（needle/RULER 通过）"：现实，但要花心思
+
+不 pretrain 在 1M；主训练在 4–8K，末尾加一个**渐进长上下文扩展阶段**（8K→32K→128K→256K→1M）。要点：
+1. **RoPE/YaRN 缩放**到目标长度；2. **长数据**：书/代码仓库级拼接 + 合成长依赖 + IN2 中段样本；3. **渐进长度课程**；
+4. **训练期显存瓶颈是 1M 序列的激活**（不是 KV）→ 用 **context/sequence parallelism**；YOCO early-exit + CSA/HCA 压缩显著降激活；**非对称设计天然契合**（encoder 处理长输入、decoder 生成短 → 长 prefill 便宜）；
+5. **验证**：RULER-1M / needle-in-haystack。这一阶段 token 量不大（几 B～十几 B），成本相对主训练小，可租卡短跑。
+
+### 16.3 对标前沿 1M 质量：小预算达不到
+
+DeepSeek/Kimi 的 1M 是 32T 级数据 + 大算力喂出来的"充分利用"。小预算能拿到"**支持 1M + needle/RULER 不错**"，但"1M 上多跳深推理达到前沿"不现实——如实说明。
+
+### 16.4 低预算实操建议
+
+- **分阶段**：先稳 **128K–256K**（便宜、够用），再单独冲 **1M capability** 并用 needle/RULER 验证；别一上来就 1M。
+- **PDSA 路线是"有效 1M"的省钱替代**：bounded editable memory + 校准稀疏回退 + 检索（§14），**不必训练原生 1M 注意力**就能拿到长程召回——你自己的工作，且 §5 实测显示在 8.2k 上 bounded 选择已优于读全文。对极限长上下文，这可能比硬训 1M 注意力更划算。
+- 里程碑上把 1M 归入 **M4**（长上下文），作为 capability 目标而非质量目标。
+
+> 一句话：**1M 推理稳拿；1M "能用"（needle/RULER）现实；1M 前沿质量超预算。** 想要极限长上下文又省钱，优先走 PDSA 记忆 + 检索回退。
+
+---
+
 ## 参考（本计划的架构依据）
 
 - **DeepSeek-V4**（CSA/HCA、mHC、Muon、MTP、Hash-MoE bootstrap；V4-Flash 284B/13B、1M ctx、32T tokens）：arXiv `2606.19348`；HuggingFace `transformers` `deepseek_v4` 模型文档（`layer_types`、`compress_rates`、`sliding_window`、`index_topk`、`mlp_layer_types` 等配置）。
