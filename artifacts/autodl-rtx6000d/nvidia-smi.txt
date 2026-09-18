@@ -1,0 +1,20 @@
+Fri Sep 18 23:19:54 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+===============================================|
+|   0  NVIDIA RTX 6000D               On  |   00000000:38:00.0 Off |                  Off |
+| N/A   34C    P0             92W /  600W |       0MiB /  85651MiB |    100%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
+name, compute_cap, memory.total [MiB], driver_version
+NVIDIA RTX 6000D, 12.0, 85651 MiB, 595.71.05
+
+torch 2.8.0+cu128
+cuda True
+cap (12, 0)
+mem 89173131264

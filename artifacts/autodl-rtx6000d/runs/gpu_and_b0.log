@@ -1,0 +1,287 @@
+=== start 2026-09-18T15:36:45Z ===
+NVIDIA RTX 6000D, 12.0, 85651 MiB
+HF_ENDPOINT=https://hf-mirror.com
+HF_HOME=/root/autodl-tmp/hf
+=== sha256 model.safetensors ===
+size 5033557128
+sha256 d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a
+match True
+=== config.json ===
+{
+    "_name_or_path": "openbmb/MiniCPM5-2B",
+    "architectures": [
+        "LlamaForCausalLM"
+    ],
+    "bos_token_id": 0,
+    "eos_token_id": [1, 130073],
+    "pad_token_id": 1,
+    "hidden_act": "silu",
+    "hidden_size": 2048,
+    "initializer_range": 0.02,
+    "intermediate_size": 6144,
+    "max_position_embeddings": 524288,
+    "model_type": "llama",
+    "num_attention_heads": 16,
+    "num_hidden_layers": 42,
+    "num_key_value_heads": 2,
+    "head_dim": 128,
+    "rms_norm_eps": 1e-06,
+    "rope_theta": 5000000,
+    "rope_scaling": null,
+    "tie_word_embeddings": false,
+    "torch_dtype": "bfloat16",
+    "transformers_version": "5.6.2",
+    "use_cache": true,
+    "vocab_size": 130560
+}
+=== download_minicpm5 already complete ===
+already complete /root/autodl-tmp/hf/MiniCPM5-2B-Base/model.safetensors
+=== gpu_smoke tiny ===
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/2 nll=4.9867 ppl=146.5 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=47 mem=18MiB
+tiny B0 step 2/2 nll=4.8941 ppl=133.5 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=1690 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/2 nll=4.9898 ppl=146.9 aux=0.0011 gate=0.650 gn=1.66 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=1334 mem=18MiB
+tiny B1 step 2/2 nll=4.8979 ppl=134.0 aux=0.0010 gate=1.000 gn=1.69 moe_cv=0.25 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=1361 mem=19MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/2 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=832 mem=20MiB
+tiny B2 step 2/2 nll=4.8979 ppl=134.0 aux=0.0032 gate=1.000 gn=1.90 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False tok=64 tok/s=981 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=170 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9911 ppl=147.1 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=True tok=32 tok/s=1160 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=4.9904 ppl=147.0 aux=0.0031 gate=1.000 gn=1.87 moe_cv=0.15 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=568 mem=20MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9750 ppl=144.7 aux=0.0010 gate=1.000 gn=1.67 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=820 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=0.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=4.9750 ppl=144.7 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.14 trainable=0.21M lr=3.00e-08 fp8=False tok=32 tok/s=267 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9979 ppl=148.1 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=1006 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9318 ppl=138.6 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.26 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=864 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=True seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=5.1130 ppl=166.2 aux=0.0031 gate=1.000 gn=1.91 moe_cv=0.18 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=564 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/2 nll=4.9729 ppl=144.4 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=871 mem=17MiB
+tiny B0 step 2/2 nll=4.8943 ppl=133.5 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=1572 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.7927 ppl=120.6 aux=0.0000 gate=0.301 gn=0.02 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=1561 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=1370 mem=17MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9041 ppl=134.8 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=1480 mem=18MiB
+built tiny on cuda dtype=fp32 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 2/2 nll=4.9997 ppl=148.4 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=64 tok/s=1782 mem=18MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.9750 ppl=144.7 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=1454 mem=17MiB
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.8938 ppl=133.5 aux=0.0010 gate=1.000 gn=1.70 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False tok=32 tok/s=1400 mem=17MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank0]:[W918 23:37:00.001753743 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 23:37:01.206442491 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=60 mem=0MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+[rank1]:[W918 23:37:04.920652195 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W918 23:37:04.929604797 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.8766 ppl=131.2 aux=0.0000 gate=0.301 gn=0.05 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=59 mem=17MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+[rank0]:[W918 23:37:13.604430133 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W918 23:37:13.616324005 reducer.cpp:1457] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9547 ppl=141.8 aux=0.0000 gate=0.301 gn=0.06 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False tok=32 tok/s=57 mem=17MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.8937 ppl=133.5 aux=0.0011 gate=1.000 gn=1.64 moe_cv=0.26 trainable=0.12M lr=3.00e-07 fp8=False tok=64 tok/s=360 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.21M reuse=True PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B2 step 1/1 nll=5.0651 ppl=158.4 aux=0.0032 gate=1.000 gn=1.92 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False tok=96 tok/s=596 mem=18MiB
+built tiny on cuda:0 dtype=bf16 params=210,816 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B0 step 1/1 nll=4.8448 ppl=127.1 aux=0.0000 gate=0.301 gn=0.08 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False tok=16 tok/s=30 mem=17MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA RTX 6000D",
+    "index": 0,
+    "capability": "12.0",
+    "total_gib": 83.05,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8",
+    "alloc_conf": "expandable_segments:True"
+  },
+  "phases": {
+    "B0": {
+      "nll": 4.89410400390625,
+      "ok": true
+    },
+    "B1": {
+      "nll": 4.897916316986084,
+      "ok": true
+    },
+    "B2": {
+      "nll": 4.89794397354126,
+      "ok": true
+    }
+  },
+  "bf16": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "fp8_policy": {
+    "b1_autocast": true,
+    "b0_autocast": false
+  },
+  "b1_fp8_autocast": {
+    "nll": 4.991145610809326,
+    "ok": true
+  },
+  "grad_ckpt": {
+    "nll": 4.990389823913574,
+    "ok": true
+  },
+  "b1_offload": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "b2_block_offload": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "c1_ckpts": {
+    "ok": true
+  },
+  "c1_chain": {
+    "B0": {
+      "nll": 4.9979166984558105,
+      "step": 1,
+      "ok": true
+    },
+    "B1": {
+      "nll": 4.9317708015441895,
+      "step": 1,
+      "ok": true
+    },
+    "B2": {
+      "nll": 5.113020896911621,
+      "step": 1,
+      "ok": true
+    },
+    "ok": true
+  },
+  "kd": {
+    "nll": 4.894270896911621,
+    "ok": true
+  },
+  "upcycle": {
+    "nll": 4.792708396911621,
+    "ok": true
+  },
+  "eval": {
+    "nll": 4.974999904632568,
+    "ok": true
+  },
+  "packed_resume": {
+    "first_nll": 4.904058933258057,
+    "second_step": 2,
+    "ok": true
+  },
+  "b0_to_b1": {
+    "b0_nll": 4.974999904632568,
+    "b1_step": 1,
+    "b1_phase": "B1",
+    "ok": true
+  },
+  "b0_encoder_frozen": {
+    "ok": true
+  },
+  "ddp_gloo": {
+    "nll": 4.957737223307292,
+    "step": 1,
+    "world": 2,
+    "phase": "B0",
+    "device": "cpu",
+    "mode": "ddp",
+    "accum": 1,
+    "ok": true
+  },
+  "ddp_cuda": {
+    "nll": 4.8765625,
+    "step": 1,
+    "world": 2,
+    "phase": "B0",
+    "device": "cuda",
+    "mode": "ddp",
+    "accum": 1,
+    "ok": true
+  },
+  "ddp_cuda_c1": {
+    "nll": 5.065104166666667,
+    "step": 1,
+    "world": 2,
+    "phase": "C1",
+    "b0": 4.9546875,
+    "b1": 4.89375,
+    "b2": 5.065104166666667,
+    "device": "cuda",
+    "ok": true
+  },
+  "fsdp": {
+    "nll": 4.844791889190674,
+    "step": 1,
+    "world": 1,
+    "phase": "B0",
+    "device": "cuda",
+    "mode": "fsdp",
+    "accum": 1,
+    "ok": true
+  },
+  "peak_mib": 17.5,
+  "ok": true
+}
+=== B0 --try real MiniCPM5 upcycle ===
+B0 argv: --config 12b --phase B0 --device cuda --dtype bf16 --grad-ckpt --seed 0 --save-dir /root/autodl-tmp/runs/b0 --keep-last 2 --no-save-full --save-trainable --no-save-optim --micro-batch 1 --accum 1 --offload-encoder --seq-len 64 --steps 32 --save-every 8 --log /root/autodl-tmp/runs/b0/metrics.jsonl --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 17539.76it/s]
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=False PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+CAT-YOKO-12B B0 step 1/32 nll=17.6091 ppl=44416742.7 aux=0.0000 gate=0.009 gn=3.86 moe_cv=0.87 trainable=219.21M lr=1.00e-07 fp8=False tok=64 tok/s=19 mem=23378MiB
+CAT-YOKO-12B B0 step 2/32 nll=18.1399 ppl=75517965.1 aux=0.0000 gate=0.019 gn=5.00 moe_cv=0.92 trainable=219.21M lr=1.00e-07 fp8=False tok=128 tok/s=17 mem=24244MiB
+CAT-YOKO-12B B0 step 3/32 nll=18.3631 ppl=94404030.8 aux=0.0000 gate=0.028 gn=8.75 moe_cv=0.91 trainable=219.21M lr=1.00e-07 fp8=False tok=192 tok/s=19 mem=24244MiB
+CAT-YOKO-12B B0 step 4/32 nll=16.6081 ppl=16323808.2 aux=0.0000 gate=0.038 gn=6.56 moe_cv=0.89 trainable=219.21M lr=1.00e-07 fp8=False tok=256 tok/s=22 mem=24244MiB
+CAT-YOKO-12B B0 step 5/32 nll=16.8046 ppl=19866859.0 aux=0.0000 gate=0.047 gn=18.00 moe_cv=0.84 trainable=219.21M lr=1.00e-07 fp8=False tok=320 tok/s=21 mem=24244MiB
+CAT-YOKO-12B B0 step 6/32 nll=16.8413 ppl=20609659.8 aux=0.0000 gate=0.056 gn=15.12 moe_cv=0.92 trainable=219.21M lr=1.00e-07 fp8=False tok=384 tok/s=26 mem=24244MiB
+CAT-YOKO-12B B0 step 7/32 nll=21.8244 ppl=- aux=0.0000 gate=0.065 gn=55.50 moe_cv=0.85 trainable=219.21M lr=1.00e-07 fp8=False tok=448 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 8/32 nll=16.6855 ppl=17637120.5 aux=0.0000 gate=0.075 gn=16.50 moe_cv=0.89 trainable=219.21M lr=1.00e-07 fp8=False tok=512 tok/s=24 mem=24244MiB
+CAT-YOKO-12B B0 step 9/32 nll=17.9514 ppl=62544528.2 aux=0.0000 gate=0.084 gn=30.12 moe_cv=0.95 trainable=219.21M lr=1.00e-07 fp8=False tok=576 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 10/32 nll=18.6319 ppl=123523830.7 aux=0.0000 gate=0.094 gn=57.75 moe_cv=0.94 trainable=219.21M lr=1.00e-07 fp8=False tok=640 tok/s=19 mem=24244MiB
+CAT-YOKO-12B B0 step 11/32 nll=16.9613 ppl=23238232.5 aux=0.0000 gate=0.103 gn=38.00 moe_cv=0.94 trainable=219.21M lr=1.00e-07 fp8=False tok=704 tok/s=19 mem=24244MiB
+CAT-YOKO-12B B0 step 12/32 nll=16.5734 ppl=15766719.9 aux=0.0000 gate=0.112 gn=39.50 moe_cv=0.88 trainable=219.21M lr=1.00e-07 fp8=False tok=768 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 13/32 nll=16.4375 ppl=13763077.2 aux=0.0000 gate=0.122 gn=23.12 moe_cv=0.91 trainable=219.21M lr=1.00e-07 fp8=False tok=832 tok/s=25 mem=24244MiB
+CAT-YOKO-12B B0 step 14/32 nll=17.9514 ppl=62544528.2 aux=0.0000 gate=0.131 gn=74.00 moe_cv=0.84 trainable=219.21M lr=1.00e-07 fp8=False tok=896 tok/s=25 mem=24244MiB
+CAT-YOKO-12B B0 step 15/32 nll=16.4782 ppl=14334420.2 aux=0.0000 gate=0.141 gn=116.50 moe_cv=0.85 trainable=219.21M lr=1.00e-07 fp8=False tok=960 tok/s=26 mem=24244MiB
+CAT-YOKO-12B B0 step 16/32 nll=15.7163 ppl=6690970.5 aux=0.0000 gate=0.150 gn=31.25 moe_cv=0.93 trainable=219.21M lr=1.00e-07 fp8=False tok=1024 tok/s=24 mem=24244MiB
+CAT-YOKO-12B B0 step 17/32 nll=18.9524 ppl=170182361.4 aux=0.0000 gate=0.159 gn=109.50 moe_cv=0.82 trainable=219.21M lr=1.00e-07 fp8=False tok=1088 tok/s=21 mem=24244MiB
+CAT-YOKO-12B B0 step 18/32 nll=16.9286 ppl=22489783.6 aux=0.0000 gate=0.169 gn=89.00 moe_cv=0.86 trainable=219.21M lr=1.00e-07 fp8=False tok=1152 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 19/32 nll=16.5625 ppl=15595609.7 aux=0.0000 gate=0.178 gn=120.00 moe_cv=0.91 trainable=219.21M lr=1.00e-07 fp8=False tok=1216 tok/s=24 mem=24244MiB
+CAT-YOKO-12B B0 step 20/32 nll=17.6696 ppl=47187680.1 aux=0.0000 gate=0.188 gn=80.50 moe_cv=0.91 trainable=219.21M lr=1.00e-07 fp8=False tok=1280 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 21/32 nll=17.5476 ppl=41767073.3 aux=0.0000 gate=0.197 gn=31.38 moe_cv=0.92 trainable=219.21M lr=1.00e-07 fp8=False tok=1344 tok/s=25 mem=24244MiB
+CAT-YOKO-12B B0 step 22/32 nll=16.1339 ppl=10159586.5 aux=0.0000 gate=0.206 gn=59.25 moe_cv=0.95 trainable=219.21M lr=1.00e-07 fp8=False tok=1408 tok/s=26 mem=24244MiB
+CAT-YOKO-12B B0 step 23/32 nll=18.3819 ppl=96200456.1 aux=0.0000 gate=0.216 gn=102.50 moe_cv=0.81 trainable=219.21M lr=1.00e-07 fp8=False tok=1472 tok/s=25 mem=24244MiB
+CAT-YOKO-12B B0 step 24/32 nll=17.5665 ppl=42561863.7 aux=0.0000 gate=0.225 gn=42.75 moe_cv=0.92 trainable=219.21M lr=1.00e-07 fp8=False tok=1536 tok/s=25 mem=24244MiB
+CAT-YOKO-12B B0 step 25/32 nll=17.4206 ppl=36786269.5 aux=0.0000 gate=0.234 gn=51.50 moe_cv=0.90 trainable=219.21M lr=1.00e-07 fp8=False tok=1600 tok/s=25 mem=24244MiB
+CAT-YOKO-12B B0 step 26/32 nll=18.1587 ppl=76954858.4 aux=0.0000 gate=0.244 gn=80.50 moe_cv=0.84 trainable=219.21M lr=1.00e-07 fp8=False tok=1664 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 27/32 nll=15.7361 ppl=6825053.2 aux=0.0000 gate=0.254 gn=32.00 moe_cv=0.93 trainable=219.21M lr=1.00e-07 fp8=False tok=1728 tok/s=21 mem=24244MiB
+CAT-YOKO-12B B0 step 28/32 nll=16.5804 ppl=15876595.4 aux=0.0000 gate=0.262 gn=41.25 moe_cv=0.88 trainable=219.21M lr=1.00e-07 fp8=False tok=1792 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 29/32 nll=16.8214 ppl=20204750.3 aux=0.0000 gate=0.271 gn=113.00 moe_cv=0.99 trainable=219.21M lr=1.00e-07 fp8=False tok=1856 tok/s=24 mem=24244MiB
+CAT-YOKO-12B B0 step 30/32 nll=16.8413 ppl=20609659.8 aux=0.0000 gate=0.281 gn=71.50 moe_cv=0.92 trainable=219.21M lr=1.00e-07 fp8=False tok=1920 tok/s=23 mem=24244MiB
+CAT-YOKO-12B B0 step 31/32 nll=17.8948 ppl=59105949.6 aux=0.0000 gate=0.291 gn=118.00 moe_cv=0.88 trainable=219.21M lr=1.00e-07 fp8=False tok=1984 tok/s=26 mem=24244MiB
+CAT-YOKO-12B B0 step 32/32 nll=15.9142 ppl=8155364.4 aux=0.0000 gate=0.301 gn=29.50 moe_cv=0.87 trainable=219.21M lr=1.00e-07 fp8=False tok=2048 tok/s=27 mem=24244MiB
+=== B0 exit 0 2026-09-18T15:39:16Z ===
+total 1.3G
+-rw-r--r-- 1 root root  21K Sep 18 23:39 metrics.jsonl
+-rw-r--r-- 2 root root 419M Sep 18 23:39 trainable.pt
+-rw-r--r-- 1 root root 419M Sep 18 23:38 trainable_step_24.pt
+-rw-r--r-- 2 root root 419M Sep 18 23:39 trainable_step_32.pt
+=== all done 2026-09-18T15:39:16Z ===
