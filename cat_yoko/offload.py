@@ -37,6 +37,15 @@ def move_module(mod: nn.Module, device: torch.device | str) -> None:
     mod.to(device)
 
 
+_after_block_backward = None
+
+
+def set_after_block_backward(fn) -> None:
+    """Optional hook: ``fn(blk)`` after a checkpointed block's backward (B2)."""
+    global _after_block_backward
+    _after_block_backward = fn
+
+
 def _aux_of(blk: nn.Module, y: torch.Tensor) -> torch.Tensor:
     aux = getattr(getattr(blk, "mlp", None), "last_aux", None)
     if aux is None:
@@ -107,6 +116,10 @@ def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[to
                 grads.append(gaux if gaux is not None else torch.zeros_like(aux))
             torch.autograd.backward(tuple(outs), tuple(grads))
             move_module(blk, "cpu")
+            cb = _after_block_backward
+            if cb is not None:
+                with torch.no_grad():
+                    cb(blk)
             return tuple(x.grad for x in inputs)
 
     return _Fn.apply(*tensors)

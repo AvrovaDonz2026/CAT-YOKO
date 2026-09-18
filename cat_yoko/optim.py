@@ -133,6 +133,62 @@ class CPUOffloadAdamW(Optimizer):
             dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay),
         )
 
+    def _group_map(self) -> dict[int, dict]:
+        return {id(p): g for g in self.param_groups for p in g["params"]}
+
+    @torch.no_grad()
+    def _update_one(self, p, group: dict) -> None:
+        if p.grad is None:
+            return
+        lr = float(group["lr"])
+        beta1, beta2 = group["betas"]
+        eps = float(group.get("eps", 1e-8))
+        wd = float(group["weight_decay"])
+        grad = p.grad.detach()
+        p.grad = None
+        if grad.device.type != "cpu" or grad.dtype != torch.float32:
+            grad = grad.to(device="cpu", dtype=torch.float32)
+        p32 = p.detach()
+        if p32.device.type != "cpu" or p32.dtype != torch.float32:
+            p32 = p32.to(device="cpu", dtype=torch.float32)
+        state = self.state[p]
+        if self.retain_state:
+            if len(state) == 0:
+                state["step"] = 0
+                state["exp_avg"] = torch.zeros(
+                    p32.shape, dtype=self.state_dtype, device="cpu"
+                )
+                state["exp_avg_sq"] = torch.zeros(
+                    p32.shape, dtype=self.state_dtype, device="cpu"
+                )
+            elif torch.is_tensor(state.get("step")):
+                state["step"] = int(state["step"].item())
+            state["step"] = int(state.get("step", 0)) + 1
+            t = int(state["step"])
+            exp_avg = state["exp_avg"].float()
+            exp_avg_sq = state["exp_avg_sq"].float()
+            exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
+            exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
+            state["exp_avg"] = exp_avg.to(dtype=self.state_dtype)
+            state["exp_avg_sq"] = exp_avg_sq.to(dtype=self.state_dtype)
+        else:
+            t = 1
+            exp_avg = grad * (1.0 - beta1)
+            exp_avg_sq = grad * grad * (1.0 - beta2)
+            state.clear()
+        if wd != 0.0:
+            p32.mul_(1.0 - lr * wd)
+        denom = exp_avg_sq.sqrt().div_(math.sqrt(1.0 - beta2**t)).add_(eps)
+        p32.addcdiv_(exp_avg, denom, value=-lr / (1.0 - beta1**t))
+        p.copy_(p32.to(device=p.device, dtype=p.dtype))
+        del p32, grad, exp_avg, exp_avg_sq
+
+    def step_params(self, params) -> None:
+        gmap = self._group_map()
+        default = self.param_groups[0]
+        for p in params:
+            self._update_one(p, gmap.get(id(p), default))
+
     @torch.no_grad()
     def step(self, closure=None):
         loss = None
@@ -140,51 +196,8 @@ class CPUOffloadAdamW(Optimizer):
             with torch.enable_grad():
                 loss = closure()
         for group in self.param_groups:
-            lr = float(group["lr"])
-            beta1, beta2 = group["betas"]
-            eps = float(group.get("eps", 1e-8))
-            wd = float(group["weight_decay"])
             for p in group["params"]:
-                if p.grad is None:
-                    continue
-                grad = p.grad.detach()
-                p.grad = None
-                if grad.device.type != "cpu" or grad.dtype != torch.float32:
-                    grad = grad.to(device="cpu", dtype=torch.float32)
-                p32 = p.detach()
-                if p32.device.type != "cpu" or p32.dtype != torch.float32:
-                    p32 = p32.to(device="cpu", dtype=torch.float32)
-                state = self.state[p]
-                if self.retain_state:
-                    if len(state) == 0:
-                        state["step"] = 0
-                        state["exp_avg"] = torch.zeros(
-                            p32.shape, dtype=self.state_dtype, device="cpu"
-                        )
-                        state["exp_avg_sq"] = torch.zeros(
-                            p32.shape, dtype=self.state_dtype, device="cpu"
-                        )
-                    elif torch.is_tensor(state.get("step")):
-                        state["step"] = int(state["step"].item())
-                    state["step"] = int(state.get("step", 0)) + 1
-                    t = int(state["step"])
-                    exp_avg = state["exp_avg"].float()
-                    exp_avg_sq = state["exp_avg_sq"].float()
-                    exp_avg.mul_(beta1).add_(grad, alpha=1.0 - beta1)
-                    exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
-                    state["exp_avg"] = exp_avg.to(dtype=self.state_dtype)
-                    state["exp_avg_sq"] = exp_avg_sq.to(dtype=self.state_dtype)
-                else:
-                    t = 1
-                    exp_avg = grad * (1.0 - beta1)
-                    exp_avg_sq = grad * grad * (1.0 - beta2)
-                    state.clear()
-                if wd != 0.0:
-                    p32.mul_(1.0 - lr * wd)
-                denom = exp_avg_sq.sqrt().div_(math.sqrt(1.0 - beta2**t)).add_(eps)
-                p32.addcdiv_(exp_avg, denom, value=-lr / (1.0 - beta1**t))
-                p.copy_(p32.to(device=p.device, dtype=p.dtype))
-                del p32, grad, exp_avg, exp_avg_sq
+                self._update_one(p, group)
         return loss
 
     def load_state_dict(self, state_dict):

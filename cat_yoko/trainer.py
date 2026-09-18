@@ -22,8 +22,13 @@ from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight
 from cat_yoko.model import CATYokoForCausalLM
-from cat_yoko.offload import auto_offload_flags, clip_grad_norm_mixed, move_module
-from cat_yoko.optim import build_optimizer, plan_cpu_adam, trim_host_allocator, unwrap, wsd_lr
+from cat_yoko.offload import (
+    auto_offload_flags,
+    clip_grad_norm_mixed,
+    move_module,
+    set_after_block_backward,
+)
+from cat_yoko.optim import CPUOffloadAdamW, build_optimizer, plan_cpu_adam, trim_host_allocator, unwrap, wsd_lr
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
@@ -380,64 +385,120 @@ class Trainer:
         trainable = [p for p in model.parameters() if p.requires_grad]
         n_train = sum(p.numel() for p in trainable)
 
-        while True:
-            if max_steps is not None and step >= max_steps:
-                break
-            if phase_budget is not None and tokens_in_phase >= phase_budget:
-                break
-            progress = 0.0
-            if max_steps:
-                progress = (step + 1) / max_steps
-            elif phase_budget:
-                progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
-            set_gate(unwrap(model), gate_schedule(self.phase, progress))
-            lr = wsd_lr(tokens_seen, self.cfg, self.phase)
-            for g in opt.param_groups:
-                g["lr"] = lr
-            opt.zero_grad(set_to_none=True)
-            step_nll = 0.0
-            step_loss = 0.0
-            step_aux = 0.0
-            step_tokens = 0
-            t0 = time.perf_counter()
-            for _ in range(self.accum):
-                batch = stream.batch(self.micro_batch, self.device)
-                step_tokens += int(batch["input_ids"].numel())
-                with self._amp():
-                    out = model(**batch)
-                    loss = out["loss"] / self.accum
-                if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
-                    print(f"forward done phase={self.phase}", flush=True)
-                if self.teacher is not None:
-                    with torch.no_grad():
-                        t_logits = self.teacher(batch["input_ids"])["logits"]
-                    w = kd_weight(
-                        step,
-                        max_steps or 1,
-                        self.cfg.kd_weight_start,
-                    )
-                    if w > 0:
-                        loss = loss + w * kd_kl(
-                            out["logits"][:, :-1],
-                            t_logits[:, :-1],
-                            self.cfg.kd_temperature,
+        if self.offload_blocks and isinstance(opt, CPUOffloadAdamW):
+            def _on_block(blk):
+                opt.step_params(blk.parameters())
+
+            set_after_block_backward(_on_block)
+        try:
+            while True:
+                if max_steps is not None and step >= max_steps:
+                    break
+                if phase_budget is not None and tokens_in_phase >= phase_budget:
+                    break
+                progress = 0.0
+                if max_steps:
+                    progress = (step + 1) / max_steps
+                elif phase_budget:
+                    progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
+                set_gate(unwrap(model), gate_schedule(self.phase, progress))
+                lr = wsd_lr(tokens_seen, self.cfg, self.phase)
+                for g in opt.param_groups:
+                    g["lr"] = lr
+                opt.zero_grad(set_to_none=True)
+                step_nll = 0.0
+                step_loss = 0.0
+                step_aux = 0.0
+                step_tokens = 0
+                t0 = time.perf_counter()
+                for _ in range(self.accum):
+                    batch = stream.batch(self.micro_batch, self.device)
+                    step_tokens += int(batch["input_ids"].numel())
+                    with self._amp():
+                        out = model(**batch)
+                        loss = out["loss"] / self.accum
+                    if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
+                        print(f"forward done phase={self.phase}", flush=True)
+                    if self.teacher is not None:
+                        with torch.no_grad():
+                            t_logits = self.teacher(batch["input_ids"])["logits"]
+                        w = kd_weight(
+                            step,
+                            max_steps or 1,
+                            self.cfg.kd_weight_start,
                         )
-                loss.backward()
-                if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
-                    print(f"backward done phase={self.phase}", flush=True)
-                unwrap(model).step_router_bias()
-                step_nll += float(out["nll"].detach()) / self.accum
-                step_loss += float(out["loss"].detach()) / self.accum
-                step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
-            if not math.isfinite(step_nll):
-                raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
-            grad_norm = self._clip(model, trainable)
-            opt.step()
-            dt = max(time.perf_counter() - t0, 1e-9)
-            step += 1
-            tokens_in_phase += step_tokens * self.world
-            tokens_seen += step_tokens * self.world
-            last = step_nll
+                        if w > 0:
+                            loss = loss + w * kd_kl(
+                                out["logits"][:, :-1],
+                                t_logits[:, :-1],
+                                self.cfg.kd_temperature,
+                            )
+                    loss.backward()
+                    if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
+                        print(f"backward done phase={self.phase}", flush=True)
+                    unwrap(model).step_router_bias()
+                    step_nll += float(out["nll"].detach()) / self.accum
+                    step_loss += float(out["loss"].detach()) / self.accum
+                    step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
+                if not math.isfinite(step_nll):
+                    raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
+                if self.offload_blocks:
+                    grad_norm = 0.0
+                else:
+                    grad_norm = self._clip(model, trainable)
+                opt.step()
+                dt = max(time.perf_counter() - t0, 1e-9)
+                step += 1
+                tokens_in_phase += step_tokens * self.world
+                tokens_seen += step_tokens * self.world
+                last = step_nll
+                extra = {
+                    "phase": self.phase,
+                    "step": step,
+                    "tokens_in_phase": tokens_in_phase,
+                    "tokens_seen": tokens_seen,
+                    "gate": float(unwrap(model).decoder[0].gate),
+                    "name": self.cfg.name,
+                    "seq_len": self.seq_len,
+                    "stream": stream.state_dict(),
+                    "rng_torch": torch.get_rng_state(),
+                    "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+                }
+                if step == 1 or step % self.log_every == 0 or (
+                    max_steps is not None and step == max_steps
+                ):
+                    row = {
+                        "name": self.cfg.name,
+                        "phase": self.phase,
+                        "step": step,
+                        "steps_or_inf": max_steps if max_steps is not None else "-",
+                        "nll": last,
+                        "loss": step_loss,
+                        "aux": step_aux,
+                        "gate": extra["gate"],
+                        "grad_norm": grad_norm,
+                        "trainable_m": n_train / 1e6,
+                        "lr": lr,
+                        "fp8": use_fp8,
+                        "tokens_seen": tokens_seen,
+                        "tokens_in_phase": tokens_in_phase,
+                        "tok_s": (step_tokens * self.world) / dt,
+                        "mem_mib": self._mem_mib(),
+                        "seq_len": self.seq_len,
+                        "grad_ckpt": self.grad_ckpt,
+                        "offload_encoder": self.offload_encoder,
+                        "offload_blocks": self.offload_blocks,
+                        "optim_cpu": self.optim_cpu,
+                    }
+                    self._log(row)
+                if self.eval_every and step % self.eval_every == 0:
+                    ev = self._eval_nll(model)
+                    if is_rank0(self.rank):
+                        print(f"eval nll={ev:.4f}")
+                if self.save_every and step % self.save_every == 0:
+                    self._maybe_save(model, opt, extra, f"step_{step}.pt")
+                if max_steps is None and phase_budget is None:
+                    break
             extra = {
                 "phase": self.phase,
                 "step": step,
@@ -450,64 +511,19 @@ class Trainer:
                 "rng_torch": torch.get_rng_state(),
                 "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
             }
-            if step == 1 or step % self.log_every == 0 or (
-                max_steps is not None and step == max_steps
-            ):
-                row = {
-                    "name": self.cfg.name,
-                    "phase": self.phase,
-                    "step": step,
-                    "steps_or_inf": max_steps if max_steps is not None else "-",
-                    "nll": last,
-                    "loss": step_loss,
-                    "aux": step_aux,
-                    "gate": extra["gate"],
-                    "grad_norm": grad_norm,
-                    "trainable_m": n_train / 1e6,
-                    "lr": lr,
-                    "fp8": use_fp8,
-                    "tokens_seen": tokens_seen,
-                    "tokens_in_phase": tokens_in_phase,
-                    "tok_s": (step_tokens * self.world) / dt,
-                    "mem_mib": self._mem_mib(),
-                    "seq_len": self.seq_len,
-                    "grad_ckpt": self.grad_ckpt,
-                    "offload_encoder": self.offload_encoder,
-                    "offload_blocks": self.offload_blocks,
-                    "optim_cpu": self.optim_cpu,
-                }
-                self._log(row)
-            if self.eval_every and step % self.eval_every == 0:
-                ev = self._eval_nll(model)
-                if is_rank0(self.rank):
-                    print(f"eval nll={ev:.4f}")
-            if self.save_every and step % self.save_every == 0:
-                self._maybe_save(model, opt, extra, f"step_{step}.pt")
-            if max_steps is None and phase_budget is None:
-                break
-        extra = {
-            "phase": self.phase,
-            "step": step,
-            "tokens_in_phase": tokens_in_phase,
-            "tokens_seen": tokens_seen,
-            "gate": float(unwrap(model).decoder[0].gate),
-            "name": self.cfg.name,
-            "seq_len": self.seq_len,
-            "stream": stream.state_dict(),
-            "rng_torch": torch.get_rng_state(),
-            "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
-        }
-        self._maybe_save(model, opt, extra, "latest.pt")
-        barrier()
-        peak = self._mem_mib()
-        del opt
-        if self.optim_cpu or self.offload_blocks or self.offload_encoder:
-            trim_host_allocator()
-            if str(self.device).startswith("cuda") and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        return TrainResult(
-            nll=last, step=step, tokens_seen=tokens_seen, phase=self.phase, peak_mib=peak
-        )
+            self._maybe_save(model, opt, extra, "latest.pt")
+            barrier()
+            peak = self._mem_mib()
+            del opt
+            if self.optim_cpu or self.offload_blocks or self.offload_encoder:
+                trim_host_allocator()
+                if str(self.device).startswith("cuda") and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            return TrainResult(
+                nll=last, step=step, tokens_seen=tokens_seen, phase=self.phase, peak_mib=peak
+            )
+        finally:
+            set_after_block_backward(None)
 
 
 def run_c1_chain(
