@@ -29,8 +29,9 @@ from cat_yoko.upcycle import dummy_minicpm_state
 
 
 def cuda_info() -> dict:
+    alloc_conf = os.environ.get("PYTORCH_CUDA_ALLOC_CONF")
     if not torch.cuda.is_available():
-        return {"cuda": False}
+        return {"cuda": False, "alloc_conf": alloc_conf}
     idx = torch.cuda.current_device()
     props = torch.cuda.get_device_properties(idx)
     return {
@@ -42,6 +43,7 @@ def cuda_info() -> dict:
         "bf16": bool(torch.cuda.is_bf16_supported()),
         "torch": torch.__version__,
         "cuda_runtime": torch.version.cuda,
+        "alloc_conf": alloc_conf,
     }
 
 

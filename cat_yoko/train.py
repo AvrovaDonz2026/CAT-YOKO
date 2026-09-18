@@ -21,6 +21,13 @@ from cat_yoko.upcycle import dummy_minicpm_state
 TIGHT_12B_GPU_GIB = 40.0
 
 
+def cuda_runtime_available() -> bool:
+    """Import-safe CUDA probe so 12B CLI can refuse before ``build_model``."""
+    import torch
+
+    return bool(torch.cuda.is_available())
+
+
 def twelve_b_cli_errors(
     *,
     seq_len: int | None,
@@ -226,14 +233,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.config == "12b" and str(args.device).startswith("cuda"):
         import torch
 
-        if torch.cuda.is_available():
-            gpu_gib = torch.cuda.get_device_properties(0).total_memory / 1024**3
-            for err in twelve_b_cli_errors(
-                seq_len=args.seq_len,
-                teacher_hf=args.teacher_hf is not None,
-                gpu_gib=gpu_gib,
-            ):
-                p.error(err)
+        if not cuda_runtime_available():
+            p.error(
+                "12b --device cuda requires a CUDA runtime "
+                "(torch.cuda.is_available() is False); refusing to build"
+            )
+        gpu_gib = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        for err in twelve_b_cli_errors(
+            seq_len=args.seq_len,
+            teacher_hf=args.teacher_hf is not None,
+            gpu_gib=gpu_gib,
+        ):
+            p.error(err)
     if args.steps is None and args.tokens is None:
         if args.c1_smoke:
             args.steps = 1

@@ -233,18 +233,44 @@ def save_checkpoint(
     tmp.replace(path)
 
 
+def _latest_inode(save_dir: Path) -> int | None:
+    """Inode of ``latest.pt`` when it is a real file. Dangling links are ignored."""
+    latest = Path(save_dir) / "latest.pt"
+    try:
+        # exists() is False for a dangling symlink; do not follow it.
+        if not latest.exists() or not latest.is_file():
+            return None
+        return latest.stat().st_ino
+    except OSError:
+        return None
+
+
 def prune_step_checkpoints(save_dir: Path, keep: int) -> None:
-    """Keep the newest ``step_*.pt`` files; ``latest.pt`` is not touched."""
+    """Keep the newest ``step_*.pt`` files; ``latest.pt`` is not touched.
+
+    Never unlink a ``step_*.pt`` that shares an inode with ``latest.pt``
+    (hardlink). POSIX unlink of one name in an nlink=2 pair would leave
+    the bytes, but the step name must still stay so ``latest.pt`` is not
+    the only remaining link. A copy of ``latest.pt`` (separate inode) does
+    not protect the step file. A dangling ``latest.pt`` is ignored.
+    """
     if keep <= 0:
         return
-    files = []
-    for p in Path(save_dir).glob("step_*.pt"):
+    save_dir = Path(save_dir)
+    latest_ino = _latest_inode(save_dir)
+    files: list[tuple[int, Path]] = []
+    for p in save_dir.glob("step_*.pt"):
         try:
             files.append((int(p.stem.split("_", 1)[1]), p))
         except (IndexError, ValueError):
             continue
     files.sort()
     for _, old in files[:-keep]:
+        try:
+            if latest_ino is not None and old.stat().st_ino == latest_ino:
+                continue
+        except OSError:
+            pass
         old.unlink(missing_ok=True)
 
 

@@ -129,10 +129,21 @@ def pack_documents(
 class DummyStream:
     """Infinite random single-document sequences (smoke / L0)."""
 
-    def __init__(self, vocab_size: int, seq_len: int, seed: int = 0) -> None:
+    def __init__(
+        self,
+        vocab_size: int,
+        seq_len: int,
+        seed: int = 0,
+        *,
+        shard_id: int = 0,
+        num_shards: int = 1,
+    ) -> None:
         self.vocab_size = vocab_size
         self.seq_len = seq_len
-        self.gen = torch.Generator().manual_seed(seed)
+        self.stride = max(int(num_shards), 1)
+        self.shard_id = int(shard_id) % self.stride
+        # Offset by rank so DDP ranks with the same seed do not emit identical batches.
+        self.gen = torch.Generator().manual_seed(int(seed) + self.shard_id)
 
     def state_dict(self) -> dict:
         return {"kind": "dummy", "gen": self.gen.get_state()}
@@ -231,8 +242,18 @@ class FileStream:
         return {"kind": "file", "i": self._i, "stride": self.stride}
 
     def load_state_dict(self, st: dict) -> None:
-        if st.get("kind") not in (None, "file", "packed"):
+        kind = st.get("kind")
+        if kind == "packed":
+            raise ValueError(
+                "FileStream cannot restore PackedBinStream cursor (kind='packed')"
+            )
+        if kind not in (None, "file"):
             return
+        if "stride" in st and int(st["stride"]) != self.stride:
+            raise ValueError(
+                f"FileStream cannot restore cursor: checkpoint stride={st['stride']} "
+                f"!= stream stride={self.stride}; would desync DDP shards"
+            )
         if "i" in st:
             self._i = int(st["i"])
 
@@ -294,8 +315,18 @@ class PackedBinStream:
         return {"kind": "packed", "i": self._i, "stride": self.stride, "nseq": self.nseq}
 
     def load_state_dict(self, st: dict) -> None:
-        if st.get("kind") not in (None, "packed", "file"):
+        kind = st.get("kind")
+        if kind == "file":
+            raise ValueError(
+                "PackedBinStream cannot restore FileStream cursor (kind='file')"
+            )
+        if kind not in (None, "packed"):
             return
+        if "stride" in st and int(st["stride"]) != self.stride:
+            raise ValueError(
+                f"PackedBinStream cannot restore cursor: checkpoint stride={st['stride']} "
+                f"!= stream stride={self.stride}; would desync DDP shards"
+            )
         if "i" in st:
             self._i = int(st["i"])
 
@@ -322,13 +353,15 @@ def open_stream(
     rank: int = 0,
     world: int = 1,
 ) -> DummyStream | FileStream | PackedBinStream:
+    world = max(int(world), 1)
+    rank = int(rank) % world
     if data is None:
-        return DummyStream(vocab_size, seq_len, seed=seed)
+        return DummyStream(
+            vocab_size, seq_len, seed=seed, shard_id=rank, num_shards=world
+        )
     path = Path(data)
     eos = resolve_eos(path, eos_id)
     packed_seq = resolve_seq_len(path, seq_len)
-    world = max(int(world), 1)
-    rank = int(rank) % world
     if path.suffix.lower() in {".bin", ".tok"}:
         return PackedBinStream(
             path, packed_seq, eos_id=eos, shard_id=rank, num_shards=world

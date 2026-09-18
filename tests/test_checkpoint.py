@@ -16,6 +16,7 @@ from cat_yoko.checkpoint import (
     cleanup_save_tmp,
     load_checkpoint,
     newest_step_checkpoint,
+    prune_step_checkpoints,
     publish_latest,
     require_free_bytes,
     require_host_bytes,
@@ -145,6 +146,53 @@ class CheckpointCpuTests(unittest.TestCase):
                 with self.assertRaises(OSError) as ctx:
                     require_host_bytes(20 << 30, what="ckpt")
         self.assertIn("host RAM", str(ctx.exception))
+
+    def test_prune_hardlink_latest_still_loadable(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            step0 = td / "step_0.pt"
+            step1 = td / "step_1.pt"
+            torch.save({"k": torch.tensor([0.0])}, step0)
+            torch.save({"k": torch.tensor([1.0])}, step1)
+            latest = publish_latest(step1)
+            self.assertTrue(latest.samefile(step1))
+            prune_step_checkpoints(td, keep=1)
+            self.assertFalse(step0.exists())
+            self.assertTrue(step1.is_file())
+            self.assertTrue(latest.is_file())
+            loaded = torch.load(latest, map_location="cpu", weights_only=False)
+            self.assertEqual(loaded["k"].item(), 1.0)
+
+    def test_prune_skips_step_sharing_inode_with_latest(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            step0 = td / "step_0.pt"
+            step1 = td / "step_1.pt"
+            torch.save({"k": torch.tensor([0.0])}, step0)
+            torch.save({"k": torch.tensor([1.0])}, step1)
+            latest = publish_latest(step0)
+            self.assertTrue(latest.samefile(step0))
+            prune_step_checkpoints(td, keep=1)
+            self.assertTrue(step0.is_file())
+            self.assertTrue(step1.is_file())
+            self.assertTrue(latest.is_file())
+            loaded = torch.load(latest, map_location="cpu", weights_only=False)
+            self.assertEqual(loaded["k"].item(), 0.0)
+
+    def test_prune_does_not_follow_dangling_latest(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            step0 = td / "step_0.pt"
+            step1 = td / "step_1.pt"
+            torch.save({"k": torch.tensor([0.0])}, step0)
+            torch.save({"k": torch.tensor([1.0])}, step1)
+            latest = td / "latest.pt"
+            latest.symlink_to(td / "missing.pt")
+            prune_step_checkpoints(td, keep=1)
+            self.assertFalse(step0.exists())
+            self.assertTrue(step1.is_file())
+            self.assertTrue(latest.is_symlink())
+            self.assertFalse(latest.exists())
 
     def test_save_checkpoint_refuses_full_disk(self) -> None:
         from unittest.mock import patch

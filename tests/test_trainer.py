@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -201,6 +202,24 @@ class LoopTests(unittest.TestCase):
             ).run()
             self.assertEqual(out.step, 2)
 
+    def test_resume_stream_kind_mismatch_skips_cursor(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        toks = list(range(64))
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            path = td / "tok.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            save = td / "run"
+            Trainer(
+                cfg, "B0", "cpu", steps=1, accum=1, micro_batch=1, data=path, save_dir=save, save_every=1
+            ).run()
+            jsonl = td / "docs.jsonl"
+            jsonl.write_text(json.dumps({"tokens": list(range(cfg.seq_len))}) + "\n")
+            out = Trainer(
+                cfg, "B0", "cpu", steps=1, accum=1, micro_batch=1, data=jsonl, resume=save / "latest.pt"
+            ).run()
+            self.assertEqual(out.step, 1)
+
     def test_grad_ckpt_b2(self) -> None:
         nll = train_loop(self.cfg, "B2", steps=1, device="cpu", accum=1, grad_ckpt=True)
         self.assertTrue(nll > 0)
@@ -240,6 +259,97 @@ class LoopTests(unittest.TestCase):
                 ev is None or (isinstance(ev, float) and math.isnan(ev)),
                 msg=row,
             )
+            self.assertNotIn("eval_nll", row)
+
+    def test_eval_nll_is_token_weighted_and_skips_empty(self) -> None:
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1, eval_data=Path("unused.bin"))
+
+        class FakeStream:
+            def batch(self, micro_batch, device):
+                return {"input_ids": torch.zeros(1, 2, dtype=torch.long)}
+
+        class FakeModel:
+            def __init__(self, seq):
+                self.training = True
+                self._seq = list(seq)
+                self.i = 0
+
+            def eval(self):
+                self.training = False
+
+            def train(self, mode: bool = True):
+                self.training = bool(mode)
+
+            def __call__(self, **kwargs):
+                item = self._seq[self.i]
+                self.i += 1
+                return item
+
+        tr._open = lambda path, seed: FakeStream()
+        seq = [
+            {"nll": torch.tensor(2.0), "n_valid": torch.tensor(10)},
+            {"nll": torch.tensor(4.0), "n_valid": torch.tensor(0)},
+            {"nll": torch.tensor(1.0), "n_valid": torch.tensor(30)},
+        ]
+        got = tr._eval_nll(FakeModel(seq), batches=3)
+        # (2.0*10 + 1.0*30) / 40 = 1.25; empty n_valid skipped. Not mean (2+4+1)/3.
+        self.assertAlmostEqual(got, 1.25)
+        none_tr = Trainer(self.cfg, "B0", "cpu", steps=1, eval_data=None)
+        self.assertTrue(math.isnan(none_tr._eval_nll(FakeModel([]), batches=1)))
+        empty = [
+            {"nll": torch.tensor(3.0), "n_valid": torch.tensor(0)},
+            {"nll": torch.tensor(9.0), "n_valid": torch.tensor(0)},
+        ]
+        self.assertTrue(math.isnan(tr._eval_nll(FakeModel(empty), batches=2)))
+
+    def test_log_jsonl_is_strict_json(self) -> None:
+        from cat_yoko.trainer import _json_safe
+
+        self.assertIsNone(_json_safe(float("nan")))
+        self.assertIsNone(_json_safe(float("inf")))
+        self.assertIsNone(_json_safe(float("-inf")))
+        self.assertEqual(_json_safe(1.25), 1.25)
+        self.assertIsNone(_json_safe({"ppl": float("nan")})["ppl"])
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "m.jsonl"
+            tr = Trainer(self.cfg, "B0", "cpu", steps=1, log_path=log)
+            tr._log(
+                {
+                    "name": "tiny",
+                    "phase": "B0",
+                    "step": 1,
+                    "steps_or_inf": 1,
+                    "nll": 1.0,
+                    "ppl": float("nan"),
+                    "aux": float("inf"),
+                    "gate": 0.0,
+                    "grad_norm": 0.0,
+                    "moe_cv": 0.0,
+                    "trainable_m": 1.0,
+                    "lr": 1e-4,
+                    "fp8": False,
+                    "tokens_seen": 1.0,
+                    "tok_s": 1.0,
+                    "mem_mib": 0.0,
+                    "path": Path("/tmp/x"),
+                }
+            )
+            raw = log.read_text().splitlines()[0]
+            self.assertNotIn("NaN", raw)
+            self.assertNotIn("Infinity", raw)
+            row = json.loads(raw)
+            self.assertIsNone(row["ppl"])
+            self.assertIsNone(row["aux"])
+            self.assertEqual(row["path"], "/tmp/x")
+
+    def test_built_line_path_does_not_crash(self) -> None:
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1)
+
+        class M:
+            def param_count(self):
+                return 123
+
+        tr._print_built(M(), n_train=1, adam_state="gpu")
 
     def test_eval_nll_lands_in_jsonl(self) -> None:
         toks = list(range(64))
@@ -442,6 +552,25 @@ class CliTests(unittest.TestCase):
         te = twelve_b_cli_errors(seq_len=64, teacher_hf=True, gpu_gib=31.48)
         self.assertTrue(any("teacher" in e for e in te))
         self.assertEqual(twelve_b_cli_errors(seq_len=None, teacher_hf=True, gpu_gib=80.0), [])
+
+    def test_12b_cuda_device_without_runtime_errors_before_build(self) -> None:
+        with patch("cat_yoko.train.cuda_runtime_available", return_value=False):
+            with self.assertRaises(SystemExit) as cm:
+                main(
+                    [
+                        "--config",
+                        "12b",
+                        "--phase",
+                        "B0",
+                        "--steps",
+                        "1",
+                        "--device",
+                        "cuda:0",
+                        "--seq-len",
+                        "64",
+                    ]
+                )
+        self.assertEqual(cm.exception.code, 2)
 
     def test_expandable_segments_env_is_set(self) -> None:
         import os

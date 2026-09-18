@@ -57,6 +57,17 @@ def enable_expandable_segments() -> str:
     return os.environ["PYTORCH_CUDA_ALLOC_CONF"]
 
 
+def _json_safe(obj):
+    """Strict-JSON form: non-finite floats become null; nested dict/list walked."""
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return None
+    return obj
+
+
 enable_expandable_segments()
 
 
@@ -257,7 +268,7 @@ class Trainer:
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             with self.log_path.open("a") as f:
-                f.write(json.dumps(row) + "\n")
+                f.write(json.dumps(_json_safe(row), default=str, allow_nan=False) + "\n")
 
     def _maybe_save(self, model: nn.Module, opt, extra: dict, tag: str) -> None:
         if self.save_dir is None or not is_rank0(self.rank):
@@ -307,25 +318,34 @@ class Trainer:
 
     @torch.no_grad()
     def _eval_nll(self, model: nn.Module, batches: int | None = None) -> float:
+        """Token-mean NLL: ``sum(nll * n_valid) / sum(n_valid)``. Skip empty batches."""
         n_batches = self.eval_batches if batches is None else batches
         if self.eval_data is None:
             return float("nan")
         stream = self._open(self.eval_data, self.seed + 1 + self.rank)
         was_train = model.training
         model.eval()
-        total = 0.0
-        n = 0
+        weighted = 0.0
+        n_valid_total = 0.0
         try:
             for _ in range(max(n_batches, 1)):
                 batch = stream.batch(self.micro_batch, self.device)
                 with self._amp():
                     out = model(**batch)
-                total += float(out["nll"])
-                n += 1
+                nv = out.get("n_valid")
+                if nv is None:
+                    continue
+                n_valid_f = float(nv.detach() if torch.is_tensor(nv) else nv)
+                if n_valid_f <= 0:
+                    continue
+                weighted += float(out["nll"]) * n_valid_f
+                n_valid_total += n_valid_f
         finally:
             if was_train:
                 model.train()
-        return total / max(n, 1)
+        if n_valid_total <= 0:
+            return float("nan")
+        return weighted / n_valid_total
 
     def _resolve_offload(self) -> None:
         self.offload_encoder, self.offload_blocks, self.optim_cpu = auto_offload_flags(
@@ -385,7 +405,12 @@ class Trainer:
         self._resolve_offload()
         self._apply_runtime_flags(model)
         if extra.get("stream") is not None:
-            stream.load_state_dict(extra["stream"])
+            try:
+                stream.load_state_dict(extra["stream"])
+            except ValueError:
+                # Packed vs jsonl / DDP stride mismatch: keep the new stream
+                # at shard start (published: kind mismatch skips cursor).
+                pass
         self._restore_rng(extra)
         del ckpt
         return step, tokens_in_phase, tokens_seen
@@ -417,6 +442,23 @@ class Trainer:
                 move_module(blk, "cpu")
         elif self.offload_encoder:
             move_module(raw.encoder, "cpu")
+
+    def _print_built(self, model: nn.Module, n_train: int, adam_state: str) -> None:
+        """Rank-0 CUDA banner after the graph exists. Includes allocator conf."""
+        alloc = 0.0
+        if str(self.device).startswith("cuda") and torch.cuda.is_available():
+            alloc = torch.cuda.memory_allocated() / 1024**3
+        alloc_conf = enable_expandable_segments()
+        print(
+            f"built {self.cfg.name} on {self.device} dtype={self.dtype} "
+            f"params={unwrap(model).param_count():,} alloc={alloc:.2f}GiB "
+            f"grad_ckpt={self.grad_ckpt} seq={self.seq_len} "
+            f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
+            f"optim_cpu={self.optim_cpu} adam={adam_state} "
+            f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
+            f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
+            flush=True,
+        )
 
     def _begin_step_peak(self) -> None:
         """Start peak tracking after freeze/offload, not at 12B ``build_model``.
@@ -478,16 +520,7 @@ class Trainer:
             )
         self.adam_state = adam_state
         if is_rank0(self.rank) and str(self.device).startswith("cuda") and torch.cuda.is_available():
-            alloc = torch.cuda.memory_allocated() / 1024**3
-            print(
-                f"built {self.cfg.name} on {self.device} dtype={self.dtype} "
-                f"params={unwrap(model).param_count():,} alloc={alloc:.2f}GiB "
-                f"grad_ckpt={self.grad_ckpt} seq={self.seq_len} "
-                f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
-                f"optim_cpu={self.optim_cpu} adam={adam_state} "
-                f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None}",
-                flush=True,
-            )
+            self._print_built(unwrap(model), n_train, adam_state)
             if (
                 self.save_dir is not None
                 and self.cfg.name == "CAT-YOKO-12B"

@@ -57,6 +57,12 @@ def _teardown_12b(*holders: object) -> None:
 
 
 class GpuSmokeSkipTests(unittest.TestCase):
+    def test_cuda_info_reports_alloc_conf(self) -> None:
+        info = cuda_info()
+        self.assertIn("expandable_segments:True", info.get("alloc_conf") or "")
+        if not torch.cuda.is_available():
+            self.assertFalse(info["cuda"])
+
     def test_main_skips_without_cuda(self) -> None:
         if torch.cuda.is_available():
             self.skipTest("CUDA present; skip-path is for CPU CI")
@@ -81,6 +87,7 @@ class GpuTinyTests(unittest.TestCase):
         self.assertTrue(info["cuda"])
         self.assertTrue(info["device"])
         self.assertGreater(info["total_gib"], 0)
+        self.assertIn("expandable_segments:True", info.get("alloc_conf") or "")
 
     def test_forward_backward_cuda(self) -> None:
         nll = train_loop(self.cfg, "B0", steps=2, device="cuda", accum=1)
