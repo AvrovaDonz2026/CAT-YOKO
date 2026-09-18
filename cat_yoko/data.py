@@ -47,6 +47,27 @@ def resolve_seq_len(path: Path | None, seq_len: int) -> int:
     return packed
 
 
+def to_device(batch: dict[str, torch.Tensor], device: str) -> dict[str, torch.Tensor]:
+    """Host→device copy. Pin + non_blocking when the target is CUDA."""
+    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available()
+    out: dict[str, torch.Tensor] = {}
+    for key, value in batch.items():
+        if not torch.is_tensor(value):
+            out[key] = value
+            continue
+        tensor = value
+        if want_cuda and tensor.device.type == "cpu":
+            if not tensor.is_pinned():
+                try:
+                    tensor = tensor.pin_memory()
+                except RuntimeError:
+                    pass
+            out[key] = tensor.to(device, non_blocking=True)
+        else:
+            out[key] = tensor.to(device)
+    return out
+
+
 def read_int32_bin(path: Path) -> torch.Tensor:
     data = Path(path).read_bytes()
     if len(data) % 4:
@@ -126,11 +147,14 @@ class DummyStream:
             generator=self.gen,
         )
         docs = torch.arange(micro_batch).unsqueeze(1).expand_as(ids)
-        return {
-            "input_ids": ids.to(device),
-            "labels": ids.clone().to(device),
-            "doc_ids": docs.to(device),
-        }
+        return to_device(
+            {
+                "input_ids": ids,
+                "labels": ids.clone(),
+                "doc_ids": docs,
+            },
+            device,
+        )
 
 
 def _jsonl_docs(path: Path) -> Iterator[list[int]]:
@@ -213,11 +237,14 @@ class FileStream:
         for _ in range(micro_batch):
             rows.append(self._packed[self._i % len(self._packed)])
             self._i += self.stride
-        return {
-            "input_ids": torch.stack([r["input_ids"] for r in rows]).to(device),
-            "labels": torch.stack([r["labels"] for r in rows]).to(device),
-            "doc_ids": torch.stack([r["doc_ids"] for r in rows]).to(device),
-        }
+        return to_device(
+            {
+                "input_ids": torch.stack([r["input_ids"] for r in rows]),
+                "labels": torch.stack([r["labels"] for r in rows]),
+                "doc_ids": torch.stack([r["doc_ids"] for r in rows]),
+            },
+            device,
+        )
 
 
 def doc_ids_from_eos(ids: torch.Tensor, eos_id: int | None) -> torch.Tensor:
@@ -275,10 +302,10 @@ class PackedBinStream:
             idx.append(i % self.nseq)
             i += self.stride
         self._i = i
-        ids = torch.stack([self.rows[j].to(dtype=torch.long) for j in idx]).to(device)
+        ids = torch.stack([self.rows[j].to(dtype=torch.long) for j in idx])
         docs = doc_ids_from_eos(ids, self.eos_id)
         labels = labels_with_doc_boundaries(ids, docs) if self.eos_id is not None else ids.clone()
-        return {"input_ids": ids, "labels": labels, "doc_ids": docs}
+        return to_device({"input_ids": ids, "labels": labels, "doc_ids": docs}, device)
 
 
 def open_stream(

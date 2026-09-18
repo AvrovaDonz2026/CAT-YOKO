@@ -38,6 +38,11 @@ def wrap_fsdp(model: CATYokoForCausalLM, *, enabled: bool) -> nn.Module:
                 reduce_dtype=torch.float32,
                 buffer_dtype=torch.bfloat16,
             )
+    from torch.distributed.fsdp import ShardingStrategy
+
+    strategy = (
+        ShardingStrategy.NO_SHARD if dist.get_world_size() == 1 else ShardingStrategy.FULL_SHARD
+    )
     return FSDP(
         model,
         auto_wrap_policy=policy,
@@ -45,4 +50,5 @@ def wrap_fsdp(model: CATYokoForCausalLM, *, enabled: bool) -> nn.Module:
         use_orig_params=True,
         mixed_precision=mixed,
         sync_module_states=True,
+        sharding_strategy=strategy,
     )

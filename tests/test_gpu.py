@@ -125,6 +125,7 @@ class GpuTinyTests(unittest.TestCase):
         self.assertTrue(result["ok"], msg=result)
         self.assertTrue(result["ddp_gloo"]["ok"], msg=result)
         self.assertTrue(result["ddp_cuda"]["ok"], msg=result)
+        self.assertTrue(result["ddp_cuda_c1"]["ok"], msg=result)
         self.assertTrue(result["fsdp"]["ok"], msg=result)
 
     def test_gloo_ddp_cpu_from_cuda_process(self) -> None:
@@ -139,11 +140,30 @@ class GpuTinyTests(unittest.TestCase):
         row = run_gloo_ddp(device="cuda", world=2, steps=1)
         self.assertTrue(row["ok"], msg=row)
 
+    def test_ddp_c1_two_rank_cuda(self) -> None:
+        from cat_yoko.ddp_smoke import run_gloo_c1
+
+        row = run_gloo_c1(device="cuda", world=2, steps=1)
+        self.assertTrue(row["ok"], msg=row)
+        self.assertEqual(row["phase"], "C1")
+
     def test_fsdp_one_rank_cuda(self) -> None:
         from cat_yoko.ddp_smoke import run_fsdp_one
 
         row = run_fsdp_one(device="cuda", steps=1)
         self.assertTrue(row["ok"], msg=row)
+
+    def test_sdpa_fastpath_matches_mask_cuda(self) -> None:
+        from cat_yoko.attention import _sdpa, _window_causal_bias
+
+        torch.manual_seed(0)
+        q = torch.randn(1, 2, 8, 8, device="cuda")
+        k = torch.randn(1, 2, 8, 8, device="cuda")
+        v = torch.randn(1, 2, 8, 8, device="cuda")
+        bias = _window_causal_bias(8, 8, 8, q.device, torch.float32)
+        masked = _sdpa(q, k, v, bias)
+        fast = _sdpa(q, k, v, causal=True)
+        self.assertTrue(torch.allclose(fast, masked, atol=1e-4, rtol=1e-4))
 
 
 @unittest.skipUnless(torch.cuda.is_available(), "CUDA GPU required")

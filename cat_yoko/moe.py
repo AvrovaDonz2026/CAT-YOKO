@@ -51,20 +51,33 @@ class MoE(nn.Module):
         self.register_buffer("e_score_correction_bias", torch.zeros(n_routed))
         self.last_aux: torch.Tensor | None = None
         self.last_load: torch.Tensor | None = None
+        self._load_n = 0
+
+    def mean_pending_load(self) -> torch.Tensor | None:
+        """Average expert load over micro-batches since the last bias step."""
+        if self.last_load is None:
+            return None
+        n = max(int(self._load_n), 1)
+        if n == 1:
+            return self.last_load
+        return self.last_load / n
 
     def step_router_bias(self) -> None:
-        """Aux-loss-free bias. Call after backward so checkpoint recompute sees the same routing."""
-        if self.last_load is None:
+        """Aux-loss-free bias. Call once per optimizer step, after DDP load sync."""
+        load = self.mean_pending_load()
+        if load is None:
+            self._load_n = 0
             return
         with torch.no_grad():
             target = 1.0 / self.n_routed
             # last_load is a Python attr; module.to("cpu") does not move it.
-            load = self.last_load.to(
+            load = load.to(
                 device=self.e_score_correction_bias.device,
                 dtype=self.e_score_correction_bias.dtype,
             )
             self.e_score_correction_bias += 1e-3 * (target - load)
         self.last_load = None
+        self._load_n = 0
 
     def forward(self, x: torch.Tensor, token_ids: torch.Tensor | None = None) -> torch.Tensor:
         b, s, d = x.shape
@@ -82,6 +95,7 @@ class MoE(nn.Module):
                     routed[mask] = _like(routed, self.experts[e](flat[mask]))
             self.last_aux = flat.new_zeros(())
             self.last_load = None
+            self._load_n = 0
             return (shared_out + _like(shared_out, routed)).view(b, s, d)
 
         # Router logits + softmax stay fp32 (C1+FP8 whitelist).
@@ -108,9 +122,16 @@ class MoE(nn.Module):
         balance = self.n_routed * (load * load).sum()
         self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
         if self.training:
-            self.last_load = load.detach()
+            ld = load.detach()
+            if self.last_load is None:
+                self.last_load = ld.clone()
+                self._load_n = 1
+            else:
+                self.last_load = self.last_load + ld
+                self._load_n += 1
         else:
             self.last_load = None
+            self._load_n = 0
         return (shared_out + _like(shared_out, routed)).view(b, s, d)
 
 
@@ -125,7 +146,11 @@ def moe_utilization(model: nn.Module) -> dict[str, float]:
     blocks = list(encoder or []) + list(decoder or [])
     for blk in blocks:
         mlp = getattr(blk, "mlp", None)
-        load = getattr(mlp, "last_load", None)
+        load = None
+        if mlp is not None and hasattr(mlp, "mean_pending_load"):
+            load = mlp.mean_pending_load()
+        else:
+            load = getattr(mlp, "last_load", None)
         if load is None:
             continue
         p = load.detach().float().reshape(-1)

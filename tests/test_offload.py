@@ -241,6 +241,8 @@ class TrainerOffloadTests(unittest.TestCase):
         src = inspect.getsource(fsdp_mod.wrap_fsdp)
         self.assertIn("device_id", src)
         self.assertIn("use_orig_params", src)
+        self.assertIn("sharding_strategy", src)
+        self.assertIn("NO_SHARD", src)
 
 
 class CliOffloadTests(unittest.TestCase):

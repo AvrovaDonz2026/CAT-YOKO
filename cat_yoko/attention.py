@@ -10,12 +10,30 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.rope import RMSNorm, RotaryEmbedding, apply_rope
 
 
-def _sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
+def _sdpa(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    bias: torch.Tensor | None = None,
+    *,
+    causal: bool = False,
+) -> torch.Tensor:
     """Attention softmax in fp32 (C1+FP8 whitelist); output matches ``q.dtype``."""
-    out = F.scaled_dot_product_attention(
-        q.float(), k.float(), v.float(), attn_mask=bias.float()
-    )
+    qf, kf, vf = q.float(), k.float(), v.float()
+    if bias is None:
+        out = F.scaled_dot_product_attention(qf, kf, vf, is_causal=causal)
+    else:
+        out = F.scaled_dot_product_attention(qf, kf, vf, attn_mask=bias.float())
     return out.to(q.dtype)
+
+
+def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) -> bool:
+    """Dense causal SDPA is enough when the window covers the row and docs do not mix."""
+    if window < q_len:
+        return True
+    if doc_ids is None or q_len <= 1:
+        return False
+    return bool((doc_ids[:, 1:] != doc_ids[:, :-1]).any().item())
 
 
 def _window_causal_bias(
@@ -72,8 +90,11 @@ class WindowAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
-        out = _sdpa(q, k, v, bias)
+        if _needs_explicit_mask(s, self.n_win, doc_ids):
+            bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
+            out = _sdpa(q, k, v, bias)
+        else:
+            out = _sdpa(q, k, v, causal=True)
         return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
 
 
@@ -108,6 +129,9 @@ class CrossAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)  # window=s → causal only
-        out = _sdpa(q, k, v, bias)
+        if _needs_explicit_mask(s, s, doc_ids):
+            bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
+            out = _sdpa(q, k, v, bias)
+        else:
+            out = _sdpa(q, k, v, causal=True)
         return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))

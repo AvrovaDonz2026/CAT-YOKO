@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 import socket
 from contextlib import nullcontext
+from datetime import timedelta
 
 import torch
 from torch import nn
@@ -40,21 +42,37 @@ def init_distributed(device: str, *, force: bool = False) -> tuple[str, int, int
         return device, 0, 1
     import torch.distributed as dist
 
+    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available()
+    local = int(os.environ.get("LOCAL_RANK", os.environ.get("RANK", "0")))
+    device_id = None
+    if want_cuda:
+        n_gpus = max(torch.cuda.device_count(), 1)
+        torch.cuda.set_device(local % n_gpus)
+        device = f"cuda:{local % n_gpus}"
+        device_id = torch.device(device)
     if not dist.is_initialized():
         if not distributed_requested() and force:
             os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
             os.environ.setdefault("MASTER_PORT", str(free_tcp_port()))
             os.environ.setdefault("RANK", "0")
             os.environ.setdefault("WORLD_SIZE", "1")
-        dist.init_process_group(pick_backend(device))
+        backend = pick_backend(device)
+        kwargs: dict = {}
+        try:
+            params = inspect.signature(dist.init_process_group).parameters
+        except (TypeError, ValueError):
+            params = {}
+        if "timeout" in params:
+            kwargs["timeout"] = timedelta(minutes=30)
+        if device_id is not None and "device_id" in params and backend == "nccl":
+            kwargs["device_id"] = device_id
+        try:
+            dist.init_process_group(backend, **kwargs)
+        except TypeError:
+            kwargs.pop("device_id", None)
+            dist.init_process_group(backend, **kwargs)
     rank = dist.get_rank()
     world = dist.get_world_size()
-    local = int(os.environ.get("LOCAL_RANK", rank))
-    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available()
-    if want_cuda:
-        n_gpus = max(torch.cuda.device_count(), 1)
-        torch.cuda.set_device(local % n_gpus)
-        device = f"cuda:{local % n_gpus}"
     return device, rank, world
 
 
@@ -109,11 +127,55 @@ def reduce_mean(value: float, *, device: str, world: int) -> float:
     """Average a scalar across DDP ranks. No-op when world==1."""
     if world <= 1:
         return float(value)
+    return _reduce_scalar(value, device=device, world=world, mean=True)
+
+
+def reduce_sum(value: float, *, device: str, world: int) -> float:
+    """Sum a scalar across DDP ranks. No-op when world==1."""
+    if world <= 1:
+        return float(value)
+    return _reduce_scalar(value, device=device, world=world, mean=False)
+
+
+def _reduce_scalar(value: float, *, device: str, world: int, mean: bool) -> float:
     import torch.distributed as dist
 
     if not dist.is_available() or not dist.is_initialized():
         return float(value)
-    dev = device if str(device).startswith("cuda") and torch.cuda.is_available() else "cpu"
+    backend = dist.get_backend()
+    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available() and backend != "gloo"
+    dev = device if want_cuda else "cpu"
     t = torch.tensor([float(value)], device=dev)
     dist.all_reduce(t, op=dist.ReduceOp.SUM)
-    return float(t.item()) / world
+    out = float(t.item())
+    return out / world if mean else out
+
+
+def allreduce_router_loads(model: nn.Module, *, device: str, world: int) -> None:
+    """Mean expert load across ranks so aux-loss-free bias stays in lockstep."""
+    del device
+    if world <= 1:
+        return
+    import torch.distributed as dist
+
+    if not dist.is_available() or not dist.is_initialized():
+        return
+    raw = unwrap(model)
+    backend = dist.get_backend()
+    for blk in list(getattr(raw, "encoder", [])) + list(getattr(raw, "decoder", [])):
+        mlp = getattr(blk, "mlp", None)
+        if mlp is None or not hasattr(mlp, "mean_pending_load"):
+            continue
+        if not any(p.requires_grad for p in mlp.parameters()):
+            continue
+        load = mlp.mean_pending_load()
+        if load is None:
+            continue
+        buf = load.detach().float()
+        if backend == "gloo" and buf.device.type == "cuda":
+            buf = buf.cpu()
+        dist.all_reduce(buf, op=dist.ReduceOp.SUM)
+        buf.div_(world)
+        averaged = buf.to(device=load.device, dtype=load.dtype)
+        mlp.last_load = averaged
+        mlp._load_n = 1

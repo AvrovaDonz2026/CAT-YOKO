@@ -217,6 +217,69 @@ class TinyTrainTests(unittest.TestCase):
         self.assertLess(bias[1, 2].item(), -1e4)
         self.assertEqual(bias[2, 2].item(), 0.0)
 
+    def test_causal_fastpath_matches_mask(self) -> None:
+        from cat_yoko.attention import _needs_explicit_mask, _sdpa, _window_causal_bias
+
+        torch.manual_seed(0)
+        q = torch.randn(1, 2, 8, 8)
+        k = torch.randn(1, 2, 8, 8)
+        v = torch.randn(1, 2, 8, 8)
+        bias = _window_causal_bias(8, 8, 8, q.device, torch.float32)
+        masked = _sdpa(q, k, v, bias)
+        fast = _sdpa(q, k, v, causal=True)
+        self.assertTrue(torch.allclose(fast, masked, atol=1e-4, rtol=1e-4))
+        doc = torch.zeros(2, 8, dtype=torch.long)
+        self.assertFalse(_needs_explicit_mask(8, 8, doc))
+        mixed = torch.tensor([[0, 0, 1, 1, 1, 1, 1, 1], [0] * 8])
+        self.assertTrue(_needs_explicit_mask(8, 8, mixed))
+
+    def test_b0_frozen_moe_aux_is_zero(self) -> None:
+        model = CATYokoForCausalLM(self.cfg)
+        apply_freeze(model, "B0")
+        ids = torch.randint(0, self.cfg.vocab_size, (2, self.cfg.seq_len))
+        out = model(input_ids=ids, labels=ids)
+        self.assertEqual(float(out["aux"]), 0.0)
+        self.assertGreater(int(out["n_valid"]), 0)
+
+    def test_b0_does_not_step_frozen_router_bias(self) -> None:
+        model = CATYokoForCausalLM(self.cfg)
+        apply_freeze(model, "B0")
+        before_dec = model.decoder[-1].mlp.e_score_correction_bias.clone()
+        before_enc = model.encoder[0].mlp.e_score_correction_bias.clone()
+        ids = torch.randint(0, self.cfg.vocab_size, (2, self.cfg.seq_len))
+        model(input_ids=ids, labels=ids)["loss"].backward()
+        model.step_router_bias()
+        self.assertTrue(torch.equal(before_dec, model.decoder[-1].mlp.e_score_correction_bias))
+        self.assertTrue(torch.equal(before_enc, model.encoder[0].mlp.e_score_correction_bias))
+
+    def test_b1_decoder_router_bias_updates(self) -> None:
+        model = CATYokoForCausalLM(self.cfg)
+        apply_freeze(model, "B1")
+        before_dec = model.decoder[-1].mlp.e_score_correction_bias.clone()
+        before_enc = model.encoder[0].mlp.e_score_correction_bias.clone()
+        ids = torch.randint(0, self.cfg.vocab_size, (2, self.cfg.seq_len))
+        model(input_ids=ids, labels=ids)["loss"].backward()
+        model.step_router_bias()
+        self.assertFalse(torch.equal(before_dec, model.decoder[-1].mlp.e_score_correction_bias))
+        self.assertTrue(torch.equal(before_enc, model.encoder[0].mlp.e_score_correction_bias))
+
+    def test_moe_load_accumulates_across_forwards(self) -> None:
+        from cat_yoko.moe import MoE
+
+        moe = MoE(self.cfg, self.cfg.n_routed_dec, self.cfg.top_k_dec)
+        moe.train()
+        x = torch.randn(2, self.cfg.seq_len, self.cfg.hidden_size)
+        moe(x)
+        self.assertEqual(moe._load_n, 1)
+        first = moe.mean_pending_load().clone()
+        moe(x)
+        self.assertEqual(moe._load_n, 2)
+        averaged = moe.mean_pending_load()
+        self.assertEqual(tuple(averaged.shape), tuple(first.shape))
+        moe.step_router_bias()
+        self.assertEqual(moe._load_n, 0)
+        self.assertIsNone(moe.last_load)
+
 
 class MetaTwelveBTests(unittest.TestCase):
     def test_meta_param_count_near_12b(self) -> None:

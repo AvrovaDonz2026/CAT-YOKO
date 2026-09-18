@@ -23,11 +23,13 @@ from cat_yoko.checkpoint import (
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import open_stream, resolve_eos, resolve_seq_len, sidecar_meta
 from cat_yoko.dist_util import (
+    allreduce_router_loads,
     barrier,
     backward_sync_ctx,
     init_distributed,
     is_rank0,
     reduce_mean,
+    reduce_sum,
     wrap_distributed,
 )
 from cat_yoko.fp8 import should_autocast
@@ -57,6 +59,7 @@ def configure_cuda() -> None:
         return
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    torch.backends.cudnn.benchmark = True
 
 
 def _as_dtype(dtype: str | torch.dtype | None) -> torch.dtype:
@@ -313,6 +316,11 @@ class Trainer:
         )
 
     def _restore_rng(self, extra: dict) -> None:
+        if extra.get("rng_py") is not None:
+            try:
+                random.setstate(extra["rng_py"])
+            except (TypeError, ValueError):
+                pass
         if extra.get("rng_torch") is not None:
             torch.set_rng_state(extra["rng_torch"].cpu())
         rng_cuda = extra.get("rng_cuda")
@@ -370,6 +378,7 @@ class Trainer:
             "seed": self.seed,
             "cfg": asdict(self.cfg),
             "stream": stream.state_dict(),
+            "rng_py": random.getstate(),
             "rng_torch": torch.get_rng_state(),
             "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
         }
@@ -501,6 +510,10 @@ class Trainer:
                 step_loss = 0.0
                 step_aux = 0.0
                 step_tokens = 0
+                step_n_valid = 0.0
+                kd_w = 0.0
+                if self.teacher is not None:
+                    kd_w = kd_weight(step, max_steps or 1, self.cfg.kd_weight_start)
                 t0 = time.perf_counter()
                 for micro_i in range(self.accum):
                     batch = stream.batch(self.micro_batch, self.device)
@@ -510,29 +523,30 @@ class Trainer:
                         with self._amp():
                             out = model(**batch)
                             loss = out["loss"] / self.accum
-                        if self.teacher is not None:
+                        if self.teacher is not None and kd_w > 0:
                             with torch.no_grad():
                                 t_logits = self.teacher(batch["input_ids"])["logits"]
-                            w = kd_weight(
-                                step,
-                                max_steps or 1,
-                                self.cfg.kd_weight_start,
+                            shift_labels = batch["labels"][:, 1:]
+                            loss = loss + kd_w * kd_kl(
+                                out["logits"][:, :-1],
+                                t_logits[:, :-1],
+                                self.cfg.kd_temperature,
+                                ignore=shift_labels,
                             )
-                            if w > 0:
-                                loss = loss + w * kd_kl(
-                                    out["logits"][:, :-1],
-                                    t_logits[:, :-1],
-                                    self.cfg.kd_temperature,
-                                )
                         loss.backward()
-                    moe_stats = moe_utilization(unwrap(model))
-                    unwrap(model).step_router_bias()
                     step_nll += float(out["nll"].detach()) / self.accum
                     step_loss += float(out["loss"].detach()) / self.accum
                     step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
+                    n_valid = out.get("n_valid")
+                    if n_valid is not None:
+                        step_n_valid += float(n_valid.detach())
+                allreduce_router_loads(model, device=str(self.device), world=self.world)
+                moe_stats = moe_utilization(unwrap(model))
+                unwrap(model).step_router_bias()
                 step_nll = reduce_mean(step_nll, device=str(self.device), world=self.world)
                 step_loss = reduce_mean(step_loss, device=str(self.device), world=self.world)
                 step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
+                step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
                 if not math.isfinite(step_nll):
                     raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
                 if self.offload_blocks:
@@ -576,6 +590,10 @@ class Trainer:
                         "offload_blocks": self.offload_blocks,
                         "optim_cpu": self.optim_cpu,
                         "adam": self.adam_state,
+                        "kd_w": kd_w,
+                        "world": self.world,
+                        "accum": self.accum,
+                        "n_valid": step_n_valid,
                         **moe_stats,
                     }
                     if self.eval_every and step % self.eval_every == 0:
@@ -590,10 +608,13 @@ class Trainer:
                     if is_rank0(self.rank):
                         print(f"eval nll={ev:.4f} ppl={safe_ppl(ev) or '-'}")
                 if self.save_every and step % self.save_every == 0:
+                    barrier()
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
+                    barrier()
                 if max_steps is None and phase_budget is None:
                     break
             extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
+            barrier()
             self._maybe_save(model, opt, extra, "latest.pt")
             barrier()
             peak = self._mem_mib()

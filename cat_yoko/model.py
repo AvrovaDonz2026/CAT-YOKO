@@ -65,6 +65,8 @@ class CATYokoForCausalLM(nn.Module):
         aux = getattr(getattr(blk, "mlp", None), "last_aux", None)
         if aux is None:
             aux = y.new_zeros(())
+        elif not any(p.requires_grad for p in blk.mlp.parameters()):
+            aux = y.new_zeros(())
         return y, aux
 
     def forward(
@@ -102,16 +104,24 @@ class CATYokoForCausalLM(nn.Module):
                 shift_labels.reshape(-1),
                 ignore_index=-100,
             )
+            n_valid = (shift_labels != -100).sum()
             out["aux"] = aux
             out["loss"] = nll + aux
             out["nll"] = nll
+            out["n_valid"] = n_valid
         return out
 
     def step_router_bias(self) -> None:
         for blk in list(self.encoder) + list(self.decoder):
-            fn = getattr(blk.mlp, "step_router_bias", None)
-            if callable(fn):
-                fn()
+            mlp = getattr(blk, "mlp", None)
+            fn = getattr(mlp, "step_router_bias", None)
+            if not callable(fn):
+                continue
+            if not any(p.requires_grad for p in mlp.parameters()):
+                mlp.last_load = None
+                mlp._load_n = 0
+                continue
+            fn()
 
     def param_count(self) -> int:
         return sum(p.numel() for p in self.parameters())

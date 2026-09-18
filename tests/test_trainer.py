@@ -135,6 +135,7 @@ class LoopTests(unittest.TestCase):
             self.assertEqual(ckpt["extra"]["stream"]["i"], 2)
             self.assertEqual(ckpt["extra"]["seed"], 0)
             self.assertEqual(ckpt["extra"]["cfg"]["name"], "tiny")
+            self.assertIn("rng_py", ckpt["extra"])
             out = Trainer(
                 cfg, "B0", "cpu", steps=2, accum=1, micro_batch=2, data=path, resume=save / "latest.pt"
             ).run()
@@ -164,6 +165,10 @@ class LoopTests(unittest.TestCase):
             self.assertEqual(row["adam"], "gpu")
             self.assertIn("ppl", row)
             self.assertIn("moe_cv", row)
+            self.assertIn("n_valid", row)
+            self.assertEqual(row["kd_w"], 0.0)
+            self.assertEqual(row["world"], 1)
+            self.assertGreater(row["n_valid"], 0)
 
     def test_eval_nll_lands_in_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -236,6 +241,10 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(kd_weight(0, 1, 0.5), 0.0)
         self.assertGreater(kd_weight(0, 8, 0.5), 0.3)
         self.assertEqual(kd_kl(torch.zeros(2, 4), torch.zeros(2, 4), 2.0).shape, ())
+        identical = kd_kl(torch.zeros(2, 3, 4), torch.zeros(2, 3, 4), 2.0)
+        self.assertAlmostEqual(float(identical), 0.0)
+        ignore = torch.full((2, 3), -100)
+        self.assertEqual(float(kd_kl(torch.ones(2, 3, 4), torch.zeros(2, 3, 4), 2.0, ignore=ignore)), 0.0)
 
     def test_safe_ppl_caps(self) -> None:
         from cat_yoko.loss import safe_ppl
