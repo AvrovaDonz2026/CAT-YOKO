@@ -455,6 +455,41 @@ BBH（推理），IFEval（指令遵循）。
 
 ---
 
+## 14. 融合 PDSA 记忆管理（可训练生命周期 + 校准回退）
+
+> 依据：**Memory-Managed Long-Context Attention**（Zou & Donz，arXiv `2606.28876`，本团队工作，下称 PDSA）。
+> 该文是**围绕冻结 LLM 的推理/评估层记忆系统**（不是可训练架构），核心为：query-independent 写入器 +
+> 硬边界生命周期（overwrite/protection/eviction，≤32 槽）+ query-aware 读取器 + **校准稀疏回退** + 冻结 LLM 从原始证据生成。
+> 它与 CSA/HCA/KDA **正交、互补**：后者是 token 级状态压缩，PDSA 是语义单元级受管理记忆。
+> PDSA 明确的"下一步"是把生命周期**做进模型、可训练**——CAT-YOKO 正好可作为该实例。
+
+### 14.1 关键可迁移结论
+
+- **"无写入时信号"边界（PDSA §5 实测）**：静态文本上，不看 query 的可写性判断 ≈ 随机（AUC 0.63–0.66 vs query-aware 0.89–0.97），纯 bounded memory 只能召回 ~0.56 黄金证据。**推论**：任何 **write-first 压缩**（HCA、KDA、甚至 CSA 的压缩步）都会系统性丢掉"写入时无信号、事后才被 query 命中"的信息 → **必须保留一条到低压缩/原始 KV 的 query 时回退**。
+- **bounded 选择在长文上优于读全文（PDSA §4）**：8.2k 词时读全文反而掉分（lost-in-the-middle），≤10% 证据即达全文 F1 的 102–116%。佐证 CAT-YOKO"压缩 + 选择"路线方向正确。
+
+### 14.2 分层集成方案（契合 §13 难度管理）
+
+- **Tier 1（低风险，建议加）— 校准置信度门控的稀疏回退**：
+  给 CSA 的 Lightning Indexer 增加**置信度信号**（如 top-k 得分的均值/熵）；低于阈值时**扩大 top-k 或回退到更少压缩/原始 KV 检索**。
+  阈值**在部署长度 regime 上校准**（PDSA 记录的负结果：在短上下文校准会让回退永不触发、长文覆盖崩溃）。
+  这是**用本团队自己的实测**对治前述"中段召回"担忧的原则化手段，且属推理期增量、可后加。
+- **Tier 2（中风险）— query-aware 优先于 write-first**：层调度上**多用 CSA（query-aware 选择）**、审慎用 HCA/KDA（write-first）承担关键检索；把 HCA/KDA 定位为"廉价 gist 覆盖 + 兜底"，精确检索交给 CSA + full 锚点 + 回退。
+- **Tier 3（研究级，base 稳定后）— 可训练 bounded editable memory lifecycle**：
+  把 YOCO 的"只增全局 cache"升级为**有界、可编辑、带生命周期**的记忆：学习到的**写入器**（write/overwrite/protect/evict，按 key/salience）管理一个容量受限的记忆，decoder 的 cross-attn 读取它。
+  收益：KV cache 真正有界 + **版本化/保护语义**（agent、长程任务差异化）；风险：switched-process 稳定性（PDSA Appendix H）、写入不稳定，需谨慎——属未解研究，单独里程碑推进，留符号化/冻结回退。
+
+### 14.3 对应消融（补入 §7）
+
+- 有/无**校准稀疏回退**在 RULER/多跳中段召回与长文 F1 上的差异；回退阈值**跨长度 regime 校准**的敏感性。
+- **CSA 比例 ↑（query-aware） vs HCA/KDA 比例 ↑（write-first）**对"事后才被命中的信息"召回的影响。
+- （研究项）可训练 editable memory vs 只增全局 cache：KV cache 上界、版本化任务正确性、稳定性。
+
+> 定位提醒：PDSA 的贡献是**记忆管理**，不替代 CSA/HCA/KDA 的**状态压缩**；二者叠加才是完整方案。
+> 不迁移其冻结-reader 评估台架与 32 槽具体数字（那是方法学证据，非架构）。
+
+---
+
 ## 参考（本计划的架构依据）
 
 - **DeepSeek-V4**（CSA/HCA、mHC、Muon、MTP、Hash-MoE bootstrap；V4-Flash 284B/13B、1M ctx、32T tokens）：arXiv `2606.19348`；HuggingFace `transformers` `deepseek_v4` 模型文档（`layer_types`、`compress_rates`、`sliding_window`、`index_topk`、`mlp_layer_types` 等配置）。
@@ -472,3 +507,6 @@ BBH（推理），IFEval（指令遵循）。
 - **OLMo 2 / Gemma 2**（QK-Norm、双 RMSNorm、logit soft-capping、z-loss 等稳定性技巧）：arXiv `2501.00656` / `2408.00118`。
 - **EAGLE / 投机解码**（复用 MTP 头做自投机加速）：arXiv `2401.15077`。
 - **YaRN**（RoPE 长上下文外推缩放）：arXiv `2309.00071`。
+- **PDSA / Memory-Managed Long-Context Attention**（有界可编辑记忆 + 硬生命周期 overwrite/protection/eviction + query-independent 写入器 + query-aware 读取 + 校准稀疏回退；实测"无写入时信号"边界、bounded 选择在长文优于读全文）：Zou & Donz，arXiv `2606.28876`（本团队工作；其"下一步"为可训练生命周期，本计划 §14 承接）。
+- **MSA — Memory Sparse Attention**（静态文档稀疏记忆，PDSA 的最近邻）：arXiv `2603.23516`。
+- **Gated DeltaNet / Gated DeltaNet-2**（KDA 的前身；解耦擦除与写入）：arXiv `2412.06464` / `2605.22791`。
