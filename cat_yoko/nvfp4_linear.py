@@ -1,10 +1,11 @@
 """NVFP4 linear GEMM: E2M1 data + per-16-block scales.
 
 Master weights stay the original ``nn.Linear`` Parameter (bf16). Allowed
-slots (attn QKV/O, MoE experts, cross Q/O, cache KV, lm_head, frozen
-encoder linears) run this forward. Router / embed / RMSNorm stay out.
-B0 wraps frozen encoder GEMMs only; B1/B2 wrap the rest of the allowed
-slots. Decoder self-attn stays ``WindowAttention`` either way.
+slots (attn QKV/O, MoE experts, cross Q/O, cache KV, lm_head, encoder
+linears) run this forward. Router / embed / RMSNorm stay out.
+B0 wraps frozen encoder GEMMs only; B1/B2 wrap **all** allowed GEMMs
+(including the unfrozen encoder in B2). Decoder self-attn stays
+``WindowAttention`` either way.
 
 On Blackwell, Transformer Engine ``NVFP4BlockScaling`` is preferred when
 importable. Otherwise this module emulates E2M1 with 16-wide blocks
@@ -28,6 +29,22 @@ from cat_yoko.nvfp4 import POLICY
 _BLOCK = 16
 # E2M1 magnitudes (sign applied separately). Max abs is 6.
 _E2M1_ABS = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
+# Leaf names that are NVFP4 GEMMs. Router / embed / RMSNorm are not Linear
+# slots here (router is Linear but excluded in should_wrap_linear).
+NVFP4_LINEAR_LEAVES = frozenset(
+    {
+        "q_proj",
+        "k_proj",
+        "v_proj",
+        "o_proj",
+        "gate_proj",
+        "up_proj",
+        "down_proj",
+        "cache_k",
+        "cache_v",
+        "lm_head",
+    }
+)
 
 
 def hardware_nvfp4() -> bool:
@@ -118,7 +135,12 @@ class Nvfp4Linear(nn.Linear):
 
 
 def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
-    """Router stays high-prec. B0 wraps frozen encoder GEMMs only."""
+    """Router stays high-prec. B0 wraps frozen encoder GEMMs only.
+
+    B1/B2 wrap every allowed GEMM leaf (attn QKV/O, MoE experts, cross Q/O,
+    cache KV, lm_head, encoder linears). Embed / RMSNorm / QK-Norm are not
+    ``nn.Linear`` and are never swapped.
+    """
     if isinstance(lin, Nvfp4Linear):
         return False
     leaf = name.rsplit(".", 1)[-1]
@@ -135,7 +157,9 @@ def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
         if not name.startswith("encoder."):
             return False
         return not any(p.requires_grad for p in lin.parameters())
-    return True
+    # B1/B2 student nvfp4. Allowlist so a new high-prec Linear is not wrapped.
+    # Encoder GEMMs stay in the set (fresh B1 graph, and B2 unfrozen encoder).
+    return leaf in NVFP4_LINEAR_LEAVES
 
 
 def _parent_and_leaf(model: nn.Module, name: str) -> tuple[nn.Module, str]:

@@ -1,6 +1,8 @@
 #!/bin/bash
 # AutoDL C1 B1 --try on RTX 6000D: resume B0 overlay + MiniCPM5 upcycle.
 # Keep --try (32 steps, seq=64) for GPU smoke. Full 27B tokens is H100-scale.
+# CLI 注入 --no-save-full --save-trainable，不写 23GiB latest.pt。
+# DummyStream only. Overlay to HuggingFace checkpoints/b1/.
 set -uo pipefail
 ROOT="${ROOT:-/root/autodl-tmp/CAT-YOKO}"
 # shellcheck disable=SC1091

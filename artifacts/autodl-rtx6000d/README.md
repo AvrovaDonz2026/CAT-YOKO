@@ -28,6 +28,10 @@ hf-mirror 的 `/resolve/` 会 302 到 `cas-bridge.xethub.hf.co`；这台机器�
 
 不要把 Hub 缓存在 overlay。不要把 SSH 密码或 HuggingFace deploy key 写进本目录。发布权重落到 HuggingFace [AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)，不进 GitHub。
 
+## B2 `--try`（等 GPU 空闲 + B1 overlay）
+
+发布信封 15e9 tokens；6000D 先跑 [`scripts/run_b2_try_autodl.sh`](../../scripts/run_b2_try_autodl.sh)：`--try` 32 步、resume `/root/autodl-tmp/runs/b1`、MiniCPM5 上采样 encoder+embed、NVFP4 wrap 全部允许 GEMM、`--offload-blocks --optim-cpu --accum 1`。不要 `git fetch`，不要 50B 语料，不要 23GiB `--save-full`。指针：[`b2/`](b2/)、Hub [`checkpoints/b2/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b2)。
+
 ## B0 `--try`（真实 MiniCPM5 上采样）
 
 MiniCPM5-2B-Base sha256 `d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a` 校验通过后，`python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base` 32/32 步 exit 0。
@@ -55,6 +59,8 @@ Disk at prep end: overlay `/` 1.8G/30G used (29G free); `/root/autodl-tmp` 7.4G/
 Transformer Engine: `transformer-engine==2.19.0` + `transformer_engine_cu12==2.19.0` installed. `import transformer_engine` works and `NVFP4BlockScaling` exists, but `import transformer_engine.pytorch` fails (`libtorch_cuda.so: undefined symbol: ncclCommWindowRegister`). Isolated `transformer-engine[pytorch]` also failed: pip tried to download torch 2.14, then `--no-build-isolation` compile died on missing `nccl_dev_cap.hpp` (not in torch 2.8). GPU test path is E2M1/16 emulation. Logs: `te_install.log`, `te_error_extract.txt`, `prep_status.txt`.
 
 After `cursor/nvfp4-train-6000d-02c6` is on origin, overlay the tree with tar/scp (GitHub `git fetch` hangs). Published B0 is [`scripts/run_b0_full_autodl.sh`](../../scripts/run_b0_full_autodl.sh): 8e9 tokens, seq=4096, `--no-offload-encoder`, resume `/root/autodl-tmp/runs/b0` if present. tmux `b0-full`. Overlay → Hub `checkpoints/b0-full/`；日志 → [`b0-full/`](b0-full/)。不要覆盖 Hub 上 32 步 `checkpoints/b0/`。
+
+B0 发布跑完、GPU 空闲后再跑 B1 `--try`：[`scripts/run_b1_try_autodl.sh`](../../scripts/run_b1_try_autodl.sh)（resume `runs/b0-full` 否则 `runs/b0`，MiniCPM5 上采样，seq=64，32 步）。日志 → [`b1/`](b1/)。overlay → Hub `checkpoints/b1/`。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 

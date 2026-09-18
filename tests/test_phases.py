@@ -210,6 +210,7 @@ class TrainableCkptTests(unittest.TestCase):
             ).run()
             self.assertTrue((save / "trainable.pt").is_file())
             self.assertTrue((save / "trainable_step_1.pt").is_file())
+            self.assertTrue((save / "trainable.pt").samefile(save / "trainable_step_1.pt"))
             self.assertFalse((save / "latest.pt").is_file())
             self.assertFalse((save / "step_1.pt").is_file())
             ckpt = load_checkpoint(save / "trainable.pt")

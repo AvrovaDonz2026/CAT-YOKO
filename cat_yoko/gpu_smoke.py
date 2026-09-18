@@ -275,24 +275,42 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     n_b1_new = apply_nvfp4(nv_model, "B1", enabled=True)
     names_b1 = nvfp4_module_names(nv_model)
     n_b1 = len(names_b1)
+    dec_attn = nv_model.decoder[0].self_attn
+    cross1 = nv_model.decoder[0].cross_attn
     out["nvfp4_b1_wrap"] = {
         "n": n_b1,
         "new": n_b1_new,
         "cache_k": isinstance(nv_model.cache_k, Nvfp4Linear),
-        "cross_q": isinstance(nv_model.decoder[0].cross_attn.q_proj, Nvfp4Linear),
+        "cache_v": isinstance(nv_model.cache_v, Nvfp4Linear),
+        "cross_q": isinstance(cross1.q_proj, Nvfp4Linear),
+        "cross_o": isinstance(cross1.o_proj, Nvfp4Linear),
         "lm_head": isinstance(nv_model.lm_head, Nvfp4Linear),
+        "dec_q": isinstance(dec_attn.q_proj, Nvfp4Linear),
+        "dec_k": isinstance(dec_attn.k_proj, Nvfp4Linear),
+        "dec_v": isinstance(dec_attn.v_proj, Nvfp4Linear),
+        "dec_o": isinstance(dec_attn.o_proj, Nvfp4Linear),
+        "dec_expert": isinstance(nv_model.decoder[0].mlp.experts[0].gate_proj, Nvfp4Linear),
         "router_bf16": not any(n.endswith("router") for n in names_b1),
         "window_attn": isinstance(nv_model.encoder[0].attn, WindowAttention),
+        "dec_window": isinstance(dec_attn, WindowAttention),
     }
     out["nvfp4_b1_wrap"]["ok"] = all(
         [
             n_b1 > n_b0,
             n_b1_new > 0,
             out["nvfp4_b1_wrap"]["cache_k"],
+            out["nvfp4_b1_wrap"]["cache_v"],
             out["nvfp4_b1_wrap"]["cross_q"],
+            out["nvfp4_b1_wrap"]["cross_o"],
             out["nvfp4_b1_wrap"]["lm_head"],
+            out["nvfp4_b1_wrap"]["dec_q"],
+            out["nvfp4_b1_wrap"]["dec_k"],
+            out["nvfp4_b1_wrap"]["dec_v"],
+            out["nvfp4_b1_wrap"]["dec_o"],
+            out["nvfp4_b1_wrap"]["dec_expert"],
             out["nvfp4_b1_wrap"]["router_bf16"],
             out["nvfp4_b1_wrap"]["window_attn"],
+            out["nvfp4_b1_wrap"]["dec_window"],
         ]
     )
     del nv_model

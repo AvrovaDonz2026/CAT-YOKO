@@ -314,6 +314,9 @@ class Trainer:
             elif tag.startswith("step_"):
                 dest = self.save_dir / f"trainable_{tag}"
                 save_trainable_checkpoint(dest, model=model, extra=extra)
+                # Rental GPUs die mid-envelope. Point trainable.pt at this
+                # step so --resume save_dir works before the final latest.pt.
+                publish_latest(dest, self.save_dir / "trainable.pt")
         if self.save_full:
             dest = self.save_dir / tag
             if tag == "latest.pt":
@@ -438,7 +441,16 @@ class Trainer:
         ckpt = load_checkpoint(self.resume, map_location="cpu")
         extra = ckpt.get("extra") or {}
         if is_trainable_ckpt(ckpt):
+            n_ov = len(ckpt["trainable"])
             load_trainable_state(model, ckpt["trainable"])
+            if is_rank0(self.rank):
+                # B1: MiniCPM5/dummy upcycle already copied encoder+embed;
+                # this overlay is B0 new-modules (cache/cross) or B1 decoder.
+                print(
+                    f"overlay resume {self.resume}: {n_ov} tensors "
+                    f"ckpt_phase={extra.get('phase')} cli_phase={self.phase}",
+                    flush=True,
+                )
         else:
             load_model_state(model, ckpt["model"])
         ckpt_phase = str(extra.get("phase", self.phase))

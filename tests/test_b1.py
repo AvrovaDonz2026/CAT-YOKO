@@ -23,14 +23,28 @@ from cat_yoko.freeze import apply_freeze, gate_schedule, trainable_names
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.nvfp4_linear import Nvfp4Linear, apply_nvfp4, nvfp4_module_names
 from cat_yoko.phase_train import build_phase_argv
-from cat_yoko.phases import PUBLISHED_SAVE_EVERY, PUBLISHED_SEQ, TRY_STEPS
+from cat_yoko.phases import PHASES, PUBLISHED_SAVE_EVERY, PUBLISHED_SEQ, TRY_STEPS
 from cat_yoko.rope import RMSNorm
 from cat_yoko.trainer import Trainer
-from cat_yoko.upcycle import dummy_minicpm_state
+from cat_yoko.upcycle import dummy_minicpm_state, upcycle_from_minicpm
 
 
 def _nv_tiny() -> CATYokoConfig:
     return replace(CATYokoConfig.tiny(), use_nvfp4=True)
+
+
+class B1PublishedSpecTests(unittest.TestCase):
+    def test_envelope_flags(self) -> None:
+        ph = PHASES["B1"]
+        self.assertEqual(ph.tokens, C1_SPLIT["B1"])
+        self.assertEqual(ph.tokens, 27e9)
+        self.assertEqual(ph.student, "nvfp4")
+        self.assertTrue(ph.detach)
+        self.assertEqual(ph.gate_start, 0.3)
+        self.assertEqual(ph.gate_end, 1.0)
+        self.assertTrue(ph.offload_encoder)
+        self.assertTrue(ph.optim_cpu)
+        self.assertFalse(ph.offload_blocks)
 
 
 class B1FreezeTests(unittest.TestCase):
@@ -88,6 +102,13 @@ class B1Nvfp4WrapTests(unittest.TestCase):
         self.assertFalse(any(n.endswith("router") for n in names))
         self.assertNotIsInstance(model.decoder[0].mlp.router, Nvfp4Linear)
         self.assertNotIsInstance(model.encoder[0].mlp.router, Nvfp4Linear)
+        leftover = [
+            n
+            for n, m in model.named_modules()
+            if isinstance(m, nn.Linear) and not isinstance(m, Nvfp4Linear)
+        ]
+        self.assertTrue(leftover)
+        self.assertTrue(all(n.endswith("router") for n in leftover), msg=leftover)
         self.assertIsInstance(model.embed, nn.Embedding)
         self.assertNotIsInstance(model.embed, Nvfp4Linear)
         self.assertIsInstance(dec.q_norm, RMSNorm)
@@ -175,6 +196,56 @@ class B1ResumeHandoffTests(unittest.TestCase):
             self.assertTrue(any("self_attn" in k for k in b1_keys))
             self.assertFalse(any(k.startswith("encoder.") for k in b1_keys))
             self.assertFalse(any(k.startswith("embed.") for k in b1_keys))
+
+    def test_minicpm_upcycle_then_b0_overlay_then_wrap(self) -> None:
+        """B1 GPU path: same MiniCPM5 dummy → B0 overlay cache/cross → wrap student GEMMs."""
+        cfg = _nv_tiny()
+        src = dummy_minicpm_state(cfg)
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            b0_dir = td / "b0"
+            Trainer(
+                cfg,
+                "B0",
+                "cpu",
+                steps=1,
+                accum=1,
+                micro_batch=1,
+                seed=0,
+                save_dir=b0_dir,
+                save_every=1,
+                save_full=False,
+                save_trainable=True,
+                save_optim=False,
+                upcycle_src=src,
+            ).run()
+            overlay = load_checkpoint(b0_dir / "trainable.pt")["trainable"]
+            cache_k = overlay["cache_k.weight"].clone()
+
+            handed = CATYokoForCausalLM(cfg)
+            upcycle_from_minicpm(handed, src, cfg)
+            embed = handed.embed.weight.detach().clone()
+            enc0 = next(handed.encoder.parameters()).detach().clone()
+            load_trainable_state(handed, overlay)
+            apply_freeze(handed, "B1")
+            n = apply_nvfp4(handed, "B1", enabled=True)
+            self.assertGreater(n, 0)
+            self.assertTrue(torch.equal(handed.embed.weight.detach().cpu(), embed.cpu()))
+            self.assertTrue(torch.equal(next(handed.encoder.parameters()).detach().cpu(), enc0.cpu()))
+            self.assertTrue(torch.equal(handed.cache_k.weight.detach().cpu(), cache_k.cpu()))
+            self.assertFalse(handed.embed.weight.requires_grad)
+            self.assertFalse(next(handed.encoder.parameters()).requires_grad)
+            self.assertTrue(handed.lm_head.weight.requires_grad)
+            self.assertTrue(handed.norm.weight.requires_grad)
+            self.assertTrue(handed.detach_cache)
+            self.assertIsInstance(handed.cache_k, Nvfp4Linear)
+            self.assertIsInstance(handed.cache_v, Nvfp4Linear)
+            self.assertIsInstance(handed.lm_head, Nvfp4Linear)
+            self.assertIsInstance(handed.decoder[0].cross_attn.q_proj, Nvfp4Linear)
+            self.assertIsInstance(handed.decoder[0].self_attn.q_proj, Nvfp4Linear)
+            self.assertIsInstance(handed.decoder[0].mlp.experts[0].gate_proj, Nvfp4Linear)
+            self.assertNotIsInstance(handed.decoder[0].mlp.router, Nvfp4Linear)
+            self.assertNotIsInstance(handed.encoder[0].mlp.router, Nvfp4Linear)
 
 
 class B1TrainStepTests(unittest.TestCase):
@@ -290,6 +361,7 @@ class B1ScriptTests(unittest.TestCase):
     def test_run_b1_try_autodl_script(self) -> None:
         path = Path(__file__).resolve().parents[1] / "scripts" / "run_b1_try_autodl.sh"
         self.assertTrue(path.is_file())
+        self.assertTrue(path.stat().st_mode & 0o111)
         text = path.read_text(encoding="utf-8")
         self.assertIn("--try", text)
         self.assertIn("/root/autodl-tmp/runs/b1", text)
@@ -298,9 +370,38 @@ class B1ScriptTests(unittest.TestCase):
         self.assertIn("HF_ENDPOINT", text)
         self.assertIn("https://hf-mirror.com", text)
         self.assertIn("cat_yoko.b1", text)
+        self.assertIn("--upcycle-hf", text)
+        self.assertIn("MiniCPM5-2B-Base", text)
+        self.assertIn("download_minicpm5", text)
         self.assertNotIn("westc", text)
         self.assertNotIn("Ultra-FineWeb", text)
         self.assertNotIn("BEGIN OPENSSH", text)
+        self.assertNotIn("git fetch", text)
+        self.assertNotIn("git pull", text)
+        self.assertNotIn("PRIVATE KEY", text)
+        self.assertNotRegex(text.lower(), r"password\s*=")
+
+    def test_hub_pointer_and_artifacts_readme(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        hub = root / "checkpoints" / "b1" / "README.md"
+        art = root / "artifacts" / "autodl-rtx6000d" / "b1" / "README.md"
+        self.assertTrue(hub.is_file())
+        self.assertTrue(art.is_file())
+        body = hub.read_text(encoding="utf-8")
+        self.assertIn("huggingface.co/AvrovaDonz/CAT-YOKO", body)
+        self.assertIn("checkpoints/b1", body)
+        self.assertIn("trainable.pt", body)
+        self.assertIn("不进 GitHub", body)
+        self.assertNotIn("BEGIN OPENSSH", body)
+        art_body = art.read_text(encoding="utf-8")
+        self.assertIn("--try", art_body)
+        self.assertIn("27e9", art_body)
+        self.assertIn("hf-mirror", art_body)
+        self.assertIn("MiniCPM5", art_body)
+        self.assertIn("offload-encoder", art_body)
+        self.assertIn("optim-cpu", art_body)
+        self.assertNotIn("Ultra-FineWeb", art_body)
+        self.assertFalse((root / "checkpoints" / "b1" / "trainable.pt").exists())
 
 
 if __name__ == "__main__":

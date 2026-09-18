@@ -14,7 +14,7 @@ ssh -T git@hf.co
 
 Clone：`git clone git@hf.co:AvrovaDonz/CAT-YOKO`
 
-NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。发布档 B0（8e9，seq=4096）overlay 走 `checkpoints/b0-full/`。日志进 GitHub `artifacts/autodl-rtx6000d/`。
+NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。发布档 B0（8e9，seq=4096）overlay 走 `checkpoints/b0-full/`。B1 `--try` overlay 走 `checkpoints/b1/`（decoder + `lm_head` + 最终 RMSNorm；权重不进 GitHub）。B2 `--try` 指针：GitHub [`checkpoints/b2/README.md`](../checkpoints/b2/README.md) → Hub `checkpoints/b2/`（全模型 overlay；resume B1 + MiniCPM5 encoder/embed）。日志进 GitHub `artifacts/autodl-rtx6000d/`。
 
 Deploy SSH key 只放本机 `~/.ssh`（`HF_SSH_KEY` 可覆盖路径），在 https://huggingface.co/settings/keys 加公钥。**不要进 git**。
 

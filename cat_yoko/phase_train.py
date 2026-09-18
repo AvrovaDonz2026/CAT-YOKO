@@ -177,10 +177,11 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.extend(["--upcycle", str(args.upcycle)])
     elif args.upcycle_hf is not None:
         out.extend(["--upcycle-hf", str(args.upcycle_hf)])
-    elif args.try_run and (args.resume is None or phase == "B1"):
-        # Published --try without --upcycle* is dummy-upcycle. B1 overlay
-        # resume is MiniCPM5 upcycle + load_trainable_state; skip this and
-        # the frozen encoder/embed stay random.
+    elif args.try_run and (args.resume is None or phase in {"B1", "B2"}):
+        # --try without --upcycle* uses dummy MiniCPM5 weights. B1/B2 overlay
+        # resume is MiniCPM5 (or dummy) upcycle + load_trainable_state: the
+        # previous overlay has no encoder/embed, so skipping upcycle leaves
+        # them random. AutoDL scripts pass --upcycle-hf when MiniCPM5 is local.
         out.append("--dummy-upcycle")
     out.extend(rest)
     return out

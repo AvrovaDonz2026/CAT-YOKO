@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
+from torch import nn
 
 from cat_yoko.attention import CrossAttention, WindowAttention
 from cat_yoko.checkpoint import load_checkpoint, load_trainable_state, trainable_state_dict
@@ -25,6 +26,7 @@ from cat_yoko.optim import wsd_lr
 from cat_yoko.phase_train import build_phase_argv
 from cat_yoko.phases import PHASES, TRY_STEPS
 from cat_yoko.trainer import Trainer, train_loop
+from cat_yoko.upcycle import dummy_minicpm_state, upcycle_from_minicpm
 
 
 def _nv_tiny() -> CATYokoConfig:
@@ -59,11 +61,33 @@ class PublishedB2Tests(unittest.TestCase):
         self.assertNotIn("--offload-encoder", argv)
         self.assertEqual(argv[argv.index("--accum") + 1], "1")
         self.assertEqual(argv[argv.index("--steps") + 1], str(TRY_STEPS))
+        self.assertEqual(argv[argv.index("--seq-len") + 1], "64")
+        self.assertEqual(argv[argv.index("--save-every") + 1], "8")
         self.assertIn("--save-trainable", argv)
         self.assertIn("--no-save-full", argv)
         self.assertIn("--no-save-optim", argv)
-        self.assertNotIn("--dummy-upcycle", argv)
+        self.assertIn("--dummy-upcycle", argv)
         self.assertNotIn("--tokens", argv)
+
+    def test_try_keeps_explicit_upcycle(self) -> None:
+        argv = build_phase_argv(
+            "B2",
+            [
+                "--try",
+                "--resume",
+                "/root/autodl-tmp/runs/b1",
+                "--upcycle-hf",
+                "/root/autodl-tmp/hf/MiniCPM5-2B-Base",
+            ],
+        )
+        self.assertIn("--upcycle-hf", argv)
+        self.assertEqual(
+            argv[argv.index("--upcycle-hf") + 1],
+            "/root/autodl-tmp/hf/MiniCPM5-2B-Base",
+        )
+        self.assertNotIn("--dummy-upcycle", argv)
+        self.assertEqual(argv[argv.index("--accum") + 1], "1")
+        self.assertIn("--offload-blocks", argv)
 
     def test_wsd_uses_lr_b2_after_warmup(self) -> None:
         cfg = CATYokoConfig.tiny()
@@ -118,9 +142,23 @@ class WrapB2Tests(unittest.TestCase):
         self.assertIsInstance(model.cache_k, Nvfp4Linear)
         self.assertIsInstance(model.cache_v, Nvfp4Linear)
         self.assertIsInstance(model.lm_head, Nvfp4Linear)
+        self.assertIsInstance(model.encoder[0].mlp.experts[0].up_proj, Nvfp4Linear)
+        self.assertIsInstance(model.encoder[0].mlp.experts[0].down_proj, Nvfp4Linear)
+        self.assertIsInstance(model.encoder[0].mlp.shared[0].gate_proj, Nvfp4Linear)
+        self.assertIsInstance(model.decoder[0].mlp.experts[0].up_proj, Nvfp4Linear)
+        self.assertIsInstance(model.decoder[0].mlp.experts[0].down_proj, Nvfp4Linear)
+        self.assertIsInstance(model.decoder[0].mlp.shared[0].down_proj, Nvfp4Linear)
+        leftover = [
+            n
+            for n, m in model.named_modules()
+            if isinstance(m, nn.Linear) and not isinstance(m, Nvfp4Linear)
+        ]
+        self.assertTrue(leftover)
+        self.assertTrue(all(n.endswith("router") for n in leftover), msg=leftover)
         self.assertFalse(any(n.endswith("router") for n in names))
         self.assertNotIsInstance(model.encoder[0].mlp.router, Nvfp4Linear)
         self.assertNotIsInstance(model.decoder[0].mlp.router, Nvfp4Linear)
+        self.assertIsInstance(model.embed, nn.Embedding)
         self.assertIsInstance(enc, WindowAttention)
         self.assertIsInstance(dec, WindowAttention)
         self.assertIsInstance(model.decoder[0].cross_attn, CrossAttention)
@@ -131,6 +169,7 @@ class OverlayResumeTests(unittest.TestCase):
     def test_b1_overlay_loads_into_b2(self) -> None:
         cfg = _nv_tiny()
         torch.manual_seed(0)
+        src = dummy_minicpm_state(cfg)
         with tempfile.TemporaryDirectory() as td:
             b1 = Path(td) / "b1"
             Trainer(
@@ -145,6 +184,7 @@ class OverlayResumeTests(unittest.TestCase):
                 save_full=False,
                 save_trainable=True,
                 save_optim=False,
+                upcycle_src=src,
                 seed=1,
             ).run()
             overlay = load_checkpoint(b1 / "trainable.pt")
@@ -155,12 +195,18 @@ class OverlayResumeTests(unittest.TestCase):
             self.assertNotIn("embed.weight", keys)
 
             dst = CATYokoForCausalLM(cfg)
+            torch.manual_seed(99)
+            upcycle_from_minicpm(dst, src, cfg)
+            enc_ref = next(dst.encoder.parameters()).detach().clone()
+            embed_ref = dst.embed.weight.detach().clone()
             apply_freeze(dst, "B2")
             apply_nvfp4(dst, "B2", enabled=True)
             load_trainable_state(dst, overlay["trainable"])
             current = dst.state_dict()
             for name, tensor in overlay["trainable"].items():
                 self.assertTrue(torch.equal(current[name].cpu(), tensor.cpu()), msg=name)
+            self.assertTrue(torch.equal(next(dst.encoder.parameters()).cpu(), enc_ref.cpu()))
+            self.assertTrue(torch.equal(dst.embed.weight.cpu(), embed_ref.cpu()))
             self.assertFalse(dst.detach_cache)
             for name, p in dst.named_parameters():
                 self.assertTrue(p.requires_grad, msg=name)
@@ -183,6 +229,7 @@ class OverlayResumeTests(unittest.TestCase):
                 log_path=log,
                 offload_blocks=True,
                 optim_cpu=True,
+                upcycle_src=src,
                 seed=1,
             ).run()
             self.assertEqual(out.phase, "B2")
@@ -217,6 +264,7 @@ class OffloadAndStepTests(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("offload-blocks", msg)
         self.assertIn("accum", msg)
+        self.assertIn("accum 1", msg)
 
     def test_finite_nll_one_step(self) -> None:
         cfg = _nv_tiny()
@@ -258,6 +306,47 @@ class OffloadAndStepTests(unittest.TestCase):
         self.assertEqual(set(overlay), {n for n, _ in model.named_parameters()})
         self.assertIn("embed.weight", overlay)
         self.assertTrue(any(k.startswith("encoder.") for k in overlay))
+
+
+class B2ScriptAndHubTests(unittest.TestCase):
+    def test_run_b2_try_autodl_script(self) -> None:
+        path = Path(__file__).resolve().parents[1] / "scripts" / "run_b2_try_autodl.sh"
+        self.assertTrue(path.is_file())
+        self.assertTrue(path.stat().st_mode & 0o111)
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("--try", text)
+        self.assertIn("/root/autodl-tmp/runs/b1", text)
+        self.assertIn("/root/autodl-tmp/runs/b2", text)
+        self.assertIn("/root/autodl-tmp/hf/MiniCPM5-2B-Base", text)
+        self.assertIn("--upcycle-hf", text)
+        self.assertIn("encoder+embed", text)
+        self.assertIn("cat_yoko.b2", text)
+        self.assertIn("autodl_env.sh", text)
+        self.assertNotIn("git fetch", text)
+        self.assertNotIn("git pull", text)
+        self.assertNotIn("Ultra-FineWeb", text)
+        self.assertNotIn("--save-full", text)
+        self.assertNotIn("westc", text)
+        self.assertNotIn("BEGIN OPENSSH", text)
+
+    def test_hub_and_artifact_pointers(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        hub = root / "checkpoints" / "b2" / "README.md"
+        art = root / "artifacts" / "autodl-rtx6000d" / "b2" / "README.md"
+        self.assertTrue(hub.is_file(), hub)
+        self.assertTrue(art.is_file(), art)
+        hub_txt = hub.read_text(encoding="utf-8")
+        art_txt = art.read_text(encoding="utf-8")
+        self.assertIn("huggingface.co/AvrovaDonz/CAT-YOKO", hub_txt)
+        self.assertIn("checkpoints/b2", hub_txt)
+        self.assertIn("15e9", hub_txt)
+        self.assertIn("--try", hub_txt)
+        self.assertIn("runs/b1", hub_txt)
+        self.assertIn("huggingface.co/AvrovaDonz/CAT-YOKO", art_txt)
+        self.assertIn("run_b2_try_autodl.sh", art_txt)
+        self.assertIn("offload-blocks", art_txt)
+        self.assertIn("accum=1", art_txt)
+        self.assertNotIn("BEGIN OPENSSH", hub_txt + art_txt)
 
 
 if __name__ == "__main__":
