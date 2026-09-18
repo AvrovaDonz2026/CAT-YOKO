@@ -1,6 +1,6 @@
 # CAT-YOKO 架构理论验证
 
-> 与 [`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 分工：那篇核**中间档参数 / FLOPs / KV**；这篇核**数据流、因果、感受野、全局 cache 接口**。规格仍是中间档：Encoder 16L / Decoder 24L，CSA+HCA+8K 滑窗，主目标 128K–256K。
+> 与 [`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 分工：那篇核**中间档参数 / FLOPs / KV**；这篇核**数据流、因果、感受野、全局 cache 接口**。规格仍是中间档：Encoder 16L / Decoder 26L，CSA+HCA+8K 滑窗，主目标 128K–256K。底座 MiniCPM5-2B（Llama GQA，untied）。
 > 可执行断言：`python3 scripts/arch_verify.py --verify` 与 `python3 -m unittest tests.test_arch_verify`。
 > 理论能证明的是**自洽、因果、复杂度与信息流**；不能证明 12B 上采样后的质量。质量仍走 L0→L1 实验。
 
@@ -20,11 +20,11 @@ YOCO 的全局性来自 **M3 读全部（或所选）cache 槽**，不来自 enc
 
 还必须钉死的几条：
 
-1. **gate≈0 时，16/24 切分 ≡ 原 40 层残差流**（差一个尚未打开的 cross-attn）。这是 MiniCPM 热启合法的理由。
+1. **gate≈0 时，16/26 切分 ≡ 原 42 层残差流**（差一个尚未打开的 cross-attn）。这是 MiniCPM5 热启合法的理由。
 2. **CSA/HCA 压缩支路必须排除自身块**，否则块内未来 token 泄漏；**滑窗补这个洞**。充分条件：\(n_{\mathrm{win}}\ge m'\)。8K ≥ 128，成立。
-3. **Early-exit 只属于推理 prefill**。训练是两条栈都跑全部 token；不要把 34% 激活份额误当成训练 FLOPs。
+3. **Early-exit 只属于推理 prefill**。训练是两条栈都跑全部 token；不要把 32% 激活份额误当成训练 FLOPs。
 4. **Decoder 自注意力在训练时也看到全长序列。** 「生成序列通常不长」只描述推理。长上下文训练里 decoder self-attn 必须是滑窗/KDA，全局混合交给 cross-attn。
-5. Encoder 16 层做不了「3 层 bootstrap + CSA:HCA=1:1」。冻结为 **2× sliding + 7 CSA + 7 HCA**（对齐 V4-Flash 的 2 层滑窗 bootstrap）。
+5. Encoder 16 层做不了「3 层 bootstrap + CSA:HCA=1:1」。冻结为 **2× sliding + 7 CSA + 7 HCA**（对齐 V4-Flash 的 2 层滑窗 bootstrap）。Decoder 加到 26 层**不改**这条 Encoder 调度。
 
 Claim ledger：14/14 通过。
 
@@ -32,7 +32,7 @@ Claim ledger：14/14 通过。
 
 ## 1. 形式化数据流
 
-长度 \(n\) 的序列，隐状态 \(X^{0}\in\mathbb{R}^{n\times d}\) 为 embedding（含 MiniCPM `scale_emb`）。
+长度 \(n\) 的序列，隐状态 \(X^{0}\in\mathbb{R}^{n\times d}\) 为 embedding（MiniCPM5 `scale_emb=1`，无 μP）。
 
 \[
 \begin{aligned}
@@ -42,7 +42,7 @@ X^{\ell} &= \mathrm{CrossDec}^{\ell}(X^{\ell-1},\hat K,\hat V), && \ell=L_e+1,\l
 \end{aligned}
 \]
 
-每个 CrossDec 块：
+\(d_{\mathrm{kv}}=n_{\mathrm{kv}}d_h=256\)（GQA-2）。每个 CrossDec 块：
 
 \[
 \begin{aligned}
@@ -54,15 +54,15 @@ X' &= Z + \mathrm{MoE}(Z).
 
 \(g\in[0,1]\) 是 Phase A/B 的 cross-attn gate。因果 mask：self-attn 与 cross-attn 的 query \(t\) 都不得看见位置 \(>t\)。
 
-外部行为是因果 LM：logits 来自 \(X^{L_e+L_d}\) 的 tied head。这就是 YOCO 说的「看起来像 decoder-only，只缓存一次」。
+外部行为是因果 LM：logits 来自 \(X^{L_e+L_d}\) 的 **untied** head \(W_{\mathrm{head}}\)。这就是 YOCO 说的「看起来像 decoder-only，只缓存一次」。
 
 ---
 
 ## 2. 定理 A — gate=0 时切分等价于原残差流
 
-**定理 A.** 若 (i) \(\mathrm{SelfDec}\) 与 \(\mathrm{CrossDec}\) 的 self-attn+FFN 就是原 MiniCPM 第 \(1..16\) 与第 \(17..40\) 层，(ii) \(g=0\)，(iii) 尚未 MoE 化、尚未把注意力换成 CSA，则对任意输入，CAT-YOKO 的 \(X^{40}\) 等于原 MiniCPM 的 \(X^{40}\)。
+**定理 A.** 若 (i) \(\mathrm{SelfDec}\) 与 \(\mathrm{CrossDec}\) 的 self-attn+FFN 就是原 MiniCPM5 第 \(1..16\) 与第 \(17..42\) 层，(ii) \(g=0\)，(iii) 尚未 MoE 化、尚未把注意力换成 CSA，则对任意输入，CAT-YOKO 的 \(X^{42}\) 等于原 MiniCPM5 的 \(X^{42}\)。
 
-**证明.** \(g=0\) 时 CrossDec 退化为 SelfAttn+FFN。残差输入为 \(X^{16}\)，正是 MiniCPM 第 17 层的输入。按层归纳即得。□
+**证明.** \(g=0\) 时 CrossDec 退化为 SelfAttn+FFN。残差输入为 \(X^{16}\)，正是 MiniCPM5 第 17 层的输入。按层归纳即得。□
 
 推论：
 
@@ -141,7 +141,7 @@ CAT-YOKO：\(n_{\mathrm{win}}=8192\)，\(m=4\)，\(m'=128\)，\(8192\ge 128\)。
 
 **推理 prefill early-exit.** 提示 \(x_{0:n-1}\) 的全局 cache 在 \(X^{L_e}_{0:n-1}\) 算完后就闭合。要出第一个生成 token，只需 **decoder 在位置 \(n-1\) 上跑一次**（读已写好的 cache），不必对 \(n\) 个提示位置跑 \(L_d\) 层。这是 YOCO Table 1 的 early-exit：省的是 \(O(L_d n)\) 的 decoder prefill，不是 decoder 的最后一位。
 
-**训练没有 early-exit.** 每个位置都有 CE，decoder 必须在全部 \(t=0..n-1\) 上前向。训练 FLOPs 用 \(N_{\mathrm{fwd}}^{\mathrm{act}}\)（预算篇），不能用 34% 的 encoder 份额去估 Phase B。
+**训练没有 early-exit.** 每个位置都有 CE，decoder 必须在全部 \(t=0..n-1\) 上前向。训练 FLOPs 用 \(N_{\mathrm{fwd}}^{\mathrm{act}}\)（预算篇），不能用 32% 的 encoder 份额去估 Phase B。
 
 ---
 
@@ -167,32 +167,32 @@ Decoder 窗不能和 encoder 窗叠感受野：切点之后 decoder 的 self-att
 Decoder-only：第 \(\ell\) 层的键来自该层隐状态，共 \(L_d\) 份彼此不同的记忆。  
 YOCO：\(L_d\) 层读**同一份** \(\hat K(X^{L_e})\)，每层只有 \(W_Q^{\ell}\) 不同。
 
-记忆张量从 \(O(L_d n d_{\mathrm{kv}})\) 降到 \(O(n d_{\mathrm{kv}})\)，因子 \(L_d=24\)。这是显存定理，也是表达力赌注：多层不能再「改写」键，只能换查询。YOCO 在 1M needle 上近似满分，说明对检索型任务这份记忆够用；它**不**证明多层推理/改写（agent 状态、版本化）够用——那是计划 §14 Tier 3 可训练 lifecycle 的动机，不是 CSA 的动机。
+记忆张量从 \(O(L_d n d_{\mathrm{kv}})\) 降到 \(O(n d_{\mathrm{kv}})\)，因子 \(L_d=26\)。这是显存定理，也是表达力赌注：多层不能再「改写」键，只能换查询。YOCO 在 1M needle 上近似满分，说明对检索型任务这份记忆够用；它**不**证明多层推理/改写（agent 状态、版本化）够用——那是计划 §14 Tier 3 可训练 lifecycle 的动机，不是 CSA 的动机。
 
 M2 再沿序列池化，瓶颈从 \(n\) 降到 \(n/m\)。PDSA 已经量过 write-first 选择会丢「无写入时信号」的针，所以 M2 默认不要比 \(m=4\) 更狠；÷8 只作 stretch。
 
 ---
 
-## 8. 16/24 非对称
+## 8. 16/26 非对称
 
-YOCO 原文 \(L/2+L/2\)。CAT-YOKO 取 16/24，对应「更轻的 writer、更重的 reader」：
+YOCO 原文 \(L/2+L/2\)。CAT-YOKO 取 16/26（MiniCPM5 的 \(L_0=42\)），对应「更轻的 writer、更重的 reader」：
 
-- Prefill / 长输入绑定 writer（2.29B，34% 计划口径激活）。
-- 生成期把算力留给 reader（4.49B）在记忆上做更多层的 \(W_Q\) 查询。
-- MiniCPM 前 16 层作 writer、后 24 层作 reader，与定理 A 的切点一致（前低层特征、后高层处理）。
+- Prefill / 长输入绑定 writer（2.03B，32% 计划口径激活）。
+- 生成期把算力留给 reader（4.33B）在记忆上做更多层的 \(W_Q\) 查询。
+- MiniCPM5 前 16 层作 writer、后 26 层作 reader，与定理 A 的切点一致（前低层特征、后高层处理）。
 
-理论**不唯一决定** 16/24。12/28 会更便宜 prefill、更弱记忆；20/20 更接近 YOCO 原文。这是 §7 消融项，不是错误。16/24 与「输入轻、输出重」的中间档叙事一致即可。
+理论**不唯一决定** 16/26。12/30 会更便宜 prefill、更弱记忆；21/21 更接近 YOCO 原文。这是 §7 消融项，不是错误。16/26 与「输入轻、输出重」的中间档叙事一致即可。Encoder 仍是 16 层，CSA 调度 2/7/7 不变。
 
 ---
 
 ## 9. Encoder 层调度：为什么是 2/7/7 而不是「前 3 层 bootstrap」
 
-16 层要同时满足：(i) 前几层接近 MiniCPM 稠密注意力以便热启，(ii) CSA:HCA=1:1。
+16 层要同时满足：(i) 前几层接近 MiniCPM5 稠密注意力以便热启，(ii) CSA:HCA=1:1。
 
 - 2 层 sliding bootstrap → 余 14 层 → **7 CSA + 7 HCA**。
 - 3 层 bootstrap → 余 13 层 → **无法 1:1**。
 
-V4-Flash 的 `compress_ratios` 以两个 `0`（sliding）开头；V4-Pro 文本是 2× HCA bootstrap。对 MiniCPM 上采样，**sliding bootstrap 更近原 MHA**（只是加窗），优于一上来 HCA \(m'=128\)。
+V4-Flash 的 `compress_ratios` 以两个 `0`（sliding）开头；V4-Pro 文本是 2× HCA bootstrap。对 MiniCPM5 上采样，**sliding bootstrap 更近原 GQA**（只是加窗），优于一上来 HCA \(m'=128\)。
 
 **冻结：** Encoder `layer_types` =
 
@@ -202,16 +202,16 @@ sliding, sliding, csa, hca, csa, hca, csa, hca, csa, hca, csa, hca, csa, hca, cs
 
 Decoder self-attn：全部 sliding（或以后的 KDA 混合），**不要**默认在 decoder self-attn 上再铺 CSA——全局已经在 cross-attn。Decoder 上的 CSA 是额外复杂度，且与 YOCO「decoder self 用高效局部注意力」重复。
 
-计划原文「前 3 层 sliding/HCA」与「2× HCA bootstrap」并列表述，已在本节冻结为上面这一条。
+计划原文「前 3 层 sliding/HCA」与「2× HCA bootstrap」并列表述，已在本节冻结为上面这一条。Decoder 26 层不改变 Encoder 这条 16 层调度。
 
 ---
 
-## 10. MoE、Hash-MoE、μP（架构侧）
+## 10. MoE、Hash-MoE、无 μP（架构侧）
 
 - 非对称激活来自**两个栈的层数与 top-k**，不是同一层上按 token 改 k。与定理 A 兼容：FFN 被换成 MoE 后等价被打破，所以 virtual-group 上采样要单独恢复（Phase B）。
-- 每栈首层 dense：路由在第 1 层不稳定（DeepSeekMoE 惯例），与注意力 bootstrap 同构——都是「先别上最险的归纳偏置」。预算篇：首层 dense 后 Enc routed 17→19 补回 12.05B。
+- 每栈首层 dense：路由在第 1 层不稳定（DeepSeekMoE 惯例），与注意力 bootstrap 同构——都是「先别上最险的归纳偏置」。预算篇：首层 dense 后 Enc/Dec routed 20→21 补回 12.30B。
 - Hash-MoE：冻结 `token_id→expert_id`，无学习路由，不进入注意力因果。Encoder 的 Hash-MoE 放到 B2 解冻之后（课程篇 §5）。
-- μP：残差乘子锁 \(1.4/\sqrt{40}\)（预算篇 §9）。与 YOCO 切分正交：切的是层，不是尺度。
+- **无 μP**：`scale_emb=1`，残差恒等 1，logits 不除以 9。不要搬 MiniCPM-2B 的 \(1.4/\sqrt{40}\)。与 YOCO 切分正交：切的是层，不是尺度。
 
 mHC / Muon / MTP 不进入本篇因果核验。mHC 是残差谱约束，关了不影响 YOCO/CSA 合法性。
 
@@ -240,7 +240,7 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 | 16 层 1:1 排不下 | 3 层 bootstrap | 冻结 2/7/7 |
 | Indexer 复用错 query | 把 M1 的 indexer 接到 M3 | 两套 query，两套（或后加的）indexer |
 
-理论**不能**排除的：MoE 负载坍塌、indexer 对不齐、lost-in-the-middle（位置偏置，IN2/FILM + RoPE/NoPE）、12B 恢复不到 MiniCPM 95%。那些是实验。
+理论**不能**排除的：MoE 负载坍塌、indexer 对不齐、lost-in-the-middle（位置偏置，IN2/FILM + RoPE/NoPE）、12B 恢复不到 MiniCPM5 95%。那些是实验。
 
 ---
 
@@ -250,11 +250,11 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 
 | Claim | 结果 |
 | --- | --- |
-| 16+24=40 | PASS |
+| 16+26=42 | PASS |
 | \(n_{\mathrm{win}}\ge m,m'\) | PASS（8192≥128） |
 | Encoder 调度 2 sliding + 7 CSA + 7 HCA | PASS |
 | 窗-only encoder RF = 131072 < 256K | PASS（且不需要 ≥256K） |
-| 共享 cache = 1 writer × 24 readers | PASS |
+| 共享 cache = 1 writer × 26 readers | PASS |
 | Early-exit 仅推理 | PASS（条文） |
 | n=64 CSA/HCA/YOCO 因果、自身块不走压缩、窗补洞、top-k 子集 | PASS |
 | M1 ≠ M2 ≠ M3 | PASS（条文；测试检查槽数与 query 集不同） |
@@ -266,20 +266,20 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 1. §2.0：CSA/HCA 不自动压 YOCO 槽数；全局性来自 cross-attn。
 2. §2.3：Encoder `layer_types` 冻结为 2/7/7 sliding→CSA/HCA；Decoder self 默认全滑窗。
 3. §2.0「生成序列通常不长」：标明仅推理；训练 decoder self 仍是窗。
-4. 与预算篇衔接：128K–256K 必须有 M2 或 M3；默认推 M3。
+4. 与预算篇衔接：128K–256K 必须有 M2 或 M3；默认推 M3。切分 **16/26**，不是 16/24。
 
 ---
 
 ## 15. 分训再合并（算力，不是因果）
 
-两栈**独立当 LM 训再拼接**会破坏定理 A 的表示对齐，且 50B+50B+拼接比联合 50B **更贵**（约 1.5×）。能省的是同一套切开权重上的**解冻课程**。
+两栈**独立当 LM 训再拼接**会破坏定理 A 的表示对齐，且 50B+50B+拼接比联合 50B **更贵**（约 1.46×）。能省的是同一套切开权重上的**解冻课程**。
 
 定理 D：B0/B1 在 \(X^{16}\) 上 `.detach()`，Encoder 无权重/激活梯度；\(W_K,W_V\) 挂在 detach 之后，是新模块。  
-定理 E：tied \(E\) 必须随 Encoder 冻结（或解绑只训 head），否则冻结 Encoder 的输入分布会漂。
+定理 E：输入 \(E_{\mathrm{in}}\) 必须随 Encoder 冻结；B0 冻 lm_head，B1 **可以训** untied head。禁止在 Encoder 冻结时训输入表，否则冻结 Encoder 的输入分布会漂。
 
-定稿 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM-16；B2 才让 Encoder 专家特化）。
+定稿 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM5-16；B2 才让 Encoder 专家特化）。
 
-数字：C1 约 **81%** 联合 50B；独立拼接 **152%**。B1 Adam 状态约联合的 **60%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0。**发布墙钟 C1+FP8 = 761 H100-h**（[`FP8_THEORY.md`](FP8_THEORY.md)）。`python3 scripts/param_budget.py --staged --curriculum --fp8`。
+数字：C1 约 **79%** 联合 50B；独立拼接 **146%**。B1 Adam 状态约联合的 **62%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0。**发布墙钟 C1+FP8 = 729 H100-h**（[`FP8_THEORY.md`](FP8_THEORY.md)）。`python3 scripts/param_budget.py --staged --curriculum --fp8`。
 
 复算：
 
