@@ -175,6 +175,38 @@ class TrainerOffloadTests(unittest.TestCase):
         )
         self.assertGreater(nll, 0)
 
+    def test_block_offload_logs_grad_norm(self) -> None:
+        import json
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "m.jsonl"
+            Trainer(
+                self.cfg,
+                "B2",
+                "cpu",
+                steps=1,
+                accum=1,
+                offload_blocks=True,
+                optim_cpu=True,
+                log_path=log,
+            ).run()
+            row = json.loads(log.read_text().splitlines()[0])
+            self.assertGreater(row["grad_norm"], 0)
+            self.assertEqual(row["adam"], "ephemeral")
+
+    def test_block_offload_rejects_accum(self) -> None:
+        with self.assertRaises(RuntimeError):
+            train_loop(
+                self.cfg,
+                "B2",
+                steps=1,
+                device="cpu",
+                accum=2,
+                offload_blocks=True,
+                optim_cpu=True,
+            )
+
     def test_c1_chain(self) -> None:
         out = run_c1_chain(self.cfg, "cpu", steps=1, accum=1, micro_batch=2)
         self.assertEqual(set(out), {"B0", "B1", "B2"})

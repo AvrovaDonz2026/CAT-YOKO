@@ -16,6 +16,7 @@ import torch
 
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import FileStream, PackedBinStream, pack_documents, sidecar_meta
+from cat_yoko.loss import kd_kl, kd_weight
 from cat_yoko.optim import adamw_param_groups, wsd_lr
 from cat_yoko.train import main
 from cat_yoko.trainer import Trainer, auto_accum, train_loop
@@ -107,6 +108,18 @@ class LoopTests(unittest.TestCase):
             ).run()
             self.assertEqual(out.step, 2)
 
+    def test_resume_b0_into_b1_starts_new_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg, "B0", "cpu", steps=1, accum=1, save_dir=save, save_every=1, seed=1
+            ).run()
+            out = Trainer(
+                self.cfg, "B1", "cpu", steps=1, accum=1, resume=save / "latest.pt", seed=1
+            ).run()
+            self.assertEqual(out.step, 1)
+            self.assertEqual(out.phase, "B1")
+
     def test_resume_advances_packed_cursor(self) -> None:
         cfg = CATYokoConfig.tiny()
         toks = list(range(64))
@@ -146,10 +159,16 @@ class LoopTests(unittest.TestCase):
             self.assertIn("grad_norm", row)
             self.assertIn("tok_s", row)
             self.assertIn("aux", row)
+            self.assertEqual(row["adam"], "gpu")
 
     def test_wsd_b1_offset_skips_warmup(self) -> None:
         lr = wsd_lr(8e9, self.cfg, "B1")
         self.assertAlmostEqual(lr, self.cfg.lr)
+
+    def test_kd_weight_needs_more_than_one_step(self) -> None:
+        self.assertEqual(kd_weight(0, 1, 0.5), 0.0)
+        self.assertGreater(kd_weight(0, 8, 0.5), 0.3)
+        self.assertEqual(kd_kl(torch.zeros(2, 4), torch.zeros(2, 4), 2.0).shape, ())
 
     def test_auto_accum_tiny(self) -> None:
         self.assertEqual(auto_accum(self.cfg, micro_batch=2, world=1), 4)

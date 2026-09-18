@@ -485,7 +485,7 @@ BBH（推理），IFEval（指令遵循）。
 3. 有 GPU：`python3 -m cat_yoko.gpu_smoke`（tiny）；`python3 -m cat_yoko.gpu_smoke --middle`（12B B0 一步，≥28GiB，bf16 直接建图）；`--middle --phase B1`（Encoder 卸载 + CPU Adam）；`--c1`（同一张 12B 图 B0→B1→B2）
 4. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
 5. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
-6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（packed 游标与 RNG 会一起恢复；`--tokens-offset` 默认已计入前一阶段）。单卡 32GB：B0 直接一步；B1 默认卸冻结 Encoder、Adam 动量在 CPU；B2 默认逐层 offload + CPU Adam（host RAM 约 90GiB）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
+6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（权重 + packed 游标 + RNG；不恢复上一阶段 Adam / step）。单卡 32GB + ~62GiB host cgroup：B0 直接一步；B1 卸冻结 Encoder + CPU Adam（一步 smoke 走 ephemeral 动量）；B2 逐层 offload，backward 完一层就 clip+Adam（`--accum 1`）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
 
 不要再改 16/24、C1、C1+FP8、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
 

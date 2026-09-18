@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import gc
 import json
 import math
 import random
@@ -14,7 +13,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from cat_yoko.checkpoint import load_checkpoint, load_model_state, save_checkpoint
+from cat_yoko.checkpoint import load_checkpoint, load_model_state, load_optimizer_state, save_checkpoint
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import open_stream, resolve_eos, resolve_seq_len, sidecar_meta
 from cat_yoko.dist_util import barrier, init_distributed, is_rank0, wrap_distributed
@@ -167,6 +166,7 @@ class Trainer:
         self.offload_encoder = False
         self.offload_blocks = False
         self.optim_cpu = False
+        self.adam_state = "gpu"
         self.device, self.rank, self.world = init_distributed(device)
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
@@ -279,6 +279,52 @@ class Trainer:
             optim_cpu=self.optim_cpu_arg,
         )
 
+    def _restore_rng(self, extra: dict) -> None:
+        if extra.get("rng_torch") is not None:
+            torch.set_rng_state(extra["rng_torch"].cpu())
+        rng_cuda = extra.get("rng_cuda")
+        if (
+            rng_cuda is not None
+            and torch.cuda.is_available()
+            and str(self.device).startswith("cuda")
+        ):
+            try:
+                torch.cuda.set_rng_state_all([t.cpu() for t in rng_cuda])
+            except (RuntimeError, TypeError, ValueError):
+                pass
+
+    def _load_resume(self, model: nn.Module, opt, stream) -> tuple[int, float, float]:
+        """Load weights from ``resume``. Same-phase = crash recovery; new phase = C1 handoff.
+
+        Checkpoints map onto CPU so a 12B state_dict does not clone VRAM. Packed
+        cursor and RNG always restore. Optimizer / step / tokens_in_phase only
+        restore when CLI ``phase`` matches the checkpoint.
+        """
+        ckpt = load_checkpoint(self.resume, map_location="cpu")
+        load_model_state(model, ckpt["model"])
+        extra = ckpt.get("extra") or {}
+        ckpt_phase = str(extra.get("phase", self.phase))
+        same_phase = ckpt_phase == self.phase
+        step = 0
+        tokens_in_phase = 0.0
+        tokens_seen = self.global_tokens_offset
+        if same_phase:
+            try:
+                load_optimizer_state(opt, ckpt.get("optimizer"))
+            except (ValueError, RuntimeError, KeyError):
+                pass
+            step = int(extra.get("step", 0))
+            tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
+            tokens_seen = float(extra.get("tokens_seen", tokens_seen))
+        apply_freeze(unwrap(model), self.phase)
+        self._resolve_offload()
+        self._apply_runtime_flags(model)
+        if extra.get("stream") is not None:
+            stream.load_state_dict(extra["stream"])
+        self._restore_rng(extra)
+        del ckpt
+        return step, tokens_in_phase, tokens_seen
+
     def _apply_runtime_flags(self, model: nn.Module) -> None:
         raw = unwrap(model)
         raw.grad_checkpoint = self.grad_ckpt
@@ -298,6 +344,11 @@ class Trainer:
         if str(self.device).startswith("cuda") and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
         self._resolve_offload()
+        if self.offload_blocks and self.accum > 1:
+            raise RuntimeError(
+                "B2 --offload-blocks Adams each layer during backward and cannot "
+                "gradient-accumulate; use --accum 1, or ZeRO/multi-GPU for the 4M-token batch"
+            )
         if self.reuse_model is not None:
             model = self.reuse_model
         else:
@@ -317,6 +368,7 @@ class Trainer:
             state_dtype, retain_state, adam_state = plan_cpu_adam(
                 n_train, steps=self.steps
             )
+        self.adam_state = adam_state
         if is_rank0(self.rank) and str(self.device).startswith("cuda") and torch.cuda.is_available():
             alloc = torch.cuda.memory_allocated() / 1024**3
             print(
@@ -335,39 +387,12 @@ class Trainer:
             state_dtype=state_dtype,
             retain_state=retain_state,
         )
-        if is_rank0(self.rank) and self.cfg.name == "CAT-YOKO-12B":
-            print(f"optimizer ready {type(opt).__name__}", flush=True)
         stream = self._open(self.data, self.seed + self.rank)
         step = 0
         tokens_in_phase = 0.0
         tokens_seen = self.global_tokens_offset
         if self.resume is not None:
-            ckpt = load_checkpoint(self.resume, map_location=self.device)
-            load_model_state(model, ckpt["model"])
-            if ckpt.get("optimizer") is not None:
-                opt.load_state_dict(ckpt["optimizer"])
-            extra = ckpt.get("extra") or {}
-            step = int(extra.get("step", 0))
-            tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
-            tokens_seen = float(extra.get("tokens_seen", tokens_seen))
-            self.phase = str(extra.get("phase", self.phase))
-            apply_freeze(unwrap(model), self.phase)
-            self._resolve_offload()
-            self._apply_runtime_flags(model)
-            if extra.get("stream") is not None:
-                stream.load_state_dict(extra["stream"])
-            if extra.get("rng_torch") is not None:
-                torch.set_rng_state(extra["rng_torch"].cpu())
-            rng_cuda = extra.get("rng_cuda")
-            if (
-                rng_cuda is not None
-                and torch.cuda.is_available()
-                and str(self.device).startswith("cuda")
-            ):
-                try:
-                    torch.cuda.set_rng_state_all([t.cpu() for t in rng_cuda])
-                except (RuntimeError, TypeError, ValueError):
-                    pass
+            step, tokens_in_phase, tokens_seen = self._load_resume(model, opt, stream)
 
         if self.teacher is not None:
             self.teacher.to(self.device)
@@ -385,8 +410,13 @@ class Trainer:
         trainable = [p for p in model.parameters() if p.requires_grad]
         n_train = sum(p.numel() for p in trainable)
 
+        gn_parts: list[float] = []
         if self.offload_blocks and isinstance(opt, CPUOffloadAdamW):
+            clip = self.cfg.grad_clip
+
             def _on_block(blk):
+                params = [p for p in blk.parameters() if p.grad is not None]
+                gn_parts.append(clip_grad_norm_mixed(params, clip))
                 opt.step_params(blk.parameters())
 
             set_after_block_backward(_on_block)
@@ -396,6 +426,7 @@ class Trainer:
                     break
                 if phase_budget is not None and tokens_in_phase >= phase_budget:
                     break
+                gn_parts.clear()
                 progress = 0.0
                 if max_steps:
                     progress = (step + 1) / max_steps
@@ -417,8 +448,6 @@ class Trainer:
                     with self._amp():
                         out = model(**batch)
                         loss = out["loss"] / self.accum
-                    if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
-                        print(f"forward done phase={self.phase}", flush=True)
                     if self.teacher is not None:
                         with torch.no_grad():
                             t_logits = self.teacher(batch["input_ids"])["logits"]
@@ -434,8 +463,6 @@ class Trainer:
                                 self.cfg.kd_temperature,
                             )
                     loss.backward()
-                    if self.cfg.name == "CAT-YOKO-12B" and is_rank0(self.rank):
-                        print(f"backward done phase={self.phase}", flush=True)
                     unwrap(model).step_router_bias()
                     step_nll += float(out["nll"].detach()) / self.accum
                     step_loss += float(out["loss"].detach()) / self.accum
@@ -443,7 +470,10 @@ class Trainer:
                 if not math.isfinite(step_nll):
                     raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
                 if self.offload_blocks:
-                    grad_norm = 0.0
+                    leftover = [p for p in trainable if p.grad is not None]
+                    if leftover:
+                        gn_parts.append(clip_grad_norm_mixed(leftover, self.cfg.grad_clip))
+                    grad_norm = math.sqrt(sum(g * g for g in gn_parts)) if gn_parts else 0.0
                 else:
                     grad_norm = self._clip(model, trainable)
                 opt.step()
@@ -489,6 +519,7 @@ class Trainer:
                         "offload_encoder": self.offload_encoder,
                         "offload_blocks": self.offload_blocks,
                         "optim_cpu": self.optim_cpu,
+                        "adam": self.adam_state,
                     }
                     self._log(row)
                 if self.eval_every and step % self.eval_every == 0:

@@ -58,3 +58,22 @@ def save_checkpoint(
 
 def load_checkpoint(path: Path, map_location: str = "cpu") -> dict[str, Any]:
     return torch.load(path, map_location=map_location, weights_only=False)
+
+
+def load_optimizer_state(optimizer: Optimizer | None, state: dict | None) -> None:
+    """Load Adam state. Checkpoints are read on CPU so 12B does not double VRAM.
+
+    GPU AdamW moments are then copied onto each param's device. CPU-offload
+    AdamW keeps moments on host (see ``CPUOffloadAdamW.load_state_dict``).
+    """
+    if optimizer is None or not state:
+        return
+    optimizer.load_state_dict(state)
+    from cat_yoko.optim import CPUOffloadAdamW
+
+    if isinstance(optimizer, CPUOffloadAdamW):
+        return
+    for p, st in optimizer.state.items():
+        for k, v in list(st.items()):
+            if torch.is_tensor(v):
+                st[k] = v.to(device=p.device, dtype=v.dtype)

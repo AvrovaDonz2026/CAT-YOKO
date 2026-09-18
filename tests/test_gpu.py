@@ -81,6 +81,45 @@ class GpuTinyTests(unittest.TestCase):
         )
         self.assertEqual(code, 0)
 
+    def test_cli_c1_smoke_cuda(self) -> None:
+        code = train_main(
+            ["--config", "tiny", "--c1-smoke", "--steps", "1", "--accum", "1", "--device", "cuda", "--dtype", "bf16"]
+        )
+        self.assertEqual(code, 0)
+
+    def test_resume_b0_into_b1_cuda(self) -> None:
+        import tempfile
+
+        from cat_yoko.trainer import Trainer
+
+        cfg = self.cfg
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                cfg, "B0", "cuda", steps=1, accum=1, save_dir=save, save_every=1, dtype="bf16"
+            ).run()
+            out = Trainer(
+                cfg, "B1", "cuda", steps=1, accum=1, resume=save / "latest.pt", dtype="bf16"
+            ).run()
+        self.assertEqual(out.step, 1)
+        self.assertEqual(out.phase, "B1")
+        self.assertGreater(out.nll, 0)
+
+    def test_kd_two_steps_cuda(self) -> None:
+        from cat_yoko.teacher import DummyTeacher
+
+        teacher = DummyTeacher(self.cfg.vocab_size, self.cfg.hidden_size)
+        nll = train_loop(
+            self.cfg,
+            "B0",
+            steps=2,
+            device="cuda",
+            accum=1,
+            teacher=teacher,
+            dtype="bf16",
+        )
+        self.assertGreater(nll, 0)
+
     def test_full_tiny_bundle(self) -> None:
         result = run_tiny_cuda(steps=1, micro_batch=2)
         self.assertTrue(result["ok"], msg=result)
@@ -114,7 +153,7 @@ class GpuTwelveBTests(unittest.TestCase):
         result = run_middle_12b_c1(seq_len=32, steps=1, micro_batch=1)
         self.assertTrue(result["phases"]["B0"]["ok"], msg=result)
         self.assertTrue(result["b1_ok"], msg=result)
-        # B2 is allowed to OOM on 32GB if host RAM cannot hold CPU Adam; B0/B1 must pass.
+        # Per-block B2 Adam fits a 32GB card + 62GiB cgroup; still allow OOM.
         if not result["phases"].get("B2", {}).get("oom"):
             self.assertTrue(result["phases"]["B2"]["ok"], msg=result)
 

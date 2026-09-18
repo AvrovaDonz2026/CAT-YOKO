@@ -17,8 +17,10 @@ from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.prepare import prepare
+from cat_yoko.teacher import DummyTeacher
 from cat_yoko.tokenizer import HashTokenizer
 from cat_yoko.trainer import Trainer, build_model, run_c1_chain, train_loop
+from cat_yoko.upcycle import dummy_minicpm_state
 
 
 def cuda_info() -> dict:
@@ -103,6 +105,42 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
         for phase, r in chain.items()
     }
     out["c1_chain"]["ok"] = all(out["c1_chain"][p]["ok"] for p in ("B0", "B1", "B2"))
+    teacher = DummyTeacher(cfg.vocab_size, cfg.hidden_size)
+    nll_kd = train_loop(
+        cfg,
+        "B0",
+        steps=2,
+        device=device,
+        accum=1,
+        micro_batch=micro_batch,
+        teacher=teacher,
+        dtype="bf16",
+    )
+    out["kd"] = {"nll": float(nll_kd), "ok": _finite(nll_kd) and nll_kd > 0}
+    del teacher
+    src = dummy_minicpm_state(cfg)
+    nll_up = train_loop(
+        cfg,
+        "B0",
+        steps=1,
+        device=device,
+        accum=1,
+        micro_batch=micro_batch,
+        upcycle_src=src,
+        dtype="bf16",
+    )
+    out["upcycle"] = {"nll": float(nll_up), "ok": _finite(nll_up) and nll_up > 0}
+    ev = Trainer(
+        cfg,
+        "B0",
+        device,
+        steps=1,
+        accum=1,
+        micro_batch=micro_batch,
+        eval_every=1,
+        dtype="bf16",
+    ).run()
+    out["eval"] = {"nll": float(ev.nll), "ok": _finite(ev.nll) and ev.nll > 0}
     tok = HashTokenizer(cfg.vocab_size)
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
@@ -139,6 +177,33 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             "second_step": int(second.step),
             "ok": second.step == 2 and _finite(second.nll),
         }
+        b0 = Trainer(
+            cfg,
+            "B0",
+            device,
+            steps=1,
+            accum=1,
+            micro_batch=micro_batch,
+            save_dir=td / "b0",
+            save_every=1,
+            dtype="bf16",
+        ).run()
+        b1 = Trainer(
+            cfg,
+            "B1",
+            device,
+            steps=1,
+            accum=1,
+            micro_batch=micro_batch,
+            resume=td / "b0" / "latest.pt",
+            dtype="bf16",
+        ).run()
+        out["b0_to_b1"] = {
+            "b0_nll": float(b0.nll),
+            "b1_step": int(b1.step),
+            "b1_phase": b1.phase,
+            "ok": b1.step == 1 and b1.phase == "B1" and _finite(b1.nll),
+        }
     model = CATYokoForCausalLM(cfg).to(device)
     apply_freeze(model, "B0")
     ids = torch.randint(0, cfg.vocab_size, (micro_batch, cfg.seq_len), device=device)
@@ -156,6 +221,10 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             out["b2_block_offload"]["ok"],
             out["c1_chain"]["ok"],
             out["packed_resume"]["ok"],
+            out["b0_to_b1"]["ok"],
+            out["kd"]["ok"],
+            out["upcycle"]["ok"],
+            out["eval"]["ok"],
             out["b0_encoder_frozen"]["ok"],
             out["fp8_policy"]["b1_autocast"] is True,
             out["fp8_policy"]["b0_autocast"] is False,
@@ -364,6 +433,8 @@ def main(argv: list[str] | None = None) -> int:
         if "bf16" in result:
             print(f"  bf16 nll={result['bf16']['nll']:.4f} ok={result['bf16']['ok']}")
         print(f"  packed_resume ok={result['packed_resume']['ok']} peak_mib={result['peak_mib']}")
+        print(f"  b0_to_b1 ok={result['b0_to_b1']['ok']}")
+        print(f"  kd ok={result['kd']['ok']} upcycle ok={result['upcycle']['ok']} eval ok={result['eval']['ok']}")
         print(f"  grad_ckpt ok={result['grad_ckpt']['ok']}")
         print(f"  b1_offload ok={result['b1_offload']['ok']}")
         print(f"  b2_block_offload ok={result['b2_block_offload']['ok']}")

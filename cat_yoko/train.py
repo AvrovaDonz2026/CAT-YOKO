@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
-    p.add_argument("--micro-batch", type=int, default=2)
+    p.add_argument("--micro-batch", type=int, default=None, help="default 2 (tiny) / 1 (12b)")
     p.add_argument("--accum", type=int, default=0, help="0 = auto from global_batch_tokens")
     p.add_argument("--device", default="cpu")
     p.add_argument("--dtype", choices=["fp32", "bf16"], default="fp32")
@@ -138,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
             args.steps = 3
         else:
             p.error("12b training needs --steps or --tokens (this VM cannot run the 8B-token B0 envelope)")
+    if args.micro_batch is None:
+        args.micro_batch = 1 if args.config == "12b" else 2
     if args.config == "12b":
         if args.dtype != "bf16":
             args.dtype = "bf16"
