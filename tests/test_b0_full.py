@@ -56,12 +56,14 @@ class B0FullLauncherTests(unittest.TestCase):
         self.assertIn("transformer_engine[pytorch,core-cu13]", text)
         self.assertIn("venv-nightly", text)
         self.assertIn("probe_nvfp4_hw.py", text)
+        self.assertIn("transformers==5.17.0", text)
         self.assertNotIn("git fetch", text)
         self.assertNotRegex(text, r"31jEePeb|vDw8xU9c|PRIVATE KEY")
         self.assertNotIn("westc.seetacloud", text)
         probe_src = probe.read_text()
-        self.assertIn("torch.randn(8, 128", probe_src)
+        self.assertIn("torch.randn(16, 128", probe_src)
         self.assertNotIn("torch.randn(4, 64", probe_src)
+        self.assertNotIn("torch.randn(8, 128", probe_src)
 
 
 if __name__ == "__main__":

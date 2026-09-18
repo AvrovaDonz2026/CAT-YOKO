@@ -1,7 +1,7 @@
 # AutoDL RTX 6000D（Blackwell sm_120）
 
 实例 `autodl-container-8x4c4zmh8d-e96e943a`，SSH `connect.weste.seetacloud.com:34864`（**weste**，不是已释放的 westc）。
-torch 2.8.0+cu128，驱动 595.71.05，CUDA 13.2。
+发布档 B0 **已切到** `/root/autodl-tmp/venv-nightly`：torch `2.15.0.dev20260918+cu130`，驱动 595.71.05，CUDA 13.2。miniconda 里仍留着 2.8.0+cu128。
 
 | 项 | 实测 |
 | --- | --- |
@@ -76,6 +76,8 @@ PY=/root/autodl-tmp/venv-nightly/bin/python bash scripts/run_b0_full_autodl.sh
 ```
 
 Nightly 目标：`https://download.pytorch.org/whl/nightly/cu130` 上当天的 torch 2.15.dev + `transformer_engine[pytorch,core-cu13]`。TE 文档把 **NVFP4 训练 kernel 写成 SM100/103**；sm_120 是尽力探测（`disable_rht` / `disable_2d_quantization`）。探活失败就继续 E2M1/16 仿真，不改 C1 配方。
+
+**已切换（2026-09-18T18:06Z）：** B0 从 step 1400 overlay 同阶段 resume，进程是 nightly Python。`transformer_engine.pytorch` 2.19 可以 import；`float4_e2m1fn_x2` 的 `copy_` 仍失败，所以 GEMM 还是仿真。探活 JSON：[`nvfp4/NVFP4_PROBE_nightly.json`](nvfp4/NVFP4_PROBE_nightly.json)。吞吐约 1350 → 1670 tok/s。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 

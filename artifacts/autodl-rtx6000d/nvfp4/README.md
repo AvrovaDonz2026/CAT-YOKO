@@ -10,6 +10,7 @@
 | gate / nll_last | 0.301 / 18.06（DummyStream，不是评估） |
 | peak | 34442 MiB |
 | tok/s | ≈7–8（E2M1/16 仿真，不是 TE kernel） |
-| TE | 2.19 cu12 装上了；`transformer_engine.pytorch` 因 `ncclCommWindowRegister` 导不进。走仿真。 |
+| TE（2.8 miniconda） | 2.19 cu12 装上了；`transformer_engine.pytorch` 因 `ncclCommWindowRegister` 导不进。走仿真。 |
+| TE（nightly cu130） | torch `2.15.0.dev20260918+cu130` 上 `transformer_engine.pytorch` **可以 import**。`float4` `copy_` 仍失败；TE NVFP4 Linear 需 leading dim % 16 == 0。探活：[`NVFP4_PROBE_nightly.json`](NVFP4_PROBE_nightly.json)。 |
 
 **大文件不进 GitHub。** overlay `trainable.pt`（419MiB，sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e`）在 HuggingFace [`checkpoints/b0-nvfp4-try/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-nvfp4-try)。不覆盖原来的 32 步 `checkpoints/b0/trainable.pt`。

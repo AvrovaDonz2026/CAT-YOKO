@@ -46,6 +46,12 @@ if ! python -m pip install --no-build-isolation "transformer_engine[pytorch,core
   python -m pip install --no-build-isolation "git+https://github.com/NVIDIA/TransformerEngine.git@main"
 fi
 
+# MiniCPM5 upcycle on B0 restart needs transformers in this venv.
+# Do not reinstall torch; pin the same versions as miniconda.
+echo "install transformers for MiniCPM5 upcycle"
+python -m pip install "transformers==5.17.0" "safetensors==0.8.0" accelerate huggingface_hub tokenizers
+python -c "import torch, transformers; print('torch still', torch.__version__, 'transformers', transformers.__version__)"
+
 echo "=== probe ==="
 PROBE_JSON="$VENV/NVFP4_PROBE.json"
 if [ -f "$ROOT/scripts/probe_nvfp4_hw.py" ]; then
