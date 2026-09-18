@@ -1,0 +1,78 @@
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=True
+CAT-YOKO-12B B0 step 1/1 nll=11.9444 ppl=153959.5 aux=0.0000 gate=0.301 gn=3.34 moe_cv=0.44 trainable=219.21M lr=1.00e-07 fp8=False tok=64 tok/s=7 mem=23378MiB
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=15.09GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=True adam=ephemeral trainable=7603.42M reuse=True
+CAT-YOKO-12B B1 step 1/1 nll=11.9821 ppl=159874.2 aux=0.0376 gate=1.000 gn=9.11 moe_cv=0.53 trainable=7603.42M lr=1.00e-07 fp8=True tok=64 tok/s=1 mem=29331MiB
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=1.01GiB grad_ckpt=True seq=64 offload_enc=False offload_blocks=True optim_cpu=True adam=ephemeral trainable=12250.38M reuse=True
+CAT-YOKO-12B B2 step 1/1 nll=11.9821 ppl=159874.2 aux=0.0564 gate=1.000 gn=15.55 moe_cv=0.53 trainable=12250.38M lr=3.00e-08 fp8=True tok=64 tok/s=0 mem=2662MiB
+{
+  "info": {
+    "cuda": true,
+    "device": "NVIDIA GeForce RTX 4080 SUPER",
+    "index": 0,
+    "capability": "8.9",
+    "total_gib": 31.48,
+    "bf16": true,
+    "torch": "2.8.0+cu128",
+    "cuda_runtime": "12.8"
+  },
+  "phases": {
+    "B0": {
+      "info": {
+        "cuda": true,
+        "device": "NVIDIA GeForce RTX 4080 SUPER",
+        "index": 0,
+        "capability": "8.9",
+        "total_gib": 31.48,
+        "bf16": true,
+        "torch": "2.8.0+cu128",
+        "cuda_runtime": "12.8"
+      },
+      "phase": "B0",
+      "nll": 11.94444465637207,
+      "step": 1,
+      "seq_len": 64,
+      "peak_gib": 22.83,
+      "ok": true
+    },
+    "B1": {
+      "info": {
+        "cuda": true,
+        "device": "NVIDIA GeForce RTX 4080 SUPER",
+        "index": 0,
+        "capability": "8.9",
+        "total_gib": 31.48,
+        "bf16": true,
+        "torch": "2.8.0+cu128",
+        "cuda_runtime": "12.8"
+      },
+      "phase": "B1",
+      "nll": 11.982142448425293,
+      "step": 1,
+      "seq_len": 64,
+      "peak_gib": 28.64,
+      "ok": true
+    },
+    "B2": {
+      "info": {
+        "cuda": true,
+        "device": "NVIDIA GeForce RTX 4080 SUPER",
+        "index": 0,
+        "capability": "8.9",
+        "total_gib": 31.48,
+        "bf16": true,
+        "torch": "2.8.0+cu128",
+        "cuda_runtime": "12.8"
+      },
+      "phase": "B2",
+      "nll": 11.982142448425293,
+      "step": 1,
+      "seq_len": 64,
+      "peak_gib": 2.6,
+      "ok": true
+    }
+  },
+  "seq_len": 64,
+  "ok": true,
+  "b1_ok": true,
+  "b2_oom": false
+}

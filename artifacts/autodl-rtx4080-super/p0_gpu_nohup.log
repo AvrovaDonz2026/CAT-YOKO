@@ -1,0 +1,12 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+START tiny 12:10:25
+EXIT:0
+START b0 12:10:59
+EXIT:0
+START b1 12:11:19
+EXIT:0
+START b2 12:13:25
+EXIT:0
+START c1 12:16:42
+EXIT:0
+DONE 12:21:46
