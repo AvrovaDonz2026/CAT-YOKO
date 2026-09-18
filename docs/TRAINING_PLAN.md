@@ -474,11 +474,11 @@ BBH（推理），IFEval（指令遵循）。
 
 发布规格已敲死，见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)。下一步是跑仓库里的 **12B 训练代码**（tiny 单测 → meta 12B 图 → `--dump-megatron` → 有卡再 FSDP / Megatron）。
 
-1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_megatron`
-2. `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3`
+1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron`
+2. `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1`
 3. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
 4. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
-5. 有 MiniCPM 权重与 GPU 时：`--config 12b --phase B0 --upcycle <minicpm>` 按 C1+FP8 开训。规模化再 `--backend megatron`（需安装 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 并填 `model_provider`）。
+5. 有 MiniCPM 权重与 GPU 时：`--config 12b --phase B0 --upcycle <minicpm> --data <jsonl|.bin> --save-dir runs/b0 --dtype bf16 --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（`--tokens-offset` 默认已计入前一阶段）。规模化再 `--backend megatron`。
 
 不要再改 16/24、C1、C1+FP8、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
 

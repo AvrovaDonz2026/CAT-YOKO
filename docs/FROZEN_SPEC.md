@@ -95,15 +95,15 @@
 
 做：
 
-- 12B 配置的 YOCO MoE 图、C1 冻结 API、C1+FP8 策略对象、WSD、上采样、单卡/FSDP 入口。
-- tiny 配置单测（gate=0、detach 无 Encoder 梯度、freeze_tied）。
+- 12B 配置的 YOCO MoE 图、C1 冻结 API、C1+FP8 策略对象、WSD、上采样、单卡/DDP/FSDP 入口。
+- **C1 训练循环**：packing + 文档 mask、梯度累积、AdamW 分组、checkpoint / resume、jsonl 日志、可选 MiniCPM logit KD。tiny 单测（gate=0、detach 无 Encoder 梯度、freeze_tied、ckpt）。
 - Megatron-LM 适配面：`ParallelPlan`（TP/PP/EP/CP）、双栈 `TransformerConfig` 映射、`model_provider` / `forward_step` 钩子。不 vendoring Megatron。
 
 不做（本步）：
 
 - 把 `GPTModel` / 双向 T5 encoder 当 YOCO；实现 EP/TP 训练循环（等装上 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 再填 provider）。
-- 自研 CSA kernel / FP4 / 真实 50B 数据管道 / 评测套件 / Phase C indexer 训练循环。
-- 在本机 CPU 上分配 12B 权重（约 24GB bf16）。`--config 12b --meta` 只建 meta 图、数参数。
+- 自研 CSA kernel / FP4 / **50B 语料本身** / 评测套件 / Phase C indexer 训练循环。数据接口吃 jsonl `tokens` 或 int32 `.bin`。
+- 在本机 CPU 上分配 12B 权重（约 24GB bf16）。`--config 12b --meta` 只建 meta 图、数参数。12B 开训必须显式 `--steps` 或 `--tokens`。
 
 Megatron 约束（已写进 `cat_yoko.parallel`）：
 

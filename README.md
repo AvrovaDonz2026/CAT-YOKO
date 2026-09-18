@@ -16,10 +16,13 @@ Default spec (**middle compute tier**): ≈12B total, Encoder ≈2.3B active / i
 ## Train (12B graph; tiny for tests)
 
 ```bash
-python3 -m cat_yoko.train --config tiny --phase B0 --steps 3
-python3 -m cat_yoko.train --config 12b --meta          # count params, no 24GB alloc
-python3 -m cat_yoko.train --config 12b --dump-megatron # Megatron-LM mapping JSON
-python3 -m unittest tests.test_train tests.test_megatron
+python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1
+python3 -m cat_yoko.train --config 12b --meta
+python3 -m cat_yoko.train --config 12b --dump-megatron
+# 有卡 + MiniCPM 权重：
+# python3 -m cat_yoko.train --config 12b --phase B0 --upcycle minicpm.pt \
+#   --data tokens.jsonl --save-dir runs/b0 --steps 100 --dtype bf16
+python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron
 ```
 
 ## Recalculate / verify
@@ -28,5 +31,5 @@ python3 -m unittest tests.test_train tests.test_megatron
 python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 ledger
 python3 scripts/param_budget.py --staged --curriculum --fp8
 python3 scripts/arch_verify.py --verify      # architecture invariants
-python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_megatron
+python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron
 ```

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 from cat_yoko.config import C1_SPLIT
 from cat_yoko.model import CATYokoForCausalLM
+from cat_yoko.optim import unwrap
 
 
 def set_gate(model: CATYokoForCausalLM, value: float) -> None:
     """Scheduled mix, not an AdamW parameter (Theorem A)."""
+    model = unwrap(model)
     for blk in model.decoder:
-        blk.gate.fill_(float(value))
+        unwrap(blk).gate.fill_(float(value))
 
 
 def gate_schedule(phase: str, progress: float) -> float:
@@ -30,6 +32,7 @@ def gate_schedule(phase: str, progress: float) -> float:
 def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
     if phase not in {"B0", "B1", "B2"}:
         raise ValueError(phase)
+    model = unwrap(model)
     for p in model.parameters():
         p.requires_grad = True
     model.set_detach(phase != "B2")
@@ -41,6 +44,7 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
     model.embed.weight.requires_grad = False
     if phase == "B0":
         for blk in model.decoder:
+            blk = unwrap(blk)
             for p in blk.self_attn.parameters():
                 p.requires_grad = False
             for p in blk.mlp.parameters():
