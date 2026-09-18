@@ -1,0 +1,118 @@
+"""MiniCPM dense → CAT-YOKO MoE (copy-and-scale, not exact identity)."""
+
+from __future__ import annotations
+
+import math
+from typing import Any, Mapping
+
+import torch
+from torch import nn
+
+from cat_yoko.config import CATYokoConfig
+from cat_yoko.model import CATYokoForCausalLM
+
+
+def _scale(n_experts: int, n_groups: int = 1, top_k: int = 1) -> float:
+    return (n_experts * n_groups**2 / max(top_k, 1)) ** (1.0 / 3.0)
+
+
+def _copy_linear(dst: nn.Linear, src: torch.Tensor) -> None:
+    rows = min(dst.weight.shape[0], src.shape[0])
+    cols = min(dst.weight.shape[1], src.shape[1])
+    dst.weight.data.zero_()
+    dst.weight.data[:rows, :cols] = src[:rows, :cols]
+
+
+def upcycle_from_minicpm(
+    model: CATYokoForCausalLM,
+    src: Mapping[str, Any],
+    cfg: CATYokoConfig | None = None,
+) -> CATYokoForCausalLM:
+    """Map MiniCPM-style keys `layers.{i}.*` / `embed_tokens` into CAT-YOKO.
+
+    Dense FFN 5760 does not divide moe 2048: each expert gets the leading
+    ``moe_intermediate_size`` rows, then scaled. Phase B recovers the rest.
+    """
+    cfg = cfg or model.cfg
+    if "embed_tokens.weight" in src:
+        model.embed.weight.data.copy_(src["embed_tokens.weight"])
+    elif "model.embed_tokens.weight" in src:
+        model.embed.weight.data.copy_(src["model.embed_tokens.weight"])
+
+    def layer_prefix(i: int) -> str:
+        for p in (f"model.layers.{i}.", f"layers.{i}."):
+            if any(k.startswith(p) for k in src):
+                return p
+        return f"model.layers.{i}."
+
+    def copy_attn(dst_attn: nn.Module, prefix: str) -> None:
+        mapping = {
+            "q_proj": "self_attn.q_proj.weight",
+            "k_proj": "self_attn.k_proj.weight",
+            "v_proj": "self_attn.v_proj.weight",
+            "o_proj": "self_attn.o_proj.weight",
+        }
+        for dst_name, src_name in mapping.items():
+            key = prefix + src_name
+            if key in src:
+                getattr(dst_attn, dst_name).weight.data.copy_(src[key])
+
+    def copy_ffn_to_moe(moe: nn.Module, prefix: str, top_k: int) -> None:
+        gkey, ukey, dkey = (
+            prefix + "mlp.gate_proj.weight",
+            prefix + "mlp.up_proj.weight",
+            prefix + "mlp.down_proj.weight",
+        )
+        if gkey not in src:
+            return
+        scale = _scale(moe.n_routed + moe.n_shared, top_k=top_k)
+        for expert in list(moe.shared) + list(moe.experts):
+            _copy_linear(expert.gate_proj, src[gkey] / scale)
+            _copy_linear(expert.up_proj, src[ukey] / scale)
+            # down is [hidden, intermediate]
+            rows = min(expert.down_proj.weight.shape[0], src[dkey].shape[0])
+            cols = min(expert.down_proj.weight.shape[1], src[dkey].shape[1])
+            expert.down_proj.weight.data.zero_()
+            expert.down_proj.weight.data[:rows, :cols] = src[dkey][:rows, :cols] / scale
+
+    n_enc = cfg.encoder_layers
+    for i, blk in enumerate(model.encoder):
+        p = layer_prefix(i)
+        copy_attn(blk.attn, p)
+        if p + "input_layernorm.weight" in src:
+            blk.ln1.weight.data.copy_(src[p + "input_layernorm.weight"])
+        if p + "post_attention_layernorm.weight" in src:
+            blk.ln2.weight.data.copy_(src[p + "post_attention_layernorm.weight"])
+        copy_ffn_to_moe(blk.mlp, p, cfg.top_k_enc)
+
+    for j, blk in enumerate(model.decoder):
+        p = layer_prefix(n_enc + j)
+        copy_attn(blk.self_attn, p)
+        if p + "input_layernorm.weight" in src:
+            blk.ln1.weight.data.copy_(src[p + "input_layernorm.weight"])
+        if p + "post_attention_layernorm.weight" in src:
+            blk.ln2.weight.data.copy_(src[p + "post_attention_layernorm.weight"])
+        copy_ffn_to_moe(blk.mlp, p, cfg.top_k_dec)
+    return model
+
+
+def dummy_minicpm_state(cfg: CATYokoConfig) -> dict[str, torch.Tensor]:
+    """Tiny dense teacher weights for tests (same hidden/vocab as cfg)."""
+    d, v = cfg.hidden_size, cfg.vocab_size
+    mid = cfg.dense_intermediate_size
+    n = cfg.encoder_layers + cfg.decoder_layers
+    sd: dict[str, torch.Tensor] = {
+        "model.embed_tokens.weight": torch.randn(v, d) * 0.02,
+    }
+    for i in range(n):
+        p = f"model.layers.{i}."
+        sd[p + "self_attn.q_proj.weight"] = torch.randn(d, d) * 0.02
+        sd[p + "self_attn.k_proj.weight"] = torch.randn(d, d) * 0.02
+        sd[p + "self_attn.v_proj.weight"] = torch.randn(d, d) * 0.02
+        sd[p + "self_attn.o_proj.weight"] = torch.randn(d, d) * 0.02
+        sd[p + "mlp.gate_proj.weight"] = torch.randn(mid, d) * 0.02
+        sd[p + "mlp.up_proj.weight"] = torch.randn(mid, d) * 0.02
+        sd[p + "mlp.down_proj.weight"] = torch.randn(d, mid) * 0.02
+        sd[p + "input_layernorm.weight"] = torch.ones(d)
+        sd[p + "post_attention_layernorm.weight"] = torch.ones(d)
+    return sd

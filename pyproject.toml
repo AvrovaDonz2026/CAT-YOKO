@@ -1,0 +1,23 @@
+[project]
+name = "cat-yoko"
+version = "0.1.0"
+description = "CAT-YOKO-12B: YOCO causal encoder-decoder MoE upcycled from MiniCPM-2B"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+dependencies = ["torch>=2.4"]
+
+[project.optional-dependencies]
+megatron = ["megatron-core>=0.12"]
+
+[project.scripts]
+cat-yoko-train = "cat_yoko.train:main"
+
+[project.urls]
+Megatron-LM = "https://github.com/NVIDIA/Megatron-LM"
+
+[tool.setuptools.packages.find]
+include = ["cat_yoko*"]
+
+[tool.setuptools.package-data]
+cat_yoko = ["py.typed"]

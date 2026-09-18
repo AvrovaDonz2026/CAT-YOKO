@@ -7,8 +7,9 @@
 >
 > ⚠️ **关键**：总参数主要影响**显存/存储**；**训练算力 ∝ 激活参数 × tokens**。要真正降训练成本必须降**激活**（选更省算力档），而不是只降总参。
 >
-> 本文是可执行的工程训练计划，包含：架构定义、参数预算、分阶段训练配方、数据、优化器、
-> 基础设施、评测与风险控制。文中所有具体数字为**推荐初值**，需在小规模标定后再冻结。
+> 本文是可执行的工程训练计划。**实现默认已敲死**在 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)
+> / `cat_yoko.config.CATYokoConfig.middle_12b()`：因果 16/24、C1 全 MoE、C1+FP8、Phase B 滑窗 + 门控
+> cross-attn、AdamW；**KDA / mHC / MTP / Muon / 首层 dense / M2 不是发布默认**。本文其余档位与消融是敏感性，不是训练代码的开关默认。
 
 ---
 
@@ -24,10 +25,9 @@
 | `大滑窗注意力 8k` | 每个 CSA/HCA 层保留的**未压缩滑窗分支** `n_win = 8192` | DeepSeek-V4 默认 `n_win=128`，8K 是明显放大，成本更高但局部保真更好 |
 | `CSA HCA` | **Compressed Sparse Attention** + **Heavily Compressed Attention**（DeepSeek-V4 的两种压缩注意力，层间交错） | 见 §2 |
 
-> ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；**总参数 12B**（从 24B 下调）；激活默认 **≈2.3B-in / ≈4.5B-out**（取 1.6/3.1 与 3.0/6.2 的中间档）。更省算力档与近-dense 档见 §3。
-> **Phase B 发布配方按 C1+FP8 定稿**：解冻课程 C1（两栈先 MoE，B0/B1 冻 Encoder，B2 短联合）× 混合 FP8（B1/B2 MoE GEMM + 冻结 Encoder 前向；B0 student / L0 / indexer / 白名单高精度）。墙钟 **761 H100-h（联合 bf16 的 56%）**。联合 bf16 1,354 只作 100% 对照；C1 bf16 1,090 只作操作数账（[`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) / [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md)）。
-> 仓库名 **CAT-YOKO** 中的 "YOKO" 即对应 **YOCO**。若你希望的 encoder 是**双向**（非因果）编码器而非 YOCO 的因果 self-decoder，
-> 请告知——这会影响能否用 MiniCPM（因果）权重直接热启，以及能否做 prefill early-exit。
+> ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；**总参数 12B**（从 24B 下调）；激活默认 **≈2.3B-in / ≈4.5B-out**。
+> **发布配方已敲死**（[`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md) / `cat_yoko.config`）：因果 16/24、C1 全 MoE、C1+FP8 墙钟 761 H100-h、Phase B 滑窗+门控 cross-attn、M2/KDA/mHC/MTP/Muon 关。
+> Encoder **不是**双向。仓库名 **CAT-YOKO** 中的 "YOKO" 即对应 **YOCO**。
 
 > ⚠️ **重要现实提示（务必先读）**：完整复刻这一架构并从 32T 级别数据预训练是**前沿实验室量级**的工程。
 > 以 MiniCPM-2B 为底座做**上采样（upcycling）+ 继续训练**能把成本降到几百 B token 量级，
@@ -314,7 +314,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
    - 把 dense FFN 的中间维切成 G 段、每段复制成多个专家（**virtual-group 初始化**：保证转换瞬间 top-k 恰好选到每个分片的一份副本，等价于原 dense 函数）。
    - **权重缩放**：SwiGLU 专家投影按 `(E·G²/T)^(1/3)` 量级缩放（论文验证约降 1.5% loss）。
    - **路由**：`softmax-then-topK`（优于 topK-then-softmax）；亲和度打分用 **Sqrt(Softplus(·))**（V4 做法）。
-   - 每栈**首层保留 dense**（DeepSeekMoE 惯例：首层负载收敛慢）。规格表按全 MoE 记账为 12.05B；首层 dense 后总参约 11.62B，把 Encoder routed **17→19**（top-k 不变）即可补回 12.04B，激活仍为 ≈2.23B / ≈4.40B。
+   - 每栈**默认全 MoE**（C1：token 0 两栈都是 MoE）。DeepSeek 式「首层 dense」不进发布配方；需要时用 `--first-dense` 敏感性，再把 Enc routed 17→19 补占位账本。
    - **μP**：残差乘子继续用 `scale_depth/√40`，不要按 16/24 重算（见理论验证 §9）。
    - **Hash-MoE bootstrap**：Decoder 最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。Encoder 在 B0/B1 已冻，Encoder 上的哈希路由多余，放到 B2 解冻时再用。
 2. **注意力改造**：继承 `q/k/v/o`（或 SVD 到 MLA 低秩）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。
@@ -391,7 +391,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 | 项 | 推荐 |
 | --- | --- |
-| 优化器 | **Muon**（所有 2D 隐层权重矩阵）+ **AdamW**（embedding、LayerNorm/RMSNorm、router、bias、indexer 打分头） |
+| 优化器 | **发布默认 AdamW**（\(\beta=(0.9,0.95)\)，wd=0.1）。Muon 开关留着、**默认关**（见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)） |
 | Muon | 对动量做 Newton-Schulz 正交化；配 **hybrid ZeRO** 实现（V4 做法）；lr 需单独调（通常比 Adam 大） |
 | LR 调度 | **WSD**：warmup(0.5–1B) → stable → decay；继续训练峰值取底座预训练峰值的 0.3–0.5× |
 | Batch | 全局 batch 随阶段增大（如 4M→16M token/step）；长上下文阶段用 seq packing |
@@ -430,8 +430,8 @@ BBH（推理），IFEval（指令遵循）。
 
 | 组件 | 建议 |
 | --- | --- |
-| 训练框架 | **Megatron-Core**（内置 MoE + **upcycling** + EP/TP/PP/DP）或 DeepSpeed-Megatron |
-| 并行 | Expert Parallel（EP）+ Tensor/Pipeline/Data Parallel；长上下文用 **Context/Sequence Parallel**（V4 用两阶段 CP 管理压缩注意力） |
+| 训练框架 | 本仓库参考实现是 **PyTorch**（`cat_yoko.train --backend torch`）。规模化走 **[Megatron-LM](https://github.com/NVIDIA/Megatron-LM)** / Megatron-Core（MoE + EP/TP/PP/CP + upcycling）。映射：`cat_yoko.megatron.mapping.megatron_blueprint`；`--dump-megatron` 打 JSON。YOCO **不是** `GPTModel`。 |
+| 并行 | `ParallelPlan`：TP/PP/EP/CP/SP。12B：TP ∈ {1,2,3,4,6,9,12,18,36}；**EP ∈ {1,17}**（17 质数）。PP>1 时 encoder|decoder 切在第 16 层（`pipeline_split_rank`）。长上下文用 Context/Sequence Parallel。 |
 | 注意力 kernel | **FlashMLA** 稀疏 prefill/decode kernel（支撑 DSA，FP8 KV）；**NSA** 的 Triton kernel 可参考压缩+选择+滑窗三分支实现 |
 | MoE kernel | 融合的 MoE dispatch/combine kernel（计算/通信/访存 overlap） |
 | 精度 | bf16 master + 定稿 FP8 GEMM（§6 / [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md)）；确定性/可复现 kernel（可选） |
@@ -472,11 +472,15 @@ BBH（推理），IFEval（指令遵循）。
 
 ## 11. 立即可做的下一步
 
-1. 冻结 §0 的假设（尤其 encoder 是否因果、Encoder/Decoder 层数拆分、`n_win=8K`、是否上 MLA 与 mHC）。
-2. 跑 `scripts/param_budget.py --verify` 与 `scripts/arch_verify.py --verify`（中间档账本 + 解冻课程 + FP8 + 架构因果/切分已通过）。用**真实注意力实现**替换占位行后，微调 `Nr_e/Nr_d/moe_intermediate_size` 把总量精确对齐到 **12.05B**、enc 激活 **2.3B**、dec 激活 **4.5B**。预算见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)，架构见 [`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)，FP8 见 [`docs/FP8_THEORY.md`](FP8_THEORY.md)。
-3. 搭一个 **tiny 配置**（YOCO 骨架 + HF `DeepseekV4` 式 CSA/HCA，例如 `hidden 256, enc 2L / dec 2L, sliding_window=8, m=4, m'=8, index_topk=2`）验证 encoder→全局 cache→cross-decoder 与 CSA/HCA mask 端到端正确性（mask 不泄漏未来、自身块不走压缩支路）。
-4. 落地 Phase A 的**栈拆分 + cross-attn 注入 + 上采样脚本**（Megatron `upcycling_utils`）+ 注意力权重迁移脚本。
-5. 起一个 **50–150B token** 的 Phase B 恢复训练小实验，验证 cross-attn 渐开 + 蒸馏 + WSD 恢复曲线。
+发布规格已敲死，见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)。下一步是跑仓库里的 **12B 训练代码**（tiny 单测 → meta 12B 图 → `--dump-megatron` → 有卡再 FSDP / Megatron）。
+
+1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_megatron`
+2. `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3`
+3. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
+4. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
+5. 有 MiniCPM 权重与 GPU 时：`--config 12b --phase B0 --upcycle <minicpm>` 按 C1+FP8 开训。规模化再 `--backend megatron`（需安装 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 并填 `model_provider`）。
+
+不要再改 16/24、C1、C1+FP8、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
 
 ---
 
