@@ -296,6 +296,10 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
 ### Phase G — RL
 
 - **GRPO**（DeepSeek 系）为主，reward 覆盖数学可验证、代码可执行、指令遵循；可加 DPO 作为轻量偏好对齐。
+- **长上下文可用度 RL（关键、且省算力）**：用**可验证的长上下文任务**做 RLVR，直接把"真读、真用长输入"奖励出来——比再喂海量长 token 便宜得多，专治 lost-in-the-middle / 长指令不遵循 / 多跳漏检：
+  - **奖励信号**：长文 QA（RULER 式、needle 变体、多跳 HotpotQA 扩展）用 exact-match/F1 可验证；**grounding/引用奖励**（答案必须引用正确 passage/行，契合 §14 PDSA 证据选择）；长指令遵循（约束可检查）。
+  - **课程**：在 128K→256K 逐级做 RL，把关键信息刻意放到**中段/长距**，强化中段召回（与 §12 的 IN2/FILM 训练互补）。
+  - **省算力**：长 trace RL 每 rollout 成本高 → 用 **PS-PPO（prefix-sampling PPO）** 只回传采样前缀、无偏截断，显著降长序列 RL 的算力/显存；或对超长上下文用 PDSA 选证据后再 RL（缩短有效 rollout 长度）。
 - RL 阶段注意 MoE 路由与稀疏注意力在长 rollout 下的稳定性。
 
 ---
@@ -561,6 +565,7 @@ DeepSeek/Kimi 的 1M 是 32T 级数据 + 大算力喂出来的"充分利用"。�
 - **分阶段**：先稳 **128K–256K**（便宜、够用），再单独冲 **1M capability** 并用 needle/RULER 验证；别一上来就 1M。
 - **PDSA 路线是"有效 1M"的省钱替代**：bounded editable memory + 校准稀疏回退 + 检索（§14），**不必训练原生 1M 注意力**就能拿到长程召回——你自己的工作，且 §5 实测显示在 8.2k 上 bounded 选择已优于读全文。对极限长上下文，这可能比硬训 1M 注意力更划算。
 - 里程碑上把 1M 归入 **M4**（长上下文），作为 capability 目标而非质量目标。
+- **后期用 RL 提升"可用度"**：预训练/扩展只解决"能吞下 128K–256K"，**能不能真用好**很大程度靠后期 **长上下文 RLVR**（见 §4 Phase G）——用可验证长文任务 + grounding 奖励把中段召回/长指令遵循直接优化上来，且用 PS-PPO/PDSA 选证据把长 rollout 成本压下来。这是小预算下把"可用度"再抬一档的关键杠杆。
 
 > **定位（重要，避免误解）**：本项目**不是**用 12B 去对标 2T 级前沿模型的质量——那不可能。
 > **主交付目标是"前 128K–256K 长上下文可用"**（在 12B 规模上，这理论与工程都有戏）；
@@ -588,6 +593,7 @@ DeepSeek/Kimi 的 1M 是 32T 级数据 + 大算力喂出来的"充分利用"。�
 - **OLMo 2 / Gemma 2**（QK-Norm、双 RMSNorm、logit soft-capping、z-loss 等稳定性技巧）：arXiv `2501.00656` / `2408.00118`。
 - **EAGLE / 投机解码**（复用 MTP 头做自投机加速）：arXiv `2401.15077`。
 - **YaRN**（RoPE 长上下文外推缩放）：arXiv `2309.00071`。
+- **PS-PPO — Prefix-Sampling PPO**（critic-free RLHF 只回传采样前缀、无偏截断，降长 trace RL 算力/显存）：arXiv `2606.29758`。
 - **PDSA / Memory-Managed Long-Context Attention**（有界可编辑记忆 + 硬生命周期 overwrite/protection/eviction + query-independent 写入器 + query-aware 读取 + 校准稀疏回退；实测"无写入时信号"边界、bounded 选择在长文优于读全文）：Zou & Donz，arXiv `2606.28876`（本团队工作；其"下一步"为可训练生命周期，本计划 §14 承接）。
 - **MSA — Memory Sparse Attention**（静态文档稀疏记忆，PDSA 的最近邻）：arXiv `2603.23516`。
 - **Gated DeltaNet / Gated DeltaNet-2**（KDA 的前身；解耦擦除与写入）：arXiv `2412.06464` / `2605.22791`。
