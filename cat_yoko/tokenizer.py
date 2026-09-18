@@ -1,12 +1,11 @@
-"""Tokenizers for Phase B. Production: MiniCPM-2B; tests: byte-hash dummy."""
+"""Tokenizers for Phase B. Production: MiniCPM5-2B; tests: byte-hash dummy."""
 
 from __future__ import annotations
 
 from typing import Protocol
 
 from cat_yoko.config import CATYokoConfig
-
-MINICPM_TOKENIZER = "openbmb/MiniCPM-2B-sft-bf16"
+from cat_yoko.recipe import MINICPM_TOKENIZER
 
 
 class Tokenizer(Protocol):

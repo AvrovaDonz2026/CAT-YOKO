@@ -19,8 +19,8 @@ from typing import Iterable, Sequence
 
 # Middle-tier skeleton (must match TRAINING_PLAN §1.2 / §2.3).
 LE = 16
-LD = 24
-L0 = 40
+LD = 26
+L0 = 42
 N_WIN = 8192
 M_CSA = 4
 M_HCA = 128
@@ -196,7 +196,7 @@ def claims_architecture() -> list[Claim]:
     n_slide = types.count("sliding")
     rf = window_only_receptive_field(LE, N_WIN)
     return [
-        Claim("MiniCPM depth splits 16+24=40", LE + LD == L0, f"{LE}+{LD}", str(L0)),
+        Claim("MiniCPM5 depth splits 16+26=42", LE + LD == L0, f"{LE}+{LD}", str(L0)),
         Claim(
             "n_win covers CSA own-block (n_win≥m)",
             N_WIN >= M_CSA,

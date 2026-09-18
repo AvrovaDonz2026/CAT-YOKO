@@ -48,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         nargs="?",
         const=MINICPM_HF,
         default=None,
-        help="MiniCPM Hub id or HF dir (default openbmb/MiniCPM-2B-sft-bf16)",
+        help="MiniCPM Hub id or HF dir (default openbmb/MiniCPM5-2B-Base)",
     )
     p.add_argument("--dummy-upcycle", action="store_true")
     p.add_argument("--teacher", type=Path, default=None, help="pickled nn.Module teacher")

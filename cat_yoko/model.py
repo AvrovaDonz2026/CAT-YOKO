@@ -26,8 +26,8 @@ class CATYokoForCausalLM(nn.Module):
             )
             for i in range(cfg.encoder_layers)
         )
-        self.cache_k = nn.Linear(d, d, bias=False)
-        self.cache_v = nn.Linear(d, d, bias=False)
+        self.cache_k = nn.Linear(d, cfg.kv_dim, bias=False)
+        self.cache_v = nn.Linear(d, cfg.kv_dim, bias=False)
         self.decoder = nn.ModuleList(
             DecoderBlock(
                 cfg,
@@ -38,7 +38,8 @@ class CATYokoForCausalLM(nn.Module):
         )
         self.norm = RMSNorm(d, cfg.rms_eps)
         self.lm_head = nn.Linear(d, v, bias=False)
-        self.lm_head.weight = self.embed.weight
+        if cfg.tie_embeddings:
+            self.lm_head.weight = self.embed.weight
         self.scale_emb = cfg.scale_emb
         self.logit_scale = cfg.logit_scale
         self.detach_cache = True

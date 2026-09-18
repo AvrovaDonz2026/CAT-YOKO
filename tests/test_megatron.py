@@ -25,10 +25,10 @@ from cat_yoko.train import main
 class ParallelPlanTests(unittest.TestCase):
     def test_12b_legal_tp_and_prime_ep(self) -> None:
         cfg = CATYokoConfig.middle_12b()
-        self.assertEqual(legal_tensor_parallel(cfg.num_heads, cfg.hidden_size), (1, 2, 3, 4, 6, 9, 12, 18, 36))
-        self.assertEqual(legal_expert_parallel(cfg.n_routed_enc), (1, 17))
+        self.assertEqual(legal_tensor_parallel(cfg.num_heads, cfg.hidden_size), (1, 2, 4, 8, 16))
+        self.assertEqual(legal_expert_parallel(cfg.n_routed_enc), (1, 2, 4, 5, 10, 20))
         validate_parallel(cfg, ParallelPlan())
-        validate_parallel(cfg, ParallelPlan(tensor_parallel=4, expert_parallel=17))
+        validate_parallel(cfg, ParallelPlan(tensor_parallel=4, expert_parallel=10))
         with self.assertRaises(ValueError):
             validate_parallel(cfg, ParallelPlan(expert_parallel=8))
         with self.assertRaises(ValueError):
@@ -49,12 +49,17 @@ class MappingTests(unittest.TestCase):
     def test_two_stacks_differ_on_topk_and_depth(self) -> None:
         enc, dec = self.bp["encoder"], self.bp["decoder"]
         self.assertEqual(enc["num_layers"], 16)
-        self.assertEqual(dec["num_layers"], 24)
-        self.assertEqual(enc["moe_router_topk"], 6)
-        self.assertEqual(dec["moe_router_topk"], 8)
-        self.assertEqual(enc["num_moe_experts"], 17)
+        self.assertEqual(dec["num_layers"], 26)
+        self.assertEqual(enc["moe_router_topk"], 7)
+        self.assertEqual(dec["moe_router_topk"], 10)
+        self.assertEqual(enc["num_moe_experts"], 20)
+        self.assertEqual(dec["num_moe_experts"], 20)
+        self.assertEqual(enc["num_query_groups"], 2)
+        self.assertEqual(dec["num_query_groups"], 2)
         self.assertEqual(dec["moe_ffn_hidden_size"], 2048)
         self.assertEqual(enc["moe_shared_expert_intermediate_size"], 2048)
+        self.assertFalse(self.bp["yoco"]["tied_embeddings"])
+        self.assertTrue(self.bp["training"]["untie_embeddings_and_output_weights"])
 
     def test_router_matches_frozen_spec(self) -> None:
         enc = self.bp["encoder"]

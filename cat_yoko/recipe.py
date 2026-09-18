@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-MINICPM_HF = "openbmb/MiniCPM-2B-sft-bf16"
-MINICPM_TOKENIZER = "openbmb/MiniCPM-2B-sft-bf16"
+# Apache-2.0 MiniCPM5. Base = upcycle/teacher weights; instruct = tokenizer.
+MINICPM_HF = "openbmb/MiniCPM5-2B-Base"
+MINICPM_TOKENIZER = "openbmb/MiniCPM5-2B"
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,7 @@ PHASE_B_WITH_CODE = (
         "bigcode/starcoderdata",
         0.10,
         text_fields=("content", "text"),
-        notes="not OpenBMB; MiniCPM-2B / Ultra-FineWeb eval mix used 10% code",
+        notes="not OpenBMB; MiniCPM / Ultra-FineWeb eval mix used 10% code",
     ),
 )
 

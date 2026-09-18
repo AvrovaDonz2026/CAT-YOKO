@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterator
 
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.recipe import Source, mix_named
+from cat_yoko.recipe import MINICPM_TOKENIZER, Source, mix_named
 from cat_yoko.tokenizer import HashTokenizer, Tokenizer, load_tokenizer
 
 
@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", choices=["12b", "tiny"], default="12b")
     p.add_argument(
         "--tokenizer",
-        default="openbmb/MiniCPM-2B-sft-bf16",
+        default=MINICPM_TOKENIZER,
         help="HF id, or 'dummy' for tests",
     )
     p.add_argument("--seed", type=int, default=0)
@@ -189,9 +189,9 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
     )
     print(json.dumps(meta, indent=2))
-    if args.config == "12b" and not isinstance(tok, HashTokenizer) and tok.vocab_size not in {cfg.vocab_size, 122753}:
+    if args.config == "12b" and not isinstance(tok, HashTokenizer) and tok.vocab_size not in {cfg.vocab_size, 130560}:
         print(
-            f"warning: tokenizer vocab {tok.vocab_size} != MiniCPM-2B {cfg.vocab_size}",
+            f"warning: tokenizer vocab {tok.vocab_size} != MiniCPM5-2B {cfg.vocab_size}",
             file=sys.stderr,
         )
     return 0

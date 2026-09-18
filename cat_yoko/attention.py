@@ -1,4 +1,8 @@
-"""Sliding-window self-attn and gated cross-attn (Phase B backend)."""
+"""Sliding-window self-attn and gated cross-attn (Phase B backend).
+
+MiniCPM5-2B is Llama GQA (16 Q / 2 KV). Encoder/decoder self-attn and the
+YOCO cache therefore use ``kv_dim = n_kv * head_dim``, not full MHA.
+"""
 
 from __future__ import annotations
 
@@ -25,6 +29,14 @@ def _sdpa(
     else:
         out = F.scaled_dot_product_attention(qf, kf, vf, attn_mask=bias.float())
     return out.to(q.dtype)
+
+
+def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """``[B, n_kv, S, hd]`` → ``[B, n_heads, S, hd]``."""
+    if n_rep == 1:
+        return x
+    b, n_kv, s, hd = x.shape
+    return x[:, :, None, :, :].expand(b, n_kv, n_rep, s, hd).reshape(b, n_kv * n_rep, s, hd)
 
 
 def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) -> bool:
@@ -68,12 +80,16 @@ class WindowAttention(nn.Module):
     def __init__(self, cfg: CATYokoConfig) -> None:
         super().__init__()
         self.n_heads = cfg.num_heads
+        self.n_kv = cfg.num_kv_heads
         self.head_dim = cfg.head_dim
         self.n_win = cfg.n_win
+        if self.n_heads % self.n_kv != 0:
+            raise ValueError(f"num_heads={self.n_heads} must divide by num_kv_heads={self.n_kv}")
         d = cfg.hidden_size
+        kv = cfg.kv_dim
         self.q_proj = nn.Linear(d, d, bias=False)
-        self.k_proj = nn.Linear(d, d, bias=False)
-        self.v_proj = nn.Linear(d, d, bias=False)
+        self.k_proj = nn.Linear(d, kv, bias=False)
+        self.v_proj = nn.Linear(d, kv, bias=False)
         self.o_proj = nn.Linear(d, d, bias=False)
         self.q_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.k_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
@@ -81,15 +97,17 @@ class WindowAttention(nn.Module):
 
     def forward(self, x: torch.Tensor, doc_ids: torch.Tensor | None = None) -> torch.Tensor:
         b, s, d = x.shape
-        h, hd = self.n_heads, self.head_dim
+        h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
-        k = self.k_proj(x).view(b, s, h, hd).transpose(1, 2)
-        v = self.v_proj(x).view(b, s, h, hd).transpose(1, 2)
+        k = self.k_proj(x).view(b, s, n_kv, hd).transpose(1, 2)
+        v = self.v_proj(x).view(b, s, n_kv, hd).transpose(1, 2)
         if self.q_norm is not None:
             q = self.q_norm(q)
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
+        k = _repeat_kv(k, h // n_kv)
+        v = _repeat_kv(v, h // n_kv)
         if _needs_explicit_mask(s, self.n_win, doc_ids):
             bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
             out = _sdpa(q, k, v, bias)
@@ -99,11 +117,12 @@ class WindowAttention(nn.Module):
 
 
 class CrossAttention(nn.Module):
-    """Decoder queries attend causally to the YOCO global cache."""
+    """Decoder queries attend causally to the YOCO global cache (GQA K/V)."""
 
     def __init__(self, cfg: CATYokoConfig) -> None:
         super().__init__()
         self.n_heads = cfg.num_heads
+        self.n_kv = cfg.num_kv_heads
         self.head_dim = cfg.head_dim
         d = cfg.hidden_size
         self.q_proj = nn.Linear(d, d, bias=False)
@@ -120,15 +139,17 @@ class CrossAttention(nn.Module):
         doc_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
         b, s, d = x.shape
-        h, hd = self.n_heads, self.head_dim
+        h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
-        k = k.view(b, s, h, hd).transpose(1, 2)
-        v = v.view(b, s, h, hd).transpose(1, 2)
+        k = k.view(b, s, n_kv, hd).transpose(1, 2)
+        v = v.view(b, s, n_kv, hd).transpose(1, 2)
         if self.q_norm is not None:
             q = self.q_norm(q)
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
+        k = _repeat_kv(k, h // n_kv)
+        v = _repeat_kv(v, h // n_kv)
         if _needs_explicit_mask(s, s, doc_ids):
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
             out = _sdpa(q, k, v, bias)

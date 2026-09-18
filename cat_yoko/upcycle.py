@@ -64,14 +64,20 @@ def upcycle_from_minicpm(
 ) -> CATYokoForCausalLM:
     """Map MiniCPM-style keys `layers.{i}.*` / `embed_tokens` into CAT-YOKO.
 
-    Dense FFN 5760 does not divide moe 2048: each expert gets the leading
-    ``moe_intermediate_size`` rows, then scaled. Phase B recovers the rest.
+    MiniCPM5 dense SwiGLU 6144 / moe 2048 = 3 (exact groups). Each expert still
+    takes the leading ``moe_intermediate_size`` rows, then scaled. Phase B
+    recovers the rest. GQA K/V are ``(kv_dim, d)``.
     """
     cfg = cfg or model.cfg
     if "embed_tokens.weight" in src:
         model.embed.weight.data.copy_(src["embed_tokens.weight"])
     elif "model.embed_tokens.weight" in src:
         model.embed.weight.data.copy_(src["model.embed_tokens.weight"])
+    if not cfg.tie_embeddings:
+        for key in ("lm_head.weight", "model.lm_head.weight"):
+            if key in src:
+                model.lm_head.weight.data.copy_(src[key])
+                break
 
     def layer_prefix(i: int) -> str:
         for p in (f"model.layers.{i}.", f"layers.{i}."):
@@ -133,16 +139,18 @@ def upcycle_from_minicpm(
 def dummy_minicpm_state(cfg: CATYokoConfig) -> dict[str, torch.Tensor]:
     """Tiny dense teacher weights for tests (same hidden/vocab as cfg)."""
     d, v = cfg.hidden_size, cfg.vocab_size
+    kv = cfg.kv_dim
     mid = cfg.dense_intermediate_size
     n = cfg.encoder_layers + cfg.decoder_layers
     sd: dict[str, torch.Tensor] = {
         "model.embed_tokens.weight": torch.randn(v, d) * 0.02,
+        "lm_head.weight": torch.randn(v, d) * 0.02,
     }
     for i in range(n):
         p = f"model.layers.{i}."
         sd[p + "self_attn.q_proj.weight"] = torch.randn(d, d) * 0.02
-        sd[p + "self_attn.k_proj.weight"] = torch.randn(d, d) * 0.02
-        sd[p + "self_attn.v_proj.weight"] = torch.randn(d, d) * 0.02
+        sd[p + "self_attn.k_proj.weight"] = torch.randn(kv, d) * 0.02
+        sd[p + "self_attn.v_proj.weight"] = torch.randn(kv, d) * 0.02
         sd[p + "self_attn.o_proj.weight"] = torch.randn(d, d) * 0.02
         sd[p + "mlp.gate_proj.weight"] = torch.randn(mid, d) * 0.02
         sd[p + "mlp.up_proj.weight"] = torch.randn(mid, d) * 0.02

@@ -14,7 +14,7 @@ from cat_yoko.rope import RMSNorm
 class EncoderBlock(nn.Module):
     def __init__(self, cfg: CATYokoConfig, *, kind: str = "sliding", dense: bool = False) -> None:
         super().__init__()
-        self.kind = kind  # sliding | csa | hca; Phase B compute is still window MHA
+        self.kind = kind  # sliding | csa | hca; Phase B compute is still window GQA
         ns, nr, tk = cfg.expert_count("encoder")
         del ns
         self.ln1 = RMSNorm(cfg.hidden_size, cfg.rms_eps)

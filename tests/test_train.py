@@ -22,18 +22,32 @@ from cat_yoko.upcycle import dummy_minicpm_state, upcycle_from_minicpm
 class ConfigFrozenTests(unittest.TestCase):
     def test_12b_matches_frozen_spec(self) -> None:
         c = CATYokoConfig.middle_12b()
-        self.assertEqual(c.hidden_size, 2304)
-        self.assertEqual((c.encoder_layers, c.decoder_layers), (16, 24))
-        self.assertEqual((c.n_routed_enc, c.n_routed_dec), (17, 17))
-        self.assertEqual((c.top_k_enc, c.top_k_dec), (6, 8))
+        self.assertEqual(c.hidden_size, 2048)
+        self.assertEqual((c.encoder_layers, c.decoder_layers), (16, 26))
+        self.assertEqual((c.n_routed_enc, c.n_routed_dec), (20, 20))
+        self.assertEqual((c.top_k_enc, c.top_k_dec), (7, 10))
         self.assertFalse(c.first_dense)
         self.assertEqual(c.n_win, 8192)
         self.assertEqual(c.attention_backend, "window")
         self.assertFalse(c.use_muon)
-        self.assertEqual(c.residual_scale, c.scale_depth / (40**0.5))
-        self.assertEqual(c.logit_scale, 9)
+        self.assertFalse(c.use_mup)
+        self.assertEqual(c.residual_scale, 1)
+        self.assertEqual(c.logit_scale, 1)
+        self.assertEqual(c.num_kv_heads, 2)
+        self.assertFalse(c.tie_embeddings)
+        self.assertEqual(c.vocab_size, 130560)
         kinds = [encoder_layer_kind(i) for i in range(16)]
         self.assertEqual((kinds.count("sliding"), kinds.count("csa"), kinds.count("hca")), (2, 7, 7))
+
+    def test_gqa_projections_use_kv_dim(self) -> None:
+        c = CATYokoConfig.middle_12b()
+        model = build_model(c, "meta")
+        self.assertEqual(c.kv_dim, 256)
+        self.assertEqual(model.encoder[0].attn.k_proj.out_features, c.kv_dim)
+        self.assertEqual(model.encoder[0].attn.v_proj.out_features, c.kv_dim)
+        self.assertEqual(model.cache_k.out_features, c.kv_dim)
+        self.assertEqual(model.cache_v.out_features, c.kv_dim)
+        self.assertEqual(model.decoder[0].self_attn.k_proj.out_features, c.kv_dim)
 
 
 class TinyTrainTests(unittest.TestCase):
@@ -54,6 +68,7 @@ class TinyTrainTests(unittest.TestCase):
             self.assertFalse(p.requires_grad)
             self.assertIsNone(p.grad)
         self.assertFalse(model.embed.weight.requires_grad)
+        self.assertFalse(model.lm_head.weight.requires_grad)
         self.assertIsNotNone(model.cache_k.weight.grad)
         names = trainable_names(model)
         self.assertTrue(any("cross_attn" in n for n in names))
@@ -64,6 +79,7 @@ class TinyTrainTests(unittest.TestCase):
         apply_freeze(model, "B1")
         self.assertTrue(model.detach_cache)
         self.assertFalse(model.embed.weight.requires_grad)
+        self.assertTrue(model.lm_head.weight.requires_grad)
         self.assertFalse(next(model.encoder.parameters()).requires_grad)
         self.assertTrue(next(model.decoder[0].self_attn.parameters()).requires_grad)
         self.assertTrue(next(model.decoder[0].mlp.parameters()).requires_grad)
@@ -208,6 +224,7 @@ class TinyTrainTests(unittest.TestCase):
         src = dummy_minicpm_state(self.cfg)
         upcycle_from_minicpm(model, src, self.cfg)
         self.assertTrue(torch.equal(model.embed.weight, src["model.embed_tokens.weight"]))
+        self.assertTrue(torch.equal(model.lm_head.weight, src["lm_head.weight"]))
 
     def test_causal_mask_no_future(self) -> None:
         from cat_yoko.attention import _window_causal_bias
@@ -286,9 +303,9 @@ class MetaTwelveBTests(unittest.TestCase):
         cfg = CATYokoConfig.middle_12b()
         model = build_model(cfg, "meta")
         n = sum(p.numel() for p in model.parameters())
-        # YOCO shared top cache 2d² + per-layer Q/O cross-attn ≈ 11.59B, not 11.83B.
-        self.assertGreater(n, 11.50e9)
-        self.assertLess(n, 11.70e9)
+        # MiniCPM5 GQA 12B stored params ~12.25B (not MiniCPM-2B 11.50–11.70B).
+        self.assertGreater(n, 12.20e9)
+        self.assertLess(n, 12.32e9)
 
 
 if __name__ == "__main__":

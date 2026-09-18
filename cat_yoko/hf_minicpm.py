@@ -1,4 +1,4 @@
-"""Load MiniCPM-2B weights for upcycling / teacher KD."""
+"""Load MiniCPM5-2B weights for upcycling / teacher KD."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def _unwrap_state(obj: Any) -> dict[str, torch.Tensor]:
 
 
 def load_minicpm_state(source: str | Path, *, map_location: str = "cpu") -> dict[str, torch.Tensor]:
-    """`.pt` file, local HF dir, or Hub id (default MiniCPM-2B-sft-bf16)."""
+    """`.pt` file, local HF dir, or Hub id (default MiniCPM5-2B-Base)."""
     path = Path(source)
     if path.is_file():
         obj = torch.load(path, map_location=map_location, weights_only=True)

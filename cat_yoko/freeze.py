@@ -38,10 +38,13 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
     model.set_detach(phase != "B2")
     if phase == "B2":
         return
-    # Freeze encoder + tied embedding (Theorem E).
+    # Freeze encoder + input embedding (Theorem E). Untied lm_head is frozen
+    # in B0 (new-modules only) and trained in B1 (does not drift X^0).
     for p in model.encoder.parameters():
         p.requires_grad = False
     model.embed.weight.requires_grad = False
+    if model.cfg.tie_embeddings or phase == "B0":
+        model.lm_head.weight.requires_grad = False
     if phase == "B0":
         for blk in model.decoder:
             blk = unwrap(blk)

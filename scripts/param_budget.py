@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """CAT-YOKO parameter budget + middle-tier theoretical verification.
 
-Causal Encoder-Decoder (YOCO-style) MoE built on MiniCPM-2B.
+Causal Encoder-Decoder (YOCO-style) MoE built on Apache-2.0 MiniCPM5-2B
+(Llama GQA), not MiniCPM-2B-sft-bf16.
 
-Default target (compute-budget middle tier): total ~12B, Encoder(input)
-active ~2.3B, Decoder(output) active ~4.5B.
+Default target (compute-budget middle tier): total ~12.25B, Encoder(input)
+active ~2.03B, Decoder(output) active ~4.33B.
 
 Note: total params ~ memory/storage; TRAINING FLOPs ~ ACTIVE params x tokens.
 Cutting total does not cut training cost -- cutting ACTIVE does.
 
-The default attention term is the plan's *placeholder* (1.25x MHA) until the
-real CSA/HCA/MLA projection dims are frozen. A MiniCPM-native CSA/HCA MQA-64
-estimate is available via ``--attn csa_mqa64`` as a sensitivity check; it
-does not change the published middle-tier spec.
+The published attention term is MiniCPM5 GQA (16 Q / 2 KV). A CSA/HCA
+sensitivity estimate is available via ``--attn csa_mqa64``; it does not
+change the published middle-tier spec.
 
 Freeze-curriculum (Phase B) is **frozen as C1**: MoE both stacks at
 Phase A, freeze encoder in B0/B1, short joint B2. Delayed encoder MoE
@@ -34,27 +34,33 @@ import sys
 from dataclasses import dataclass
 from typing import Iterable, Sequence
 
-# ---- MiniCPM-2B base (openbmb/MiniCPM-2B-sft-bf16 config.json) ----
-D = 2304
-V = 122753
-N_HEADS = 36
-HEAD_DIM = 64  # D / N_HEADS
-DENSE_INT = 5760  # MiniCPM dense SwiGLU intermediate
+# ---- MiniCPM5-2B base (openbmb/MiniCPM5-2B config.json) ----
+D = 2048
+V = 130_560
+N_HEADS = 16
+N_KV_HEADS = 2
+HEAD_DIM = D // N_HEADS  # 128
+KV_DIM = N_KV_HEADS * HEAD_DIM  # 256
+DENSE_INT = 6144  # MiniCPM5 dense SwiGLU intermediate (6144/2048 = 3)
 MOE_INT = 2048
-SCALE_EMB = 12.0
-DIM_MODEL_BASE = 256
-SCALE_DEPTH = 1.4
-BASE_LAYERS = 40
+SCALE_EMB = 1.0
+DIM_MODEL_BASE = 2048
+SCALE_DEPTH = 1.0
+BASE_LAYERS = 42
+TIE_EMBEDDINGS = False
+LE_DEFAULT = 16
+LD_DEFAULT = 26
 
 EMB = V * D
+LM_HEAD = 0 if TIE_EMBEDDINGS else V * D
 EXPERT = 3 * D * MOE_INT  # SwiGLU expert (gate, up, down)
 DENSE_FFN = 3 * D * DENSE_INT
 MHA = 4 * D * D
-PLACEHOLDER_SELF_ATTN = int(1.25 * MHA)
-PLACEHOLDER_CROSS_ATTN = MHA
-# YOCO cache projections (W_K, W_V) at encoder top. Upper bound d_kv = d;
-# MLA-576 is smaller. Not in the published 12.05B stack total (~0.01B).
-CACHE_PROJ = 2 * D * D
+GQA_SELF = 2 * D * D + 2 * D * KV_DIM  # Q,O + K,V
+CROSS_QO = 2 * D * D  # decoder cross: Q,O only; K/V from the YOCO cache
+# YOCO cache projections (W_K, W_V) at encoder top. d_kv = n_kv * head_dim.
+# Not in the published 12.25B stack total (~1M).
+CACHE_PROJ = 2 * D * KV_DIM
 # Mixed-precision AdamW footprint (bytes / parameter). No fp32 master copy.
 ADAM_STATE_BYTES = 8  # m, v in fp32
 GRAD_BYTES = 2  # bf16 gradients
@@ -81,7 +87,8 @@ FP8_SPEEDUP_CONSERVATIVE = 1.5  # plan §15.1; 12B kernel/comm overhead
 FP8_SPEEDUP_PEAK = H100_FP8_PEAK / H100_BF16_PEAK  # ≈2.0
 # Modules that stay high precision under the frozen FP8 policy.
 FP8_KEEP_HIGH_PREC = (
-    "tied_emb",
+    "embed",
+    "lm_head",
     "rms_norm",
     "router",
     "gate",
@@ -91,9 +98,9 @@ FP8_KEEP_HIGH_PREC = (
 
 # KV recipes used in plan §16 (bytes of cache content, not allocator padding).
 MLA_LATENT = 512 + 64  # DeepSeek-V3-style: kv_lora_rank + qk_rope_head_dim
-GQA4_KV_DIM = 2 * 4 * HEAD_DIM  # 4 KV heads, K and V
-MHA_KV_DIM = 2 * D  # 36 KV heads, K and V
-MQA64_KV_DIM = 2 * HEAD_DIM  # single KV head at MiniCPM head_dim
+GQA2_KV_DIM = 2 * KV_DIM  # MiniCPM5 2 KV heads, K and V
+MHA_KV_DIM = 2 * D  # full MHA KV (not the published GQA graph)
+MQA64_KV_DIM = 2 * HEAD_DIM  # single KV head at MiniCPM5 head_dim
 
 
 @dataclass(frozen=True)
@@ -107,13 +114,14 @@ class Tier:
     tk_d: int
     nr_d: int
     le: int = 16
-    ld: int = 24
+    ld: int = 26
 
 
 TIERS: dict[str, Tier] = {
-    "low": Tier("省算力档", "low", ns_e=1, tk_e=3, nr_e=20, ns_d=1, tk_d=4, nr_d=15),
-    "middle": Tier("默认（中间档）", "middle", ns_e=1, tk_e=6, nr_e=17, ns_d=1, tk_d=8, nr_d=17),
-    "near_dense": Tier("近-dense 档", "near_dense", ns_e=2, tk_e=8, nr_e=10, ns_d=2, tk_d=12, nr_d=20),
+    # Same 1+20 experts on both stacks (882 slots). Tiers only change top-k.
+    "low": Tier("省算力档", "low", ns_e=1, tk_e=4, nr_e=20, ns_d=1, tk_d=6, nr_d=20),
+    "middle": Tier("默认（中间档）", "middle", ns_e=1, tk_e=7, nr_e=20, ns_d=1, tk_d=10, nr_d=20),
+    "near_dense": Tier("近-dense 档", "near_dense", ns_e=1, tk_e=12, nr_e=20, ns_d=1, tk_d=16, nr_d=20),
 }
 
 DEFAULT_TIER = "middle"
@@ -128,17 +136,17 @@ class AttnAccounting:
 
 
 def _csa_mqa64_self_attn(is_csa: bool) -> int:
-    """MiniCPM-native CSA/HCA parameter estimate (MQA, head_dim=64).
+    """MiniCPM5-native CSA/HCA parameter estimate (MQA, head_dim=128).
 
-    Scaled from DeepSeek-V4 (arXiv 2606.19348 §2.3) onto MiniCPM dims rather
-    than copying V4's head_dim=512, which would be oversized at d=2304.
+    Scaled from DeepSeek-V4 (arXiv 2606.19348 §2.3) onto MiniCPM5 dims rather
+    than copying V4's head_dim=512, which would be oversized at d=2048.
 
     Shared pieces: LoRA-Q (W_DQ, W_UQ), grouped output, sliding-window KV,
     CSA/HCA compressor. CSA adds a Lightning Indexer; HCA does not.
     """
     q_lora = 512
-    kv_dim = HEAD_DIM  # MQA-64
-    o_groups = 4  # 36 heads / 4
+    kv_dim = HEAD_DIM  # MQA-128
+    o_groups = 4  # 16 heads / 4
     o_lora = 512
     index_n_heads = 16
     index_head_dim = 64
@@ -163,23 +171,21 @@ def _csa_mqa64_self_attn(is_csa: bool) -> int:
 
 
 def attn_accounting(kind: str) -> AttnAccounting:
-    if kind == "placeholder":
+    if kind in {"gqa", "placeholder"}:
         return AttnAccounting(
-            name="placeholder 1.25×MHA",
-            self_attn=PLACEHOLDER_SELF_ATTN,
-            cross_attn=PLACEHOLDER_CROSS_ATTN,
-            note="plan §3 default until CSA/HCA/MLA dims are frozen",
+            name="GQA 16/2",
+            self_attn=GQA_SELF,
+            cross_attn=CROSS_QO,
+            note="MiniCPM5 GQA; Phase B window; YOCO cache supplies K/V",
         )
     if kind == "csa_mqa64":
         # Interleave CSA:HCA ≈ 1:1; average the two layer types.
         avg_self = (_csa_mqa64_self_attn(True) + _csa_mqa64_self_attn(False)) // 2
-        # Cross-attn stays dense MHA/MQA-style 4d² as an upper bound
-        # (YOCO global cache read). MLA would be smaller.
         return AttnAccounting(
-            name="CSA/HCA MQA-64 (sensitivity)",
+            name="CSA/HCA MQA-128 (sensitivity)",
             self_attn=avg_self,
-            cross_attn=MHA,
-            note="MiniCPM-native CSA/HCA estimate; does not change published spec",
+            cross_attn=CROSS_QO,
+            note="MiniCPM5-native CSA/HCA estimate; does not change published spec",
         )
     raise ValueError(f"unknown attn accounting: {kind}")
 
@@ -207,12 +213,13 @@ class ModelBudget:
     attn: AttnAccounting
     first_dense: bool
     emb: int
+    lm_head: int
     enc: StackBudget
     dec: StackBudget
     total: int
-    enc_active: int  # includes tied emb (plan convention: per-token stack)
-    dec_active: int
-    fwd_active: int  # embedding counted once (one full forward)
+    enc_active: int  # includes input embed (plan convention: per-token stack)
+    dec_active: int  # includes untied lm_head
+    fwd_active: int  # embed + lm_head counted once each (one full forward)
 
     @property
     def expert_slots(self) -> int:
@@ -283,15 +290,16 @@ def compute_budget(
     dec = _stack(
         tier.ld, tier.ns_d, tier.tk_d, tier.nr_d, attn.self_attn, attn.cross_attn, first_dense
     )
-    total = EMB + enc.stack_total + dec.stack_total
+    total = EMB + LM_HEAD + enc.stack_total + dec.stack_total
     enc_active = EMB + enc.active_no_emb
-    dec_active = EMB + dec.active_no_emb
-    fwd_active = EMB + enc.active_no_emb + dec.active_no_emb
+    dec_active = (LM_HEAD or EMB) + dec.active_no_emb
+    fwd_active = EMB + LM_HEAD + enc.active_no_emb + dec.active_no_emb
     return ModelBudget(
         tier=tier,
         attn=attn,
         first_dense=first_dense,
         emb=EMB,
+        lm_head=LM_HEAD,
         enc=enc,
         dec=dec,
         total=total,
@@ -339,8 +347,8 @@ class StagedRecipe:
 def _n_parts(budget: ModelBudget) -> tuple[int, int, int, int]:
     """emb, encoder-no-emb, decoder-no-emb, new-module proxy.
 
-    New modules = 24× cross-attn + cache W_K/W_V. Cache proj is ~0.01B
-    and does not change published 12.05B at two decimals.
+    New modules = 26× cross-attn Q/O + cache W_K/W_V. Cache proj is ~1M
+    and does not change published 12.25B at two decimals.
     """
     n_emb = budget.emb
     n_e = budget.enc.active_no_emb
@@ -357,7 +365,7 @@ def n_new_modules(budget: ModelBudget) -> int:
 def encoder_active_no_emb(budget: ModelBudget, *, dense: bool = False) -> int:
     """Encoder activation excluding embedding.
 
-    ``dense=True`` is delayed-encoder-MoE (C2): MiniCPM SwiGLU on all 16
+    ``dense=True`` is delayed-encoder-MoE (C2): MiniCPM5 SwiGLU on all 16
     layers, same self-attn accounting as the MoE budget. Dense FFN is fully
     active, so this equals encoder stack total.
     """
@@ -390,7 +398,7 @@ def flops_freeze_encoder(
     """YOCO LM loss, encoder frozen (fwd only), decoder+cross-attn trainable.
 
     Backward stops at the global cache: encoder has no weight or activation grads.
-    ``encoder_dense`` is delayed-encoder-MoE (C2): encoder FFN is MiniCPM dense.
+    ``encoder_dense`` is delayed-encoder-MoE (C2): encoder FFN is MiniCPM5 dense.
     """
     n_emb, _, n_d, _ = _n_parts(budget)
     n_e = encoder_active_no_emb(budget, dense=encoder_dense)
@@ -400,7 +408,7 @@ def flops_freeze_encoder(
 def flops_new_modules(
     budget: ModelBudget, tokens: float, *, encoder_dense: bool = False
 ) -> float:
-    """Freeze inherited MiniCPM stacks; train cross-attn + cache proj.
+    """Freeze inherited MiniCPM5 stacks; train cross-attn + cache proj.
 
     Forward still runs both stacks. Activation backward runs through the decoder
     (chain rule to the new residual branch) but not the encoder.
@@ -431,7 +439,7 @@ def flops_curriculum(
 ) -> float:
     """B0 new-modules + B1 freeze-enc + B2 joint. B2 always uses MoE encoder.
 
-    ``delayed=True`` (C2): MiniCPM-dense encoder in B0/B1; virtual-group
+    ``delayed=True`` (C2): MiniCPM5-dense encoder in B0/B1; virtual-group
     encoder MoE starts at B2. ``delayed=False`` (C1): encoder already MoE,
     frozen through B0/B1. If ``split`` does not sum to ``tokens`` it is
     scaled (keeps the 8:27:15 ratio).
@@ -464,7 +472,7 @@ def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedReci
             "freeze-enc dense (delayed, all tokens)",
             flops_freeze_encoder(budget, tokens, encoder_dense=True),
             tokens,
-            "C2 encoder FFN = MiniCPM dense; still no co-adapt",
+            "C2 encoder FFN = MiniCPM5 dense; still no co-adapt",
         ),
         StagedRecipe(
             "new-modules only (cross-attn)",
@@ -504,8 +512,9 @@ class FreezeBoundary:
     """What may receive gradients in one curriculum phase.
 
     Names are module groups, not parameter counts. Counts live in
-    ``phase_param_counts``. Tied-embedding policy is part of the boundary
-    because MiniCPM shares E as input and LM head (Theorem E).
+    ``phase_param_counts``. Untied-embedding policy is part of the boundary
+    because MiniCPM5 does not share E as LM head (Theorem E still freezes
+    the input table in B0/B1).
     """
 
     phase: str
@@ -517,34 +526,34 @@ class FreezeBoundary:
     note: str = ""
 
 
-# Default freeze-curriculum (ULMFiT-style). Alternative tied policy is
-# ``untie_train_head`` (LP-FT); leaky ``train_tied`` while encoder is frozen
-# is forbidden.
+# Default freeze-curriculum (ULMFiT-style). MiniCPM5 is untied: freeze the
+# input table with the encoder; B0 also freezes lm_head; B1 trains lm_head.
+# Training the input table while the encoder is frozen is still forbidden.
 FREEZE_BOUNDARIES: tuple[FreezeBoundary, ...] = (
     FreezeBoundary(
         phase="B0",
-        frozen=("encoder", "decoder_backbone", "tied_emb"),
+        frozen=("encoder", "decoder_backbone", "embed", "lm_head"),
         trainable=("cross_attn", "cache_proj", "cross_ln", "gate"),
         detach_at_cache=True,
-        tied_emb="freeze_tied",
+        tied_emb="freeze_embed_and_head",
         gate="0→0.3",
         note="new modules only; encoder FFN = frozen MoE copies (C1)",
     ),
     FreezeBoundary(
         phase="B1",
-        frozen=("encoder", "tied_emb"),
-        trainable=("decoder_self_attn", "decoder_moe", "cross_attn", "cache_proj", "gate"),
+        frozen=("encoder", "embed"),
+        trainable=("decoder_self_attn", "decoder_moe", "cross_attn", "cache_proj", "lm_head", "gate"),
         detach_at_cache=True,
-        tied_emb="freeze_tied",
+        tied_emb="freeze_embed_train_head",
         gate="→1",
-        note="unfreeze reader; writer + tied head stay MiniCPM-16",
+        note="unfreeze reader + lm_head; writer + input E stay MiniCPM5-16",
     ),
     FreezeBoundary(
         phase="B2",
         frozen=(),
-        trainable=("encoder", "decoder", "tied_emb", "cross_attn", "cache_proj"),
+        trainable=("encoder", "decoder", "embed", "lm_head", "cross_attn", "cache_proj"),
         detach_at_cache=False,
-        tied_emb="train_tied",
+        tied_emb="train_untied",
         gate="1",
         note="short joint; unfreeze the already-MoE encoder",
     ),
@@ -572,6 +581,7 @@ def phase_param_counts(
     B2 always stores the MoE encoder (C2 upcycles at the B2 boundary).
     """
     n_emb = budget.emb
+    n_head = budget.lm_head
     n_cross = budget.dec.layers * budget.attn.cross_attn
     n_dec = budget.dec.stack_total
     if phase == "B2":
@@ -580,12 +590,12 @@ def phase_param_counts(
         n_enc = encoder_stack_total(budget, dense=delayed)
     if phase == "B0":
         train = n_new_modules(budget)
-        frozen = n_emb + n_enc + (n_dec - n_cross)
+        frozen = n_emb + n_head + n_enc + (n_dec - n_cross)
         return train, frozen
     if phase == "B1":
-        return n_dec + CACHE_PROJ, n_emb + n_enc
+        return n_dec + CACHE_PROJ + n_head, n_emb + n_enc
     if phase == "B2":
-        return n_emb + n_enc + n_dec + CACHE_PROJ, 0
+        return n_emb + n_head + n_enc + n_dec + CACHE_PROJ, 0
     raise ValueError(f"unknown phase {phase}")
 
 
@@ -626,8 +636,8 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
     b1_tr, b1_fr = phase_param_counts(budget, "B1", delayed=False)
     b2_tr, _ = phase_param_counts(budget, "B2", delayed=False)
     opt_ratio = optimizer_state_bytes(b1_tr) / optimizer_state_bytes(b2_tr)
-    dec_ratio = (budget.dec.stack_total + CACHE_PROJ) / (
-        budget.emb + budget.enc.stack_total + budget.dec.stack_total + CACHE_PROJ
+    dec_ratio = (budget.dec.stack_total + CACHE_PROJ + budget.lm_head) / (
+        budget.emb + budget.lm_head + budget.enc.stack_total + budget.dec.stack_total + CACHE_PROJ
     )
     b0, b1, b2 = FREEZE_BOUNDARIES
     valid_c1 = curriculum_split_table(budget, delayed=False)
@@ -650,7 +660,7 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
             "dense encoder FFN active < MoE encoder FFN active",
             n_e_dense < n_e_moe,
             f"{b(n_e_dense)} < {b(n_e_moe)}",
-            "MiniCPM 16× dense < 16×7 experts",
+            "MiniCPM5 16× dense < 16×8 experts",
         ),
         Claim(
             "B0/B1 detach cache; B2 does not",
@@ -659,11 +669,11 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
             "True, True, False",
         ),
         Claim(
-            "tied emb frozen with encoder in B0/B1",
-            b0.tied_emb == "freeze_tied" and b1.tied_emb == "freeze_tied",
+            "embed frozen B0/B1; lm_head frozen B0 trained B1",
+            b0.tied_emb == "freeze_embed_and_head" and b1.tied_emb == "freeze_embed_train_head",
             f"{b0.tied_emb}/{b1.tied_emb}",
-            "freeze_tied (or untie_train_head)",
-            note="train_tied while encoder frozen leaks X^0 (Theorem E)",
+            "freeze_embed_and_head / freeze_embed_train_head",
+            note="training embed while encoder frozen leaks X^0 (Theorem E)",
         ),
         Claim(
             "B1 Adam states ≈ decoder/total (~60%)",
@@ -672,10 +682,10 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
             f"~{dec_ratio:.0%}",
         ),
         Claim(
-            "detach drops encoder activations (keep 24/40)",
-            abs(activation_keep_frac() - 0.6) < 1e-12,
+            "detach drops encoder activations (keep 26/42)",
+            abs(activation_keep_frac() - 26 / 42) < 1e-12,
             f"{activation_keep_frac():.0%}",
-            "60%",
+            "62%",
         ),
         Claim(
             "all valid 50B splits stay ≤85% joint (C1 and C2)",
@@ -808,7 +818,7 @@ FP8_PHASE_POLICY: tuple[Fp8PhasePolicy, ...] = (
         "B1",
         "fp8_moe",
         "fp8",
-        "decoder MoE GEMM in FP8; router / LN / tied E stay high prec",
+        "decoder MoE GEMM in FP8; router / LN / embed / lm_head stay high prec",
     ),
     Fp8PhasePolicy(
         "B2",
@@ -879,10 +889,10 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "B0 student bf16; B1/B2 fp8_moe (not all-1.5×)",
         ),
         Claim(
-            "published C1+FP8 hours ≈761 (≤60% joint bf16)",
-            _close(mixed_h, 761, rel=0.02) and mixed_h <= 0.60 * joint_h,
+            "published C1+FP8 hours ≈729 (≤60% joint bf16)",
+            _close(mixed_h, 729, rel=0.02) and mixed_h <= 0.60 * joint_h,
             f"{mixed_h:.0f} ({mixed_h / joint_h:.0%} of {joint_h:.0f})",
-            "~761; ≤60% of joint",
+            "~729; ≤60% of joint",
         ),
         Claim(
             "B0 student stays bf16 (Theorem A neighborhood)",
@@ -909,17 +919,17 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "≤15%",
         ),
         Claim(
-            "tied E / router / LN stay high precision",
+            "embed / lm_head / router / LN stay high precision",
             set(FP8_KEEP_HIGH_PREC)
-            >= {"tied_emb", "router", "rms_norm", "gate", "indexer", "attn_softmax"},
+            >= {"embed", "lm_head", "router", "rms_norm", "gate", "indexer", "attn_softmax"},
             ",".join(FP8_KEEP_HIGH_PREC),
-            "emb, router, LN, gate, softmax, indexer",
+            "embed, lm_head, router, LN, gate, softmax, indexer",
         ),
         Claim(
             "C1 bf16 hours unchanged by the FP8 policy",
-            _close(c1_bf16_h, 1090, rel=0.02),
+            _close(c1_bf16_h, 1046, rel=0.02),
             f"{c1_bf16_h:.0f}",
-            "~1090",
+            "~1046",
         ),
     ]
 
@@ -961,23 +971,24 @@ class KvRecipe:
 
 
 def kv_table(seq: int, dtype_bytes: float = 2.0) -> list[KvRecipe]:
-    """Reproduce plan §16 plus MiniCPM-native MQA-64.
+    """Reproduce plan §16 plus MiniCPM5-native GQA-2.
 
-    Plan §16's "1M" is 1_000_000 tokens (not 2^20). GQA-4 means 4 KV heads
-    (not 36/4=9). MLA-576 is a DeepSeek-V3-style latent (kv_lora=512 + rope=64).
+    Plan §16's "1M" is 1_000_000 tokens (not 2^20). GQA-2 means 2 KV heads
+    at head_dim=128. MLA-576 is a DeepSeek-V3-style latent (kv_lora=512 + rope=64).
     """
-    dec_win_layers = 24
+    dec_win_layers = LD_DEFAULT
     n_win = 8192
+    l0 = LE_DEFAULT + LD_DEFAULT
     return [
-        KvRecipe("decoder-only MHA (40L)", MHA_KV_DIM, dtype_bytes, 40, seq),
-        KvRecipe("decoder-only GQA-4 (40L)", GQA4_KV_DIM, dtype_bytes, 40, seq),
-        KvRecipe("decoder-only MLA-576 (40L)", MLA_LATENT, dtype_bytes, 40, seq),
+        KvRecipe("decoder-only MHA (42L)", MHA_KV_DIM, dtype_bytes, l0, seq),
+        KvRecipe("decoder-only GQA-2 (42L)", GQA2_KV_DIM, dtype_bytes, l0, seq),
+        KvRecipe("decoder-only MLA-576 (42L)", MLA_LATENT, dtype_bytes, l0, seq),
         KvRecipe("YOCO + MLA-576 (1 global)", MLA_LATENT, dtype_bytes, 1, seq),
         KvRecipe("YOCO + MLA-576 + seq÷8", MLA_LATENT, dtype_bytes, 1, seq, compress=8.0),
         KvRecipe("YOCO + MLA-576 + CSA m=4", MLA_LATENT, dtype_bytes, 1, seq, compress=4.0),
-        KvRecipe("YOCO + MQA-64 (1 global)", MQA64_KV_DIM, dtype_bytes, 1, seq),
+        KvRecipe("YOCO + GQA-2 (1 global)", GQA2_KV_DIM, dtype_bytes, 1, seq),
         KvRecipe(
-            "decoder 24×8K window (MLA-576)",
+            "decoder 26×8K window (MLA-576)",
             MLA_LATENT,
             dtype_bytes,
             dec_win_layers,
@@ -987,7 +998,7 @@ def kv_table(seq: int, dtype_bytes: float = 2.0) -> list[KvRecipe]:
             "encoder 16×8K window (MLA-576)",
             MLA_LATENT,
             dtype_bytes,
-            16,
+            LE_DEFAULT,
             min(n_win, seq),
         ),
     ]
@@ -1009,89 +1020,89 @@ def _close(x: float, target: float, rel: float = 0.03, abs_tol: float = 0.0) -> 
 def claims_middle_placeholder(budget: ModelBudget) -> list[Claim]:
     """Ledger against the published middle-tier spec (plan §1.2 / §3)."""
     tokens = 50e9
-    # Plan §3 uses enc_active + dec_active (embedding counted twice).
+    # Plan §3 uses enc_active + dec_active (embed + lm_head counted on each stack).
     flops_plan = training_flops(budget.enc_active + budget.dec_active, tokens)
     h100_plan = gpu_hours(flops_plan, H100_BF16_EFF)
     kv_1m = {r.name: r for r in kv_table(1_000_000)}
     return [
-        Claim("total ~12B", _close(budget.total, 12e9, rel=0.02), b(budget.total), "12.0B"),
+        Claim("total ~12.25B", _close(budget.total, 12.25e9, rel=0.01), b(budget.total), "12.25B"),
         Claim(
-            "enc active ~2.3B",
-            _close(budget.enc_active, 2.3e9, rel=0.04),
+            "enc active ~2.03B",
+            _close(budget.enc_active, 2.03e9, rel=0.02),
             b(budget.enc_active),
-            "2.3B",
+            "2.03B",
         ),
         Claim(
-            "dec active ~4.5B",
-            _close(budget.dec_active, 4.5e9, rel=0.04),
+            "dec active ~4.33B",
+            _close(budget.dec_active, 4.33e9, rel=0.02),
             b(budget.dec_active),
-            "4.5B",
+            "4.33B",
         ),
         Claim(
-            "emb ~0.28B",
-            _close(budget.emb, 0.28e9, rel=0.05),
+            "emb ~0.27B",
+            _close(budget.emb, 0.267e9, rel=0.02),
             b(budget.emb),
-            "0.28B",
+            "0.27B",
         ),
         Claim(
-            "enc self-attn ~0.42B",
-            _close(budget.enc.attn_total, 0.42e9, rel=0.05),
+            "enc self-attn ~0.15B",
+            _close(budget.enc.attn_total, 0.15e9, rel=0.05),
             b(budget.enc.attn_total),
-            "0.42B",
+            "0.15B",
         ),
         Claim(
-            "dec self-attn ~0.64B",
-            _close(budget.dec.layers * budget.attn.self_attn, 0.64e9, rel=0.05),
+            "dec self-attn ~0.25B",
+            _close(budget.dec.layers * budget.attn.self_attn, 0.25e9, rel=0.05),
             b(budget.dec.layers * budget.attn.self_attn),
-            "0.64B",
+            "0.25B",
         ),
         Claim(
-            "dec cross-attn ~0.51B",
-            _close(budget.dec.layers * budget.attn.cross_attn, 0.51e9, rel=0.05),
+            "dec cross-attn ~0.22B",
+            _close(budget.dec.layers * budget.attn.cross_attn, 0.22e9, rel=0.05),
             b(budget.dec.layers * budget.attn.cross_attn),
-            "0.51B",
+            "0.22B",
         ),
         Claim(
-            "sparsity enc 7/18",
-            abs(budget.sparsity_enc - 7 / 18) < 1e-12,
+            "sparsity enc 8/21",
+            abs(budget.sparsity_enc - 8 / 21) < 1e-12,
             f"{budget.sparsity_enc:.1%}",
-            "38.9% (7/18)",
+            "38.1% (8/21)",
         ),
         Claim(
-            "sparsity dec 9/18",
-            abs(budget.sparsity_dec - 9 / 18) < 1e-12,
+            "sparsity dec 11/21",
+            abs(budget.sparsity_dec - 11 / 21) < 1e-12,
             f"{budget.sparsity_dec:.1%}",
-            "50.0% (9/18)",
+            "52.4% (11/21)",
         ),
         Claim(
-            "three tiers share 720 expert-slots",
-            budget.expert_slots == 720,
+            "three tiers share 882 expert-slots",
+            budget.expert_slots == 882,
             str(budget.expert_slots),
-            "720",
+            "882",
         ),
         Claim(
-            "50B tok ≈1400 H100-h (plan convention)",
-            _close(h100_plan, 1400, rel=0.05),
+            "50B tok ≈1325 H100-h (plan convention)",
+            _close(h100_plan, 1325, rel=0.03),
             f"{h100_plan:.0f}",
-            "~1400",
+            "~1325",
         ),
         Claim(
-            "1M decoder-only MHA KV ≈369 GB",
-            _close(kv_1m["decoder-only MHA (40L)"].bytes / 1e9, 369, rel=0.01),
-            gb(kv_1m["decoder-only MHA (40L)"].bytes),
-            "369 GB",
+            "1M decoder-only MHA KV ≈344 GB",
+            _close(kv_1m["decoder-only MHA (42L)"].bytes / 1e9, 343.93, rel=0.01),
+            gb(kv_1m["decoder-only MHA (42L)"].bytes),
+            "344 GB",
         ),
         Claim(
-            "1M decoder-only GQA-4 KV ≈41 GB",
-            _close(kv_1m["decoder-only GQA-4 (40L)"].bytes / 1e9, 41, rel=0.02),
-            gb(kv_1m["decoder-only GQA-4 (40L)"].bytes),
-            "41 GB",
+            "1M decoder-only GQA-2 KV ≈43 GB",
+            _close(kv_1m["decoder-only GQA-2 (42L)"].bytes / 1e9, 42.99, rel=0.02),
+            gb(kv_1m["decoder-only GQA-2 (42L)"].bytes),
+            "43 GB",
         ),
         Claim(
-            "1M decoder-only MLA-576 KV ≈46 GB",
-            _close(kv_1m["decoder-only MLA-576 (40L)"].bytes / 1e9, 46, rel=0.02),
-            gb(kv_1m["decoder-only MLA-576 (40L)"].bytes),
-            "46 GB",
+            "1M decoder-only MLA-576 KV ≈48 GB",
+            _close(kv_1m["decoder-only MLA-576 (42L)"].bytes / 1e9, 48.38, rel=0.02),
+            gb(kv_1m["decoder-only MLA-576 (42L)"].bytes),
+            "48 GB",
         ),
         Claim(
             "1M YOCO+MLA KV ≈1.15 GB",
@@ -1106,23 +1117,23 @@ def claims_middle_placeholder(budget: ModelBudget) -> list[Claim]:
             "0.14 GB",
         ),
         Claim(
-            "24×8K window (MLA) ≈0.2 GB",
-            _close(kv_1m["decoder 24×8K window (MLA-576)"].bytes / 1e9, 0.2, rel=0.15),
-            gb(kv_1m["decoder 24×8K window (MLA-576)"].bytes),
-            "~0.2 GB",
+            "26×8K window (MLA) ≈0.25 GB",
+            _close(kv_1m["decoder 26×8K window (MLA-576)"].bytes / 1e9, 0.25, rel=0.15),
+            gb(kv_1m["decoder 26×8K window (MLA-576)"].bytes),
+            "~0.25 GB",
         ),
         Claim(
-            "μP logits scale d/dim_model_base = 9",
-            abs(D / DIM_MODEL_BASE - 9.0) < 1e-12,
+            "no MiniCPM μP: logit_scale = 1",
+            abs(D / DIM_MODEL_BASE - 1.0) < 1e-12,
             f"{D / DIM_MODEL_BASE:.0f}",
-            "9",
+            "1",
         ),
         Claim(
-            "keep residual 1.4/√40 after stack split",
-            True,
-            f"{SCALE_DEPTH / math.sqrt(BASE_LAYERS):.4f}",
-            "do not rescale by 16/24",
-            note="inherited MiniCPM weights were trained with 1.4/√40",
+            "residual_scale identity (Llama, not 1.4/√L)",
+            SCALE_EMB == 1.0 and SCALE_DEPTH == 1.0,
+            f"scale_emb={SCALE_EMB} residual={SCALE_DEPTH}",
+            "1 / 1",
+            note="MiniCPM5 is Llama; do not keep MiniCPM-2B μP",
         ),
         Claim(
             "freeze-enc train-dec saves ~20% vs joint",
@@ -1149,14 +1160,14 @@ def claims_middle_placeholder(budget: ModelBudget) -> list[Claim]:
 
 def verify(budget: ModelBudget | None = None) -> list[Claim]:
     budget = budget or compute_budget(TIERS[DEFAULT_TIER])
-    if budget.tier.key != "middle" or budget.first_dense or budget.attn.name != "placeholder 1.25×MHA":
-        raise ValueError("--verify is defined on the published middle-tier placeholder budget")
+    if budget.tier.key != "middle" or budget.first_dense or budget.attn.name != "GQA 16/2":
+        raise ValueError("--verify is defined on the published middle-tier GQA budget")
     return claims_middle_placeholder(budget) + claims_curriculum(budget) + claims_fp8(budget)
 
 
 def print_budget(budget: ModelBudget) -> None:
     t = budget.tier
-    print(f"embedding (tied)         : {b(budget.emb)}")
+    print(f"embedding (untied + lm_head) : {b(budget.emb)} + {b(budget.lm_head)}")
     print(f"expert (single)          : {m(EXPERT)}")
     print(f"dense FFN (MiniCPM)      : {m(DENSE_FFN)}")
     print(f"attn accounting          : {budget.attn.name}  self={m(budget.attn.self_attn)} cross={m(budget.attn.cross_attn)}")
@@ -1245,10 +1256,10 @@ def print_curriculum(budget: ModelBudget, tokens: float = 50e9) -> None:
             )
     print(
         f"  detach drops encoder layer activations: keep "
-        f"{activation_keep_frac():.0%} (24/40); save ~40% vs joint"
+        f"{activation_keep_frac():.0%} (26/42); save ~38% vs joint"
     )
     print(
-        f"  cache W_K/W_V upper bound (d_kv=d)     : {m(CACHE_PROJ)}  "
+        f"  cache W_K/W_V (d_kv={KV_DIM})              : {m(CACHE_PROJ)}  "
         f"(trainable in B0, after encoder.detach())"
     )
     print(
@@ -1350,18 +1361,18 @@ def print_attn_complexity(
     mid = compute_budget(TIERS["middle"])
     mlp = 2.0 * mid.fwd_active  # 2 N_active per token; ×n below
     print(
-        f"{'n':>10s} {'mlp_fwd':>12s} {'dense40':>12s} {'enc_hyb16':>12s} "
-        f"{'enc+dec_win':>12s} {'xattn24':>12s}"
+        f"{'n':>10s} {'mlp_fwd':>12s} {'dense42':>12s} {'enc_hyb16':>12s} "
+        f"{'enc+dec_win':>12s} {'xattn26':>12s}"
     )
     for n in lengths:
         mlp_n = mlp * n
-        dense = attn_score_flops(n, n, 40)
+        dense = attn_score_flops(n, n, 42)
         enc_hyb = 0.0
         for i in range(16):
             k = keys_csa(n) if i % 2 == 0 else keys_hca(n)
             enc_hyb += attn_score_flops(n, k, 1)
-        dec_win = attn_score_flops(n, min(8192, n), 24)
-        xattn = attn_score_flops(n, n, 24)
+        dec_win = attn_score_flops(n, min(8192, n), 26)
+        xattn = attn_score_flops(n, n, 26)
         print(
             f"{n:10d} {mlp_n:12.3e} {dense:12.3e} {enc_hyb:12.3e} "
             f"{enc_hyb + dec_win:12.3e} {xattn:12.3e}"
@@ -1394,12 +1405,12 @@ def print_prefill_decode(budget: ModelBudget) -> None:
 
 
 def print_attn_params() -> None:
-    ph = attn_accounting("placeholder")
     print("-- Self-attn params per layer --")
-    print(f"  MiniCPM MHA 4d²              : {m(MHA)}")
-    print(f"  placeholder 1.25×MHA         : {m(ph.self_attn)}")
-    print(f"  CSA MQA-64 (detailed)        : {m(_csa_mqa64_self_attn(True))}")
-    print(f"  HCA MQA-64 (detailed)        : {m(_csa_mqa64_self_attn(False))}")
+    print(f"  MiniCPM5 GQA 16/2            : {m(GQA_SELF)}")
+    print(f"  MiniCPM5 MHA 4d² (not used)  : {m(MHA)}")
+    print(f"  cross-attn Q/O 2d²           : {m(CROSS_QO)}")
+    print(f"  CSA MQA-128 (detailed)       : {m(_csa_mqa64_self_attn(True))}")
+    print(f"  HCA MQA-128 (detailed)       : {m(_csa_mqa64_self_attn(False))}")
     print(f"  CSA/HCA average              : {m(attn_accounting('csa_mqa64').self_attn)}")
     print("  (8K window dominates long-context score FLOPs; index_topk 256 vs 512 is a ~3% delta.)")
 
@@ -1408,7 +1419,7 @@ def retune_routed(
     *,
     first_dense: bool,
     attn: AttnAccounting,
-    target: float = 12.05e9,
+    target: float = 12.25e9,
     base: Tier | None = None,
 ) -> tuple[Tier, ModelBudget]:
     """Brute-force small Nr_e / Nr_d adjustments to hit ``target`` total params."""
@@ -1441,7 +1452,7 @@ def retune_routed(
 
 
 def print_retune() -> None:
-    print("-- Nr retune to 12.05B (top-k unchanged ⇒ activations almost unchanged) --")
+    print("-- Nr retune to 12.25B (top-k unchanged ⇒ activations almost unchanged) --")
     attn_ph = attn_accounting("placeholder")
     attn_csa = attn_accounting("csa_mqa64")
     for label, first_dense, attn in (
@@ -1458,17 +1469,16 @@ def print_retune() -> None:
 
 
 def print_mup() -> None:
-    print("-- MiniCPM μP scales (must keep after the 16/24 split) --")
+    print("-- MiniCPM5 scales (Llama; no MiniCPM-2B μP) --")
     print(f"  scale_emb                 : {SCALE_EMB}")
     print(f"  logits / (d/dim_model_base): {D / DIM_MODEL_BASE:.0f}")
-    print(f"  residual scale_depth/√40  : {SCALE_DEPTH / math.sqrt(BASE_LAYERS):.4f}  (keep; do not use √16 or √24)")
-    print(f"  residual if rescaled √16  : {SCALE_DEPTH / math.sqrt(16):.4f}  (would drift inherited weights)")
-    print(f"  residual if rescaled √24  : {SCALE_DEPTH / math.sqrt(24):.4f}")
+    print(f"  residual_scale            : {SCALE_DEPTH}  (identity; do not use 1.4/√42)")
+    print(f"  base_layers               : {BASE_LAYERS}  (16 encoder + 26 decoder)")
 
 
 def print_claims(cs: Iterable[Claim]) -> int:
     cs = list(cs)
-    print("-- Claim ledger (middle tier + C1 + C1+FP8, placeholder attn, all-MoE) --")
+    print("-- Claim ledger (middle tier + C1 + C1+FP8, GQA 16/2, all-MoE) --")
     failed = 0
     for c in cs:
         mark = "PASS" if c.ok else "FAIL"
@@ -1490,9 +1500,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--attn",
-        choices=["placeholder", "csa_mqa64"],
-        default="placeholder",
-        help="self-attn parameter accounting",
+        choices=["gqa", "placeholder", "csa_mqa64"],
+        default="gqa",
+        help="self-attn parameter accounting (placeholder is an alias of gqa)",
     )
     p.add_argument(
         "--first-dense",
@@ -1571,7 +1581,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print()
         print_fp8(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
         print()
-        if args.tier in ("middle", "all") and args.attn == "placeholder" and not args.first_dense:
+        if args.tier in ("middle", "all") and args.attn in ("gqa", "placeholder") and not args.first_dense:
             print_claims(verify())
     elif args.curriculum and not args.staged:
         pass

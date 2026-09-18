@@ -1,39 +1,45 @@
-"""Frozen 12B recipe. See docs/FROZEN_SPEC.md."""
+"""Frozen 12B recipe. See docs/FROZEN_SPEC.md.
+
+Base checkpoint: Apache-2.0 MiniCPM5-2B (Llama GQA), not MiniCPM-2B-sft-bf16.
+"""
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
 class CATYokoConfig:
     name: str = "CAT-YOKO-12B"
-    vocab_size: int = 122_753
-    hidden_size: int = 2304
-    num_heads: int = 36
+    vocab_size: int = 130_560
+    hidden_size: int = 2048
+    num_heads: int = 16
+    num_kv_heads: int = 2
     encoder_layers: int = 16
-    decoder_layers: int = 24
-    dense_intermediate_size: int = 5760
+    decoder_layers: int = 26
+    dense_intermediate_size: int = 6144
     moe_intermediate_size: int = 2048
     n_shared: int = 1
-    n_routed_enc: int = 17
-    n_routed_dec: int = 17
-    top_k_enc: int = 6
-    top_k_dec: int = 8
+    n_routed_enc: int = 20
+    n_routed_dec: int = 20
+    top_k_enc: int = 7
+    top_k_dec: int = 10
     first_dense: bool = False
     n_win: int = 8192
     compress_m: int = 4
     compress_m_hca: int = 128
     index_topk: int = 256
     hash_moe_decoder_layers: int = 2
-    scale_emb: float = 12.0
-    dim_model_base: int = 256
-    scale_depth: float = 1.4
-    base_layers: int = 40
-    rms_eps: float = 1e-5
+    # MiniCPM5 is Llama: no MiniCPM-2B μP. Keep fields so the trainer API stays.
+    use_mup: bool = False
+    scale_emb: float = 1.0
+    dim_model_base: int = 2048
+    scale_depth: float = 1.0
+    base_layers: int = 42
+    tie_embeddings: bool = False
+    rms_eps: float = 1e-6
     qk_norm: bool = True
-    rope_theta: float = 10_000.0
+    rope_theta: float = 5_000_000.0
     seq_len: int = 4096
     lr: float = 1e-4
     lr_b2: float = 3e-5
@@ -56,7 +62,15 @@ class CATYokoConfig:
         return self.hidden_size // self.num_heads
 
     @property
+    def kv_dim(self) -> int:
+        return self.num_kv_heads * self.head_dim
+
+    @property
     def residual_scale(self) -> float:
+        if not self.use_mup:
+            return 1.0
+        import math
+
         return self.scale_depth / math.sqrt(self.base_layers)
 
     @property
@@ -87,6 +101,7 @@ class CATYokoConfig:
             vocab_size=128,
             hidden_size=64,
             num_heads=4,
+            num_kv_heads=2,
             encoder_layers=2,
             decoder_layers=2,
             dense_intermediate_size=128,
@@ -98,15 +113,18 @@ class CATYokoConfig:
             top_k_dec=2,
             n_win=8,
             hash_moe_decoder_layers=1,
+            dim_model_base=64,
             seq_len=16,
             lr=3e-4,
             use_fp8=False,
             global_batch_tokens=128,
+            rope_theta=10_000.0,
+            rms_eps=1e-5,
         )
 
 
 def encoder_layer_kind(index: int) -> str:
-    """Phase C labels. Phase B still runs sliding-window MHA on every encoder layer."""
+    """Phase C labels. Phase B still runs sliding-window GQA on every encoder layer."""
     if index < 2:
         return "sliding"
     return "csa" if (index - 2) % 2 == 0 else "hca"

@@ -210,7 +210,7 @@ class PrepareTrainTests(unittest.TestCase):
                     "tiny",
                     "--dummy-upcycle",
                     "--upcycle-hf",
-                    "openbmb/MiniCPM-2B-sft-bf16",
+                    "openbmb/MiniCPM5-2B-Base",
                     "--steps",
                     "1",
                 ]
@@ -249,7 +249,7 @@ class HfMinicpmTests(unittest.TestCase):
             import transformers  # noqa: F401
         except ImportError:
             with self.assertRaises(ImportError):
-                load_minicpm_state("openbmb/MiniCPM-2B-sft-bf16")
+                load_minicpm_state("openbmb/MiniCPM5-2B-Base")
             return
         self.skipTest("transformers installed; skip to avoid Hub download")
 

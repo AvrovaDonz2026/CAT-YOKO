@@ -1,8 +1,8 @@
 """Cluster parallelism. Architecture stays in CATYokoConfig; this is runtime-only.
 
-Legal defaults for CAT-YOKO-12B (d=2304, 36 heads, 17 routed experts):
-- tensor parallel must divide 36 and 2304 → {1,2,3,4,6,9,12,18,36}
-- expert parallel must divide 17 → {1, 17}  (17 is prime)
+Legal defaults for CAT-YOKO-12B (d=2048, 16 Q / 2 KV GQA, 20 routed experts):
+- tensor parallel must divide 16 heads and 2048 → {1,2,4,8,16}
+- expert parallel must divide 20 → {1,2,4,5,10,20}
 """
 
 from __future__ import annotations
@@ -50,4 +50,4 @@ def validate_parallel(cfg: CATYokoConfig, plan: ParallelPlan) -> None:
         raise ValueError("sequence_parallel requires TP>1")
     if plan.pipeline_split_rank is not None:
         if not (0 < plan.pipeline_split_rank < cfg.encoder_layers + cfg.decoder_layers):
-            raise ValueError("pipeline_split_rank must sit inside the 16+24 stack")
+            raise ValueError("pipeline_split_rank must sit inside the 16+26 stack")

@@ -54,6 +54,7 @@ class CausalityTests(unittest.TestCase):
 
 class SkeletonTests(unittest.TestCase):
     def test_depth_cut(self) -> None:
+        self.assertEqual((av.LE, av.LD, av.L0), (16, 26, 42))
         self.assertEqual(av.LE + av.LD, av.L0)
 
     def test_encoder_schedule_2_7_7(self) -> None:

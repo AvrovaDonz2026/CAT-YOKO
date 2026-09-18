@@ -15,14 +15,15 @@ MEGATRON_LM = "https://github.com/NVIDIA/Megatron-LM"
 
 # Custom surface a Megatron GPTModel / T5Model cannot provide.
 MEGATRON_CUSTOM_SURFACE = (
-    "two TransformerConfigs (encoder top-k=6 vs decoder top-k=8)",
+    "two TransformerConfigs (encoder top-k=7 vs decoder top-k=10)",
     "causal encoder; do not use T5 bidirectional encoder",
-    "single global cache W_K/W_V after encoder top (not per-layer 4d² K/V)",
+    "GQA 16 Q / 2 KV; cache W_K/W_V is d→kv_dim (not per-layer 4d² K/V)",
     "cache.detach() in B0/B1 (Theorem D)",
     "scheduled gated cross-attn (buffer, not AdamW)",
-    "μP scale_emb / residual_scale=1.4/√40 / logit_scale=d/256",
+    "no MiniCPM μP (scale_emb=1, residual_scale=1, logit_scale=1)",
+    "untied embeddings: freeze embed B0/B1; freeze lm_head in B0; train lm_head in B1",
     "Hash-MoE on decoder first 2 layers",
-    "EP in {1, 17} because n_routed=17 is prime",
+    "EP in {1,2,4,5,10,20} because n_routed=20",
     "do not instantiate megatron.core.models.gpt.GPTModel for this graph",
 )
 
@@ -82,6 +83,7 @@ def transformer_config_dict(
         "num_layers": n_layers,
         "hidden_size": cfg.hidden_size,
         "num_attention_heads": cfg.num_heads,
+        "num_query_groups": cfg.num_kv_heads,
         "kv_channels": cfg.head_dim,
         "ffn_hidden_size": cfg.dense_intermediate_size,
         "hidden_dropout": 0.0,
@@ -129,7 +131,7 @@ def yoco_extras(cfg: CATYokoConfig, phase: str) -> dict:
         "scale_emb": cfg.scale_emb,
         "residual_scale": cfg.residual_scale,
         "logit_scale": cfg.logit_scale,
-        "tied_embeddings": True,
+        "tied_embeddings": cfg.tie_embeddings,
         "hash_moe_decoder_layers": cfg.hash_moe_decoder_layers,
         "hash_moe_encoder": False,
         "first_dense": cfg.first_dense,
@@ -142,7 +144,7 @@ def yoco_extras(cfg: CATYokoConfig, phase: str) -> dict:
             "csa_compress_ratios": encoder_csa_compress_ratios(cfg),
             "csa_dense_mode": False,
             "dsa_indexer_topk": cfg.index_topk,
-            "note": "Phase C only. Phase B keeps csa_dense_mode conceptually on (window MHA).",
+            "note": "Phase C only. Phase B keeps csa_dense_mode conceptually on (window GQA).",
         },
         "custom_surface": list(MEGATRON_CUSTOM_SURFACE),
     }
@@ -168,7 +170,7 @@ def megatron_training_args(cfg: CATYokoConfig, plan: ParallelPlan, phase: str) -
         "use_distributed_optimizer": True,
         "tokenizer_type": "NullTokenizer",
         "vocab_size": cfg.vocab_size,
-        "untie_embeddings_and_output_weights": False,
+        "untie_embeddings_and_output_weights": not cfg.tie_embeddings,
         "tensor_model_parallel_size": plan.tensor_parallel,
         "pipeline_model_parallel_size": plan.pipeline_parallel,
         "expert_model_parallel_size": plan.expert_parallel,
