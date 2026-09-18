@@ -77,23 +77,37 @@ def newest_step_checkpoint(save_dir: Path) -> Path | None:
     return files[-1][1]
 
 
-def resolve_resume_path(path: Path | str) -> Path:
-    """File as-is; directory prefers ``latest.pt`` then newest ``step_*.pt``.
+def newest_trainable_checkpoint(save_dir: Path) -> Path | None:
+    files: list[tuple[int, Path]] = []
+    for p in Path(save_dir).glob("trainable_step_*.pt"):
+        try:
+            files.append((int(p.stem.rsplit("_", 1)[1]), p))
+        except (IndexError, ValueError):
+            continue
+    if not files:
+        return None
+    files.sort()
+    return files[-1][1]
 
-    A 12B run that filled the volume while writing ``latest.pt`` still has
-    ``step_N.pt``; resume that file or the save directory.
+
+def resolve_resume_path(path: Path | str) -> Path:
+    """File as-is; directory prefers full ``latest.pt``, then ``trainable.pt``.
+
+    12B B0 on a 32GB card writes trainable-only (~0.4GiB) because a 23GiB
+    ``latest.pt`` will not fit GitHub LFS (5GiB/file) or a 50G data volume.
     """
     path = Path(path)
     if path.is_file():
         return path
     if path.is_dir():
-        latest = path / "latest.pt"
-        if latest.is_file():
-            return latest
-        step = newest_step_checkpoint(path)
+        for name in ("latest.pt", "trainable.pt"):
+            cand = path / name
+            if cand.is_file():
+                return cand
+        step = newest_step_checkpoint(path) or newest_trainable_checkpoint(path)
         if step is not None:
             return step
-        raise FileNotFoundError(f"no latest.pt or step_*.pt in {path}")
+        raise FileNotFoundError(f"no latest.pt / trainable.pt / step_*.pt in {path}")
     raise FileNotFoundError(str(path))
 
 
@@ -189,6 +203,117 @@ def model_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
     }
 
 
+def trainable_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
+    """B0/B1 LFS payload: only ``requires_grad`` params (B0 ≈ 219M, ~0.44GiB bf16)."""
+    out: dict[str, torch.Tensor] = {}
+    for name, p in unwrap(model).named_parameters():
+        if p.requires_grad:
+            out[name] = _tensor_cpu(p)
+    return out
+
+
+def is_trainable_ckpt(ckpt: dict[str, Any]) -> bool:
+    return str(ckpt.get("kind", "")) == "trainable" or (
+        isinstance(ckpt.get("trainable"), dict) and "model" not in ckpt
+    )
+
+
+def load_trainable_state(model: nn.Module, state: dict[str, torch.Tensor]) -> None:
+    """Overlay saved new-module / unfrozen weights. Frozen tensors stay as-is."""
+    raw = unwrap(model)
+    current = raw.state_dict()
+    mapped = {k: v for k, v in state.items() if k in current}
+    raw.load_state_dict(mapped, strict=False)
+
+
+def save_trainable_checkpoint(
+    path: Path,
+    *,
+    model: nn.Module,
+    extra: dict[str, Any],
+) -> None:
+    """Weights GitHub LFS can hold. Resume = MiniCPM5 upcycle + this overlay."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sd = trainable_state_dict(model)
+    payload = {
+        "kind": "trainable",
+        "trainable": sd,
+        "extra": extra,
+        "n_tensors": len(sd),
+        "nbytes": _nbytes(sd),
+    }
+    require_host_bytes(_nbytes(sd), what=str(path))
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.unlink(missing_ok=True)
+    require_free_bytes(path.parent, _nbytes(payload), what=str(path))
+    torch.save(payload, tmp)
+    tmp.replace(path)
+
+
+def shard_state_dict(
+    state: dict[str, torch.Tensor],
+    *,
+    max_bytes: int,
+) -> list[dict[str, torch.Tensor]]:
+    """Split a full 12B dict into GitHub-LFS-sized pieces (≤4GiB)."""
+    if max_bytes <= 0:
+        raise ValueError("max_bytes must be positive")
+    shards: list[dict[str, torch.Tensor]] = []
+    cur: dict[str, torch.Tensor] = {}
+    size = 0
+    for key, tensor in state.items():
+        n = _nbytes(tensor)
+        if cur and size + n > max_bytes:
+            shards.append(cur)
+            cur, size = {}, 0
+        cur[key] = tensor
+        size += n
+    if cur:
+        shards.append(cur)
+    return shards or [{}]
+
+
+def save_sharded_checkpoint(
+    directory: Path,
+    *,
+    model: nn.Module,
+    extra: dict[str, Any],
+    max_bytes: int | None = None,
+) -> Path:
+    """Write ``shard-00000.pt`` … plus ``manifest.json``. B1/B2 full graphs."""
+    from cat_yoko.phases import GITHUB_LFS_MAX_BYTES
+
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    cap = int(max_bytes) if max_bytes is not None else GITHUB_LFS_MAX_BYTES
+    sd = _cpu_copy(model_state_dict(model))
+    shards = shard_state_dict(sd, max_bytes=cap)
+    names: list[str] = []
+    for i, piece in enumerate(shards):
+        name = f"shard-{i:05d}.pt"
+        dest = directory / name
+        payload = {"kind": "shard", "index": i, "model": piece}
+        require_host_bytes(_nbytes(piece), what=str(dest))
+        require_free_bytes(directory, _nbytes(payload), what=str(dest))
+        tmp = dest.with_name(dest.name + ".tmp")
+        tmp.unlink(missing_ok=True)
+        torch.save(payload, tmp)
+        tmp.replace(dest)
+        names.append(name)
+    import json
+
+    manifest = directory / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {"kind": "sharded", "shards": names, "n_shards": len(names), "extra": extra},
+            default=str,
+        )
+        + "\n"
+    )
+    return manifest
+
+
 def load_model_state(model: nn.Module, state: dict[str, torch.Tensor]) -> None:
     if _is_fsdp(model):
         from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -245,23 +370,27 @@ def _latest_inode(save_dir: Path) -> int | None:
         return None
 
 
-def prune_step_checkpoints(save_dir: Path, keep: int) -> None:
-    """Keep the newest ``step_*.pt`` files; ``latest.pt`` is not touched.
-
-    Never unlink a ``step_*.pt`` that shares an inode with ``latest.pt``
-    (hardlink). POSIX unlink of one name in an nlink=2 pair would leave
-    the bytes, but the step name must still stay so ``latest.pt`` is not
-    the only remaining link. A copy of ``latest.pt`` (separate inode) does
-    not protect the step file. A dangling ``latest.pt`` is ignored.
-    """
+def prune_named_checkpoints(
+    save_dir: Path,
+    keep: int,
+    *,
+    glob: str,
+    latest_name: str,
+) -> None:
     if keep <= 0:
         return
     save_dir = Path(save_dir)
-    latest_ino = _latest_inode(save_dir)
+    latest = save_dir / latest_name
+    latest_ino: int | None = None
+    try:
+        if latest.exists() and latest.is_file():
+            latest_ino = latest.stat().st_ino
+    except OSError:
+        latest_ino = None
     files: list[tuple[int, Path]] = []
-    for p in save_dir.glob("step_*.pt"):
+    for p in save_dir.glob(glob):
         try:
-            files.append((int(p.stem.split("_", 1)[1]), p))
+            files.append((int(p.stem.rsplit("_", 1)[1]), p))
         except (IndexError, ValueError):
             continue
     files.sort()
@@ -272,6 +401,21 @@ def prune_step_checkpoints(save_dir: Path, keep: int) -> None:
         except OSError:
             pass
         old.unlink(missing_ok=True)
+
+
+def prune_step_checkpoints(save_dir: Path, keep: int) -> None:
+    """Keep the newest ``step_*.pt`` files; ``latest.pt`` is not touched.
+
+    Never unlink a ``step_*.pt`` that shares an inode with ``latest.pt``
+    (hardlink). POSIX unlink of one name in an nlink=2 pair would leave
+    the bytes, but the step name must still stay so ``latest.pt`` is not
+    the only remaining link. A copy of ``latest.pt`` (separate inode) does
+    not protect the step file. A dangling ``latest.pt`` is ignored.
+    """
+    prune_named_checkpoints(save_dir, keep, glob="step_*.pt", latest_name="latest.pt")
+    prune_named_checkpoints(
+        save_dir, keep, glob="trainable_step_*.pt", latest_name="trainable.pt"
+    )
 
 
 def load_checkpoint(path: Path, map_location: str = "cpu") -> dict[str, Any]:

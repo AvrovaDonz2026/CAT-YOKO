@@ -16,13 +16,16 @@ from torch import nn
 
 from cat_yoko.checkpoint import (
     cleanup_save_tmp,
+    is_trainable_ckpt,
     load_checkpoint,
     load_model_state,
     load_optimizer_state,
+    load_trainable_state,
     prune_step_checkpoints,
     publish_latest,
     resolve_resume_path,
     save_checkpoint,
+    save_trainable_checkpoint,
 )
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import open_stream, resolve_eos, resolve_seq_len, sidecar_meta
@@ -190,6 +193,8 @@ class Trainer:
         save_optim: bool | None = None,
         save_keep: int = 0,
         initial_stream: dict | None = None,
+        save_full: bool | None = None,
+        save_trainable: bool | None = None,
     ) -> None:
         self.cfg = cfg
         self.phase = phase
@@ -227,6 +232,8 @@ class Trainer:
         self.save_optim_arg = save_optim
         self.save_keep = max(int(save_keep), 0)
         self.initial_stream = initial_stream
+        self.save_full_arg = save_full
+        self.save_trainable_arg = save_trainable
         self.device, self.rank, self.world = init_distributed(device, force=bool(fsdp))
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
@@ -280,21 +287,35 @@ class Trainer:
     def _maybe_save(self, model: nn.Module, opt, extra: dict, tag: str) -> None:
         if self.save_dir is None or not is_rank0(self.rank):
             return
-        dest = self.save_dir / tag
-        if tag == "latest.pt":
-            step = extra.get("step")
-            step_path = self.save_dir / f"step_{int(step)}.pt" if step else None
-            if step_path is not None and step_path.is_file():
-                # 12B: do not torch.save 23GiB a second time (fills /tmp).
-                publish_latest(step_path, dest)
-                return
-        save_checkpoint(
-            dest,
-            model=model,
-            optimizer=opt,
-            extra=extra,
-            save_optimizer=self.save_optim,
-        )
+        if self.save_trainable:
+            if tag == "latest.pt":
+                step = extra.get("step")
+                step_path = (
+                    self.save_dir / f"trainable_step_{int(step)}.pt" if step else None
+                )
+                dest = self.save_dir / "trainable.pt"
+                if step_path is not None and step_path.is_file():
+                    publish_latest(step_path, dest)
+                else:
+                    save_trainable_checkpoint(dest, model=model, extra=extra)
+            elif tag.startswith("step_"):
+                dest = self.save_dir / f"trainable_{tag}"
+                save_trainable_checkpoint(dest, model=model, extra=extra)
+        if self.save_full:
+            dest = self.save_dir / tag
+            if tag == "latest.pt":
+                step = extra.get("step")
+                step_path = self.save_dir / f"step_{int(step)}.pt" if step else None
+                if step_path is not None and step_path.is_file():
+                    publish_latest(step_path, dest)
+                    return
+            save_checkpoint(
+                dest,
+                model=model,
+                optimizer=opt,
+                extra=extra,
+                save_optimizer=self.save_optim,
+            )
         if tag.startswith("step_") and self.save_keep:
             prune_step_checkpoints(self.save_dir, self.save_keep)
 
@@ -402,8 +423,11 @@ class Trainer:
         restore when CLI ``phase`` matches the checkpoint.
         """
         ckpt = load_checkpoint(self.resume, map_location="cpu")
-        load_model_state(model, ckpt["model"])
         extra = ckpt.get("extra") or {}
+        if is_trainable_ckpt(ckpt):
+            load_trainable_state(model, ckpt["trainable"])
+        else:
+            load_model_state(model, ckpt["model"])
         ckpt_phase = str(extra.get("phase", self.phase))
         same_phase = ckpt_phase == self.phase
         step = 0
@@ -500,6 +524,16 @@ class Trainer:
             self.save_optim = self.cfg.name != "CAT-YOKO-12B"
         else:
             self.save_optim = bool(self.save_optim_arg)
+        if self.save_full_arg is None:
+            self.save_full = self.cfg.name != "CAT-YOKO-12B"
+        else:
+            self.save_full = bool(self.save_full_arg)
+        if self.save_trainable_arg is None:
+            self.save_trainable = self.cfg.name == "CAT-YOKO-12B"
+        else:
+            self.save_trainable = bool(self.save_trainable_arg)
+        if self.save_dir is not None and not self.save_full and not self.save_trainable:
+            raise RuntimeError("need --save-full and/or --save-trainable")
         if self.save_dir is not None:
             cleanup_save_tmp(self.save_dir)
             if self.cfg.name == "CAT-YOKO-12B":

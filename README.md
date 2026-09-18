@@ -17,6 +17,16 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 
 Phase B 语料走 OpenBMB：**Ultra-FineWeb**（en/zh）+ **UltraData-Math**，用 **MiniCPM5-2B** tokenizer（`openbmb/MiniCPM5-2B`，`V=130560`，不要 MiniCPM-2B / MiniCPM3）。仓库不进 50B token；`prepare` 只切一块 mmap `.bin`。
 
+发布入口是 **B0 / B1 / B2**，不是裸 `--phase`。12B 默认只写 Git LFS 能吃的 `trainable.pt`（B0 ≈0.44GiB bf16）；23GiB 全图 `latest.pt` **不进 git**（GitHub LFS 单文件 5GiB）。32GB 卡跑不完 8B token，用 `--try`（32 步、seq=64）。
+
+```bash
+python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
+python3 -m cat_yoko.b1 --try --resume checkpoints/b0 --save-dir checkpoints/b1
+python3 -m cat_yoko.b2 --try --resume checkpoints/b1 --save-dir checkpoints/b2
+# H100 包络（8/27/15B tokens；<40GiB 卡会拒绝，除非显式 --steps/--tokens）：
+# python3 -m cat_yoko.b0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin
+```
+
 ```bash
 # 本地 jsonl 烟测（不下载 HuggingFace）
 python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy \
@@ -46,7 +56,7 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # 12B ckpt 不要放 /tmp（23GiB×2 会写满 overlay）。save_every 命中末步时 latest.pt 是 step_N 的 hardlink：
 # python3 -m cat_yoko.gpu_smoke --middle --save-dir /root/autodl-tmp/b0ckpt
 # python3 -m cat_yoko.gpu_smoke --middle --steps 2 --resume /root/autodl-tmp/b0ckpt
-python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
+python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke
 python3 -m cat_yoko.gpu_smoke --middle
@@ -60,5 +70,5 @@ python3 -m unittest tests.test_gpu
 python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 ledger
 python3 scripts/param_budget.py --staged --curriculum --fp8
 python3 scripts/arch_verify.py --verify      # architecture invariants
-python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
+python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
 ```

@@ -13,6 +13,9 @@ data = ["datasets>=2.18", "transformers>=4.40"]
 
 [project.scripts]
 cat-yoko-train = "cat_yoko.train:main"
+cat-yoko-b0 = "cat_yoko.phase_train:main_b0"
+cat-yoko-b1 = "cat_yoko.phase_train:main_b1"
+cat-yoko-b2 = "cat_yoko.phase_train:main_b2"
 cat-yoko-prepare = "cat_yoko.prepare:main"
 cat-yoko-gpu-smoke = "cat_yoko.gpu_smoke:main"
 

@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         "--resume",
         type=Path,
         default=None,
-        help="checkpoint file, or directory (latest.pt else newest step_*.pt)",
+        help="checkpoint file, or directory (latest.pt, then trainable.pt, then newest step_*)",
     )
     p.add_argument("--log", type=Path, default=None, help="jsonl metrics path")
     p.add_argument("--log-every", type=int, default=1)
@@ -163,6 +163,26 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=0,
         help="keep only N step_*.pt files (0 = keep all); latest.pt is always kept",
+    )
+    p.add_argument(
+        "--save-full",
+        action="store_true",
+        help="write 23GiB full graphs (not GitHub LFS; default on for tiny)",
+    )
+    p.add_argument(
+        "--no-save-full",
+        action="store_true",
+        help="skip full 23GiB graphs (default for 12B)",
+    )
+    p.add_argument(
+        "--save-trainable",
+        action="store_true",
+        help="write trainable.pt overlay (default for 12B; B0 ~0.44GiB, LFS-ok)",
+    )
+    p.add_argument(
+        "--no-save-trainable",
+        action="store_true",
+        help="do not write trainable.pt",
     )
     p.add_argument("--offload-encoder", action="store_true", help="force B0/B1 encoder CPU offload")
     p.add_argument("--no-offload-encoder", action="store_true", help="disable encoder CPU offload")
@@ -216,6 +236,10 @@ def main(argv: list[str] | None = None) -> int:
         p.error("pick one of --optim-cpu / --no-optim-cpu")
     if args.save_optim and args.no_save_optim:
         p.error("pick one of --save-optim / --no-save-optim")
+    if args.save_full and args.no_save_full:
+        p.error("pick one of --save-full / --no-save-full")
+    if args.save_trainable and args.no_save_trainable:
+        p.error("pick one of --save-trainable / --no-save-trainable")
     args.c1_smoke = bool(args.c1_smoke or args.c1)
     if args.c1_smoke and args.resume is not None:
         p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
@@ -258,6 +282,8 @@ def main(argv: list[str] | None = None) -> int:
     offload_blocks = True if args.offload_blocks else (False if args.no_offload_blocks else None)
     optim_cpu = True if args.optim_cpu else (False if args.no_optim_cpu else None)
     save_optim = True if args.save_optim else (False if args.no_save_optim else None)
+    save_full = True if args.save_full else (False if args.no_save_full else None)
+    save_trainable = True if args.save_trainable else (False if args.no_save_trainable else None)
     if args.config == "12b":
         if args.dtype != "bf16":
             args.dtype = "bf16"
@@ -329,6 +355,8 @@ def main(argv: list[str] | None = None) -> int:
         offload_blocks=offload_blocks,
         optim_cpu=optim_cpu,
         save_optim=save_optim,
+        save_full=save_full,
+        save_trainable=save_trainable,
         save_keep=args.keep_last,
     )
     if args.c1_smoke:
