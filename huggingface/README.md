@@ -66,9 +66,12 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 当前权重
 
-本 Hub `checkpoints/b0/trainable.pt`：AutoDL RTX 6000D sm_120 上 `--try` 32 步、真实 MiniCPM5-2B-Base 上采样；gate 0.301；peak 24244 MiB。**不是** 8B token 信封。尚未上传全图 / 8B 信封权重。
+| 路径 | 来源 | 说明 |
+| --- | --- | --- |
+| `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
+| `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
 
-GitHub 仓库不再存权重、也不再用 Git LFS。
+两份都**不是** 8B token 信封。尚未上传全图。GitHub 不存权重、不用 Git LFS。日志在 GitHub [`artifacts/autodl-rtx6000d/nvfp4/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx6000d/nvfp4)。
 
 无公开评测分数。
 
@@ -105,6 +108,6 @@ GitHub 仓库不再存权重、也不再用 Git LFS。
 
 Data: Ultra-FineWeb en/zh + UltraData-Math. Tokenizer: [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B).
 
-This Hub copy is the RTX 6000D MiniCPM5-upcycle `--try` (32 steps, gate 0.301). It is not the 8B-token envelope. Weights do not live on GitHub.
+This Hub has two RTX 6000D MiniCPM5-upcycle `--try` overlays (not the 8B-token envelope): `checkpoints/b0/trainable.pt` (32 steps) and `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
 
 License: this repo BSD-3-Clause; MiniCPM5 base Apache-2.0. No eval scores.

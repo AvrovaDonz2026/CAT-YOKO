@@ -1,0 +1,120 @@
+          return _build_backend().build_wheel(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 410, in build_wheel
+          return self._build_with_temp_dir(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 395, in _build_with_temp_dir
+          self.run_setup()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 487, in run_setup
+          super().run_setup(setup_script=setup_script)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 311, in run_setup
+          exec(code, locals())
+        File "<string>", line 176, in <module>
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/__init__.py", line 104, in setup
+          return distutils.core.setup(**attrs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/core.py", line 184, in setup
+          return run_commands(dist)
+                 ^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/core.py", line 200, in run_commands
+          dist.run_commands()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 969, in run_commands
+          self.run_command(cmd)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/dist.py", line 967, in run_command
+          super().run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 988, in run_command
+          cmd_obj.run()
+        File "<string>", line 151, in run
+        File "/root/miniconda3/lib/python3.12/site-packages/wheel/bdist_wheel.py", line 368, in run
+          self.run_command("build")
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/cmd.py", line 316, in run_command
+          self.distribution.run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/dist.py", line 967, in run_command
+          super().run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 988, in run_command
+          cmd_obj.run()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build.py", line 132, in run
+          self.run_command(cmd_name)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/cmd.py", line 316, in run_command
+          self.distribution.run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/dist.py", line 967, in run_command
+          super().run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 988, in run_command
+          cmd_obj.run()
+        File "/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build_tools/build_ext.py", line 153, in run
+          super().run()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/command/build_ext.py", line 91, in run
+          _build_ext.run(self)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 359, in run
+          self.build_extensions()
+        File "/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build_tools/build_ext.py", line 241, in build_extensions
+          super().build_extensions()
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 1072, in build_extensions
+          build_ext.build_extensions(self)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 479, in build_extensions
+          self._build_extensions_serial()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 505, in _build_extensions_serial
+          self.build_extension(ext)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/command/build_ext.py", line 252, in build_extension
+          _build_ext.build_extension(self, ext)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 560, in build_extension
+          objects = self.compiler.compile(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 856, in unix_wrap_ninja_compile
+          _write_ninja_file_and_compile_objects(
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2227, in _write_ninja_file_and_compile_objects
+          _run_ninja_build(
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2612, in _run_ninja_build
+          raise RuntimeError(message) from e
+      RuntimeError: Error compiling objects for extension
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for transformer_engine_torch
+Failed to build transformer_engine_torch
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> transformer_engine_torch
+TE_NOISO_PYTORCH_FAIL
+=== try --no-build-isolation transformer-engine[core_cu12]==2.19.0 ===
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0 (from transformer-engine[core_cu12]==2.19.0)
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 38.2 MB/s  0:00:00
+Collecting transformer_engine_cu12==2.19.0 (from transformer-engine[core_cu12]==2.19.0)
+  Downloading transformer_engine_cu12-2.19.0-py3-none-manylinux_2_28_x86_64.whl (675.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.9/675.9 MB 16.4 MB/s  0:00:41
+Requirement already satisfied: packaging in ./miniconda3/lib/python3.12/site-packages (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0) (23.2)
+Collecting importlib-metadata>=1.0 (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading importlib_metadata-9.0.1-py3-none-any.whl (27 kB)
+Collecting pydantic (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+Collecting zipp>=3.20 (from importlib-metadata>=1.0->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+Collecting annotated-types>=0.6.0 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.46.5 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 29.8 MB/s  0:00:00
+Requirement already satisfied: typing-extensions>=4.14.1 in ./miniconda3/lib/python3.12/site-packages (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0) (4.14.1)
+Collecting typing-inspection>=0.4.2 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Collecting typing-extensions>=4.14.1 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Installing collected packages: zipp, typing-extensions, transformer-engine, annotated-types, typing-inspection, pydantic-core, importlib-metadata, pydantic, transformer_engine_cu12
+  Attempting uninstall: typing-extensions
+    Found existing installation: typing_extensions 4.14.1
+    Uninstalling typing_extensions-4.14.1:
+      Successfully uninstalled typing_extensions-4.14.1
+
+Successfully installed annotated-types-0.8.0 importlib-metadata-9.0.1 pydantic-2.13.5 pydantic-core-2.46.5 transformer-engine-2.19.0 transformer_engine_cu12-2.19.0 typing-extensions-4.16.0 typing-inspection-0.4.4 zipp-4.1.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+TE_OK
+te_root 2.19.0 /root/miniconda3/lib/python3.12/site-packages/transformer_engine/__init__.py
+te_import_fail ImportError /root/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so: undefined symbol: ncclCommWindowRegister
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  1.8G   29G   6% /
+/dev/md0         50G  7.4G   43G  15% /root/autodl-tmp
+=== te done 2026-09-18T16:30:30Z ===
+EXIT:0

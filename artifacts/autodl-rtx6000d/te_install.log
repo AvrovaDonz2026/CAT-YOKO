@@ -1,0 +1,1544 @@
+=== te install 2026-09-18T16:17:00Z ===
+hostname=autodl-container-8x4c4zmh8d-e96e943a
+python=/root/miniconda3/bin/python Build cuda_12.8.r12.8/compiler.35583870_0
+torch 2.8.0+cu128 cuda 12.8 cap (12, 0)
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  782M   30G   3% /
+/dev/md0         50G  5.9G   45G  12% /root/autodl-tmp
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+ninja=/root/miniconda3/bin/ninja
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0 (from transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 7.0 MB/s  0:00:00
+Collecting transformer_engine_torch==2.19.0 (from transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine_torch-2.19.0.tar.gz (427 kB)
+  Installing build dependencies: started
+  Installing build dependencies: still running...
+=== RESTART with NVTE_CUDA_ARCHS=120 2026-09-18T16:18:40Z ===
+=== te install 2026-09-18T16:18:40Z ===
+hostname=autodl-container-8x4c4zmh8d-e96e943a
+python=/root/miniconda3/bin/python Build cuda_12.8.r12.8/compiler.35583870_0
+NVTE_FRAMEWORK=pytorch NVTE_CUDA_ARCHS=120 CUDA_HOME=/usr/local/cuda-12.8 MAX_JOBS=8
+torch 2.8.0+cu128 cuda 12.8 cap (12, 0)
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  782M   30G   3% /
+/dev/md0         50G  6.7G   44G  14% /root/autodl-tmp
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+ninja=/root/miniconda3/bin/ninja
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0 (from transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 7.7 MB/s  0:00:00
+Collecting transformer_engine_torch==2.19.0 (from transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine_torch-2.19.0.tar.gz (427 kB)
+  Installing build dependencies: started
+  Installing build dependencies: still running...
+  Installing build dependencies: still running...
+  Installing build dependencies: finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × installing build dependencies for transformer_engine_torch did not run successfully.
+  │ exit code: 1
+  ╰─> [36 lines of output]
+      Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+      Collecting setuptools>=61.0
+        Using cached setuptools-84.0.0-py3-none-any.whl (818 kB)
+      Collecting pip
+        Using cached pip-26.2.1-py3-none-any.whl (1.8 MB)
+      Collecting torch>=2.1
+        Downloading torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (554.6 MB)
+           \xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81         440.1/554.6 MB 15.1 MB/s eta 0:00:08
+        WARNING: Connection interrupted while downloading.
+        WARNING: Attempting to resume incomplete download (440.1 MB/554.6 MB, attempt 1)
+        Resuming download torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (440.1 MB/554.6 MB)
+           \xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x95\xb8         440.1/554.6 MB ? eta -:--:--
+        WARNING: Connection interrupted while downloading.
+        WARNING: Attempting to resume incomplete download (440.1 MB/554.6 MB, attempt 2)
+        Resuming download torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (440.1 MB/554.6 MB)
+           \xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81        461.1/554.6 MB 2.9 MB/s eta 0:00:33
+        WARNING: Connection interrupted while downloading.
+        WARNING: Attempting to resume incomplete download (461.1 MB/554.6 MB, attempt 3)
+        Resuming download torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (461.1 MB/554.6 MB)
+           \xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81        461.1/554.6 MB ? eta -:--:--
+        WARNING: Connection interrupted while downloading.
+        WARNING: Attempting to resume incomplete download (461.1 MB/554.6 MB, attempt 4)
+        Resuming download torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (461.1 MB/554.6 MB)
+           \xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x95\xb8      482.1/554.6 MB 1.8 MB/s eta 0:00:42
+        WARNING: Connection interrupted while downloading.
+        WARNING: Attempting to resume incomplete download (482.1 MB/554.6 MB, attempt 5)
+        Resuming download torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl (482.1 MB/554.6 MB)
+           \xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x94\x81\xe2\x95\xb8      482.6/554.6 MB 2.5 MB/s eta 0:00:29
+        WARNING: Connection interrupted while downloading.
+      error: incomplete-download
+      
+      \xc3\x97 Download failed after 6 attempts because not enough bytes were received (482.6 MB/554.6 MB)
+      \xe2\x95\xb0\xe2\x94\x80> URL: https://repo.huaweicloud.com/repository/pypi/packages/15/71/49399acd41f750a906c686bd23c08a2001ccb8dd25f2971003c2ed89c1dd/torch-2.14.0-cp312-cp312-manylinux_2_28_x86_64.whl#sha256=fecffb58f51fd643d213acd68da21cc3fc19bea05a3bc64b4ee55128f47a4963
+      
+      note: This is an issue with network connectivity, not pip.
+      hint: Use --resume-retries to configure resume attempt limit.
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+ERROR: Failed to build 'transformer_engine_torch' when installing build dependencies for transformer_engine_torch
+TE_PYTORCH_EXTRA_FAIL
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 17.1 MB/s  0:00:00
+Installing collected packages: transformer-engine
+Successfully installed transformer-engine-2.19.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+TE_OK
+te_root_fail RuntimeError Found empty `transformer-engine` meta package installed. Install `transformer-engine` with framework extensions via'pip3 install --no-build-isolation transformer-engine[pytorch,jax]==VERSION' or 'pip3 install transformer-engine[core]` for the TE core lib only. The `core_cu12` or `core_cu13` extra deps can be used to specify CUDA version for the TE core lib.
+te_import_fail RuntimeError Found empty `transformer-engine` meta package installed. Install `transformer-engine` with framework extensions via'pip3 install --no-build-isolation transformer-engine[pytorch,jax]==VERSION' or 'pip3 install transformer-engine[core]` for the TE core lib only. The `core_cu12` or `core_cu13` extra deps can be used to specify CUDA version for the TE core lib.
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  792M   30G   3% /
+/dev/md0         50G  6.7G   44G  14% /root/autodl-tmp
+=== te done 2026-09-18T16:21:43Z ===
+EXIT:0
+=== RETRY --no-build-isolation 2026-09-18T16:27:00Z ===
+=== te install 2026-09-18T16:27:00Z ===
+hostname=autodl-container-8x4c4zmh8d-e96e943a
+python=/root/miniconda3/bin/python Build cuda_12.8.r12.8/compiler.35583870_0
+NVTE_FRAMEWORK=pytorch NVTE_CUDA_ARCHS=120 CUDA_HOME=/usr/local/cuda-12.8 MAX_JOBS=8
+torch 2.8.0+cu128 cuda 12.8 cap (12, 0)
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  792M   30G   3% /
+/dev/md0         50G  6.7G   44G  14% /root/autodl-tmp
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+ninja=/root/miniconda3/bin/ninja
+Found existing installation: transformer_engine 2.19.0
+Uninstalling transformer_engine-2.19.0:
+  Successfully uninstalled transformer_engine-2.19.0
+=== try --no-build-isolation transformer-engine[pytorch]==2.19.0 ===
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0 (from transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 29.5 MB/s  0:00:00
+Collecting transformer_engine_torch==2.19.0 (from transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine_torch-2.19.0.tar.gz (427 kB)
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: torch>=2.1 in ./miniconda3/lib/python3.12/site-packages (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (2.8.0+cu128)
+Collecting einops (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading einops-0.8.2-py3-none-any.whl (65 kB)
+Collecting onnxscript (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading onnxscript-0.7.2-py3-none-any.whl (754 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 754.2/754.2 kB 6.4 MB/s  0:00:00
+Collecting onnx (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading onnx-1.22.0-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (19.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 19.1/19.1 MB 21.9 MB/s  0:00:00
+Requirement already satisfied: packaging in ./miniconda3/lib/python3.12/site-packages (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (23.2)
+Collecting pydantic (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+Collecting nvdlfw-inspect (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvdlfw_inspect-0.2.2-py3-none-any.whl (30 kB)
+Collecting nvidia-cudnn-frontend>=1.28.0 (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cudnn_frontend-1.29.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.3/7.3 MB 34.7 MB/s  0:00:00
+Collecting transformer-engine-cu12==2.19.0 (from transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading transformer_engine_cu12-2.19.0-py3-none-manylinux_2_28_x86_64.whl (675.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.9/675.9 MB 11.0 MB/s  0:01:05
+Collecting importlib-metadata>=1.0 (from transformer-engine-cu12==2.19.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading importlib_metadata-9.0.1-py3-none-any.whl (27 kB)
+Collecting zipp>=3.20 (from importlib-metadata>=1.0->transformer-engine-cu12==2.19.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+Collecting nvidia-cutlass-dsl>=4.6.2 (from nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cutlass_dsl-4.7.1-py3-none-any.whl (10 kB)
+Collecting apache-tvm-ffi>=0.1.11 (from nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading apache_tvm_ffi-0.1.14.post0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (3.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 7.9 MB/s  0:00:00
+Requirement already satisfied: typing-extensions>=4.13 in ./miniconda3/lib/python3.12/site-packages (from apache-tvm-ffi>=0.1.11->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (4.14.1)
+Collecting nvidia-cutlass-dsl-libs-base==4.7.1 (from nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cutlass_dsl_libs_base-4.7.1-cp312-cp312-manylinux_2_28_x86_64.whl (2.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.8/2.8 MB 7.9 MB/s  0:00:00
+Collecting nvidia-cutlass-dsl-libs-cu12==4.7.1 (from nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cutlass_dsl_libs_cu12-4.7.1-cp312-cp312-manylinux_2_28_x86_64.whl (88.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 88.7/88.7 MB 9.2 MB/s  0:00:09
+Requirement already satisfied: numpy in ./miniconda3/lib/python3.12/site-packages (from nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (2.3.2)
+Collecting cuda-python>=12.8 (from nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading cuda_python-13.4.1-py3-none-any.whl (7.6 kB)
+Requirement already satisfied: protobuf>=4.21.12 in ./miniconda3/lib/python3.12/site-packages (from nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (6.31.1)
+Collecting nvidia-cuda-nvdisasm<14,>=13.3 (from nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cuda_nvdisasm-13.4.92-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.2/5.2 MB 9.1 MB/s  0:00:00
+Collecting nvidia-cutlass-dsl-libs-core==4.7.1 (from nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cutlass_dsl_libs_core-4.7.1-py3-none-any.whl (1.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 4.4 MB/s  0:00:00
+Collecting cuda-bindings~=13.4.1 (from cuda-python>=12.8->nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading cuda_bindings-13.4.2-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (7.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.2/7.2 MB 11.0 MB/s  0:00:00
+Collecting cuda-core~=1.2.0 (from cuda-python>=12.8->nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading cuda_core-1.2.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (6.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.6/6.6 MB 18.3 MB/s  0:00:00
+Collecting cuda-pathfinder~=1.1 (from cuda-python>=12.8->nvidia-cutlass-dsl-libs-base==4.7.1->nvidia-cutlass-dsl>=4.6.2->nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading cuda_pathfinder-1.8.2-py3-none-any.whl (62 kB)
+Collecting nvidia-cutlass-dsl-libs-cu13==4.7.1 (from nvidia-cutlass-dsl[cu13]>=4.6.2->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading nvidia_cutlass_dsl_libs_cu13-4.7.1-cp312-cp312-manylinux_2_28_x86_64.whl (88.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 88.3/88.3 MB 8.2 MB/s  0:00:10
+Requirement already satisfied: filelock in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (3.18.0)
+Requirement already satisfied: setuptools in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (69.5.1)
+Requirement already satisfied: sympy>=1.13.3 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (1.14.0)
+Requirement already satisfied: networkx in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (3.5)
+Requirement already satisfied: jinja2 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (3.1.6)
+Requirement already satisfied: fsspec in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (2025.7.0)
+Requirement already satisfied: nvidia-cuda-nvrtc-cu12==12.8.93 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.8.93)
+Requirement already satisfied: nvidia-cuda-runtime-cu12==12.8.90 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.8.90)
+Requirement already satisfied: nvidia-cuda-cupti-cu12==12.8.90 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.8.90)
+Requirement already satisfied: nvidia-cudnn-cu12==9.10.2.21 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (9.10.2.21)
+Requirement already satisfied: nvidia-cublas-cu12==12.8.4.1 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.8.4.1)
+Requirement already satisfied: nvidia-cufft-cu12==11.3.3.83 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (11.3.3.83)
+Requirement already satisfied: nvidia-curand-cu12==10.3.9.90 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (10.3.9.90)
+Requirement already satisfied: nvidia-cusolver-cu12==11.7.3.90 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (11.7.3.90)
+Requirement already satisfied: nvidia-cusparse-cu12==12.5.8.93 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.5.8.93)
+Requirement already satisfied: nvidia-cusparselt-cu12==0.7.1 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (0.7.1)
+Requirement already satisfied: nvidia-nccl-cu12==2.27.3 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (2.27.3)
+Requirement already satisfied: nvidia-nvtx-cu12==12.8.90 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.8.90)
+Requirement already satisfied: nvidia-nvjitlink-cu12==12.8.93 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (12.8.93)
+Requirement already satisfied: nvidia-cufile-cu12==1.13.1.3 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (1.13.1.3)
+Requirement already satisfied: triton==3.4.0 in ./miniconda3/lib/python3.12/site-packages (from torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (3.4.0)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in ./miniconda3/lib/python3.12/site-packages (from sympy>=1.13.3->torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in ./miniconda3/lib/python3.12/site-packages (from jinja2->torch>=2.1->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (3.0.2)
+Requirement already satisfied: pyyaml>=6.0.0 in ./miniconda3/lib/python3.12/site-packages (from nvdlfw-inspect->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0) (6.0.2)
+Collecting typing-extensions>=4.13 (from apache-tvm-ffi>=0.1.11->nvidia-cudnn-frontend>=1.28.0->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Collecting ml_dtypes>=0.5.4 (from onnx->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading ml_dtypes-0.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (409 kB)
+Collecting onnx_ir<2,>=0.1.16 (from onnxscript->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading onnx_ir-1.0.0-py3-none-any.whl (185 kB)
+Collecting annotated-types>=0.6.0 (from pydantic->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.46.5 (from pydantic->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 29.7 MB/s  0:00:00
+Collecting typing-inspection>=0.4.2 (from pydantic->transformer_engine_torch==2.19.0->transformer-engine[pytorch]==2.19.0)
+  Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Building wheels for collected packages: transformer_engine_torch
+  Building wheel for transformer_engine_torch (pyproject.toml): started
+  Building wheel for transformer_engine_torch (pyproject.toml): finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × Building wheel for transformer_engine_torch (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [1266 lines of output]
+      running bdist_wheel
+      Guessing wheel URL:  https://github.com/NVIDIA/TransformerEngine/releases/download/v2.19.0/transformer_engine_torch-2.19.0+cu12torch2.8.0+cu128cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+      Precompiled wheel not found. Building from source...
+      running build
+      running build_ext
+      building 'transformer_engine_torch' extension
+      creating /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build
+      creating /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312
+      creating /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc
+      creating /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions
+      creating /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/multi_tensor
+      [1/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/apply_rope.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/apply_rope.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/apply_rope.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      [2/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/comm_gemm_overlap.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/comm_gemm_overlap.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/comm_gemm_overlap.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      [3/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/common.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/common.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/common.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      [4/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/allocate.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/allocate.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/allocate.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      [5/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/bias.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/bias.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/bias.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      In file included from /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/bias.cpp:15:
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:106:22: warning: 'transformer_engine::pytorch::detail::custom_types_converters' defined but not used [-Wunused-variable]
+        106 | constexpr std::array custom_types_converters = {
+            |                      ^~~~~~~~~~~~~~~~~~~~~~~
+      [6/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/ep.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/ep.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/ep.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      FAILED: [code=1] /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/ep.o
+      c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/ep.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/ep.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/ep.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/ep.cpp:23:10: fatal error: torch/csrc/distributed/c10d/symm_mem/nccl_dev_cap.hpp: No such file or directory
+         23 | #include <torch/csrc/distributed/c10d/symm_mem/nccl_dev_cap.hpp>
+            |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      compilation terminated.
+      [7/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/activation.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/activation.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      In file included from /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:8:
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_gelu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:244:47:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_gelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dgelu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:248:49:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_glu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:252:46:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_glu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dglu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:256:48:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_geglu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:260:48:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_geglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dgeglu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:264:50:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_qgelu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:268:48:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_qgelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dqgelu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:272:50:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dqgelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_qgeglu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:276:49:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_qgeglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dqgeglu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:280:51:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dqgeglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_relu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:285:47:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_relu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_drelu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:289:49:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_drelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_reglu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:293:48:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_reglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dreglu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:297:50:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_srelu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:301:48:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_srelu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dsrelu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:305:50:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dsrelu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_sreglu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:309:49:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_sreglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dsreglu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:313:51:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dsreglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_silu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:317:47:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_silu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dsilu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:321:49:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dsilu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::activation_helper(const at::Tensor&, pybind11::handle, int, Args&& ...) [with void (* act_func)(NVTETensor, NVTETensor, cudaStream_t) = nvte_swiglu; auto act_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:325:49:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:62:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         62 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:76:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         76 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:93:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+         93 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:111:34: warning: the address of 'void nvte_swiglu(NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        111 |           if constexpr (act_func == nullptr) {
+            |                         ~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp: In instantiation of 'pybind11::object transformer_engine::pytorch::{anonymous}::dactivation_helper(const at::Tensor&, const at::Tensor&, pybind11::handle, Args&& ...) [with void (* dact_func)(NVTETensor, NVTETensor, NVTETensor, cudaStream_t) = nvte_dswiglu; auto dact_func_with_args = nullptr; Args = {}]':
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:329:51:   required from here
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:175:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        175 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:189:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        189 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:206:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        206 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:27:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         27 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/activation.cpp:224:35: warning: the address of 'void nvte_dswiglu(NVTETensor, NVTETensor, NVTETensor, cudaStream_t)' will never be NULL [-Waddress]
+        224 |           if constexpr (dact_func == nullptr) {
+            |                         ~~~~~~~~~~^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:29:7: note: in definition of macro 'NVTE_SCOPED_GIL_RELEASE'
+         29 |       code_block                                 \
+            |       ^~~~~~~~~~
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:106:22: warning: 'transformer_engine::pytorch::detail::custom_types_converters' defined but not used [-Wunused-variable]
+        106 | constexpr std::array custom_types_converters = {
+            |                      ^~~~~~~~~~~~~~~~~~~~~~~
+      [8/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/attention.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/attention.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/attention.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      In file included from /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/attention.cpp:9:
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:106:22: warning: 'transformer_engine::pytorch::detail::custom_types_converters' defined but not used [-Wunused-variable]
+        106 | constexpr std::array custom_types_converters = {
+            |                      ^~~~~~~~~~~~~~~~~~~~~~~
+      [9/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/cast.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/cast.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/cast.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      In file included from /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/cast.cpp:24:
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:106:22: warning: 'transformer_engine::pytorch::detail::custom_types_converters' defined but not used [-Wunused-variable]
+        106 | constexpr std::array custom_types_converters = {
+            |                      ^~~~~~~~~~~~~~~~~~~~~~~
+      [10/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/dropout.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/dropout.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/dropout.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      In file included from /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/dropout.cpp:10:
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:106:22: warning: 'transformer_engine::pytorch::detail::custom_types_converters' defined but not used [-Wunused-variable]
+        106 | constexpr std::array custom_types_converters = {
+            |                      ^~~~~~~~~~~~~~~~~~~~~~~
+      [11/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/fp8_partial_cast.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/fp8_partial_cast.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/fp8_partial_cast.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      [12/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/grouped_mlp_experimental.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/grouped_mlp_experimental.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/grouped_mlp_experimental.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      [13/33] c++ -MMD -MF /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/gemm.o.d -pthread -B /root/miniconda3/compiler_compat -fno-strict-overflow -DNDEBUG -O2 -Wall -fPIC -O2 -isystem /root/miniconda3/include -fPIC -O2 -isystem /root/miniconda3/include -fPIC -I/usr/local/cuda-12.8/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/common_headers/common/include -I/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc -I/root/miniconda3/lib/python3.12/site-packages/torch/include -I/root/miniconda3/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/root/miniconda3/include/python3.12 -c -c /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/gemm.cpp -o /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build/temp.linux-x86_64-cpython-312/csrc/extensions/gemm.o -O3 -fvisibility=hidden -g0 -DNVTE_WITH_NCCL_EP -DUSE_NCCL -DTORCH_API_INCLUDE_EXTENSION_H '-DPYBIND11_COMPILER_TYPE="_gcc"' '-DPYBIND11_STDLIB="_libstdcpp"' '-DPYBIND11_BUILD_ABI="_cxxabi1018"' -DTORCH_EXTENSION_NAME=transformer_engine_torch -std=c++17
+      In file included from /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/extensions/gemm.cpp:15:
+      /root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/csrc/pybind.h:106:22: warning: 'transformer_engine::pytorch::detail::custom_types_converters' defined but not used [-Wunused-variable]
+        106 | constexpr std::array custom_types_converters = {
+            |                      ^~~~~~~~~~~~~~~~~~~~~~~
+      ninja: build stopped: subcommand failed.
+      Traceback (most recent call last):
+        File "<string>", line 133, in run
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 240, in urlretrieve
+          with contextlib.closing(urlopen(url, data)) as fp:
+                                  ^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 215, in urlopen
+          return opener.open(url, data, timeout)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 521, in open
+          response = meth(req, response)
+                     ^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 630, in http_response
+          response = self.parent.error(
+                     ^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 559, in error
+          return self._call_chain(*args)
+                 ^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 492, in _call_chain
+          result = func(*args)
+                   ^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/urllib/request.py", line 639, in http_error_default
+          raise HTTPError(req.full_url, code, msg, hdrs, fp)
+      urllib.error.HTTPError: HTTP Error 404: Not Found
+      
+      During handling of the above exception, another exception occurred:
+      
+      Traceback (most recent call last):
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2595, in _run_ninja_build
+          subprocess.run(
+        File "/root/miniconda3/lib/python3.12/subprocess.py", line 571, in run
+          raise CalledProcessError(retcode, process.args,
+      subprocess.CalledProcessError: Command '['ninja', '-v', '-j', '8']' returned non-zero exit status 1.
+      
+      The above exception was the direct cause of the following exception:
+      
+      Traceback (most recent call last):
+        File "/root/miniconda3/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+        File "/root/miniconda3/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 280, in build_wheel
+          return _build_backend().build_wheel(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 410, in build_wheel
+          return self._build_with_temp_dir(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 395, in _build_with_temp_dir
+          self.run_setup()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 487, in run_setup
+          super().run_setup(setup_script=setup_script)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/build_meta.py", line 311, in run_setup
+          exec(code, locals())
+        File "<string>", line 176, in <module>
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/__init__.py", line 104, in setup
+          return distutils.core.setup(**attrs)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/core.py", line 184, in setup
+          return run_commands(dist)
+                 ^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/core.py", line 200, in run_commands
+          dist.run_commands()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 969, in run_commands
+          self.run_command(cmd)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/dist.py", line 967, in run_command
+          super().run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 988, in run_command
+          cmd_obj.run()
+        File "<string>", line 151, in run
+        File "/root/miniconda3/lib/python3.12/site-packages/wheel/bdist_wheel.py", line 368, in run
+          self.run_command("build")
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/cmd.py", line 316, in run_command
+          self.distribution.run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/dist.py", line 967, in run_command
+          super().run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 988, in run_command
+          cmd_obj.run()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build.py", line 132, in run
+          self.run_command(cmd_name)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/cmd.py", line 316, in run_command
+          self.distribution.run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/dist.py", line 967, in run_command
+          super().run_command(command)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/dist.py", line 988, in run_command
+          cmd_obj.run()
+        File "/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build_tools/build_ext.py", line 153, in run
+          super().run()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/command/build_ext.py", line 91, in run
+          _build_ext.run(self)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 359, in run
+          self.build_extensions()
+        File "/root/autodl-tmp/tmp/pip-install-af_hy8ca/transformer-engine-torch_1341314c3f034f7dafa26735f4e56fc1/build_tools/build_ext.py", line 241, in build_extensions
+          super().build_extensions()
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 1072, in build_extensions
+          build_ext.build_extensions(self)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 479, in build_extensions
+          self._build_extensions_serial()
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 505, in _build_extensions_serial
+          self.build_extension(ext)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/command/build_ext.py", line 252, in build_extension
+          _build_ext.build_extension(self, ext)
+        File "/root/miniconda3/lib/python3.12/site-packages/setuptools/_distutils/command/build_ext.py", line 560, in build_extension
+          objects = self.compiler.compile(
+                    ^^^^^^^^^^^^^^^^^^^^^^
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 856, in unix_wrap_ninja_compile
+          _write_ninja_file_and_compile_objects(
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2227, in _write_ninja_file_and_compile_objects
+          _run_ninja_build(
+        File "/root/miniconda3/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2612, in _run_ninja_build
+          raise RuntimeError(message) from e
+      RuntimeError: Error compiling objects for extension
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for transformer_engine_torch
+Failed to build transformer_engine_torch
+error: failed-wheel-build-for-install
+
+× Failed to build installable wheels for some pyproject.toml based projects
+╰─> transformer_engine_torch
+TE_NOISO_PYTORCH_FAIL
+=== try --no-build-isolation transformer-engine[core_cu12]==2.19.0 ===
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0 (from transformer-engine[core_cu12]==2.19.0)
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 38.2 MB/s  0:00:00
+Collecting transformer_engine_cu12==2.19.0 (from transformer-engine[core_cu12]==2.19.0)
+  Downloading transformer_engine_cu12-2.19.0-py3-none-manylinux_2_28_x86_64.whl (675.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.9/675.9 MB 16.4 MB/s  0:00:41
+Requirement already satisfied: packaging in ./miniconda3/lib/python3.12/site-packages (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0) (23.2)
+Collecting importlib-metadata>=1.0 (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading importlib_metadata-9.0.1-py3-none-any.whl (27 kB)
+Collecting pydantic (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+Collecting zipp>=3.20 (from importlib-metadata>=1.0->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+Collecting annotated-types>=0.6.0 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.46.5 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 29.8 MB/s  0:00:00
+Requirement already satisfied: typing-extensions>=4.14.1 in ./miniconda3/lib/python3.12/site-packages (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0) (4.14.1)
+Collecting typing-inspection>=0.4.2 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Collecting typing-extensions>=4.14.1 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Installing collected packages: zipp, typing-extensions, transformer-engine, annotated-types, typing-inspection, pydantic-core, importlib-metadata, pydantic, transformer_engine_cu12
+  Attempting uninstall: typing-extensions
+    Found existing installation: typing_extensions 4.14.1
+    Uninstalling typing_extensions-4.14.1:
+      Successfully uninstalled typing_extensions-4.14.1
+
+Successfully installed annotated-types-0.8.0 importlib-metadata-9.0.1 pydantic-2.13.5 pydantic-core-2.46.5 transformer-engine-2.19.0 transformer_engine_cu12-2.19.0 typing-extensions-4.16.0 typing-inspection-0.4.4 zipp-4.1.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+TE_OK
+te_root 2.19.0 /root/miniconda3/lib/python3.12/site-packages/transformer_engine/__init__.py
+te_import_fail ImportError /root/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so: undefined symbol: ncclCommWindowRegister
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  1.8G   29G   6% /
+/dev/md0         50G  7.4G   43G  15% /root/autodl-tmp
+=== te done 2026-09-18T16:30:30Z ===
+EXIT:0

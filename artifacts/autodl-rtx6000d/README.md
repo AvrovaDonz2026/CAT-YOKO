@@ -10,7 +10,7 @@ torch 2.8.0+cu128，驱动 595.71.05，CUDA 13.2。
 | 显存 | 85651 MiB（≈83.6 GiB） |
 | overlay `/` | 30G — 不要放权重 |
 | `/root/autodl-tmp` | 50G xfs |
-| Hub | `HF_ENDPOINT=https://hf-mirror.com` |
+| Hub | `HF_ENDPOINT=https://hf-mirror.com` `HF_HUB_DISABLE_XET=1` |
 
 NVFP4 配方的目标卡就是这张。Trainer 在 freeze 之后把允许的 ``nn.Linear`` 换成 ``Nvfp4Linear``（E2M1/16 仿真；有 TE 时走 ``NVFP4BlockScaling``）。注意力仍是因果 YOCO window + fp32 SDPA / qk_norm，不改拓扑。fused TE WGRAD/RHT 仍不是本仓硬依赖。
 
@@ -41,3 +41,21 @@ MiniCPM5-2B-Base sha256 `d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366b
 | overlay sha256 | `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 
 日志：`runs/gpu_and_b0.log`、`runs/b0/metrics.jsonl`、`gpu_smoke/tiny.json`。overlay 只进 HuggingFace，不进 GitHub。
+
+## WESTE prep（2026-09-18 16:30Z）
+
+hostname `autodl-container-8x4c4zmh8d-e96e943a`。GPU idle，0 MiB / 85651 MiB，cap 12.0。torch `2.8.0+cu128`。
+
+Remote `/root/autodl-tmp/CAT-YOKO` HEAD was `39b6e2dc740bf1693beffb58ab2c5321140bdb06` (`cursor/nvfp4-c1-theory-02c6`) with a dirty NVFP4 working tree (files copied on top; not the train branch checkout). MiniCPM5-2B-Base is at `/root/autodl-tmp/hf/MiniCPM5-2B-Base` (`model.safetensors` 4.7G). Existing `/root/autodl-tmp/runs/b0` still has the 32-step overlay.
+
+Disk at prep end: overlay `/` 1.8G/30G used (29G free); `/root/autodl-tmp` 7.4G/50G used (43G free).
+
+`HF_ENDPOINT` and `HF_HUB_DISABLE_XET=1` are in `/root/autodl-tmp/cat-yoko-env.sh`, `/etc/profile.d/cat-yoko-hf.sh`, and `/etc/environment` (non-interactive SSH picks them up).
+
+Transformer Engine: `transformer-engine==2.19.0` + `transformer_engine_cu12==2.19.0` installed. `import transformer_engine` works and `NVFP4BlockScaling` exists, but `import transformer_engine.pytorch` fails (`libtorch_cuda.so: undefined symbol: ncclCommWindowRegister`). Isolated `transformer-engine[pytorch]` also failed: pip tried to download torch 2.14, then `--no-build-isolation` compile died on missing `nccl_dev_cap.hpp` (not in torch 2.8). GPU test path is E2M1/16 emulation. Logs: `te_install.log`, `te_error_extract.txt`, `prep_status.txt`.
+
+After `cursor/nvfp4-train-6000d-02c6` is on origin, run [`smoke_commands.sh`](smoke_commands.sh) on the box (`git fetch/checkout`, `pip install -e .`, `python -m cat_yoko.gpu_smoke`, then B0 `--try` with `--upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base`; 12B already has `use_nvfp4=True`).
+
+## NVFP4 wrap 烟测（2026-09-18）
+
+tiny CUDA wrap + 因果 window 通过；12B B0 `--try` 2 步 `nvfp4=True`，wrap 2815 个 Linear，peak 34442 MiB。日志在 [`nvfp4/`](nvfp4/)。**419MiB overlay 只上 HuggingFace** [`checkpoints/b0-nvfp4-try/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-nvfp4-try)，不覆盖 32 步 `checkpoints/b0/trainable.pt`。Transformer Engine 2.19 cu12 装上了，但 `transformer_engine.pytorch` 因 `ncclCommWindowRegister` 导不进，本跑走 E2M1/16 仿真。

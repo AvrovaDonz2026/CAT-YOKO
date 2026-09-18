@@ -1,0 +1,40 @@
+Looking in indexes: https://repo.huaweicloud.com/repository/pypi/simple
+Collecting transformer-engine==2.19.0 (from transformer-engine[core_cu12]==2.19.0)
+  Downloading transformer_engine-2.19.0-py3-none-any.whl (1.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 38.2 MB/s  0:00:00
+Collecting transformer_engine_cu12==2.19.0 (from transformer-engine[core_cu12]==2.19.0)
+  Downloading transformer_engine_cu12-2.19.0-py3-none-manylinux_2_28_x86_64.whl (675.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 675.9/675.9 MB 16.4 MB/s  0:00:41
+Requirement already satisfied: packaging in ./miniconda3/lib/python3.12/site-packages (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0) (23.2)
+Collecting importlib-metadata>=1.0 (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading importlib_metadata-9.0.1-py3-none-any.whl (27 kB)
+Collecting pydantic (from transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading pydantic-2.13.5-py3-none-any.whl (472 kB)
+Collecting zipp>=3.20 (from importlib-metadata>=1.0->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading zipp-4.1.0-py3-none-any.whl (10 kB)
+Collecting annotated-types>=0.6.0 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.46.5 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 29.8 MB/s  0:00:00
+Requirement already satisfied: typing-extensions>=4.14.1 in ./miniconda3/lib/python3.12/site-packages (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0) (4.14.1)
+Collecting typing-inspection>=0.4.2 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Collecting typing-extensions>=4.14.1 (from pydantic->transformer_engine_cu12==2.19.0->transformer-engine[core_cu12]==2.19.0)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Installing collected packages: zipp, typing-extensions, transformer-engine, annotated-types, typing-inspection, pydantic-core, importlib-metadata, pydantic, transformer_engine_cu12
+  Attempting uninstall: typing-extensions
+    Found existing installation: typing_extensions 4.14.1
+    Uninstalling typing_extensions-4.14.1:
+      Successfully uninstalled typing_extensions-4.14.1
+
+Successfully installed annotated-types-0.8.0 importlib-metadata-9.0.1 pydantic-2.13.5 pydantic-core-2.46.5 transformer-engine-2.19.0 transformer_engine_cu12-2.19.0 typing-extensions-4.16.0 typing-inspection-0.4.4 zipp-4.1.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+TE_OK
+te_root 2.19.0 /root/miniconda3/lib/python3.12/site-packages/transformer_engine/__init__.py
+te_import_fail ImportError /root/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so: undefined symbol: ncclCommWindowRegister
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  1.8G   29G   6% /
+/dev/md0         50G  7.4G   43G  15% /root/autodl-tmp
+=== te done 2026-09-18T16:30:30Z ===
+EXIT:0

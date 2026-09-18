@@ -14,6 +14,8 @@ ssh -T git@hf.co
 
 Clone：`git clone git@hf.co:AvrovaDonz/CAT-YOKO`
 
+NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。日志进 GitHub `artifacts/autodl-rtx6000d/nvfp4/`。
+
 Deploy SSH key 只放本机 `~/.ssh`（`HF_SSH_KEY` 可覆盖路径），在 https://huggingface.co/settings/keys 加公钥。**不要进 git**。
 
 中国 AutoDL **下载**仍走 `HF_ENDPOINT=https://hf-mirror.com`（`scripts/autodl_env.sh`）。**上传**走 `huggingface.co` / `hf.co`。Key 若拷到 AutoDL，只放 `/root/autodl-tmp`。不要再连已释放的 `connect.westc.seetacloud.com`。
