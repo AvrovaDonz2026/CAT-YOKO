@@ -112,6 +112,21 @@ class TinyTrainTests(unittest.TestCase):
             b = model(ids)["logits"]
         self.assertTrue(torch.allclose(a, b, atol=1e-5, rtol=1e-4))
 
+    def test_moe_cpu_bf16_autocast_index_put(self) -> None:
+        """GPU B1+FP8 policy uses bf16 autocast; expert writes must match the buffer."""
+        from cat_yoko.moe import MoE
+
+        moe = MoE(self.cfg, self.cfg.n_routed_dec, self.cfg.top_k_dec, hash_route=True)
+        x = torch.randn(2, self.cfg.seq_len, self.cfg.hidden_size)
+        ids = torch.randint(0, self.cfg.vocab_size, (2, self.cfg.seq_len))
+        with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+            hashed = moe(x, token_ids=ids)
+            routed = moe(x, token_ids=None)
+        self.assertEqual(tuple(hashed.shape), tuple(x.shape))
+        self.assertEqual(tuple(routed.shape), tuple(x.shape))
+        self.assertTrue(torch.isfinite(hashed).all())
+        self.assertTrue(torch.isfinite(routed).all())
+
     def test_upcycle_copies_embed(self) -> None:
         model = CATYokoForCausalLM(self.cfg)
         src = dummy_minicpm_state(self.cfg)

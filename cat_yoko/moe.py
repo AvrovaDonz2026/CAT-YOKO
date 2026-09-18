@@ -9,6 +9,13 @@ from torch import nn
 from cat_yoko.config import CATYokoConfig
 
 
+def _like(ref: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """Autocast experts emit bf16 into an fp32 residual buffer; align dtypes."""
+    if t.dtype != ref.dtype or t.device != ref.device:
+        return t.to(dtype=ref.dtype, device=ref.device)
+    return t
+
+
 class SwiGLU(nn.Module):
     def __init__(self, hidden: int, intermediate: int) -> None:
         super().__init__()
@@ -57,9 +64,9 @@ class MoE(nn.Module):
             for e in range(self.n_routed):
                 mask = expert_id == e
                 if mask.any():
-                    routed[mask] = self.experts[e](flat[mask])
+                    routed[mask] = _like(routed, self.experts[e](flat[mask]))
             self.last_aux = flat.new_zeros(())
-            return (shared_out + routed).view(b, s, d)
+            return (shared_out + _like(shared_out, routed)).view(b, s, d)
 
         logits = self.router(flat)
         affinity = torch.sqrt(F.softplus(logits))
@@ -74,11 +81,12 @@ class MoE(nn.Module):
                 continue
             tok_ix, slot = hit.nonzero(as_tuple=True)
             weight = gates[tok_ix, slot].unsqueeze(-1)
-            routed[tok_ix] = routed[tok_ix] + weight * self.experts[e](flat[tok_ix])
+            contrib = weight * self.experts[e](flat[tok_ix])
+            routed[tok_ix] = routed[tok_ix] + _like(routed, contrib)
 
         z_loss = logits.float().pow(2).mean()
         ones = torch.zeros(self.n_routed, device=x.device, dtype=x.dtype)
-        ones.scatter_add_(0, topi.reshape(-1), gates.reshape(-1))
+        ones.scatter_add_(0, topi.reshape(-1), _like(ones, gates.reshape(-1)))
         load = ones / (b * s)
         balance = self.n_routed * (load * load).sum()
         self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
@@ -86,4 +94,4 @@ class MoE(nn.Module):
             with torch.no_grad():
                 target = 1.0 / self.n_routed
                 self.e_score_correction_bias += 1e-3 * (target - load)
-        return (shared_out + routed).view(b, s, d)
+        return (shared_out + _like(shared_out, routed)).view(b, s, d)
