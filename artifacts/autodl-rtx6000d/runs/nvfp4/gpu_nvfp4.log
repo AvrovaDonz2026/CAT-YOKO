@@ -1,0 +1,91 @@
+=== nvfp4 gpu smoke 2026-09-18T16:27:08Z ===
+autodl-container-8x4c4zmh8d-e96e943a
+NVIDIA RTX 6000D, 12.0, 85651 MiB, 0 MiB
+test_from_linear_shares_data_ptr (tests.test_nvfp4_linear.QuantizeTests.test_from_linear_shares_data_ptr) ... ok
+test_roundtrip_shape_and_finite (tests.test_nvfp4_linear.QuantizeTests.test_roundtrip_shape_and_finite) ... ok
+test_ste_linear_has_weight_grad (tests.test_nvfp4_linear.QuantizeTests.test_ste_linear_has_weight_grad) ... ok
+test_b0_wraps_frozen_skips_student_and_router (tests.test_nvfp4_linear.WrapPolicyTests.test_b0_wraps_frozen_skips_student_and_router) ... ok
+test_b1_wraps_lm_head_attn_moe_cache_cross (tests.test_nvfp4_linear.WrapPolicyTests.test_b1_wraps_lm_head_attn_moe_cache_cross) ... ok
+test_disabled_is_noop (tests.test_nvfp4_linear.WrapPolicyTests.test_disabled_is_noop) ... ok
+test_finite_nll_after_b1_wrap (tests.test_nvfp4_linear.WrapPolicyTests.test_finite_nll_after_b1_wrap) ... ok
+test_tiny_default_flag_off (tests.test_nvfp4_linear.WrapPolicyTests.test_tiny_default_flag_off) ... ok
+test_trainer_b1_hooks_wrap (tests.test_nvfp4_linear.WrapPolicyTests.test_trainer_b1_hooks_wrap) ... tiny B1 step 1/1 nll=5.4652 ppl=236.3 aux=0.0011 gate=1.000 gn=3.49 moe_cv=0.28 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=70 mem=0MiB
+ok
+test_12b_gqa_and_window_backend (tests.test_attention_plan.PublishedPlanTests.test_12b_gqa_and_window_backend) ... ok
+test_attention_module_has_no_csa_kernel (tests.test_attention_plan.PublishedPlanTests.test_attention_module_has_no_csa_kernel) ... ok
+test_keep_high_prec_includes_softmax_and_qk_norm (tests.test_attention_plan.PublishedPlanTests.test_keep_high_prec_includes_softmax_and_qk_norm) ... ok
+test_sdpa_is_fp32_then_cast (tests.test_attention_plan.PublishedPlanTests.test_sdpa_is_fp32_then_cast) ... ok
+test_causal_fastpath_matches_mask (tests.test_attention_plan.SdpaNumericTests.test_causal_fastpath_matches_mask) ... ok
+test_cross_attention_is_causal_on_cache (tests.test_attention_plan.WrapDoesNotChangeTopologyTests.test_cross_attention_is_causal_on_cache) ... ok
+test_encoder_and_decoder_still_window_cross (tests.test_attention_plan.WrapDoesNotChangeTopologyTests.test_encoder_and_decoder_still_window_cross) ... ok
+test_full_lm_future_token_does_not_leak (tests.test_attention_plan.WrapDoesNotChangeTopologyTests.test_full_lm_future_token_does_not_leak) ... ok
+test_window_attention_is_causal_after_wrap (tests.test_attention_plan.WrapDoesNotChangeTopologyTests.test_window_attention_is_causal_after_wrap) ... ok
+test_window_bias_still_masks_future (tests.test_attention_plan.WrapDoesNotChangeTopologyTests.test_window_bias_still_masks_future) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 1.686s
+
+OK
+built tiny on cuda dtype=bf16 params=210,816 alloc=0.02GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=False nvfp4=True nvfp4_n=83 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+tiny B1 step 1/1 nll=4.9792 ppl=145.4 aux=0.0010 gate=1.000 gn=2.38 moe_cv=0.17 trainable=0.12M lr=3.00e-07 fp8=True nvfp4=True tok=32 tok/s=101 mem=21MiB
+{
+  "device": "NVIDIA RTX 6000D",
+  "cap": [
+    12,
+    0
+  ],
+  "torch": "2.8.0+cu128",
+  "hardware_nvfp4": true,
+  "te_available": false,
+  "b0": {
+    "n": 77,
+    "lm_head": true,
+    "enc_q": true,
+    "cache_k_bf16": true,
+    "cross_bf16": true,
+    "router": true,
+    "window": true,
+    "qk_norm": true,
+    "nll": 5.0114054679870605,
+    "ms": 635.2,
+    "peak_mib": 18.5,
+    "ok": true
+  },
+  "b1_wrap": {
+    "new": 6,
+    "total": 83,
+    "cache_k": true,
+    "cross": true,
+    "cross_cls": "CrossAttention"
+  },
+  "causal_window": true,
+  "trainer_b1": {
+    "nll": 4.979166507720947,
+    "step": 1,
+    "nvfp4_n": 83,
+    "peak_mib": 21.35888671875,
+    "ok": true
+  },
+  "ok": true
+}
+WROTE /root/autodl-tmp/runs/nvfp4/cuda_nvfp4.json
+=== tiny nvfp4 cuda exit 0 2026-09-18T16:27:15Z ===
+=== 12B B0 --try 2 steps 2026-09-18T16:27:15Z ===
+B0 argv: --config 12b --phase B0 --device cuda --dtype bf16 --grad-ckpt --seed 0 --save-dir /root/autodl-tmp/runs/nvfp4/b0 --keep-last 2 --no-save-full --save-trainable --no-save-optim --micro-batch 1 --accum 1 --offload-encoder --seq-len 64 --steps 2 --save-every 8 --log /root/autodl-tmp/runs/nvfp4/b0/metrics.jsonl --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base --dtype bf16
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 14225.70it/s]
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=False nvfp4=True nvfp4_n=2815 PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+CAT-YOKO-12B B0 step 1/2 nll=17.7788 ppl=52628610.0 aux=0.0000 gate=0.150 gn=426.00 moe_cv=0.86 trainable=219.21M lr=1.00e-07 fp8=False nvfp4=True tok=64 tok/s=7 mem=33582MiB
+CAT-YOKO-12B B0 step 2/2 nll=18.0605 ppl=69756164.7 aux=0.0000 gate=0.301 gn=138.00 moe_cv=0.91 trainable=219.21M lr=1.00e-07 fp8=False nvfp4=True tok=128 tok/s=8 mem=34442MiB
+B0_TRY_OK
+=== done 2026-09-18T16:28:00Z ===
+/root/autodl-tmp/runs/nvfp4:
+total 12K
+drwxr-xr-x 2 root root   59 Sep 19 00:27 b0
+-rw-r--r-- 1 root root  703 Sep 19 00:27 cuda_nvfp4.json
+-rw-r--r-- 1 root root 5.2K Sep 19 00:28 gpu_nvfp4.log
+
+/root/autodl-tmp/runs/nvfp4/b0:
+total 419M
+-rw-r--r-- 1 root root 1.4K Sep 19 00:27 metrics.jsonl
+-rw-r--r-- 1 root root 419M Sep 19 00:27 trainable.pt
