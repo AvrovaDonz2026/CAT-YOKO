@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import math
 import struct
 import sys
 import tempfile
@@ -163,7 +162,6 @@ class LoopTests(unittest.TestCase):
             self.assertEqual(row["adam"], "gpu")
             self.assertIn("ppl", row)
             self.assertIn("moe_cv", row)
-            self.assertGreater(row["ppl"], 1.0)
 
     def test_eval_nll_lands_in_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -241,8 +239,9 @@ class LoopTests(unittest.TestCase):
         from cat_yoko.loss import safe_ppl
 
         self.assertAlmostEqual(safe_ppl(0.0), 1.0)
-        self.assertEqual(safe_ppl(float("nan")), float("inf"))
-        self.assertLess(safe_ppl(99.0), math.exp(21))
+        self.assertIsNone(safe_ppl(float("nan")))
+        self.assertIsNone(safe_ppl(99.0))
+        self.assertGreater(safe_ppl(2.0), 7.0)
 
     def test_auto_accum_tiny(self) -> None:
         self.assertEqual(auto_accum(self.cfg, micro_batch=2, world=1), 4)

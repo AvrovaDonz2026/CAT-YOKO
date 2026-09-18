@@ -25,8 +25,8 @@ def kd_weight(step: int, steps: int, start: float) -> float:
     return start * max(1.0 - (step + 1) / steps, 0.0)
 
 
-def safe_ppl(nll: float) -> float:
-    """exp(nll) capped so a blown-up CE does not overflow the log line."""
-    if not math.isfinite(nll) or nll < 0:
-        return float("inf")
-    return math.exp(min(nll, 20.0))
+def safe_ppl(nll: float) -> float | None:
+    """Token PPL from CE nats. None when NLL is not a useful finite value."""
+    if not math.isfinite(nll) or nll < 0 or nll > 20:
+        return None
+    return math.exp(nll)

@@ -215,9 +215,11 @@ class Trainer:
     def _log(self, row: dict) -> None:
         if not is_rank0(self.rank):
             return
+        ppl = row.get("ppl")
+        ppl_s = f"{ppl:.1f}" if isinstance(ppl, (int, float)) and math.isfinite(ppl) else "-"
         line = (
             f"{row['name']} {row['phase']} step {row['step']}/{row['steps_or_inf']} "
-            f"nll={row['nll']:.4f} ppl={row.get('ppl', 0):.1f} aux={row['aux']:.4f} "
+            f"nll={row['nll']:.4f} ppl={ppl_s} aux={row['aux']:.4f} "
             f"gate={row['gate']:.3f} gn={row['grad_norm']:.2f} "
             f"moe_cv={row.get('moe_cv', 0):.2f} trainable={row['trainable_m']:.2f}M "
             f"lr={row['lr']:.2e} fp8={row['fp8']} tok={row['tokens_seen']:.0f} "
@@ -567,7 +569,7 @@ class Trainer:
                     ev = self._eval_nll(model)
                     ev = reduce_mean(ev, device=str(self.device), world=self.world)
                     if is_rank0(self.rank):
-                        print(f"eval nll={ev:.4f} ppl={safe_ppl(ev):.1f}")
+                        print(f"eval nll={ev:.4f} ppl={safe_ppl(ev) or '-'}")
                 if self.save_every and step % self.save_every == 0:
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                 if max_steps is None and phase_budget is None:
