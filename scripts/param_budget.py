@@ -18,6 +18,10 @@ Freeze-curriculum (Phase B) is **frozen as C1**: MoE both stacks at
 Phase A, freeze encoder in B0/B1, short joint B2. Delayed encoder MoE
 is a sensitivity check only (``--curriculum``); it does not change the
 published recipe. Do not franken-merge two LMs.
+
+FP8 is a wall-clock overlay on C1 (``--fp8``): MoE expert GEMMs + frozen
+encoder forward GEMMs. It does not change Kaplan 6NT. L0 / B0 student /
+indexer stay bf16. Published speedup is 1.5×, not the 2× peak.
 """
 
 from __future__ import annotations
@@ -61,9 +65,24 @@ DEFAULT_CURRICULUM_SPLIT = (8e9, 27e9, 15e9)  # B0 + B1 + B2 = 50B
 DEFAULT_DELAYED_ENCODER_MOE = False
 
 # Hardware for GPU-hour estimates (plan §15.1): 40% MFU.
+H100_BF16_PEAK = 9.89e14  # H100 SXM bf16 tensor-core peak
+H100_FP8_PEAK = 1.979e15  # H100 SXM FP8 tensor-core peak (~2× bf16)
 H100_BF16_EFF = 4.0e14  # ~989 TFLOPS peak * 0.40
+H100_FP8_EFF_SAME_MFU = H100_FP8_PEAK * 0.40  # 7.916e14 if MFU holds
 A100_BF16_EFF = 1.25e14  # ~312 TFLOPS peak * 0.40
 SECONDS_PER_HOUR = 3600.0
+# Wall-clock speedups. FP8 does not change Kaplan 6NT; it raises effective FLOPS.
+FP8_SPEEDUP_CONSERVATIVE = 1.5  # plan §15.1; 12B kernel/comm overhead
+FP8_SPEEDUP_PEAK = H100_FP8_PEAK / H100_BF16_PEAK  # ≈2.0
+# Modules that stay high precision under the frozen FP8 policy.
+FP8_KEEP_HIGH_PREC = (
+    "tied_emb",
+    "rms_norm",
+    "router",
+    "gate",
+    "indexer",
+    "attn_softmax",
+)
 
 # KV recipes used in plan §16 (bytes of cache content, not allocator padding).
 MLA_LATENT = 512 + 64  # DeepSeek-V3-style: kv_lora_rank + qk_rope_head_dim
@@ -688,6 +707,208 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
     ]
 
 
+def fp8_moe_active_frac(budget: ModelBudget) -> float:
+    """Share of counted 6NT from MoE expert GEMMs (the considerable FP8 portion)."""
+    return (budget.enc.ffn_active + budget.dec.ffn_active) / budget.fwd_active
+
+
+def fp8_gemm_frac(budget: ModelBudget) -> float:
+    """Share of counted 6NT that is tensor-core GEMM if MoE+attn projections go FP8.
+
+    6NT ignores softmax / LN / router. Embedding stays high precision (Theorem E).
+    """
+    return min(1.0, (budget.fwd_active - budget.emb) / budget.fwd_active)
+
+
+def fp8_speedup_from_gemm_frac(frac: float, gemm_x: float = FP8_SPEEDUP_PEAK) -> float:
+    """Amdahl: GEMM gets gemm_x, the rest stays 1×."""
+    rest = max(0.0, 1.0 - frac)
+    return 1.0 / (frac / gemm_x + rest)
+
+
+def wallclock_h100_h(flops: float, *, speedup: float = 1.0) -> float:
+    """Kaplan FLOPs converted to H100-h at the bf16 40% MFU baseline, then scaled."""
+    return gpu_hours(flops, H100_BF16_EFF) / speedup
+
+
+def curriculum_phase_flops(
+    budget: ModelBudget,
+    tokens: float = 50e9,
+    *,
+    delayed: bool = False,
+    split: tuple[float, float, float] = DEFAULT_CURRICULUM_SPLIT,
+) -> tuple[float, float, float]:
+    """B0 / B1 / B2 Kaplan FLOPs on a token envelope (sums to ``flops_curriculum``)."""
+    t0, t1, t2 = _scale_split(tokens, split)
+    return (
+        flops_new_modules(budget, t0, encoder_dense=delayed),
+        flops_freeze_encoder(budget, t1, encoder_dense=delayed),
+        flops_joint(budget, t2),
+    )
+
+
+def encoder_fwd_flops(
+    budget: ModelBudget, tokens: float, *, delayed: bool = False
+) -> float:
+    """Encoder-stack forward only (no embedding): 2 N_enc T."""
+    return 2.0 * encoder_active_no_emb(budget, dense=delayed) * tokens
+
+
+def wallclock_c1_fp8_policy(
+    budget: ModelBudget,
+    tokens: float = 50e9,
+    *,
+    speedup: float = FP8_SPEEDUP_CONSERVATIVE,
+) -> float:
+    """Frozen FP8 policy hours.
+
+    B0 student stays bf16 (Theorem A neighborhood). Frozen-encoder forward
+    GEMM in B0, and all of B1/B2, run at ``speedup``. Does not change 6NT.
+    """
+    t0, _, _ = _scale_split(tokens)
+    f0, f1, f2 = curriculum_phase_flops(budget, tokens)
+    enc0 = encoder_fwd_flops(budget, t0)
+    return (
+        wallclock_h100_h(f0 - enc0)
+        + wallclock_h100_h(enc0, speedup=speedup)
+        + wallclock_h100_h(f1, speedup=speedup)
+        + wallclock_h100_h(f2, speedup=speedup)
+    )
+
+
+@dataclass(frozen=True)
+class Fp8PhasePolicy:
+    phase: str
+    student: str
+    frozen_encoder_gemm: str
+    note: str
+
+
+# Frozen FP8 policy for C1. Student = tensors that receive gradients.
+FP8_PHASE_POLICY: tuple[Fp8PhasePolicy, ...] = (
+    Fp8PhasePolicy(
+        "L0",
+        "bf16",
+        "bf16",
+        "tiny correctness; no FP8",
+    ),
+    Fp8PhasePolicy(
+        "B0",
+        "bf16",
+        "fp8",
+        "gate ramp next to Theorem A; frozen encoder is inference GEMM",
+    ),
+    Fp8PhasePolicy(
+        "B1",
+        "fp8_moe",
+        "fp8",
+        "decoder MoE GEMM in FP8; router / LN / tied E stay high prec",
+    ),
+    Fp8PhasePolicy(
+        "B2",
+        "fp8_moe",
+        "n/a",
+        "both stacks MoE GEMM in FP8 after unfreeze",
+    ),
+    Fp8PhasePolicy(
+        "C",
+        "bf16",
+        "fp8",
+        "indexer KL is local and small; keep bf16",
+    ),
+)
+
+
+def claims_fp8(budget: ModelBudget) -> list[Claim]:
+    """FP8 wall-clock ledger. Does not change Kaplan 6NT."""
+    joint = flops_joint(budget, 50e9)
+    c1 = flops_curriculum(budget, 50e9, delayed=False)
+    moe_f = fp8_moe_active_frac(budget)
+    moe_x = fp8_speedup_from_gemm_frac(moe_f)
+    c1_bf16_h = wallclock_h100_h(c1)
+    mixed_h = wallclock_c1_fp8_policy(budget)
+    joint_h = wallclock_h100_h(joint)
+    f0, f1, f2 = curriculum_phase_flops(budget)
+    pol = {p.phase: p for p in FP8_PHASE_POLICY}
+    t0, t1, t2 = DEFAULT_CURRICULUM_SPLIT
+    later = (t1 + t2) / (t0 + t1 + t2)
+    return [
+        Claim(
+            "FP8 does not change Kaplan 6NT",
+            abs(c1 - flops_curriculum(budget, 50e9, delayed=False)) < 1.0,
+            "same FLOPs",
+            "dtype ≠ operation count",
+        ),
+        Claim(
+            "H100 FP8 peak ≈ 2× bf16",
+            _close(FP8_SPEEDUP_PEAK, 2.0, rel=0.01),
+            f"{FP8_SPEEDUP_PEAK:.2f}×",
+            "~2.0×",
+        ),
+        Claim(
+            "conservative FP8 wall-clock is 1.5× (12B overhead)",
+            FP8_SPEEDUP_CONSERVATIVE == 1.5,
+            f"{FP8_SPEEDUP_CONSERVATIVE:.2f}×",
+            "1.5×",
+        ),
+        Claim(
+            "MoE is ≥70% of 6NT (considerable FP8 portion)",
+            moe_f >= 0.70,
+            f"{moe_f:.1%}",
+            "≥70% of counted 6NT",
+        ),
+        Claim(
+            "MoE-only Amdahl speedup in 1.50–1.75×",
+            1.50 <= moe_x <= 1.75,
+            f"{moe_x:.2f}× (f={moe_f:.1%})",
+            "justifies published 1.5×",
+        ),
+        Claim(
+            "C1 FP8 policy ≤60% of joint bf16 H100-h",
+            mixed_h <= 0.60 * joint_h,
+            f"{mixed_h / joint_h:.0%} ({mixed_h:.0f} vs {joint_h:.0f})",
+            "≤60%",
+        ),
+        Claim(
+            "B0 student stays bf16 (Theorem A neighborhood)",
+            pol["B0"].student == "bf16",
+            pol["B0"].student,
+            "bf16",
+        ),
+        Claim(
+            "B1/B2 student MoE GEMM is FP8",
+            pol["B1"].student == "fp8_moe" and pol["B2"].student == "fp8_moe",
+            f"{pol['B1'].student}/{pol['B2'].student}",
+            "fp8_moe",
+        ),
+        Claim(
+            "B1+B2 cover ≥80% of the 50B envelope",
+            later >= 0.80,
+            f"{later:.0%}",
+            "≥80% (27+15 of 50)",
+        ),
+        Claim(
+            "B0 is ≤15% of C1 FLOPs (bf16 student is cheap)",
+            f0 / (f0 + f1 + f2) <= 0.15,
+            f"{f0 / (f0 + f1 + f2):.1%}",
+            "≤15%",
+        ),
+        Claim(
+            "tied E / router / LN stay high precision",
+            set(FP8_KEEP_HIGH_PREC)
+            >= {"tied_emb", "router", "rms_norm", "gate", "indexer", "attn_softmax"},
+            ",".join(FP8_KEEP_HIGH_PREC),
+            "emb, router, LN, gate, softmax, indexer",
+        ),
+        Claim(
+            "C1 bf16 hours unchanged by the FP8 policy",
+            _close(c1_bf16_h, 1090, rel=0.02),
+            f"{c1_bf16_h:.0f}",
+            "~1090",
+        ),
+    ]
+
+
 def attn_score_flops(n: int, k: int, layers: int) -> float:
     """QK^T + AV multiply-adds, treating n_heads * head_dim = D.
 
@@ -915,7 +1136,7 @@ def verify(budget: ModelBudget | None = None) -> list[Claim]:
     budget = budget or compute_budget(TIERS[DEFAULT_TIER])
     if budget.tier.key != "middle" or budget.first_dense or budget.attn.name != "placeholder 1.25×MHA":
         raise ValueError("--verify is defined on the published middle-tier placeholder budget")
-    return claims_middle_placeholder(budget) + claims_curriculum(budget)
+    return claims_middle_placeholder(budget) + claims_curriculum(budget) + claims_fp8(budget)
 
 
 def print_budget(budget: ModelBudget) -> None:
@@ -1028,6 +1249,63 @@ def print_curriculum(budget: ModelBudget, tokens: float = 50e9) -> None:
         ratio_c1 = c1_rows[label][2]
         flag = "yes" if valid else "NO (write/read never co-adapt)"
         print(f"  {label:<22s} {ratio_c1:11.0%} {ratio_c2:11.0%}   {flag}")
+
+
+def print_fp8(budget: ModelBudget, tokens: float = 50e9) -> None:
+    joint = flops_joint(budget, tokens)
+    c1 = flops_curriculum(budget, tokens, delayed=False)
+    moe_f = fp8_moe_active_frac(budget)
+    gemm_f = fp8_gemm_frac(budget)
+    moe_x = fp8_speedup_from_gemm_frac(moe_f)
+    gemm_x = fp8_speedup_from_gemm_frac(gemm_f)
+    joint_h = wallclock_h100_h(joint)
+    c1_h = wallclock_h100_h(c1)
+    mixed_h = wallclock_c1_fp8_policy(budget, tokens)
+    print("-- FP8 policy (C1; does not change 6NT) --")
+    print(f"  H100 peak bf16 / FP8              : {H100_BF16_PEAK/1e12:.0f} / {H100_FP8_PEAK/1e12:.0f} TFLOPS")
+    print(f"  peak ratio                        : {FP8_SPEEDUP_PEAK:.2f}×")
+    attn_f = (budget.enc.attn_total + budget.dec.attn_total) / budget.fwd_active
+    print(f"  MoE stored-param / 6NT-active     : {budget.moe_frac:.1%} / {moe_f:.1%}")
+    print(f"  attn 6NT-active / GEMM 6NT        : {attn_f:.1%} / {gemm_f:.1%}")
+    print(f"  MoE-only Amdahl (2× GEMM)         : {moe_x:.2f}×  (justifies published 1.5×)")
+    print(f"  MoE+attn Amdahl (upper bound)     : {gemm_x:.2f}×")
+    print(f"  conservative 12B wall-clock       : {FP8_SPEEDUP_CONSERVATIVE:.2f}×  (kernel + comm + scale)")
+    print(f"  keep high precision               : {', '.join(FP8_KEEP_HIGH_PREC)}")
+    print(f"  {'phase':<4s} {'student':<12s} {'frozen_enc':<12s} note")
+    for p in FP8_PHASE_POLICY:
+        print(f"  {p.phase:<4s} {p.student:<12s} {p.frozen_encoder_gemm:<12s} {p.note}")
+    print(f"-- Wall-clock @ {tokens/1e9:.0f}B tok (H100-h vs joint bf16) --")
+    rows = [
+        ("joint bf16", joint_h, 1.0),
+        ("C1 bf16", c1_h, c1_h / joint_h),
+        (
+            "C1 FP8 policy (frozen spec)",
+            mixed_h,
+            mixed_h / joint_h,
+        ),
+        (
+            "C1 FP8 conservative 1.5× all",
+            wallclock_h100_h(c1, speedup=FP8_SPEEDUP_CONSERVATIVE),
+            wallclock_h100_h(c1, speedup=FP8_SPEEDUP_CONSERVATIVE) / joint_h,
+        ),
+        (
+            "C1 FP8 MoE-Amdahl all",
+            wallclock_h100_h(c1, speedup=moe_x),
+            wallclock_h100_h(c1, speedup=moe_x) / joint_h,
+        ),
+        (
+            "C1 FP8 peak 2× (upper bound)",
+            wallclock_h100_h(c1, speedup=FP8_SPEEDUP_PEAK),
+            wallclock_h100_h(c1, speedup=FP8_SPEEDUP_PEAK) / joint_h,
+        ),
+    ]
+    for name, hours, ratio in rows:
+        print(f"  {name:32s}  {hours:6.0f} H100-h  {ratio:5.0%} vs joint bf16")
+    n_enc = encoder_stack_total(budget, dense=False)
+    print(
+        f"  frozen encoder weights bf16 / FP8 : "
+        f"{gb(n_enc * WEIGHT_BYTES)} / {gb(n_enc * 1.0)}"
+    )
 
 
 def print_kv(lengths: Sequence[int] = (8_192, 32_768, 131_072, 262_144, 1_000_000)) -> None:
@@ -1175,7 +1453,7 @@ def print_mup() -> None:
 
 def print_claims(cs: Iterable[Claim]) -> int:
     cs = list(cs)
-    print("-- Claim ledger (middle tier + freeze-curriculum, placeholder attn, all-MoE) --")
+    print("-- Claim ledger (middle tier + freeze-curriculum + FP8, placeholder attn, all-MoE) --")
     failed = 0
     for c in cs:
         mark = "PASS" if c.ok else "FAIL"
@@ -1210,7 +1488,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--verify",
         action="store_true",
-        help="assert published middle-tier + freeze-curriculum claims; exit 1 on failure",
+        help="assert published middle-tier + freeze-curriculum + FP8 claims; exit 1 on failure",
     )
     p.add_argument("--full", action="store_true", help="print KV / attention-complexity / μP sections")
     p.add_argument(
@@ -1222,6 +1500,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--curriculum",
         action="store_true",
         help="print freeze boundaries, optimizer memory, token-split sensitivity",
+    )
+    p.add_argument(
+        "--fp8",
+        action="store_true",
+        help="print FP8 phase policy and C1 wall-clock (does not change 6NT)",
     )
     return p
 
@@ -1242,14 +1525,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         budget = compute_budget(TIERS[key], attn=attn, first_dense=args.first_dense)
         print_budget(budget)
         print_compute(budget, tokens=args.tokens)
-        if (args.staged or args.curriculum) and key == keys[-1]:
-            print()
+        if (args.staged or args.curriculum or args.fp8) and key == keys[-1]:
             if args.staged:
+                print()
                 print_staged(budget, tokens=args.tokens)
             if args.curriculum:
-                if args.staged:
-                    print()
+                print()
                 print_curriculum(budget, tokens=args.tokens)
+            if args.fp8:
+                print()
+                print_fp8(budget, tokens=args.tokens)
 
     if args.full:
         print()
@@ -1268,6 +1553,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print_staged(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
         print()
         print_curriculum(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
+        print()
+        print_fp8(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
         print()
         if args.tier in ("middle", "all") and args.attn == "placeholder" and not args.first_dense:
             print_claims(verify())

@@ -185,5 +185,71 @@ class CurriculumTheoryTests(unittest.TestCase):
         self.assertEqual(failed, [], msg=[c.name for c in failed])
 
 
+class Fp8TheoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.budget = pb.compute_budget(pb.TIERS["middle"])
+
+    def test_fp8_does_not_change_six_nt(self) -> None:
+        c1 = pb.flops_curriculum(self.budget, 50e9, delayed=False)
+        self.assertEqual(c1, sum(pb.curriculum_phase_flops(self.budget)))
+        self.assertAlmostEqual(
+            pb.wallclock_h100_h(c1, speedup=1.5) * 1.5,
+            pb.wallclock_h100_h(c1),
+        )
+
+    def test_conservative_speedup_is_1_5_not_peak(self) -> None:
+        self.assertEqual(pb.FP8_SPEEDUP_CONSERVATIVE, 1.5)
+        self.assertAlmostEqual(pb.FP8_SPEEDUP_PEAK, 2.0, places=2)
+        self.assertLess(pb.FP8_SPEEDUP_CONSERVATIVE, pb.FP8_SPEEDUP_PEAK)
+
+    def test_moe_is_the_considerable_portion_of_six_nt(self) -> None:
+        self.assertGreaterEqual(pb.fp8_moe_active_frac(self.budget), 0.70)
+        self.assertGreaterEqual(self.budget.moe_frac, 0.80)
+        self.assertGreater(pb.fp8_gemm_frac(self.budget), pb.fp8_moe_active_frac(self.budget))
+
+    def test_moe_only_amdahl_justifies_published_1_5(self) -> None:
+        speedup = pb.fp8_speedup_from_gemm_frac(pb.fp8_moe_active_frac(self.budget))
+        self.assertGreaterEqual(speedup, 1.50)
+        self.assertLessEqual(speedup, 1.75)
+
+    def test_phase_policy_keeps_b0_and_l0_bf16(self) -> None:
+        pol = {p.phase: p for p in pb.FP8_PHASE_POLICY}
+        self.assertEqual(pol["L0"].student, "bf16")
+        self.assertEqual(pol["B0"].student, "bf16")
+        self.assertEqual(pol["B0"].frozen_encoder_gemm, "fp8")
+        self.assertEqual(pol["B1"].student, "fp8_moe")
+        self.assertEqual(pol["B2"].student, "fp8_moe")
+        self.assertEqual(pol["C"].student, "bf16")
+
+    def test_keep_high_prec_covers_tied_router_norm(self) -> None:
+        self.assertTrue(
+            set(pb.FP8_KEEP_HIGH_PREC)
+            >= {"tied_emb", "router", "rms_norm", "gate", "indexer", "attn_softmax"}
+        )
+
+    def test_mixed_policy_under_60pct_of_joint(self) -> None:
+        joint_h = pb.wallclock_h100_h(pb.flops_joint(self.budget, 50e9))
+        c1_h = pb.wallclock_h100_h(pb.flops_curriculum(self.budget, 50e9, delayed=False))
+        mixed = pb.wallclock_c1_fp8_policy(self.budget)
+        self.assertLess(mixed, c1_h)
+        self.assertLessEqual(mixed, 0.60 * joint_h)
+        self.assertAlmostEqual(mixed, 761, delta=15)
+
+    def test_b0_is_a_minority_of_c1_flops(self) -> None:
+        f0, f1, f2 = pb.curriculum_phase_flops(self.budget)
+        self.assertLessEqual(f0 / (f0 + f1 + f2), 0.15)
+        t0, t1, t2 = pb.DEFAULT_CURRICULUM_SPLIT
+        self.assertGreaterEqual((t1 + t2) / (t0 + t1 + t2), 0.80)
+
+    def test_fp8_claims_pass(self) -> None:
+        failed = [c for c in pb.claims_fp8(self.budget) if not c.ok]
+        self.assertEqual(failed, [], msg=[c.name for c in failed])
+
+    def test_verify_includes_fp8(self) -> None:
+        names = [c.name for c in pb.verify(self.budget)]
+        self.assertTrue(any(n.startswith("FP8") for n in names))
+        self.assertGreaterEqual(len(names), 46)
+
+
 if __name__ == "__main__":
     unittest.main()

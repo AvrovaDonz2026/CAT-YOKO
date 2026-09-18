@@ -279,13 +279,13 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 
 定稿 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM-16；B2 才让 Encoder 专家特化）。
 
-数字：C1 约 **81%** 联合 50B；独立拼接 **152%**。B1 Adam 状态约联合的 **60%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0；`python3 scripts/param_budget.py --staged --curriculum`。
+数字：C1 约 **81%** 联合 50B；独立拼接 **152%**。B1 Adam 状态约联合的 **60%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0。FP8 再把 C1 墙钟从 1,090 收到 **761 H100-h**（[`FP8_THEORY.md`](FP8_THEORY.md)）。`python3 scripts/param_budget.py --staged --curriculum --fp8`。
 
 复算：
 
 ```bash
 python3 scripts/arch_verify.py --verify
 python3 -m unittest tests.test_arch_verify
-python3 scripts/param_budget.py --verify                 # 中间档 + 解冻课程账本
-python3 scripts/param_budget.py --staged --curriculum    # C1 定稿 / 冻结边界 / 显存
+python3 scripts/param_budget.py --verify                 # 中间档 + 解冻课程 + FP8 账本
+python3 scripts/param_budget.py --staged --curriculum --fp8
 ```
