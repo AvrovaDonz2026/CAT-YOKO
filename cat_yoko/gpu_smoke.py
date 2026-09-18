@@ -67,7 +67,7 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             cfg, "B0", device, steps=1, accum=1, micro_batch=micro_batch, dtype="bf16"
         ).run()
         out["bf16"] = {"nll": float(bf.nll), "ok": _finite(bf.nll) and bf.nll > 0}
-    fp8_cfg = replace(CATYokoConfig.tiny(), use_fp8=True)
+    fp8_cfg = replace(CATYokoConfig.tiny(), use_fp8=True, use_nvfp4=True)
     out["fp8_policy"] = {
         "b1_autocast": should_autocast("B1", cuda=True, enabled=True),
         "b0_autocast": should_autocast("B0", cuda=True, enabled=True),

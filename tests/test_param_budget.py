@@ -221,15 +221,16 @@ class Fp8TheoryTests(unittest.TestCase):
         self.assertEqual(pol["L0"].student, "bf16")
         self.assertEqual(pol["B0"].student, "bf16")
         self.assertEqual(pol["B0"].frozen_encoder_gemm, "fp8")
-        self.assertEqual(pol["B1"].student, "fp8_moe")
-        self.assertEqual(pol["B2"].student, "fp8_moe")
+        self.assertEqual(pol["B1"].student, "fp8")
+        self.assertEqual(pol["B2"].student, "fp8")
         self.assertEqual(pol["C"].student, "bf16")
 
     def test_keep_high_prec_covers_tied_router_norm(self) -> None:
         self.assertTrue(
-            set(pb.FP8_KEEP_HIGH_PREC)
-            >= {"embed", "lm_head", "router", "rms_norm", "gate", "indexer", "attn_softmax"}
+            set(pb.KEEP_HIGH_PREC)
+            >= {"embed", "router", "rms_norm", "gate", "indexer", "attn_softmax"}
         )
+        self.assertNotIn("lm_head", pb.KEEP_HIGH_PREC)
 
     def test_mixed_policy_under_60pct_of_joint(self) -> None:
         joint_h = pb.wallclock_h100_h(pb.flops_joint(self.budget, 50e9))
@@ -245,8 +246,8 @@ class Fp8TheoryTests(unittest.TestCase):
         t0, t1, t2 = pb.DEFAULT_CURRICULUM_SPLIT
         self.assertGreaterEqual((t1 + t2) / (t0 + t1 + t2), 0.80)
 
-    def test_frozen_wallclock_is_c1_fp8(self) -> None:
-        self.assertEqual(pb.FROZEN_WALLCLOCK, "C1+FP8")
+    def test_fp8_is_hopper_fallback_not_published(self) -> None:
+        self.assertEqual(pb.FROZEN_WALLCLOCK, "C1+NVFP4")
         mixed = pb.wallclock_c1_fp8_policy(self.budget)
         c1 = pb.flops_curriculum(self.budget, 50e9, delayed=False)
         all15 = pb.wallclock_h100_h(c1, speedup=pb.FP8_SPEEDUP_CONSERVATIVE)
@@ -257,10 +258,75 @@ class Fp8TheoryTests(unittest.TestCase):
         failed = [c for c in pb.claims_fp8(self.budget) if not c.ok]
         self.assertEqual(failed, [], msg=[c.name for c in failed])
 
-    def test_verify_includes_fp8(self) -> None:
+    def test_verify_includes_fp8_fallback(self) -> None:
         names = [c.name for c in pb.verify(self.budget)]
         self.assertTrue(any("C1+FP8" in n for n in names))
-        self.assertGreaterEqual(len(names), 47)
+        self.assertTrue(any("C1+NVFP4" in n for n in names))
+        self.assertGreaterEqual(len(names), 61)
+
+
+class Nvfp4TheoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.budget = pb.compute_budget(pb.TIERS["middle"])
+
+    def test_nvfp4_does_not_change_six_nt(self) -> None:
+        c1 = pb.flops_curriculum(self.budget, 50e9, delayed=False)
+        self.assertAlmostEqual(
+            pb.wallclock_h100_h(c1, speedup=2.0) * 2.0,
+            pb.wallclock_h100_h(c1),
+        )
+
+    def test_conservative_speedup_is_2_not_peak_4(self) -> None:
+        self.assertEqual(pb.NVFP4_SPEEDUP_CONSERVATIVE, 2.0)
+        self.assertEqual(pb.NVFP4_SPEEDUP_PEAK, 4.0)
+        self.assertLess(pb.NVFP4_SPEEDUP_CONSERVATIVE, pb.NVFP4_SPEEDUP_PEAK)
+
+    def test_nvfp4_over_fp8_in_nvidia_band(self) -> None:
+        ratio = pb.NVFP4_SPEEDUP_CONSERVATIVE / pb.FP8_SPEEDUP_CONSERVATIVE
+        lo, hi = pb.NVFP4_VS_FP8_NVIDIA
+        self.assertGreaterEqual(ratio, lo)
+        self.assertLessEqual(ratio, hi)
+
+    def test_phase_policy_is_nvfp4_not_moe_only(self) -> None:
+        pol = {p.phase: p for p in pb.NVFP4_PHASE_POLICY}
+        self.assertEqual(pol["L0"].student, "bf16")
+        self.assertEqual(pol["B0"].student, "bf16")
+        self.assertEqual(pol["B0"].frozen_encoder_gemm, "nvfp4")
+        self.assertEqual(pol["B1"].student, "nvfp4")
+        self.assertEqual(pol["B2"].student, "nvfp4")
+        self.assertEqual(pol["C"].student, "bf16")
+
+    def test_lm_head_is_gemm_not_must_bf16(self) -> None:
+        self.assertIn("lm_head", pb.NVFP4_GEMM_SLOTS)
+        self.assertNotIn("lm_head", pb.KEEP_HIGH_PREC)
+        self.assertIn("attn_qkv", pb.NVFP4_GEMM_SLOTS)
+        self.assertIn("attn_softmax", pb.KEEP_HIGH_PREC)
+
+    def test_published_hours_under_45pct_of_joint(self) -> None:
+        joint_h = pb.wallclock_h100_h(pb.flops_joint(self.budget, 50e9))
+        mixed = pb.wallclock_c1_nvfp4_policy(self.budget)
+        fp8_h = pb.wallclock_c1_fp8_policy(self.budget)
+        self.assertLess(mixed, fp8_h)
+        self.assertLessEqual(mixed, 0.45 * joint_h)
+        self.assertAlmostEqual(mixed, 571, delta=15)
+
+    def test_frozen_wallclock_is_c1_nvfp4(self) -> None:
+        self.assertEqual(pb.FROZEN_WALLCLOCK, "C1+NVFP4")
+        mixed = pb.wallclock_c1_nvfp4_policy(self.budget)
+        c1 = pb.flops_curriculum(self.budget, 50e9, delayed=False)
+        all20 = pb.wallclock_h100_h(c1, speedup=pb.NVFP4_SPEEDUP_CONSERVATIVE)
+        self.assertGreater(mixed, all20)
+        self.assertAlmostEqual(mixed, 571, delta=15)
+
+    def test_rtx_pro_6000_matches_h100_bf16(self) -> None:
+        self.assertAlmostEqual(
+            pb.RTX_PRO_6000_BF16_PEAK / pb.H100_BF16_PEAK, 1.0, delta=0.03
+        )
+        self.assertEqual(pb.RTX_PRO_6000_MEM_GIB, 96)
+
+    def test_nvfp4_claims_pass(self) -> None:
+        failed = [c for c in pb.claims_nvfp4(self.budget) if not c.ok]
+        self.assertEqual(failed, [], msg=[c.name for c in failed])
 
 
 if __name__ == "__main__":

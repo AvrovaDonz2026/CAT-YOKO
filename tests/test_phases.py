@@ -38,7 +38,7 @@ class PhaseSpecTests(unittest.TestCase):
         self.assertEqual(PHASES["B1"].tokens, C1_SPLIT["B1"])
         self.assertEqual(PHASES["B2"].tokens, C1_SPLIT["B2"])
         self.assertEqual(PHASES["B0"].student, "bf16")
-        self.assertEqual(PHASES["B1"].student, "fp8_moe")
+        self.assertEqual(PHASES["B1"].student, "nvfp4")
         self.assertTrue(PHASES["B2"].offload_blocks)
         self.assertFalse(PHASES["B0"].offload_blocks)
 

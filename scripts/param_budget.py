@@ -19,10 +19,11 @@ Phase A, freeze encoder in B0/B1, short joint B2. Delayed encoder MoE
 is a sensitivity check only (``--curriculum``); it does not change the
 published recipe. Do not franken-merge two LMs.
 
-Phase B **wall-clock** is **frozen as C1+FP8**: C1 token split × mixed
-FP8 (B0 student bf16; B1/B2 MoE GEMM + frozen-encoder forward at 1.5×).
-Joint bf16 is the 100% baseline only. All-phase 1.5× and peak 2× are
-sensitivity. FP8 does not change Kaplan 6NT.
+Phase B **wall-clock** is **frozen as C1+NVFP4**: C1 token split × mixed
+NVFP4 (B0 student bf16; B1/B2 allowed linear GEMMs + frozen-encoder
+forward at 2.0× vs bf16). Target GPU is RTX PRO 6000 / 6000D Blackwell.
+Joint bf16 is the 100% baseline only. C1+FP8 (1.5×) is the Hopper/Ada
+fallback. Peak 4× is sensitivity. NVFP4 does not change Kaplan 6NT.
 
 """
 
@@ -72,8 +73,8 @@ DEFAULT_CURRICULUM_SPLIT = (8e9, 27e9, 15e9)  # B0 + B1 + B2 = 50B
 # Delayed encoder MoE (encoder_dense=True) is sensitivity only.
 DEFAULT_DELAYED_ENCODER_MOE = False
 # Published Phase B wall-clock. Joint bf16 = 100% baseline only.
-# Applying 1.5× to B0 student, or claiming peak 2×, is sensitivity.
-FROZEN_WALLCLOCK = "C1+FP8"
+# Applying 2.0× to B0 student, or claiming peak 4×, is sensitivity.
+FROZEN_WALLCLOCK = "C1+NVFP4"
 
 # Hardware for GPU-hour estimates (plan §15.1): 40% MFU.
 H100_BF16_PEAK = 9.89e14  # H100 SXM bf16 tensor-core peak
@@ -82,18 +83,41 @@ H100_BF16_EFF = 4.0e14  # ~989 TFLOPS peak * 0.40
 H100_FP8_EFF_SAME_MFU = H100_FP8_PEAK * 0.40  # 7.916e14 if MFU holds
 A100_BF16_EFF = 1.25e14  # ~312 TFLOPS peak * 0.40
 SECONDS_PER_HOUR = 3600.0
-# Wall-clock speedups. FP8 does not change Kaplan 6NT; it raises effective FLOPS.
-FP8_SPEEDUP_CONSERVATIVE = 1.5  # plan §15.1; 12B kernel/comm overhead
+# RTX PRO 6000 Blackwell Server Edition (NVIDIA datasheet). 6000D is the
+# same-family China SKU; hours stay in H100-h because BF16 peak matches.
+RTX_PRO_6000_BF16_PEAK = 1.0e15
+RTX_PRO_6000_FP8_PEAK = 2.0e15
+RTX_PRO_6000_FP4_PEAK = 4.0e15
+RTX_PRO_6000_MEM_GIB = 96
+RTX_PRO_6000_BANDWIDTH = 1.597e12
+# Wall-clock speedups. Dtype does not change Kaplan 6NT; it raises effective FLOPS.
+FP8_SPEEDUP_CONSERVATIVE = 1.5  # Hopper/Ada fallback; 12B kernel/comm overhead
 FP8_SPEEDUP_PEAK = H100_FP8_PEAK / H100_BF16_PEAK  # ≈2.0
-# Modules that stay high precision under the frozen FP8 policy.
-FP8_KEEP_HIGH_PREC = (
+NVFP4_SPEEDUP_CONSERVATIVE = 2.0  # vs bf16; 1.33× over published FP8 1.5×
+NVFP4_SPEEDUP_PEAK = RTX_PRO_6000_FP4_PEAK / RTX_PRO_6000_BF16_PEAK  # 4.0
+NVFP4_VS_FP8_NVIDIA = (1.31, 1.73)  # MaxText GB200/GB300 Llama 8B/405B
+# Modules that stay high precision under the frozen NVFP4 policy.
+# lm_head is a GEMM and is not on this list.
+KEEP_HIGH_PREC = (
     "embed",
-    "lm_head",
     "rms_norm",
+    "qk_norm",
     "router",
     "gate",
     "indexer",
     "attn_softmax",
+)
+FP8_KEEP_HIGH_PREC = KEEP_HIGH_PREC
+NVFP4_KEEP_HIGH_PREC = KEEP_HIGH_PREC
+NVFP4_GEMM_SLOTS = (
+    "moe_expert",
+    "attn_qkv",
+    "attn_o",
+    "cross_q",
+    "cross_o",
+    "cache_kv",
+    "lm_head",
+    "frozen_encoder_linear",
 )
 
 # KV recipes used in plan §16 (bytes of cache content, not allocator padding).
@@ -723,14 +747,15 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
 
 
 def fp8_moe_active_frac(budget: ModelBudget) -> float:
-    """Share of counted 6NT from MoE expert GEMMs (the considerable FP8 portion)."""
+    """Share of counted 6NT from MoE expert GEMMs (the considerable low-prec portion)."""
     return (budget.enc.ffn_active + budget.dec.ffn_active) / budget.fwd_active
 
 
 def fp8_gemm_frac(budget: ModelBudget) -> float:
-    """Share of counted 6NT that is tensor-core GEMM if MoE+attn projections go FP8.
+    """Share of counted 6NT that is tensor-core GEMM if allowed linears go low-prec.
 
     6NT ignores softmax / LN / router. Embedding stays high precision (Theorem E).
+    lm_head is a GEMM and is included (fwd_active − emb).
     """
     return min(1.0, (budget.fwd_active - budget.emb) / budget.fwd_active)
 
@@ -739,6 +764,12 @@ def fp8_speedup_from_gemm_frac(frac: float, gemm_x: float = FP8_SPEEDUP_PEAK) ->
     """Amdahl: GEMM gets gemm_x, the rest stays 1×."""
     rest = max(0.0, 1.0 - frac)
     return 1.0 / (frac / gemm_x + rest)
+
+
+def nvfp4_speedup_from_gemm_frac(
+    frac: float, gemm_x: float = NVFP4_SPEEDUP_PEAK
+) -> float:
+    return fp8_speedup_from_gemm_frac(frac, gemm_x=gemm_x)
 
 
 def wallclock_h100_h(flops: float, *, speedup: float = 1.0) -> float:
@@ -775,11 +806,10 @@ def wallclock_c1_fp8_policy(
     *,
     speedup: float = FP8_SPEEDUP_CONSERVATIVE,
 ) -> float:
-    """Published Phase B wall-clock (frozen spec C1+FP8).
+    """Hopper/Ada fallback wall-clock (C1+FP8). Same mix as NVFP4, S=1.5.
 
     B0 student stays bf16 (Theorem A neighborhood). Frozen-encoder forward
     GEMM in B0, and all of B1/B2, run at ``speedup``. Does not change 6NT.
-    All-phase 1.5× (B0 student also FP8) and peak 2× are sensitivity.
     """
     t0, _, _ = _scale_split(tokens)
     f0, f1, f2 = curriculum_phase_flops(budget, tokens)
@@ -792,6 +822,20 @@ def wallclock_c1_fp8_policy(
     )
 
 
+def wallclock_c1_nvfp4_policy(
+    budget: ModelBudget,
+    tokens: float = 50e9,
+    *,
+    speedup: float = NVFP4_SPEEDUP_CONSERVATIVE,
+) -> float:
+    """Published Phase B wall-clock (frozen spec C1+NVFP4).
+
+    Same B0-student-bf16 mix as the FP8 fallback, with S=2.0 vs bf16.
+    All-phase 2.0× (B0 student also NVFP4) and peak 4× are sensitivity.
+    """
+    return wallclock_c1_fp8_policy(budget, tokens, speedup=speedup)
+
+
 @dataclass(frozen=True)
 class Fp8PhasePolicy:
     phase: str
@@ -800,13 +844,16 @@ class Fp8PhasePolicy:
     note: str
 
 
-# Frozen FP8 policy for C1+FP8. Student = tensors that receive gradients.
+Nvfp4PhasePolicy = Fp8PhasePolicy
+
+
+# Hopper/Ada fallback. Student = tensors that receive gradients.
 FP8_PHASE_POLICY: tuple[Fp8PhasePolicy, ...] = (
     Fp8PhasePolicy(
         "L0",
         "bf16",
         "bf16",
-        "tiny correctness; no FP8",
+        "tiny correctness; no low prec",
     ),
     Fp8PhasePolicy(
         "B0",
@@ -816,15 +863,15 @@ FP8_PHASE_POLICY: tuple[Fp8PhasePolicy, ...] = (
     ),
     Fp8PhasePolicy(
         "B1",
-        "fp8_moe",
         "fp8",
-        "decoder MoE GEMM in FP8; router / LN / embed / lm_head stay high prec",
+        "fp8",
+        "allowed linear GEMMs in FP8; router / LN / embed / softmax stay high prec",
     ),
     Fp8PhasePolicy(
         "B2",
-        "fp8_moe",
+        "fp8",
         "n/a",
-        "both stacks MoE GEMM in FP8 after unfreeze",
+        "both stacks; same allowed GEMM set in FP8 after unfreeze",
     ),
     Fp8PhasePolicy(
         "C",
@@ -834,9 +881,43 @@ FP8_PHASE_POLICY: tuple[Fp8PhasePolicy, ...] = (
     ),
 )
 
+# Frozen NVFP4 policy for C1+NVFP4. Same must-high-prec set as FP8 fallback.
+NVFP4_PHASE_POLICY: tuple[Nvfp4PhasePolicy, ...] = (
+    Nvfp4PhasePolicy(
+        "L0",
+        "bf16",
+        "bf16",
+        "tiny correctness; no NVFP4",
+    ),
+    Nvfp4PhasePolicy(
+        "B0",
+        "bf16",
+        "nvfp4",
+        "gate ramp next to Theorem A; frozen encoder is inference GEMM",
+    ),
+    Nvfp4PhasePolicy(
+        "B1",
+        "nvfp4",
+        "nvfp4",
+        "all allowed linear GEMMs including lm_head and attn QKV/O",
+    ),
+    Nvfp4PhasePolicy(
+        "B2",
+        "nvfp4",
+        "n/a",
+        "both stacks; same allowed GEMM set after unfreeze",
+    ),
+    Nvfp4PhasePolicy(
+        "C",
+        "bf16",
+        "nvfp4",
+        "indexer KL is local and small; keep bf16",
+    ),
+)
+
 
 def claims_fp8(budget: ModelBudget) -> list[Claim]:
-    """FP8 wall-clock ledger. Does not change Kaplan 6NT."""
+    """FP8 fallback ledger. Does not change Kaplan 6NT. Not the published wall-clock."""
     joint = flops_joint(budget, 50e9)
     c1 = flops_curriculum(budget, 50e9, delayed=False)
     moe_f = fp8_moe_active_frac(budget)
@@ -868,7 +949,7 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "1.5×",
         ),
         Claim(
-            "MoE is ≥70% of 6NT (considerable FP8 portion)",
+            "MoE is ≥70% of 6NT (considerable low-prec portion)",
             moe_f >= 0.70,
             f"{moe_f:.1%}",
             "≥70% of counted 6NT",
@@ -877,19 +958,19 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "MoE-only Amdahl speedup in 1.50–1.75×",
             1.50 <= moe_x <= 1.75,
             f"{moe_x:.2f}× (f={moe_f:.1%})",
-            "justifies published 1.5×",
+            "justifies published 1.5× fallback",
         ),
         Claim(
-            "frozen wall-clock spec is C1+FP8 mixed",
-            FROZEN_WALLCLOCK == "C1+FP8"
+            "C1+FP8 mixed is the Hopper/Ada fallback (~729)",
+            FROZEN_WALLCLOCK == "C1+NVFP4"
             and pol["B0"].student == "bf16"
-            and pol["B1"].student == "fp8_moe"
-            and pol["B2"].student == "fp8_moe",
-            FROZEN_WALLCLOCK,
-            "B0 student bf16; B1/B2 fp8_moe (not all-1.5×)",
+            and pol["B1"].student == "fp8"
+            and pol["B2"].student == "fp8",
+            f"{mixed_h:.0f}h fallback",
+            "B0 student bf16; B1/B2 fp8; not published wall-clock",
         ),
         Claim(
-            "published C1+FP8 hours ≈729 (≤60% joint bf16)",
+            "fallback C1+FP8 hours ≈729 (≤60% joint bf16)",
             _close(mixed_h, 729, rel=0.02) and mixed_h <= 0.60 * joint_h,
             f"{mixed_h:.0f} ({mixed_h / joint_h:.0%} of {joint_h:.0f})",
             "~729; ≤60% of joint",
@@ -901,10 +982,10 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "bf16",
         ),
         Claim(
-            "B1/B2 student MoE GEMM is FP8",
-            pol["B1"].student == "fp8_moe" and pol["B2"].student == "fp8_moe",
+            "B1/B2 fallback student GEMM is FP8",
+            pol["B1"].student == "fp8" and pol["B2"].student == "fp8",
             f"{pol['B1'].student}/{pol['B2'].student}",
-            "fp8_moe",
+            "fp8",
         ),
         Claim(
             "B1+B2 cover ≥80% of the 50B envelope",
@@ -919,17 +1000,139 @@ def claims_fp8(budget: ModelBudget) -> list[Claim]:
             "≤15%",
         ),
         Claim(
-            "embed / lm_head / router / LN stay high precision",
-            set(FP8_KEEP_HIGH_PREC)
-            >= {"embed", "lm_head", "router", "rms_norm", "gate", "indexer", "attn_softmax"},
-            ",".join(FP8_KEEP_HIGH_PREC),
-            "embed, lm_head, router, LN, gate, softmax, indexer",
+            "embed / router / LN stay high precision (lm_head is a GEMM)",
+            "lm_head" not in KEEP_HIGH_PREC
+            and set(KEEP_HIGH_PREC)
+            >= {"embed", "router", "rms_norm", "gate", "indexer", "attn_softmax"},
+            ",".join(KEEP_HIGH_PREC),
+            "embed, router, LN, gate, softmax, indexer (not lm_head)",
         ),
         Claim(
             "C1 bf16 hours unchanged by the FP8 policy",
             _close(c1_bf16_h, 1046, rel=0.02),
             f"{c1_bf16_h:.0f}",
             "~1046",
+        ),
+    ]
+
+
+def claims_nvfp4(budget: ModelBudget) -> list[Claim]:
+    """NVFP4 wall-clock ledger. Does not change Kaplan 6NT."""
+    joint = flops_joint(budget, 50e9)
+    c1 = flops_curriculum(budget, 50e9, delayed=False)
+    moe_f = fp8_moe_active_frac(budget)
+    gemm_f = fp8_gemm_frac(budget)
+    mixed_h = wallclock_c1_nvfp4_policy(budget)
+    fp8_h = wallclock_c1_fp8_policy(budget)
+    joint_h = wallclock_h100_h(joint)
+    c1_bf16_h = wallclock_h100_h(c1)
+    pol = {p.phase: p for p in NVFP4_PHASE_POLICY}
+    vs_fp8 = NVFP4_SPEEDUP_CONSERVATIVE / FP8_SPEEDUP_CONSERVATIVE
+    lo, hi = NVFP4_VS_FP8_NVIDIA
+    return [
+        Claim(
+            "NVFP4 does not change Kaplan 6NT",
+            abs(c1 - flops_curriculum(budget, 50e9, delayed=False)) < 1.0,
+            "same FLOPs",
+            "dtype ≠ operation count",
+        ),
+        Claim(
+            "RTX PRO 6000 peaks are 1/2/4 PFLOP",
+            RTX_PRO_6000_BF16_PEAK == 1.0e15
+            and RTX_PRO_6000_FP8_PEAK == 2.0e15
+            and RTX_PRO_6000_FP4_PEAK == 4.0e15,
+            "1/2/4",
+            "BF16/FP8/FP4",
+        ),
+        Claim(
+            "conservative NVFP4 wall-clock is 2.0× vs bf16 (not 4×)",
+            NVFP4_SPEEDUP_CONSERVATIVE == 2.0
+            and NVFP4_SPEEDUP_CONSERVATIVE < NVFP4_SPEEDUP_PEAK,
+            f"{NVFP4_SPEEDUP_CONSERVATIVE:.2f}×",
+            "2.0×; peak 4× is sensitivity",
+        ),
+        Claim(
+            "published NVFP4/FP8 ratio in NVIDIA 1.31–1.73×",
+            lo <= vs_fp8 <= hi,
+            f"{vs_fp8:.2f}×",
+            "2.0/1.5 ≈ 1.33",
+        ),
+        Claim(
+            "frozen wall-clock spec is C1+NVFP4 mixed",
+            FROZEN_WALLCLOCK == "C1+NVFP4"
+            and pol["B0"].student == "bf16"
+            and pol["B1"].student == "nvfp4"
+            and pol["B2"].student == "nvfp4",
+            FROZEN_WALLCLOCK,
+            "B0 student bf16; B1/B2 nvfp4 (not moe-only)",
+        ),
+        Claim(
+            "published C1+NVFP4 hours ≈571 (≤45% joint bf16)",
+            _close(mixed_h, 571, rel=0.02) and mixed_h <= 0.45 * joint_h,
+            f"{mixed_h:.0f} ({mixed_h / joint_h:.0%} of {joint_h:.0f})",
+            "~571; ≤45% of joint",
+        ),
+        Claim(
+            "B0 student stays bf16 (Theorem A neighborhood)",
+            pol["B0"].student == "bf16" and pol["B0"].frozen_encoder_gemm == "nvfp4",
+            f"{pol['B0'].student}/{pol['B0'].frozen_encoder_gemm}",
+            "bf16 / nvfp4",
+        ),
+        Claim(
+            "B1/B2 student is nvfp4 (all allowed GEMMs)",
+            pol["B1"].student == "nvfp4" and pol["B2"].student == "nvfp4",
+            f"{pol['B1'].student}/{pol['B2'].student}",
+            "nvfp4",
+        ),
+        Claim(
+            "lm_head is an NVFP4 GEMM slot (not must-bf16)",
+            "lm_head" in NVFP4_GEMM_SLOTS and "lm_head" not in KEEP_HIGH_PREC,
+            "lm_head ∈ GEMM, ∉ keep-high",
+            "Theorem E is the input table",
+        ),
+        Claim(
+            "attn softmax must stay high prec; QKV is NVFP4",
+            "attn_softmax" in KEEP_HIGH_PREC and "attn_qkv" in NVFP4_GEMM_SLOTS,
+            "softmax high / QKV nvfp4",
+            "score/context ≠ linear projections",
+        ),
+        Claim(
+            "must-high-prec set excludes lm_head",
+            "lm_head" not in KEEP_HIGH_PREC
+            and set(KEEP_HIGH_PREC)
+            >= {"embed", "router", "rms_norm", "gate", "indexer", "attn_softmax", "qk_norm"},
+            ",".join(KEEP_HIGH_PREC),
+            "embed, LN, router, gate, softmax, indexer",
+        ),
+        Claim(
+            "C1 bf16 hours unchanged by the NVFP4 policy",
+            _close(c1_bf16_h, 1046, rel=0.02),
+            f"{c1_bf16_h:.0f}",
+            "~1046",
+        ),
+        Claim(
+            "C1+FP8 fallback still ≈729",
+            _close(fp8_h, 729, rel=0.02) and fp8_h > mixed_h,
+            f"{fp8_h:.0f}",
+            "~729 Hopper/Ada",
+        ),
+        Claim(
+            "RTX PRO 6000 BF16 peak ≈ H100 (hours comparable)",
+            _close(RTX_PRO_6000_BF16_PEAK / H100_BF16_PEAK, 1.0, rel=0.03),
+            f"{RTX_PRO_6000_BF16_PEAK / H100_BF16_PEAK:.3f}×",
+            "~1.01×",
+        ),
+        Claim(
+            "MoE-only 4× Amdahl stays a sensitivity bound",
+            nvfp4_speedup_from_gemm_frac(moe_f) > NVFP4_SPEEDUP_CONSERVATIVE,
+            f"{nvfp4_speedup_from_gemm_frac(moe_f):.2f}× (f={moe_f:.1%})",
+            ">2.0×; do not publish 4×",
+        ),
+        Claim(
+            "allowed GEMM 6NT share ≥95% (lm_head included)",
+            gemm_f >= 0.95,
+            f"{gemm_f:.1%}",
+            "≥95%",
         ),
     ]
 
@@ -1162,7 +1365,12 @@ def verify(budget: ModelBudget | None = None) -> list[Claim]:
     budget = budget or compute_budget(TIERS[DEFAULT_TIER])
     if budget.tier.key != "middle" or budget.first_dense or budget.attn.name != "GQA 16/2":
         raise ValueError("--verify is defined on the published middle-tier GQA budget")
-    return claims_middle_placeholder(budget) + claims_curriculum(budget) + claims_fp8(budget)
+    return (
+        claims_middle_placeholder(budget)
+        + claims_curriculum(budget)
+        + claims_fp8(budget)
+        + claims_nvfp4(budget)
+    )
 
 
 def print_budget(budget: ModelBudget) -> None:
@@ -1287,16 +1495,16 @@ def print_fp8(budget: ModelBudget, tokens: float = 50e9) -> None:
     joint_h = wallclock_h100_h(joint)
     c1_h = wallclock_h100_h(c1)
     mixed_h = wallclock_c1_fp8_policy(budget, tokens)
-    print("-- C1+FP8 (frozen Phase B wall-clock; does not change 6NT) --")
+    print("-- C1+FP8 (Hopper/Ada fallback; does not change 6NT) --")
     print(f"  H100 peak bf16 / FP8              : {H100_BF16_PEAK/1e12:.0f} / {H100_FP8_PEAK/1e12:.0f} TFLOPS")
     print(f"  peak ratio                        : {FP8_SPEEDUP_PEAK:.2f}×")
     attn_f = (budget.enc.attn_total + budget.dec.attn_total) / budget.fwd_active
     print(f"  MoE stored-param / 6NT-active     : {budget.moe_frac:.1%} / {moe_f:.1%}")
     print(f"  attn 6NT-active / GEMM 6NT        : {attn_f:.1%} / {gemm_f:.1%}")
-    print(f"  MoE-only Amdahl (2× GEMM)         : {moe_x:.2f}×  (justifies published 1.5×)")
-    print(f"  MoE+attn Amdahl (upper bound)     : {gemm_x:.2f}×")
+    print(f"  MoE-only Amdahl (2× GEMM)         : {moe_x:.2f}×  (justifies fallback 1.5×)")
+    print(f"  MoE+attn+head Amdahl (upper bound): {gemm_x:.2f}×")
     print(f"  conservative 12B wall-clock       : {FP8_SPEEDUP_CONSERVATIVE:.2f}×  (kernel + comm + scale)")
-    print(f"  keep high precision               : {', '.join(FP8_KEEP_HIGH_PREC)}")
+    print(f"  keep high precision               : {', '.join(KEEP_HIGH_PREC)}")
     print(f"  {'phase':<4s} {'student':<12s} {'frozen_enc':<12s} note")
     for p in FP8_PHASE_POLICY:
         print(f"  {p.phase:<4s} {p.student:<12s} {p.frozen_encoder_gemm:<12s} {p.note}")
@@ -1305,7 +1513,7 @@ def print_fp8(budget: ModelBudget, tokens: float = 50e9) -> None:
         ("joint bf16", joint_h, 1.0),
         ("C1 bf16", c1_h, c1_h / joint_h),
         (
-            "C1+FP8 (frozen spec)",
+            "C1+FP8 (Hopper/Ada fallback)",
             mixed_h,
             mixed_h / joint_h,
         ),
@@ -1331,6 +1539,78 @@ def print_fp8(budget: ModelBudget, tokens: float = 50e9) -> None:
     print(
         f"  frozen encoder weights bf16 / FP8 : "
         f"{gb(n_enc * WEIGHT_BYTES)} / {gb(n_enc * 1.0)}"
+    )
+    print("  published wall-clock is C1+NVFP4; see --nvfp4")
+
+
+def print_nvfp4(budget: ModelBudget, tokens: float = 50e9) -> None:
+    joint = flops_joint(budget, tokens)
+    c1 = flops_curriculum(budget, tokens, delayed=False)
+    moe_f = fp8_moe_active_frac(budget)
+    gemm_f = fp8_gemm_frac(budget)
+    moe_x = nvfp4_speedup_from_gemm_frac(moe_f)
+    gemm_x = nvfp4_speedup_from_gemm_frac(gemm_f)
+    joint_h = wallclock_h100_h(joint)
+    c1_h = wallclock_h100_h(c1)
+    mixed_h = wallclock_c1_nvfp4_policy(budget, tokens)
+    fp8_h = wallclock_c1_fp8_policy(budget, tokens)
+    print("-- C1+NVFP4 (frozen Phase B wall-clock; does not change 6NT) --")
+    print(
+        f"  RTX PRO 6000 peak bf16/FP8/FP4   : "
+        f"{RTX_PRO_6000_BF16_PEAK/1e15:.0f} / "
+        f"{RTX_PRO_6000_FP8_PEAK/1e15:.0f} / "
+        f"{RTX_PRO_6000_FP4_PEAK/1e15:.0f} PFLOP"
+    )
+    print(f"  6000 mem / bandwidth              : {RTX_PRO_6000_MEM_GIB} GiB / {RTX_PRO_6000_BANDWIDTH/1e9:.0f} GB/s")
+    print(f"  peak FP4 / BF16                   : {NVFP4_SPEEDUP_PEAK:.2f}×")
+    print(f"  NVIDIA NVFP4 vs FP8 (GB200/300)   : {NVFP4_VS_FP8_NVIDIA[0]:.2f}–{NVFP4_VS_FP8_NVIDIA[1]:.2f}×")
+    attn_f = (budget.enc.attn_total + budget.dec.attn_total) / budget.fwd_active
+    print(f"  MoE stored-param / 6NT-active     : {budget.moe_frac:.1%} / {moe_f:.1%}")
+    print(f"  attn 6NT-active / GEMM 6NT        : {attn_f:.1%} / {gemm_f:.1%}")
+    print(f"  MoE-only Amdahl (4× GEMM)         : {moe_x:.2f}×  (sensitivity)")
+    print(f"  allowed-GEMM Amdahl (upper bound) : {gemm_x:.2f}×")
+    print(f"  conservative 12B wall-clock       : {NVFP4_SPEEDUP_CONSERVATIVE:.2f}× vs bf16")
+    print(f"  keep high precision               : {', '.join(KEEP_HIGH_PREC)}")
+    print(f"  NVFP4 GEMM slots                  : {', '.join(NVFP4_GEMM_SLOTS)}")
+    print(f"  {'phase':<4s} {'student':<12s} {'frozen_enc':<12s} note")
+    for p in NVFP4_PHASE_POLICY:
+        print(f"  {p.phase:<4s} {p.student:<12s} {p.frozen_encoder_gemm:<12s} {p.note}")
+    print(f"-- Wall-clock @ {tokens/1e9:.0f}B tok (H100-h ≈ 6000-h vs joint bf16) --")
+    rows = [
+        ("joint bf16", joint_h, 1.0),
+        ("C1 bf16", c1_h, c1_h / joint_h),
+        (
+            "C1+FP8 (Hopper/Ada fallback)",
+            fp8_h,
+            fp8_h / joint_h,
+        ),
+        (
+            "C1+NVFP4 (frozen spec)",
+            mixed_h,
+            mixed_h / joint_h,
+        ),
+        (
+            "C1 all-2.0× (sensitivity)",
+            wallclock_h100_h(c1, speedup=NVFP4_SPEEDUP_CONSERVATIVE),
+            wallclock_h100_h(c1, speedup=NVFP4_SPEEDUP_CONSERVATIVE) / joint_h,
+        ),
+        (
+            "C1 MoE-Amdahl 4× (sensitivity)",
+            wallclock_h100_h(c1, speedup=moe_x),
+            wallclock_h100_h(c1, speedup=moe_x) / joint_h,
+        ),
+        (
+            "C1 peak 4× (upper bound)",
+            wallclock_h100_h(c1, speedup=NVFP4_SPEEDUP_PEAK),
+            wallclock_h100_h(c1, speedup=NVFP4_SPEEDUP_PEAK) / joint_h,
+        ),
+    ]
+    for name, hours, ratio in rows:
+        print(f"  {name:32s}  {hours:6.0f} H100-h  {ratio:5.0%} vs joint bf16")
+    n_enc = encoder_stack_total(budget, dense=False)
+    print(
+        f"  frozen encoder weights bf16 / NVFP4 ~ : "
+        f"{gb(n_enc * WEIGHT_BYTES)} / {gb(n_enc * 0.5)}"
     )
 
 
@@ -1478,7 +1758,7 @@ def print_mup() -> None:
 
 def print_claims(cs: Iterable[Claim]) -> int:
     cs = list(cs)
-    print("-- Claim ledger (middle tier + C1 + C1+FP8, GQA 16/2, all-MoE) --")
+    print("-- Claim ledger (middle tier + C1 + C1+FP8 fallback + C1+NVFP4, GQA 16/2, all-MoE) --")
     failed = 0
     for c in cs:
         mark = "PASS" if c.ok else "FAIL"
@@ -1513,7 +1793,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--verify",
         action="store_true",
-        help="assert published middle-tier + freeze-curriculum + FP8 claims; exit 1 on failure",
+        help="assert published middle-tier + freeze-curriculum + FP8 fallback + NVFP4 claims; exit 1 on failure",
     )
     p.add_argument("--full", action="store_true", help="print KV / attention-complexity / μP sections")
     p.add_argument(
@@ -1529,7 +1809,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--fp8",
         action="store_true",
-        help="print C1+FP8 frozen wall-clock (does not change 6NT)",
+        help="print C1+FP8 Hopper/Ada fallback wall-clock (does not change 6NT)",
+    )
+    p.add_argument(
+        "--nvfp4",
+        action="store_true",
+        help="print C1+NVFP4 frozen wall-clock (does not change 6NT)",
     )
     return p
 
@@ -1550,7 +1835,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         budget = compute_budget(TIERS[key], attn=attn, first_dense=args.first_dense)
         print_budget(budget)
         print_compute(budget, tokens=args.tokens)
-        if (args.staged or args.curriculum or args.fp8) and key == keys[-1]:
+        if (args.staged or args.curriculum or args.fp8 or args.nvfp4) and key == keys[-1]:
             if args.staged:
                 print()
                 print_staged(budget, tokens=args.tokens)
@@ -1560,6 +1845,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.fp8:
                 print()
                 print_fp8(budget, tokens=args.tokens)
+            if args.nvfp4:
+                print()
+                print_nvfp4(budget, tokens=args.tokens)
 
     if args.full:
         print()
@@ -1580,6 +1868,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print_curriculum(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
         print()
         print_fp8(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
+        print()
+        print_nvfp4(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
         print()
         if args.tier in ("middle", "all") and args.attn in ("gqa", "placeholder") and not args.first_dense:
             print_claims(verify())

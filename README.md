@@ -2,7 +2,7 @@
 
 Causal Encoder-Decoder (YOCO-style) hybrid-attention MoE, upcycled from MiniCPM5-2B (Apache-2.0).
 
-Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active / input token, Decoder ≈4.33B active / output token. CSA/HCA + 8K sliding window; primary long-context target 128K–256K. Phase B wall-clock **C1+FP8 = 729 H100-h**.
+Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active / input token, Decoder ≈4.33B active / output token. CSA/HCA + 8K sliding window; primary long-context target 128K–256K. Phase B wall-clock **C1+NVFP4 = 571 H100-h**.
 
 ## Docs
 
@@ -11,7 +11,8 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 - [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — middle-tier parameter / FLOPs / KV / μP ledger
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — causality, residual-cut equivalence, M1/M2/M3 cache interface
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum **C1** (MoE both stacks, freeze encoder in B0/B1)
-- [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — **C1+FP8** frozen Phase B wall-clock (729 H100-h)
+- [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 Hopper/Ada fallback (729 H100-h)
+- [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — **C1+NVFP4** frozen Phase B wall-clock (571 H100-h)
 
 ## Train (12B graph; tiny for tests)
 
@@ -67,8 +68,8 @@ python3 -m unittest tests.test_gpu
 ## Recalculate / verify
 
 ```bash
-python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 ledger
-python3 scripts/param_budget.py --staged --curriculum --fp8
+python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 fallback + NVFP4 ledger
+python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 python3 scripts/arch_verify.py --verify      # architecture invariants
 python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
 ```

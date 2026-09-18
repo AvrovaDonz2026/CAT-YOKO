@@ -279,13 +279,13 @@ PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在�
 
 定稿 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM5-16；B2 才让 Encoder 专家特化）。
 
-数字：C1 约 **79%** 联合 50B；独立拼接 **146%**。B1 Adam 状态约联合的 **62%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0。**发布墙钟 C1+FP8 = 729 H100-h**（[`FP8_THEORY.md`](FP8_THEORY.md)）。`python3 scripts/param_budget.py --staged --curriculum --fp8`。
+数字：C1 约 **79%** 联合 50B；独立拼接 **146%**。B1 Adam 状态约联合的 **62%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0。**发布墙钟 C1+NVFP4 = 571 H100-h**（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)）。`python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4`。
 
 复算：
 
 ```bash
 python3 scripts/arch_verify.py --verify
 python3 -m unittest tests.test_arch_verify
-python3 scripts/param_budget.py --verify                 # 中间档 + 解冻课程 + FP8 账本
-python3 scripts/param_budget.py --staged --curriculum --fp8
+python3 scripts/param_budget.py --verify                 # 中间档 + 解冻课程 + FP8 回退 + NVFP4 账本
+python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 ```

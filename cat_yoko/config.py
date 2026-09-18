@@ -53,7 +53,8 @@ class CATYokoConfig:
     router_z_loss: float = 1e-4
     seq_balance_loss: float = 1e-3
     use_muon: bool = False
-    use_fp8: bool = True
+    use_nvfp4: bool = True  # published compute dtype; kernels later
+    use_fp8: bool = True  # Hopper/Ada fallback placeholder
     attention_backend: str = "window"  # Phase B; "csa" is Phase C
     kd_temperature: float = 2.0
     kd_weight_start: float = 0.5
@@ -123,6 +124,7 @@ class CATYokoConfig:
             dim_model_base=64,
             seq_len=16,
             lr=3e-4,
+            use_nvfp4=False,
             use_fp8=False,
             global_batch_tokens=128,
             # Tiny is test-only. Match MiniCPM5 RMS; keep short-rope for seq_len=16.
@@ -140,12 +142,26 @@ def encoder_layer_kind(index: int) -> str:
 
 # Phase B C1 split (tokens).
 C1_SPLIT = {"B0": 8e9, "B1": 27e9, "B2": 15e9}
-FP8_KEEP_HIGH_PREC = (
+# Must-high-prec ops. Everything else that is a linear GEMM is NVFP4
+# (B1/B2 student; frozen-encoder forward from B0). lm_head is a GEMM.
+KEEP_HIGH_PREC = (
     "embed",
-    "lm_head",
-    "norm",
+    "rms_norm",
+    "qk_norm",
     "router",
     "gate",
     "indexer",
-    "qk_norm",
+    "attn_softmax",
+)
+FP8_KEEP_HIGH_PREC = KEEP_HIGH_PREC
+NVFP4_KEEP_HIGH_PREC = KEEP_HIGH_PREC
+NVFP4_GEMM_SLOTS = (
+    "moe_expert",
+    "attn_qkv",
+    "attn_o",
+    "cross_q",
+    "cross_o",
+    "cache_kv",
+    "lm_head",
+    "frozen_encoder_linear",
 )

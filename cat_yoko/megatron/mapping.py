@@ -7,8 +7,13 @@ must be filtered when constructing a live config (see provider.py).
 
 from __future__ import annotations
 
-from cat_yoko.config import CATYokoConfig, C1_SPLIT, FP8_KEEP_HIGH_PREC, encoder_layer_kind
-from cat_yoko.fp8 import policy_for
+from cat_yoko.config import (
+    CATYokoConfig,
+    C1_SPLIT,
+    KEEP_HIGH_PREC,
+    encoder_layer_kind,
+)
+from cat_yoko.nvfp4 import policy_for
 from cat_yoko.parallel import ParallelPlan, validate_parallel
 
 MEGATRON_LM = "https://github.com/NVIDIA/Megatron-LM"
@@ -50,11 +55,32 @@ def encoder_csa_compress_ratios(cfg: CATYokoConfig) -> list[int]:
     return out
 
 
-def _fp8_fields(phase: str, cfg: CATYokoConfig) -> dict:
+def _prec_fields(phase: str, cfg: CATYokoConfig, *, stack: str) -> dict:
+    """Published NVFP4 + Hopper FP8 fallback. B0 student stays bf16.
+
+    Frozen-encoder forward is still an NVFP4 GEMM slot even when the
+    decoder student is bf16 (B0 / Phase C).
+    """
     pol = policy_for(phase)
-    if not cfg.use_fp8 or pol.student == "bf16":
-        return {"fp8": None, "bf16": True}
-    return {"fp8": "hybrid", "fp8_recipe": "delayed", "bf16": True}
+    nvfp4_on = bool(cfg.use_nvfp4)
+    fp8_on = bool(cfg.use_fp8)
+    encoder_low = pol.frozen_encoder_gemm in {"nvfp4", "fp8"}
+    student_low = pol.student in {"nvfp4", "nvfp4_moe", "fp8", "fp8_moe"}
+    if stack == "encoder":
+        low = student_low if pol.frozen_encoder_gemm == "n/a" else encoder_low
+    else:
+        low = student_low
+    if not low or not (nvfp4_on or fp8_on):
+        return {"fp8": None, "nvfp4": False, "bf16": True}
+    out = {"bf16": True, "nvfp4": bool(nvfp4_on and low)}
+    if nvfp4_on and low:
+        out["nvfp4_recipe"] = "te_nvfp4"
+    if fp8_on and low:
+        out["fp8"] = "hybrid"
+        out["fp8_recipe"] = "delayed"
+    else:
+        out["fp8"] = None
+    return out
 
 
 def transformer_config_dict(
@@ -78,7 +104,7 @@ def transformer_config_dict(
     else:
         raise ValueError(stack)
 
-    fp8 = _fp8_fields(phase, cfg)
+    prec = _prec_fields(phase, cfg, stack=stack)
     return {
         "num_layers": n_layers,
         "hidden_size": cfg.hidden_size,
@@ -119,7 +145,7 @@ def transformer_config_dict(
         "context_parallel_size": plan.context_parallel,
         "sequence_parallel": plan.sequence_parallel,
         "variable_seq_lengths": True,
-        **fp8,
+        **prec,
     }
 
 
@@ -136,7 +162,8 @@ def yoco_extras(cfg: CATYokoConfig, phase: str) -> dict:
         "hash_moe_encoder": False,
         "first_dense": cfg.first_dense,
         "attention_backend": cfg.attention_backend,
-        "fp8_keep_high_prec": list(FP8_KEEP_HIGH_PREC),
+        "fp8_keep_high_prec": list(KEEP_HIGH_PREC),
+        "nvfp4_keep_high_prec": list(KEEP_HIGH_PREC),
         "c1_split_tokens": dict(C1_SPLIT),
         "phase_c_csa": {
             "experimental_attention_variant": "dsv4_hybrid",

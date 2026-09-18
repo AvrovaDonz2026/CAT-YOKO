@@ -39,7 +39,7 @@ from cat_yoko.dist_util import (
     reduce_sum,
     wrap_distributed,
 )
-from cat_yoko.fp8 import should_autocast
+from cat_yoko.nvfp4 import low_prec_enabled, should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
@@ -255,7 +255,7 @@ class Trainer:
 
     def _use_amp(self) -> bool:
         cuda = str(self.device).startswith("cuda")
-        if should_autocast(self.phase, cuda=cuda, enabled=self.cfg.use_fp8):
+        if should_autocast(self.phase, cuda=cuda, enabled=low_prec_enabled(self.cfg)):
             return True
         return cuda and self.dtype == "bf16"
 
@@ -605,7 +605,9 @@ class Trainer:
 
         unwrap(model).train()
         use_fp8 = should_autocast(
-            self.phase, cuda=str(self.device).startswith("cuda"), enabled=self.cfg.use_fp8
+            self.phase,
+            cuda=str(self.device).startswith("cuda"),
+            enabled=low_prec_enabled(self.cfg),
         )
         last = 0.0
         phase_budget = self.tokens_target

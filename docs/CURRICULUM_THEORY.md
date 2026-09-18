@@ -2,21 +2,22 @@
 
 > 与前两篇分工：[`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 核中间档参数 / FLOPs / KV；[`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) 核因果与 M1/M2/M3；**这篇核 Phase B 的可训练子集**——冻结边界、梯度在 cache 处截断、untied embedding、**C1 定稿配方**、优化器/激活显存、token 切分。延迟 Encoder MoE 只作敏感性对照。
 > 规格仍是中间档：16/26，≈12.25B / 2.03B-in / 4.33B-out。底座 MiniCPM5-2B（Llama GQA，untied）。不引入新架构，不把两栈拆成两个独立 LM。
-> 可执行断言：`python3 scripts/param_budget.py --verify`（含课程 claim）、`--staged`、`--curriculum`、`--fp8`；`python3 -m unittest tests.test_param_budget`。
+> 可执行断言：`python3 scripts/param_budget.py --verify`（含课程 claim）、`--staged`、`--curriculum`、`--fp8`、`--nvfp4`；`python3 -m unittest tests.test_param_budget`。
 > 理论能证明的是 **FLOPs / 显存 / 梯度流 / 与定理 A 的兼容**；不能证明 12B 上采样后的质量。质量仍走 L0→L1 实验，B2 不够就加长 B2。
-> FP8 墙钟（不改 6NT；Phase B 定稿 **C1+FP8 = 729 H100-h**）见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+> NVFP4 墙钟（不改 6NT；Phase B 定稿 **C1+NVFP4 = 571 H100-h**）见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。Hopper/Ada 回退 C1+FP8 = 729 见 [`FP8_THEORY.md`](FP8_THEORY.md)。
 
 ---
 
 ## 0. 结论（先看这个）
 
-「先分开训两个模型再焊在一起」**更贵且破坏定理 A**。能省的是同一套切开权重上的 **B0 → B1 → B2 解冻课程**。冻结边界按 **C1** 定稿；Phase B **墙钟按 C1+FP8 定稿（729 H100-h）**。
+「先分开训两个模型再焊在一起」**更贵且破坏定理 A**。能省的是同一套切开权重上的 **B0 → B1 → B2 解冻课程**。冻结边界按 **C1** 定稿；Phase B **墙钟按 C1+NVFP4 定稿（571 H100-h）**。
 
 | 做法 | 50B tok H100-h | vs 联合 | 角色 |
 | --- | ---: | ---: | --- |
 | 两栈一起训（联合 bf16） | 1,325 | 100% | 对照 |
 | C1：两栈都先 MoE，B0/B1 冻 Encoder | 1,046 | 79% | 操作数账 |
-| **C1+FP8** | **729** | **55%** | **定稿墙钟** |
+| **C1+FP8（Hopper/Ada 回退）** | 729 | 55% | 无 Blackwell |
+| **C1+NVFP4** | **571** | **43%** | **定稿墙钟** |
 | 独立 50B+50B+20B 拼接 | 1,940 | **146%（更贵）** | 不要做 |
 
 还必须钉死的几条：
@@ -28,9 +29,9 @@
 5. **C1 相对联合约省 21% FLOPs；Adam 状态在 B1 只有联合的 62%；detach 丢掉 Encoder 激活约 38%（留下 26/42 ≈ 62%）。** 塞进更少卡时，显存杠杆可能比 FLOPs 杠杆更有用。
 6. **B2 不能为 0**（write/read 永不共同适应，PDSA 已警告）。默认 B2 = 15B ≥ 10B。质量不稳加长 B2，不要改回两个独立 LM。
 7. Phase C「冻主干、只训 indexer」叠在 B2 **之后**；indexer 对齐是层内 KL，不是穿过 cache 的 LM 反传。
-8. **墙钟敲死为 C1+FP8。** B1/B2 MoE GEMM + 冻结 Encoder 前向走 FP8，B0 student / L0 / indexer 保持 bf16。发布 **729 H100-h（联合 bf16 的 55%）**。见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+8. **墙钟敲死为 C1+NVFP4。** 不必须 bf16 的线性 GEMM 走 NVFP4，B0 student / L0 / indexer 保持 bf16。发布 **571 H100-h（联合 bf16 的 43%）**。见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。
 
-Claim ledger：中间档 22 条 + 课程 12 条 + FP8 13 条，`--verify` **47/47** 通过。
+Claim ledger：中间档 22 条 + 课程 12 条 + FP8 回退 13 条 + NVFP4 16 条，`--verify` **63/63** 通过。
 
 ---
 
@@ -225,7 +226,7 @@ B1 的 Adam 状态是联合的 62%（Decoder 总参 + lm_head + cache 投影 / �
 
 Muon 只在 2D 矩阵上存一份动量，B1/B2 的优化器差距会略小于 Adam 的 8 B/参，方向不变。
 
-这就是 §15.3 把解冻课程排在 FP8 前面的原因：它同时砍反向 FLOPs、Adam 状态、激活。发布积是 **C1+FP8 = 729**（C1 bf16 1,046 只作操作数账），不替代冻结。
+这就是 §15.3 把解冻课程排在 NVFP4 前面的原因：它同时砍反向 FLOPs、Adam 状态、激活。发布积是 **C1+NVFP4 = 571**（C1 bf16 1,046 只作操作数账；C1+FP8 729 为 Hopper/Ada 回退），不替代冻结。
 
 ---
 
@@ -298,7 +299,7 @@ Phase F/G 的分域专家蒸馏与这套预训练课程正交。
 | Encoder dense FFN < MoE FFN（敏感性，不定稿） | PASS（0.75B < 1.76B） |
 | delayed-enc 对照更便宜（敏感性，不定稿） | PASS（75% < 79%） |
 
-C1 ≤85% 仍在中间档账本里（79%）。FP8 另 13 条见 [`FP8_THEORY.md`](FP8_THEORY.md)；合计 `--verify` **47/47**。墙钟定稿是 **C1+FP8 = 729**。
+C1 ≤85% 仍在中间档账本里（79%）。FP8 回退 13 条见 [`FP8_THEORY.md`](FP8_THEORY.md)；NVFP4 16 条见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)；合计 `--verify` **63/63**。墙钟定稿是 **C1+NVFP4 = 571**。
 
 ---
 
@@ -308,12 +309,12 @@ C1 ≤85% 仍在中间档账本里（79%）。FP8 另 13 条见 [`FP8_THEORY.md`
 2. Phase A：对 Encoder、Decoder **各自** virtual-group。切分 **16/26**。
 3. §15.3 杠杆 #5：C1 约省 21% Phase B FLOPs、B1 Adam 62%、激活 ~38%。
 4. 不写训练代码骨架（按用户要求，理论先闭环）。
-5. **墙钟敲死为 C1+FP8**：729 H100-h（[`FP8_THEORY.md`](FP8_THEORY.md)）。联合 bf16 与全阶段 1.5× 不定稿。
+5. **墙钟敲死为 C1+NVFP4**：571 H100-h（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)）。联合 bf16、C1+FP8 与全阶段 2.0× 不定稿。
 
 复算：
 
 ```bash
 python3 scripts/param_budget.py --verify
-python3 scripts/param_budget.py --staged --curriculum --fp8
+python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 python3 -m unittest tests.test_param_budget
 ```
