@@ -83,10 +83,24 @@ class TinyTrainTests(unittest.TestCase):
             self.assertIsNone(p.grad)
         self.assertFalse(model.embed.weight.requires_grad)
         self.assertFalse(model.lm_head.weight.requires_grad)
+        self.assertFalse(model.norm.weight.requires_grad)
         self.assertIsNotNone(model.cache_k.weight.grad)
         names = trainable_names(model)
         self.assertTrue(any("cross_attn" in n for n in names))
+        self.assertTrue(any("ln_cross" in n for n in names))
+        self.assertTrue(any("cache_k" in n for n in names))
+        self.assertTrue(any("cache_v" in n for n in names))
         self.assertFalse(any("encoder" in n for n in names))
+        for n in names:
+            new_mod = (
+                n.startswith("cache_k")
+                or n.startswith("cache_v")
+                or "cross_attn" in n
+                or "ln_cross" in n
+            )
+            self.assertTrue(new_mod, msg=n)
+        apply_freeze(model, "B1")
+        self.assertTrue(model.norm.weight.requires_grad)
 
     def test_b1_decoder_trainable_encoder_frozen(self) -> None:
         model = CATYokoForCausalLM(self.cfg)
@@ -94,6 +108,7 @@ class TinyTrainTests(unittest.TestCase):
         self.assertTrue(model.detach_cache)
         self.assertFalse(model.embed.weight.requires_grad)
         self.assertTrue(model.lm_head.weight.requires_grad)
+        self.assertTrue(model.norm.weight.requires_grad)
         self.assertFalse(next(model.encoder.parameters()).requires_grad)
         self.assertTrue(next(model.decoder[0].self_attn.parameters()).requires_grad)
         self.assertTrue(next(model.decoder[0].mlp.parameters()).requires_grad)

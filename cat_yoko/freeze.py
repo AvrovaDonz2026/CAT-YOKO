@@ -1,8 +1,8 @@
 """C1 freeze boundaries (Theorems D/E).
 
 Duck-typed for the torch graph and a future MegatronModule: ``encoder``,
-``decoder``, ``embed``, ``cache_k`` / ``cache_v``, ``set_detach``, and
-``decoder[i].{self_attn, mlp, ln1, ln2, cross_attn, ln_cross, gate}``.
+``decoder``, ``embed``, ``norm``, ``cache_k`` / ``cache_v``, ``set_detach``,
+and ``decoder[i].{self_attn, mlp, ln1, ln2, cross_attn, ln_cross, gate}``.
 """
 
 from __future__ import annotations
@@ -27,6 +27,16 @@ def gate_schedule(phase: str, progress: float) -> float:
     if phase == "B1":
         return 0.3 + 0.7 * p
     return 1.0
+
+
+def _b0_new_module_params(model: CATYokoForCausalLM):
+    """YOCO new modules: cache projections and decoder cross-attn / ln_cross."""
+    yield from model.cache_k.parameters()
+    yield from model.cache_v.parameters()
+    for blk in model.decoder:
+        blk = unwrap(blk)
+        yield from blk.cross_attn.parameters()
+        yield from blk.ln_cross.parameters()
 
 
 def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
@@ -56,6 +66,14 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
             blk.ln2.weight.requires_grad = False
             # cross_attn, ln_cross stay trainable; cache_k/v stay trainable.
             # gate is a scheduled buffer, not a Parameter.
+        # MiniCPM5 final RMSNorm is backbone leftover, not a new module.
+        # B1 trains it with the decoder stack; B2 already unfreezes everything.
+        model.norm.weight.requires_grad = False
+        keep = {id(p) for p in _b0_new_module_params(model)}
+        for p in model.parameters():
+            if id(p) not in keep:
+                p.requires_grad = False
+    # B1: decoder stack (self-attn, mlp, ln1/ln2, final norm) stays trainable.
 
 
 def trainable_names(model: CATYokoForCausalLM) -> list[str]:
