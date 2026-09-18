@@ -302,6 +302,33 @@ class LoopTests(unittest.TestCase):
         ]
         self.assertTrue(math.isnan(tr._eval_nll(FakeModel(empty), batches=2)))
 
+    def test_token_mean_nll_empty_rank_does_not_poison(self) -> None:
+        from cat_yoko.trainer import token_mean_nll
+
+        # rank0: nll=2 over 10 tokens; rank1: no valid tokens → (0, 0), not nan.
+        self.assertAlmostEqual(token_mean_nll(2.0 * 10 + 0.0, 10.0 + 0.0), 2.0)
+        self.assertTrue(math.isnan(token_mean_nll(0.0, 0.0)))
+        self.assertTrue(math.isnan(token_mean_nll(float("nan"), 0.0)))
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1)
+        self.assertAlmostEqual(tr._allreduce_token_nll(20.0, 10.0), 2.0)
+        self.assertTrue(math.isnan(tr._allreduce_token_nll(0.0, 0.0)))
+
+    def test_open_dummy_does_not_double_offset_rank_seed(self) -> None:
+        from cat_yoko.data import DummyStream
+
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1)
+        tr.rank = 1
+        tr.world = 2
+        got = tr._open(None, tr.seed).batch(1, "cpu")["input_ids"]
+        exp = DummyStream(
+            self.cfg.vocab_size, tr.seq_len, seed=tr.seed, shard_id=1, num_shards=2
+        ).batch(1, "cpu")["input_ids"]
+        self.assertTrue(torch.equal(got, exp))
+        doubled = DummyStream(
+            self.cfg.vocab_size, tr.seq_len, seed=tr.seed + 1, shard_id=1, num_shards=2
+        ).batch(1, "cpu")["input_ids"]
+        self.assertFalse(torch.equal(got, doubled))
+
     def test_log_jsonl_is_strict_json(self) -> None:
         from cat_yoko.trainer import _json_safe
 

@@ -68,6 +68,13 @@ def _json_safe(obj):
     return obj
 
 
+def token_mean_nll(weighted: float, n_valid: float) -> float:
+    """``sum(nll * n_valid) / sum(n_valid)``. Empty ranks contribute ``(0, 0)``, not nan."""
+    if n_valid <= 0 or not math.isfinite(weighted):
+        return float("nan")
+    return weighted / n_valid
+
+
 enable_expandable_segments()
 
 
@@ -306,6 +313,7 @@ class Trainer:
         return torch.cuda.max_memory_allocated() / 1024**2
 
     def _open(self, path: Path | None, seed: int):
+        # DummyStream already offsets by rank; do not add rank onto ``seed`` again.
         return open_stream(
             path,
             self.cfg.vocab_size,
@@ -317,12 +325,12 @@ class Trainer:
         )
 
     @torch.no_grad()
-    def _eval_nll(self, model: nn.Module, batches: int | None = None) -> float:
-        """Token-mean NLL: ``sum(nll * n_valid) / sum(n_valid)``. Skip empty batches."""
+    def _eval_nll_stats(self, model: nn.Module, batches: int | None = None) -> tuple[float, float]:
+        """Local ``(sum nll*n_valid, sum n_valid)``. Empty / no eval_data → ``(0, 0)``."""
         n_batches = self.eval_batches if batches is None else batches
         if self.eval_data is None:
-            return float("nan")
-        stream = self._open(self.eval_data, self.seed + 1 + self.rank)
+            return 0.0, 0.0
+        stream = self._open(self.eval_data, self.seed + 1)
         was_train = model.training
         model.eval()
         weighted = 0.0
@@ -343,9 +351,17 @@ class Trainer:
         finally:
             if was_train:
                 model.train()
-        if n_valid_total <= 0:
-            return float("nan")
-        return weighted / n_valid_total
+        return weighted, n_valid_total
+
+    def _eval_nll(self, model: nn.Module, batches: int | None = None) -> float:
+        """Token-mean NLL: ``sum(nll * n_valid) / sum(n_valid)``. Skip empty batches."""
+        return token_mean_nll(*self._eval_nll_stats(model, batches))
+
+    def _allreduce_token_nll(self, weighted: float, n_valid: float) -> float:
+        """DDP token-mean. Empty ranks send ``(0, 0)`` so they cannot poison with nan."""
+        w = reduce_sum(weighted, device=str(self.device), world=self.world)
+        n = reduce_sum(n_valid, device=str(self.device), world=self.world)
+        return token_mean_nll(w, n)
 
     def _resolve_offload(self) -> None:
         self.offload_encoder, self.offload_blocks, self.optim_cpu = auto_offload_flags(
@@ -538,7 +554,7 @@ class Trainer:
             state_dtype=state_dtype,
             retain_state=retain_state,
         )
-        stream = self._open(self.data, self.seed + self.rank)
+        stream = self._open(self.data, self.seed)
         step = 0
         tokens_in_phase = 0.0
         tokens_seen = self.global_tokens_offset
@@ -597,7 +613,7 @@ class Trainer:
                 for g in opt.param_groups:
                     g["lr"] = lr
                 opt.zero_grad(set_to_none=True)
-                step_nll = 0.0
+                step_nll_w = 0.0
                 step_loss = 0.0
                 step_aux = 0.0
                 step_tokens = 0
@@ -631,19 +647,21 @@ class Trainer:
                                 ignore=shift_labels,
                             )
                         loss.backward()
-                    step_nll += float(out["nll"].detach()) / self.accum
+                    n_valid = out.get("n_valid")
+                    n_valid_f = float(n_valid.detach()) if n_valid is not None else 0.0
+                    if n_valid_f > 0:
+                        step_nll_w += float(out["nll"].detach()) * n_valid_f
+                        step_n_valid += n_valid_f
                     step_loss += float(out["loss"].detach()) / self.accum
                     step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
-                    n_valid = out.get("n_valid")
-                    if n_valid is not None:
-                        step_n_valid += float(n_valid.detach())
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
                 moe_stats = moe_utilization(unwrap(model))
                 unwrap(model).step_router_bias()
-                step_nll = reduce_mean(step_nll, device=str(self.device), world=self.world)
+                step_nll_w = reduce_sum(step_nll_w, device=str(self.device), world=self.world)
+                step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
+                step_nll = token_mean_nll(step_nll_w, step_n_valid)
                 step_loss = reduce_mean(step_loss, device=str(self.device), world=self.world)
                 step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
-                step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
                 if not math.isfinite(step_nll):
                     raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
                 if self.offload_blocks:
@@ -694,14 +712,12 @@ class Trainer:
                         **moe_stats,
                     }
                     if self.eval_every and self.eval_data is not None and step % self.eval_every == 0:
-                        ev = self._eval_nll(model)
-                        ev = reduce_mean(ev, device=str(self.device), world=self.world)
+                        ev = self._allreduce_token_nll(*self._eval_nll_stats(model))
                         row["eval_nll"] = ev
                         row["eval_ppl"] = safe_ppl(ev)
                     self._log(row)
                 elif self.eval_every and self.eval_data is not None and step % self.eval_every == 0:
-                    ev = self._eval_nll(model)
-                    ev = reduce_mean(ev, device=str(self.device), world=self.world)
+                    ev = self._allreduce_token_nll(*self._eval_nll_stats(model))
                     if is_rank0(self.rank):
                         print(f"eval nll={ev:.4f} ppl={safe_ppl(ev) or '-'}")
                 if self.save_every and step % self.save_every == 0:
