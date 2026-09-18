@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+# Full 23GiB graphs stay off git (GitHub LFS is 5GiB/file).
+**/step_*.pt
+**/latest.pt
+**/*.pt.tmp
+
