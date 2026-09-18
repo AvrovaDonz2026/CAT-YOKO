@@ -281,6 +281,110 @@ def gpu_hours(flops: float, effective_flops: float) -> float:
     return flops / (effective_flops * SECONDS_PER_HOUR)
 
 
+@dataclass(frozen=True)
+class StagedRecipe:
+    """One training recipe's FLOPs over a token budget (matmul / 6NT-style)."""
+
+    name: str
+    flops: float
+    tokens: float
+    note: str = ""
+
+    def h100_h(self) -> float:
+        return gpu_hours(self.flops, H100_BF16_EFF)
+
+
+def _n_parts(budget: ModelBudget) -> tuple[int, int, int, int]:
+    """emb, encoder-no-emb, decoder-no-emb, cross-attn (new module proxy)."""
+    n_emb = budget.emb
+    n_e = budget.enc.active_no_emb
+    n_d = budget.dec.active_no_emb
+    n_new = budget.dec.layers * budget.attn.cross_attn
+    return n_emb, n_e, n_d, n_new
+
+
+def flops_joint(budget: ModelBudget, tokens: float) -> float:
+    """Both stacks trainable (emb counted once)."""
+    return 6.0 * budget.fwd_active * tokens
+
+
+def flops_encoder_lm(budget: ModelBudget, tokens: float) -> float:
+    """Train encoder as a standalone causal LM (loss on X^{Le}, no decoder)."""
+    n_emb, n_e, _, _ = _n_parts(budget)
+    return 6.0 * (n_emb + n_e) * tokens
+
+
+def flops_freeze_encoder(budget: ModelBudget, tokens: float) -> float:
+    """YOCO LM loss, encoder frozen (fwd only), decoder+cross-attn trainable.
+
+    Backward stops at the global cache: encoder has no weight or activation grads.
+    """
+    n_emb, n_e, n_d, _ = _n_parts(budget)
+    return (2.0 * (n_emb + n_e) + 6.0 * n_d) * tokens
+
+
+def flops_new_modules(budget: ModelBudget, tokens: float) -> float:
+    """Freeze inherited MiniCPM stacks; train cross-attn (and later indexer).
+
+    Forward still runs both stacks. Activation backward runs through the decoder
+    (chain rule to the new residual branch) but not the encoder.
+    """
+    n_emb, n_e, n_d, n_new = _n_parts(budget)
+    fwd = 2.0 * (n_emb + n_e + n_d)
+    bwd_w = 2.0 * n_new
+    bwd_act = 2.0 * n_d
+    return (fwd + bwd_w + bwd_act) * tokens
+
+
+def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedRecipe]:
+    """Compare independent-merge vs freeze-curriculum vs joint, same 50B envelope."""
+    half = tokens / 2.0
+    t1, t2, t3 = 0.16 * tokens, 0.54 * tokens, 0.30 * tokens  # 8/27/15 of 50B
+    independent = (
+        flops_encoder_lm(budget, tokens)
+        + flops_freeze_encoder(budget, tokens)
+        + flops_joint(budget, 0.4 * tokens)
+    )
+    curriculum = (
+        flops_new_modules(budget, t1)
+        + flops_freeze_encoder(budget, t2)
+        + flops_joint(budget, t3)
+    )
+    return [
+        StagedRecipe("joint both stacks", flops_joint(budget, tokens), tokens, "baseline"),
+        StagedRecipe(
+            "freeze-enc, train-dec (all tokens)",
+            flops_freeze_encoder(budget, tokens),
+            tokens,
+            "saves enc backward; write/read don't co-adapt",
+        ),
+        StagedRecipe(
+            "new-modules only (cross-attn)",
+            flops_new_modules(budget, tokens),
+            tokens,
+            "Phase A warmup / Phase C indexer-style",
+        ),
+        StagedRecipe(
+            "unfreeze curriculum 8+27+15B",
+            curriculum,
+            tokens,
+            "new-mod → freeze-enc → short joint; same 50B",
+        ),
+        StagedRecipe(
+            "independent enc LM + freeze-enc dec + 20B stitch",
+            independent,
+            tokens + tokens + 0.4 * tokens,
+            "same 50B per stack then merge — usually MORE FLOPs",
+        ),
+        StagedRecipe(
+            "enc-only LM then joint on half+half",
+            flops_encoder_lm(budget, half) + flops_joint(budget, half),
+            tokens,
+            "saves only if half joint tokens suffice — quality bet",
+        ),
+    ]
+
+
 def attn_score_flops(n: int, k: int, layers: int) -> float:
     """QK^T + AV multiply-adds, treating n_heads * head_dim = D.
 
@@ -481,6 +585,26 @@ def claims_middle_placeholder(budget: ModelBudget) -> list[Claim]:
             "do not rescale by 16/24",
             note="inherited MiniCPM weights were trained with 1.4/√40",
         ),
+        Claim(
+            "freeze-enc train-dec saves ~20% vs joint",
+            0.74 <= flops_freeze_encoder(budget, 50e9) / flops_joint(budget, 50e9) <= 0.82,
+            f"{flops_freeze_encoder(budget, 50e9) / flops_joint(budget, 50e9):.0%}",
+            "~77–80%",
+        ),
+        Claim(
+            "independent 50B+50B+20B stitch is MORE FLOPs",
+            next(r.flops for r in staged_recipes(budget, 50e9) if r.name.startswith("independent"))
+            > flops_joint(budget, 50e9),
+            f"{next(r.flops for r in staged_recipes(budget, 50e9) if r.name.startswith('independent')) / flops_joint(budget, 50e9):.0%}",
+            ">100% of joint",
+        ),
+        Claim(
+            "unfreeze curriculum ≤85% of joint 50B",
+            next(r.flops for r in staged_recipes(budget, 50e9) if r.name.startswith("unfreeze"))
+            <= 0.85 * flops_joint(budget, 50e9),
+            f"{next(r.flops for r in staged_recipes(budget, 50e9) if r.name.startswith('unfreeze')) / flops_joint(budget, 50e9):.0%}",
+            "≤85%",
+        ),
     ]
 
 
@@ -530,6 +654,24 @@ def print_compute(budget: ModelBudget, tokens: float = 50e9) -> None:
             f"  {label:44s}  N={b(n_act):>7s}  "
             f"{gpu_hours(flops, H100_BF16_EFF):6.0f} H100-h  "
             f"{gpu_hours(flops, A100_BF16_EFF):6.0f} A100-h"
+        )
+
+
+def print_staged(budget: ModelBudget, tokens: float = 50e9) -> None:
+    recipes = staged_recipes(budget, tokens)
+    joint = recipes[0]
+    print(f"-- Staged vs joint @ {tokens/1e9:.0f}B tok envelope (emb-once 6NT) --")
+    for r in recipes:
+        ratio = r.flops / joint.flops
+        if ratio < 0.98:
+            delta = "save"
+        elif ratio <= 1.02:
+            delta = "base"
+        else:
+            delta = "MORE"
+        print(
+            f"  {r.name:48s}  {r.h100_h():6.0f} H100-h  "
+            f"{ratio:5.0%} vs joint ({delta})  # {r.note}"
         )
 
 
@@ -716,6 +858,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="assert published middle-tier claims; exit 1 on failure",
     )
     p.add_argument("--full", action="store_true", help="print KV / attention-complexity / μP sections")
+    p.add_argument(
+        "--staged",
+        action="store_true",
+        help="print freeze-curriculum vs independent-merge FLOPs",
+    )
     return p
 
 
@@ -735,6 +882,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         budget = compute_budget(TIERS[key], attn=attn, first_dense=args.first_dense)
         print_budget(budget)
         print_compute(budget, tokens=args.tokens)
+        if args.staged and key == keys[-1]:
+            print()
+            print_staged(budget, tokens=args.tokens)
 
     if args.full:
         print()
@@ -750,8 +900,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print()
         print_retune()
         print()
+        print_staged(compute_budget(TIERS["middle"], attn=attn, first_dense=args.first_dense), tokens=args.tokens)
+        print()
         if args.tier in ("middle", "all") and args.attn == "placeholder" and not args.first_dense:
             print_claims(verify())
+    elif args.staged and args.tier == "all":
+        pass
     return 0
 
 

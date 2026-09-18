@@ -251,6 +251,40 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
 （可选）  MTP 头联合训练           —— 从 Phase B 起挂一个 MTP 头，权重 0.1–0.3
 ```
 
+### 4.0 分栈 / 分层训再合并？——可行，但默认不要拆成两个独立 LM
+
+YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decoder**，loss 在 Decoder 顶。Encoder 与 Decoder 的表示在 MiniCPM 40 层里已经联合训过；定理 A（[`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)）说 gate=0 的 16/24 切分 **就是** 那条残差流。把两栈当成两个独立 LM 分别训再拼接，等于扔掉这份对齐。
+
+中间档 50B token、emb 计一次（`python3 scripts/param_budget.py --staged`）：
+
+| 做法 | H100-h | vs 联合 50B |
+| --- | ---: | --- |
+| 两栈一起训（基线） | 1,354 | 100% |
+| **Encoder 冻结，只训 Decoder + cross-attn** | **1,035** | **76%（约省 24%）** |
+| 只训新模块（cross-attn；骨干冻结） | 779 | 58% |
+| **解冻课程 8B 新模块 → 27B 冻 Encoder → 15B 短联合** | **1,090** | **80%（约省 20%）** |
+| Encoder 当独立 LM 50B + 冻 Encoder 训 Decoder 50B + 20B 拼接恢复 | 2,054 | **152%（更贵）** |
+| Encoder 先当 LM 25B 再联合 25B | 916 | 68%（**质量赌博**：联合 token 减半是否够恢复） |
+
+**结论：**
+
+1. **「先分开训两个模型再焊在一起」不省算力。** 同样 50B/栈再加拼接恢复，是联合训练的 1.5×。把 Encoder 隐状态缓存下来给 Decoder 用也不现实（50B token × \(d\) × 2 bytes ≈ 230 TB）。
+2. **「同一套切开的权重上，按可训练子集分层解冻」才省。** 省的是 Encoder 的反向（以及新模块阶段 Decoder 骨干的权重梯度），不是少跑 Encoder 前向——YOCO 的 CE 在 Decoder 上，Encoder 前向省不掉。
+3. 冻结 Encoder 大约省 **24%**，但 Encoder 不再为 Decoder 的 query 改写记忆（write/read 不共同适应）。PDSA 的「无写入时信号」也提示：只训 reader、永远冻 writer，检索上限会卡住。所以冻 Encoder 只能当 **Phase B 的中段**，结尾必须有一段短联合。
+4. 只训 cross-attn / indexer（Phase A 热身、Phase C 第 1 步）最省（约 42%+），这是已经写进 Phase C 的做法，不是新发明。
+5. 贪心逐层加层（2 层 → 冻 → 再加 2 层）在 LLM 上没有稳定省算力的证据，还要最终联合微调，**不做**。
+6. DeepSeek 式「分域专家各自 SFT+RL 再蒸馏」只适用于 **Phase F/G 后训练**，不适用于这套 12B 预训练骨架。
+
+**推荐（预算紧时，用解冻课程替换「Phase B 50B 全程联合」）：**
+
+| 子阶段 | token | 可训练 | gate |
+| --- | ---: | --- | --- |
+| B0 | 5–10B | 新模块（cross-attn、router、压缩器）+ LN；骨干冻结 | 0 → 0.3 |
+| B1 | 20–40B | 解冻 Decoder；**Encoder 冻结** | → 1 |
+| B2 | 10–20B | 两栈都解冻，LR 更小 | 1 |
+
+总 token 仍约 50B，算力约 **80% 联合**。质量不稳就把 B2 加长，而不是回去做两个独立 LM。Phase C 的「冻主干、只训 indexer」仍然叠在这套课程后面。
+
 ### Phase A — 架构手术与初始化（离线）
 
 0. **切分为 Encoder / Decoder 两栈（YOCO 化）**：把 MiniCPM-2B 的 40 个 dense 层映射到 **Encoder 16 层 + Decoder 24 层**。
@@ -277,6 +311,7 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
 - **蒸馏加速**：以 **MiniCPM-2B（dense，teacher）** 做 logit KD（KL(teacher‖student)，温度 1–2，权重 0.5→0 线性衰减），大幅缩短恢复期。
 - **MoE 负载均衡**：aux-loss-free 偏置法（`e_score_correction_bias`，按各专家负载更新偏置，更新率如 1e-3）+ **轻量 sequence-wise balance loss**（权重 ~1e-3）防单序列极端不均衡。
 - 学习率：**WSD**（Warmup-Stable-Decay）——短 warmup（0.5–1B token），进入 stable 段（LR ≈ MiniCPM 预训练峰值的 30–50%，因为是继续训练）。此阶段保持 stable 不衰减。
+- **预算紧时不要改成两个独立 LM**：用 §4.0 的解冻课程（B0 新模块 → B1 冻 Encoder → B2 短联合），同样 ~50B token，算力约 80%。
 
 ### Phase C — 注意力稀疏化对齐（关键、易翻车）
 
@@ -534,8 +569,9 @@ BBH（推理），IFEval（指令遵循）。
 
 1. **upcycling**（复用 MiniCPM 权重，绝不 from-scratch）；2. **蒸馏**（teacher=MiniCPM，减 tokens）；
 3. **高稀疏 MoE**（减激活参数=减 FLOPs）；4. **4K 上下文占训练大头**，长上下文只短暂一段；
-5. **FP8**；6. **Muon**（减步数）；7. **新模块全训 + 其余 LoRA**（减优化器显存，能上更小/更少卡）；
-8. **关键短跑租 spot GPU**（不必自购）；9. seq packing + 激活重计算（塞进更少卡）。
+5. **解冻课程**（§4.0：冻 Encoder / 只训新模块，约省 20–40% Phase B 算力，结尾必须短联合）；
+6. **FP8**；7. **Muon**（减步数）；8. **新模块全训 + 其余 LoRA**（减优化器显存，能上更小/更少卡）；
+9. **关键短跑租 spot GPU**（不必自购）；10. seq packing + 激活重计算（塞进更少卡）。
 
 ### 15.4 修订后的默认路径
 

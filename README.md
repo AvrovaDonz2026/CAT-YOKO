@@ -14,6 +14,7 @@ Default spec (**middle compute tier**): ≈12B total, Encoder ≈2.3B active / i
 
 ```bash
 python3 scripts/param_budget.py --verify     # middle-tier budget ledger
+python3 scripts/param_budget.py --staged     # freeze-curriculum vs independent-merge FLOPs
 python3 scripts/arch_verify.py --verify      # architecture invariants
 python3 -m unittest tests.test_param_budget tests.test_arch_verify
 ```

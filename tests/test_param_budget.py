@@ -77,5 +77,31 @@ class MiddleTierPlaceholderTests(unittest.TestCase):
         self.assertEqual((tier.nr_e, tier.nr_d), (19, 17))
 
 
+class StagedTrainingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.budget = pb.compute_budget(pb.TIERS["middle"])
+        self.joint = pb.flops_joint(self.budget, 50e9)
+
+    def test_freeze_encoder_saves_about_one_fifth(self) -> None:
+        ratio = pb.flops_freeze_encoder(self.budget, 50e9) / self.joint
+        self.assertGreater(ratio, 0.74)
+        self.assertLess(ratio, 0.82)
+
+    def test_independent_merge_costs_more_than_joint(self) -> None:
+        rec = next(r for r in pb.staged_recipes(self.budget, 50e9) if r.name.startswith("independent"))
+        self.assertGreater(rec.flops, self.joint)
+
+    def test_unfreeze_curriculum_saves_without_extra_tokens(self) -> None:
+        rec = next(r for r in pb.staged_recipes(self.budget, 50e9) if r.name.startswith("unfreeze"))
+        self.assertAlmostEqual(rec.tokens, 50e9)
+        self.assertLessEqual(rec.flops, 0.85 * self.joint)
+
+    def test_new_modules_cheaper_than_freeze_enc(self) -> None:
+        self.assertLess(
+            pb.flops_new_modules(self.budget, 50e9),
+            pb.flops_freeze_encoder(self.budget, 50e9),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
