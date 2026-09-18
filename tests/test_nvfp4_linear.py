@@ -19,6 +19,7 @@ from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.nvfp4_linear import (
     Nvfp4Linear,
     apply_nvfp4,
+    hw_nvfp4_gemm_available,
     nvfp4_linear,
     nvfp4_module_names,
     quantize_nvfp4,
@@ -37,6 +38,16 @@ class QuantizeTests(unittest.TestCase):
         self.assertEqual(tuple(y.shape), tuple(x.shape))
         self.assertEqual(y.dtype, x.dtype)
         self.assertTrue(torch.isfinite(y).all())
+
+    def test_e2m1_block_amax_maps_to_six(self) -> None:
+        x = torch.full((16,), 6.0)
+        y = quantize_nvfp4(x)
+        self.assertTrue(torch.allclose(y, x))
+        z = quantize_nvfp4(torch.zeros(16))
+        self.assertTrue(torch.equal(z, torch.zeros(16)))
+
+    def test_hw_nvfp4_gemm_probe_does_not_throw(self) -> None:
+        self.assertIsInstance(hw_nvfp4_gemm_available(), bool)
 
     def test_ste_linear_has_weight_grad(self) -> None:
         w = nn.Parameter(torch.randn(8, 4))

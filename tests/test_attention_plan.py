@@ -48,9 +48,12 @@ class PublishedPlanTests(unittest.TestCase):
 
     def test_sdpa_is_fp32_then_cast(self) -> None:
         src = inspect.getsource(_sdpa)
-        self.assertIn(".float()", src)
-        self.assertIn("is_causal", src)
         self.assertIn("scaled_dot_product_attention", src)
+        self.assertIn("enable_gqa", src)
+        self.assertIn("is_causal", src)
+        # CPU / mask fallback still upcasts; CUDA bf16 keeps QKV and uses
+        # flash/cuDNN (fp32 softmax accum inside the kernel).
+        self.assertIn(".float()", src)
         self.assertIn("to(q.dtype)", src)
 
         seen: list[torch.dtype] = []
@@ -66,6 +69,17 @@ class PublishedPlanTests(unittest.TestCase):
         with patch.object(attn_mod.F, "scaled_dot_product_attention", _spy):
             _sdpa(q, k, v, causal=True)
         self.assertEqual(seen, [torch.float32])
+
+    def test_sdpa_gqa_does_not_require_repeated_kv(self) -> None:
+        torch.manual_seed(0)
+        q = torch.randn(1, 4, 8, 8)
+        k = torch.randn(1, 2, 8, 8)
+        v = torch.randn(1, 2, 8, 8)
+        k_rep = k.repeat_interleave(2, dim=1)
+        v_rep = v.repeat_interleave(2, dim=1)
+        gqa = _sdpa(q, k, v, causal=True)
+        rep = _sdpa(q, k_rep, v_rep, causal=True)
+        self.assertTrue(torch.allclose(gqa, rep, atol=1e-4, rtol=1e-4))
 
     def test_attention_module_has_no_csa_kernel(self) -> None:
         import cat_yoko.attention as attn_mod

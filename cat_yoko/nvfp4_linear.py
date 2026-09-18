@@ -29,6 +29,8 @@ from cat_yoko.nvfp4 import POLICY
 _BLOCK = 16
 # E2M1 magnitudes (sign applied separately). Max abs is 6.
 _E2M1_ABS = (0.0, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0)
+# Midpoints between consecutive E2M1 magnitudes (bucketize, not 8-wide argmin).
+_E2M1_THRESH = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 # Leaf names that are NVFP4 GEMMs. Router / embed / RMSNorm are not Linear
 # slots here (router is Linear but excluded in should_wrap_linear).
 NVFP4_LINEAR_LEAVES = frozenset(
@@ -71,6 +73,24 @@ def te_available() -> bool:
     return True
 
 
+def hw_nvfp4_gemm_available() -> bool:
+    """True when this PyTorch build can cast to float4 and run ``_scaled_mm``.
+
+    torch 2.8.0+cu128 on sm_120 exposes ``torch.float4_e2m1fn_x2`` but
+    ``copy_`` is NotImplemented, so the cuBLAS NVFP4 GEMM is not reachable.
+    """
+    if not torch.cuda.is_available():
+        return False
+    if not hasattr(torch, "float4_e2m1fn_x2") or not hasattr(torch, "_scaled_mm"):
+        return False
+    try:
+        x = torch.zeros(32, device="cuda", dtype=torch.bfloat16)
+        _ = x.to(torch.float4_e2m1fn_x2)
+    except Exception:
+        return False
+    return True
+
+
 def _e2m1_levels(device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     return torch.tensor(_E2M1_ABS, device=device, dtype=dtype)
 
@@ -98,10 +118,12 @@ def quantize_nvfp4(t: torch.Tensor, *, block: int = _BLOCK) -> torch.Tensor:
         except (TypeError, RuntimeError, NotImplementedError):
             pass
     y = chunks / scale.unsqueeze(-1)
+    thresh = torch.tensor(_E2M1_THRESH, device=y.device, dtype=y.dtype)
+    ax = y.abs()
+    idx = torch.bucketize(ax.reshape(-1), thresh).view_as(ax)
     levels = _e2m1_levels(y.device, y.dtype)
-    idx = (y.abs().unsqueeze(-1) - levels).abs().argmin(dim=-1)
     q = y.sign().where(y != 0, torch.ones_like(y)) * levels[idx]
-    q = torch.where(y.abs() < 1e-12, torch.zeros_like(q), q)
+    q = torch.where(ax < 1e-12, torch.zeros_like(q), q)
     recon = q * scale.unsqueeze(-1)
     recon = recon.reshape(-1)[:n].view(orig_shape)
     return recon.to(dtype=orig_dtype)
