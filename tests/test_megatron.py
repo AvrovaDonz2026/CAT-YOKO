@@ -76,13 +76,20 @@ class MappingTests(unittest.TestCase):
         self.assertEqual(enc["window_size"], [8192, 0])
         self.assertIsNone(enc["mtp_num_layers"])
 
-    def test_b1_enables_fp8_hybrid_b0_does_not(self) -> None:
+    def test_b1_enables_nvfp4_b0_encoder_only(self) -> None:
         b0 = megatron_blueprint(self.cfg, phase="B0")
-        self.assertIsNone(b0["encoder"]["fp8"])
+        self.assertFalse(b0["decoder"]["nvfp4"])
+        self.assertIsNone(b0["decoder"]["fp8"])
+        self.assertTrue(b0["encoder"]["nvfp4"])
+        self.assertEqual(b0["encoder"]["fp8"], "hybrid")
         self.assertEqual(self.bp["encoder"]["fp8"], "hybrid")
+        self.assertTrue(self.bp["encoder"]["nvfp4"])
+        self.assertTrue(self.bp["decoder"]["nvfp4"])
         self.assertTrue(self.bp["yoco"]["detach_cache"])
+        self.assertNotIn("lm_head", self.bp["yoco"]["nvfp4_keep_high_prec"])
         b2 = megatron_blueprint(self.cfg, phase="B2")
         self.assertFalse(b2["yoco"]["detach_cache"])
+        self.assertTrue(b2["encoder"]["nvfp4"])
 
     def test_csa_ratios_are_megatron_legal(self) -> None:
         ratios = encoder_csa_compress_ratios(self.cfg)

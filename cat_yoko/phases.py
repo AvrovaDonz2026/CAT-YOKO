@@ -1,8 +1,9 @@
 """Published C1 Phase B launch specs. B0 / B1 / B2 are separate envelopes.
 
-Wall-clock target is C1+FP8 on H100 (729 h for 8+27+15B tokens). A 32GB
-card can run the same graph and freeze curriculum; it cannot finish the
-token envelopes. ``--try`` writes a real (short) checkpoint for LFS.
+Wall-clock target is C1+NVFP4 (571 H100-h for 8+27+15B tokens; RTX PRO
+6000 / 6000D). A 32GB card can run the same graph and freeze curriculum;
+it cannot finish the token envelopes and cannot run NVFP4. ``--try``
+writes a real (short) checkpoint for LFS.
 """
 
 from __future__ import annotations
@@ -42,7 +43,7 @@ PHASES: dict[str, PhaseSpec] = {
     "B1": PhaseSpec(
         name="B1",
         tokens=C1_SPLIT["B1"],
-        student="fp8_moe",
+        student="nvfp4",
         detach=True,
         gate_start=0.3,
         gate_end=1.0,
@@ -54,7 +55,7 @@ PHASES: dict[str, PhaseSpec] = {
     "B2": PhaseSpec(
         name="B2",
         tokens=C1_SPLIT["B2"],
-        student="fp8_moe",
+        student="nvfp4",
         detach=False,
         gate_start=1.0,
         gate_end=1.0,

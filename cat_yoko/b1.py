@@ -1,4 +1,4 @@
-"""C1 B1: 27B tokens, decoder+lm_head, fp8_moe. ``python3 -m cat_yoko.b1 --resume checkpoints/b0``."""
+"""C1 B1: 27B tokens, decoder+lm_head, nvfp4. ``python3 -m cat_yoko.b1 --resume checkpoints/b0``."""
 
 from __future__ import annotations
 

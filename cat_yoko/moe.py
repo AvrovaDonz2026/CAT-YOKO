@@ -98,7 +98,7 @@ class MoE(nn.Module):
             self._load_n = 0
             return (shared_out + _like(shared_out, routed)).view(b, s, d)
 
-        # Router logits + softmax stay fp32 (C1+FP8 whitelist).
+        # Router logits + softmax stay fp32 (must-high-prec; discrete top-k).
         logits = F.linear(flat.float(), self.router.weight.float())
         affinity = torch.sqrt(F.softplus(logits))
         # softmax-then-topK (upcycling paper); bias is aux-loss-free, pre-softmax.

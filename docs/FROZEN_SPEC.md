@@ -1,7 +1,7 @@
 # CAT-YOKO 发布规格（已敲死）
 
 > 这份表是训练代码的输入。旋钮不再开放；要改就改版本号，不要在实现里重新讨论。
-> 中间档账本 / 因果 / C1 / C1+FP8 仍以四篇理论为准。这里只钉**实现默认**。
+> 中间档账本 / 因果 / C1 / C1+NVFP4 仍以理论文档为准。这里只钉**实现默认**。
 
 机器可读副本：`cat_yoko/config.py` 的 `CATYokoConfig.middle_12b()`。
 
@@ -9,7 +9,7 @@
 
 ## 0. 一句话
 
-**CAT-YOKO-12B**：MiniCPM5-2B 上采样的因果 YOCO MoE；Phase B 按 **C1+FP8** 训；注意力 Phase B 只跑滑窗 GQA + 门控 cross-attn；M2 关；KDA / mHC / MTP / Muon / PDSA 默认关。
+**CAT-YOKO-12B**：MiniCPM5-2B 上采样的因果 YOCO MoE；Phase B 按 **C1+NVFP4** 训（目标卡 RTX PRO 6000 / 6000D）；注意力 Phase B 只跑滑窗 GQA + 门控 cross-attn；M2 关；KDA / mHC / MTP / Muon / PDSA 默认关。
 
 **底座许可**：`MiniCPM-2B-sft-bf16` 走 OpenBMB GML / 需商业授权；`MiniCPM5-2B` 是 **Apache-2.0**，所以发布底座是 MiniCPM5。上采样 / teacher 用 `openbmb/MiniCPM5-2B-Base`（`LlamaForCausalLM` GQA），tokenizer 用 `openbmb/MiniCPM5-2B`。
 
@@ -60,20 +60,20 @@
 
 ---
 
-## 2. Phase B 课程（C1+FP8）
+## 2. Phase B 课程（C1+NVFP4）
 
 | 子阶段 | token | 可训练 | detach | gate | dtype |
 | --- | ---: | --- | --- | --- | --- |
-| B0 | **8B** | cross-attn、\(W_K/W_V\)、gate、新 LN | 是 | 0→0.3 | student **bf16**；冻结 Encoder 前向可 FP8 |
-| B1 | **27B** | 整个 Decoder + **untied `lm_head`** | 是 | →1 | **fp8_moe** |
-| B2 | **15B** | 全模型（含 input embed + `lm_head`） | 否 | 1 | **fp8_moe** |
+| B0 | **8B** | cross-attn、\(W_K/W_V\)、gate、新 LN | 是 | 0→0.3 | student **bf16**；冻结 Encoder 前向 **nvfp4** |
+| B1 | **27B** | 整个 Decoder + **untied `lm_head`** | 是 | →1 | **nvfp4**（允许的线性 GEMM，含 lm_head 与 attn QKV/O） |
+| B2 | **15B** | 全模型（含 input embed + `lm_head`） | 否 | 1 | **nvfp4** |
 
 - MiniCPM5 **untied**：B0/B1 **冻 Encoder + 输入 embed**；B0 额外冻 `lm_head` **和最终 RMSNorm**（只训 cross-attn / \(W_K/W_V\) / `ln_cross`）；B1 训 `lm_head` 与最终 RMSNorm；B2 全开。禁止冻 Encoder 时训输入表。
 - 总信封 **50B**。质量不稳 **加长 B2**，不改回联合 bf16，不做两个 LM。
-- 墙钟 **729 H100-h**（联合 bf16 1,325 的 **55%**）。联合 bf16 1,325 是对照；C1 bf16 1,046 是操作数账。
-- Phase C indexer **bf16**，叠在 B2 后。L0/单测 **bf16**，不开 FP8。
-- 高精度白名单：input embed、`lm_head`、RMSNorm、router、gate、indexer、attn softmax。实现上 RMSNorm、router logits/softmax、attn softmax 在 bf16 autocast 下走 fp32。
-- FP8 加速比发布 **1.5×**。无 CUDA 时自动 bf16。
+- 墙钟 **571 H100-h**（联合 bf16 1,325 的 **43%**；≈ RTX PRO 6000-h）。联合 bf16 1,325 是对照；C1 bf16 1,046 是操作数账；C1+FP8 729 是 Hopper/Ada 回退。
+- Phase C indexer **bf16**，叠在 B2 后。L0/单测 **bf16**，不开 NVFP4。
+- **必须高精度**：input embed、RMSNorm / QK-Norm、router、gate、indexer、attn softmax / SDPA score。**lm_head 与 attn QKV/O 投影不是必须 bf16，走 NVFP4。** 实现上 RMSNorm、router logits/softmax、attn softmax 在 autocast 下走 fp32。
+- NVFP4 加速比发布 **2.0× vs bf16**（相对旧 FP8 1.5× 再 ×1.33）。无 Blackwell 时退 FP8 placeholder，再退 bf16 autocast。本仓库**不**实现 TE kernel。
 - `use_muon=True` 在 `build_optimizer` 抛 `NotImplementedError`（发布默认关）。
 
 ---
@@ -106,7 +106,7 @@
 
 做：
 
-- 12B 配置的 YOCO MoE 图、C1 冻结 API、C1+FP8 策略对象、WSD、上采样、单卡/DDP/FSDP 入口。
+- 12B 配置的 YOCO MoE 图、C1 冻结 API、C1+NVFP4 策略对象、WSD、上采样、单卡/DDP/FSDP 入口。
 - **C1 训练循环**：packing + 文档 mask（`labels_with_doc_boundaries` 打 **最后一维**，`PackedBinStream` 的 `[B,S]` 不会误用 batch 维）、**DDP 数据分片**（C1 每阶段 `apply_freeze` 后重新 wrap，累积步 `no_sync`）、梯度累积、激活重计算 `--grad-ckpt`、AdamW 分组（router 不 decay，SwiGLU `gate_proj` 仍 decay）、checkpoint / resume（含 packed 游标与 RNG；stream `kind` / DDP stride 不匹配则跳过）、DummyStream 按 rank 偏移 seed（trainer 不再把 rank 加进 seed）、训练/eval nll 按 `n_valid` 加权（DDP 对 `(nll·n_valid, n_valid)` 做 sum，空 rank 贡献 0 而不是 nan）、jsonl 日志（nll/ppl/aux/moe_cv/grad_norm/tok/s/mem/eval/n_valid/kd_w；非有限浮点写成 JSON null）、`--eval-batches`、可选 MiniCPM5 logit KD（CUDA 上 teacher bf16；KL 按 token 均值，忽略 `-100`）。冻住的 MoE 不进 aux、不改 router bias。DDP 在 opt.step 前 allreduce 专家 load，aux-loss-free bias 每优化步更新一次。无窗口截断且行内无跨文档时注意力走因果 SDPA，不物化 S×S mask。`init_process_group` 在 NCCL 上传 `device_id`；FSDP world=1 用 `NO_SHARD`。tiny 单测（gate=0、detach 无 Encoder 梯度、冻 embed / B0 冻 lm_head 与最终 RMSNorm、ckpt、2-rank gloo DDP / C1 链）。**跨阶段 resume**：`--phase B1 --resume b0/latest.pt` 只接手权重和数据游标，不恢复 B0 的 optimizer / step；phase 以 CLI 为准。`--resume` 可以是文件或目录（目录优先 `latest.pt`，否则最新 `step_*.pt`）。`--c1` / `--c1-smoke` 在同一张图上跑 B0→B1→B2，packed 游标连续，`--save-dir/{B0,B1,B2}/latest.pt`。ckpt 先落到 CPU（非 FSDP 也 `.cpu()` 拷再 save），避免 12B 双份占 GPU。12B 默认 weights-only（`--no-save-optim`）；`--keep-last N` 修剪 `step_*.pt`（不删与 `latest.pt` 同 inode 的 step 文件）。**`latest.pt` 在已有 `step_{last}.pt` 时 hardlink（或同卷 copy），禁止再 `torch.save` 一份 23GiB**——RTX 4080 SUPER 上 `/tmp` 写完 `step_1.pt` 再写 `latest.pt` 会把 overlay 写满（`PytorchStreamWriter` / `latest.pt.tmp` 残留）。12B ckpt 放到大盘（如 `/root/autodl-tmp`），不要放 `/tmp`。开训前清 `*.pt.tmp`；卷空间不足（payload+1GiB）直接报错。B2 `--offload-blocks` 只能 `--accum 1`（`--tokens` 也不会再自动扩成 4M global batch）。DDP/FSDP 与 CPU offload 互斥。
 - **B0 / B1 / B2 入口**：`python3 -m cat_yoko.b0|b1|b2`（或 `scripts/train_b{0,1,2}.py` / `cat-yoko-b0`）。无 `--try` 时注入发布 token 包络（8e9 / 27e9 / 15e9）以及 `--no-save-full --save-trainable --no-save-optim`；B0 `--offload-encoder`；B1 再加 `--optim-cpu`；B2 `--offload-blocks --optim-cpu --accum 1`。`<40GiB` 卡拒绝默认包络（32GB 跑不完 8B token），必须 `--try` 或显式 `--steps` / `--tokens`。`--try`：32 步、seq=64、无 `--upcycle*` 时 `--dummy-upcycle`，产物 `trainable.pt`（B0 ≈0.44GiB bf16）。GitHub LFS 单文件 5GiB，23GiB `latest.pt` **不进 git**（`.gitignore` 掉 `step_*.pt` / `latest.pt`；`.gitattributes` 把 `checkpoints/**/*.pt` 标 LFS，分片上限 4GiB）。`--resume DIR` 优先 `latest.pt`，其次 `trainable.pt`，再最新 `step_*.pt` / `trainable_step_*.pt`。B1 接手 B0 overlay = MiniCPM5 上采样 + `load_trainable_state`。
 - **OpenBMB 数据路径**：`cat_yoko.prepare` 把 Ultra-FineWeb en/zh + UltraData-Math（默认 0.60/0.30/0.10）打成 seq_len 对齐的 int32 mmap `.bin`；tokenizer 默认 `openbmb/MiniCPM5-2B`（\(V=130560\)）。Trainer 对 `.bin` 走 `PackedBinStream`，并从 `*.bin.meta.json` 读 `eos_id`。`--upcycle-hf` / `--teacher-hf` 拉 `openbmb/MiniCPM5-2B-Base`。
@@ -117,7 +117,7 @@
 不做（本步）：
 
 - 把 `GPTModel` / 双向 T5 encoder 当 YOCO；实现 EP/TP 训练循环（等装上 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 再填 provider）。
-- 自研 CSA kernel / FP4 / **把 50B 语料检进 git** / 评测套件 / Phase C indexer 训练循环。数据接口吃 prepare 产出的 mmap `.bin`，或 jsonl `tokens`。
+- 自研 CSA kernel / TE NVFP4 GEMM / V4 式 FP4 专家存储 / **把 50B 语料检进 git** / 评测套件 / Phase C indexer 训练循环。数据接口吃 prepare 产出的 mmap `.bin`，或 jsonl `tokens`。
 - 在本机 CPU 上分配 12B 权重（约 49GB fp32 / 24.5GB bf16），或在 CI / 小 VM 上下载 Ultra-FineWeb / MiniCPM5 权重。`--config 12b --meta` 只建 meta 图。12B 开训必须 `--device cuda --dtype bf16`，并显式 `--steps` 或 `--tokens`。单卡 32GB：B0 一步可直接跑；B1 靠冻结 Encoder 卸载 + CPU Adam（host cgroup 不够 fp32 动量时自动改 fp16 动量）；B2 靠逐层 offload，host 不够存动量时一步 smoke 走 ephemeral AdamW。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
 
 Megatron 约束（已写进 `cat_yoko.parallel`）：
@@ -142,4 +142,4 @@ Megatron 约束（已写进 `cat_yoko.parallel`）：
 | 注意力账本 | **真 GQA 16/2**，不是 1.25×MHA 占位 |
 | 解冻课程 | **C1**（B0 8B / B1 27B / B2 15B） |
 | 底座 | **MiniCPM5-2B Apache-2.0**（不用 MiniCPM-2B-sft-bf16 GML） |
-| 墙钟 | **C1+FP8 = 729 H100-h** |
+| 墙钟 | **C1+NVFP4 = 571 H100-h**（C1+FP8 729 为 Hopper/Ada 回退） |

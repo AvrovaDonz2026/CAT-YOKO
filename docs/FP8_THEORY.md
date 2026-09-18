@@ -1,17 +1,19 @@
 # CAT-YOKO FP8 理论验证
 
-> 与前三篇分工：[`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 核中间档参数 / 6NT / KV；[`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) 核因果与 M1/M2/M3；[`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 核 C1 解冻课程；**这篇核 dtype**：中间档 C1 训练里哪一块可以走 FP8、墙钟能再砍多少、哪些模块必须留高精度。
-> 规格仍是中间档：16/26，≈12.25B / 2.03B-in / 4.33B-out。底座 MiniCPM5-2B（Llama GQA）。C1 冻结边界不变。**Phase B 墙钟按 C1+FP8 定稿。** 不引入新架构，不写训练骨架。
-> 可执行断言：`python3 scripts/param_budget.py --verify`（含 FP8 claim）、`--fp8`；`python3 -m unittest tests.test_param_budget`。
+> **本文是 Hopper / Ada 回退账本，不再是 Phase B 发布墙钟。** 发布 dtype 是 **C1+NVFP4 = 571 H100-h**，见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。下面的 729 / 1.5× / `fp8_moe` 数字仍可复算，作为无 FP4 tensor core 时的路径。
+>
+> 与前三篇分工：[`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 核中间档参数 / 6NT / KV；[`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) 核因果与 M1/M2/M3；[`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 核 C1 解冻课程；**这篇核 Hopper FP8 回退**：中间档 C1 训练里哪一块可以走 FP8、墙钟能再砍多少、哪些模块必须留高精度。
+> 规格仍是中间档：16/26，≈12.25B / 2.03B-in / 4.33B-out。底座 MiniCPM5-2B（Llama GQA）。C1 冻结边界不变。不引入新架构，不写训练骨架。
+> 可执行断言：`python3 scripts/param_budget.py --verify`（含 FP8 fallback claim）、`--fp8`；`python3 -m unittest tests.test_param_budget`。
 > 理论能证明的是 **6NT 不变、Amdahl 上界、与定理 A/E 的兼容**；不能证明 12B 上 FP8 kernel 真能吃满 1.5×。那是 L1 实验。
 
 ---
 
 ## 0. 结论（先看这个）
 
-**Phase B 墙钟配方按 C1+FP8 定稿：729 H100-h，联合 bf16 的 55%。**
+**Phase B 墙钟配方曾按 C1+FP8 定稿：729 H100-h，联合 bf16 的 55%。现已降为 Hopper/Ada 回退；发布值见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md) 的 571。**
 
-联合 bf16（1,325）只是 100% 对照，不是要跑的路径。C1 bf16（1,046）是操作数账，仍按 bf16 计 6NT。真正发布、真正要跑的是 **C1 的 token 切分 × 混合 FP8 策略**。全阶段套 1.5×（697）和峰值 2×（523）不定稿。
+联合 bf16（1,325）只是 100% 对照，不是要跑的路径。C1 bf16（1,046）是操作数账，仍按 bf16 计 6NT。本篇的混合 FP8 策略是 **Hopper/Ada 回退**；Blackwell 上跑 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。全阶段套 1.5×（697）和峰值 2×（523）不定稿。
 
 中间档训练的 **相当一部分** 是 MoE 专家 GEMM：占存储参数的 **90.6%**、占计入 6NT 的 **81.9%**。这块（外加冻结 Encoder 的推理 GEMM）走 FP8。FP8 **不改** Kaplan \(6N_{\mathrm{act}}T\)，只提高 H100 上完成这些 FLOPs 的有效吞吐。
 
@@ -19,7 +21,7 @@
 | --- | ---: | ---: | --- |
 | 两栈一起训，bf16 | 1,325 | 100% | 对照 |
 | C1 解冻课程，bf16 | 1,046 | 79% | 操作数账 |
-| **C1+FP8**（B0 student bf16；B1/B2 MoE GEMM 与冻结 Encoder 前向 1.5×） | **729** | **55%** | **定稿** |
+| **C1+FP8**（B0 student bf16；B1/B2 允许的 GEMM 与冻结 Encoder 前向 1.5×） | **729** | **55%** | **Hopper/Ada 回退** |
 | C1 全阶段套 1.5×（B0 student 也 FP8） | 697 | 53% | 敏感性 |
 | C1 × 峰值 2× | 523 | 39% | 上界，不发布 |
 
@@ -28,13 +30,13 @@
 1. **6NT 与 dtype 无关**（定理 G）。计划 §15.1 的 1,325 / 1,046 仍是 bf16 操作数账本；FP8 只进墙钟列。untied 之后计划口径与完整前向相同，不再单列 emb×2 的 1,413。
 2. **发布 1.5×，不发布 2×。** H100 SXM FP8 峰值 ≈ 1979 TFLOPS，是 bf16 989 的 ~2.0×。MoE 活跃份额 \(f=81.9\%\)、GEMM 2× 的 Amdahl 是 **1.69×**，仍然托住 1.5×。12B 专家 GEMM（\(d=2048\)，\(d_{\mathrm{moe}}=2048\)，单专家 12.58M）远小于 DeepSeek-671B，dispatch/combine、scale、小 kernel 占用都会把峰值吃掉。MoE+attn 的 \(f=95.8\%\) 给出 1.92×，那是上界。
 3. **B0 student 保持 bf16。** gate 从 0 爬到 0.3，贴着定理 A 的残差邻域；新模块随机初始化，不在这里换计算精度。冻结 Encoder 前向是纯推理 GEMM，B0 就可以 FP8。
-4. **B1+B2 覆盖 50B 信封的 84% token、C1 FLOPs 的 89%。** 这就是「相当一部分」：真正长时间跑的阶段走 `fp8_moe`。B0 只占 C1 FLOPs 的 11.0%，student 留 bf16 几乎不吃掉 FP8 收益（729 vs 全阶段 697，差 ~32 H100-h）。
-5. **高精度白名单**：输入 \(E_{\mathrm{in}}\)、untied lm_head、RMSNorm、router、gate、Lightning Indexer、attn softmax。定理 E（冻结 Encoder 时 \(X^0\) 不能漂）直接禁止 FP8 输入表。
+4. **B1+B2 覆盖 50B 信封的 84% token、C1 FLOPs 的 89%。** 这就是「相当一部分」：真正长时间跑的阶段走低精度 student。B0 只占 C1 FLOPs 的 11.0%，student 留 bf16 几乎不吃掉收益（729 vs 全阶段 697，差 ~32 H100-h）。
+5. **高精度白名单（回退篇历史集合含 lm_head）**：输入 \(E_{\mathrm{in}}\)、RMSNorm、router、gate、Lightning Indexer、attn softmax。发布 NVFP4 把 **lm_head 与 attn QKV/O 从必须高精度拿掉**。定理 E 仍然禁止量化输入表。
 6. **L0 与 Phase C indexer 保持 bf16。** tiny 正确性不混精度；indexer 对齐是小张量上的层内 KL。
 7. **Muon Newton-Schulz 仍是 fp32**，与网络 GEMM 的 FP8 正交。V4 式 FP4 专家存储是后期可选项，不进本配方。
-8. **C1 与 FP8 相乘，不是相加。** C1 先砍 21% FLOPs，再在剩下的墙上乘 1.5×（B0 例外）。相对联合 bf16：\(79\% \times\)（B1/B2 1.5×，B0 近 1×）≈ **55%**。这条积就是定稿墙钟 **C1+FP8 = 729**。
+8. **C1 与 FP8 相乘，不是相加。** C1 先砍 21% FLOPs，再在剩下的墙上乘 1.5×（B0 例外）。相对联合 bf16：\(79\% \times\)（B1/B2 1.5×，B0 近 1×）≈ **55%**。这条积就是回退墙钟 **C1+FP8 = 729**。
 
-Claim ledger：中间档 22 + 课程 12 + FP8 13，`--verify` **47/47** 通过。
+Claim ledger：FP8 回退 13 条仍在 `--verify` 里；发布合计见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)（**63/63**）。
 
 ---
 
@@ -90,7 +92,7 @@ S_{\mathrm{MoE}} = \frac{1}{0.819/2 + 0.181} \approx 1.69.
 
 ---
 
-## 3. C1+FP8 定稿（叠在 C1 上，不改冻结边界）
+## 3. C1+FP8 回退（叠在 C1 上，不改冻结边界）
 
 这就是发布配方。Student = 接收梯度的张量。冻结 Encoder 的 GEMM 单独一列。全阶段 1.5×（B0 student 也 FP8）不定稿。
 
@@ -98,8 +100,8 @@ S_{\mathrm{MoE}} = \frac{1}{0.819/2 + 0.181} \approx 1.69.
 | --- | --- | --- | --- |
 | L0 | bf16 | bf16 | tiny 正确性；NaN 归因必须干净 |
 | **B0** | **bf16** | **fp8** | gate 0→0.3 贴着定理 A；冻结栈是推理 |
-| **B1** | **fp8_moe** | **fp8** | Decoder 专家 GEMM 是 27B token 的大头 |
-| **B2** | **fp8_moe** | n/a | 两栈都解冻，专家 GEMM 仍 FP8 |
+| **B1** | **fp8** | **fp8** | Decoder 允许的线性 GEMM（含 lm_head / QKV/O） |
+| **B2** | **fp8** | n/a | 两栈都解冻，同一套 GEMM 仍 FP8 |
 | C | bf16 | fp8 | indexer KL 局部、张量小 |
 
 B1+B2 = 27B+15B = 42B / 50B = **84%** 的 token 信封。对应 C1 FLOPs 的 89%。B0 的 8B 只占 C1 FLOPs **11.0%**，student 留 bf16 几乎不损害墙钟。
@@ -126,7 +128,7 @@ Hash-MoE 是 `token_id → expert_id`，没有学到的 router GEMM；若旁边�
 
 ---
 
-## 5. 墙钟账本（定稿 C1+FP8）
+## 5. 墙钟账本（回退 C1+FP8）
 
 令 \(F_0,F_1,F_2\) 为 B0/B1/B2 的 Kaplan FLOPs，\(F_{\mathrm{enc}}^{0}=2N_{\mathrm{enc}}T_0\) 为 B0 的 Encoder 前向。**定稿 C1+FP8**：
 
@@ -139,7 +141,7 @@ H_{\mathrm{FP8}}
 \approx 729\ \text{H100-h}.
 \]
 
-相对联合 bf16 1,325：**55%**。相对 C1 bf16 1,046：再砍约 **30%** 墙钟。**729 是 Phase B 发布墙钟。**
+相对联合 bf16 1,325：**55%**。相对 C1 bf16 1,046：再砍约 **30%** 墙钟。**729 是 Hopper/Ada 回退墙钟，不是发布值。**
 
 敏感性（不定稿）：
 
@@ -198,7 +200,7 @@ H_{\mathrm{FP8}}
 | 定稿墙钟是 C1+FP8 mixed | PASS |
 | 发布 C1+FP8 ≈729（≤60% 联合 bf16） | PASS（729 / 1,325 = 55%） |
 | B0 student = bf16 | PASS |
-| B1/B2 student = fp8_moe | PASS |
+| B1/B2 fallback student = fp8 | PASS |
 | B1+B2 ≥80% of 50B | PASS（84%） |
 | B0 ≤15% of C1 FLOPs | PASS（11.0%） |
 | \(E_{\mathrm{in}}\) / lm_head / router / LN / gate / indexer / softmax 高精度 | PASS |
@@ -208,7 +210,7 @@ H_{\mathrm{FP8}}
 
 ## 9. 对计划的修订（本 PR）
 
-1. **Phase B 墙钟按 C1+FP8 定稿：729 H100-h。** 联合 bf16 1,325 只作对照；C1 bf16 1,046 只作操作数账。
+1. **Phase B 墙钟已改为 C1+NVFP4（571）。** 本文的 729 只作 Hopper/Ada 回退；C1 bf16 1,046 只作操作数账。
 2. §6 / §8：精度改为 C1+FP8 模块策略。
 3. §15.1：默认 Phase B 行是 C1+FP8 **729**；1,325 标为联合 bf16 对照。
 4. §15.3：杠杆 #5+#6 的发布积是 729（55%）。

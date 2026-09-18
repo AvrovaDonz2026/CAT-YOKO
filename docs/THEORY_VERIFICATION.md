@@ -6,7 +6,7 @@
 > 数字源：`python3 scripts/param_budget.py --full`；断言：`python3 scripts/param_budget.py --verify` 与 `python3 -m unittest tests.test_param_budget`。
 > 架构（因果、切分等价、M1/M2/M3）见 [`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)。
 > 解冻课程（C1 定稿：冻结边界、定理 D/E）见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。
-> FP8：Phase B 墙钟定稿 **C1+FP8 = 729 H100-h**（定理 G；不改 6NT）见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+> NVFP4：Phase B 墙钟定稿 **C1+NVFP4 = 571 H100-h**（定理 G；不改 6NT）见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。Hopper/Ada 回退 C1+FP8 = 729 见 [`FP8_THEORY.md`](FP8_THEORY.md)。
 
 ---
 
@@ -167,7 +167,7 @@ Kaplan / Hoffmann 口径：训练 FLOPs \(\approx 6 N_{\mathrm{act}} T\)（前�
 | 完整前向（与计划相同，untied） | 6.36B | \(1.91\times 10^{21}\) | 1,325 | 4,239 |
 | 仅 Encoder（prefill / early-exit） | 2.03B | \(6.09\times 10^{20}\) | 423 | 1,353 |
 
-1,325 对上计划的 ~1,325。那是 **联合 bf16** 的对照，不是 Phase B 发布墙钟。发布值是 **C1+FP8 = 729 H100-h**（联合 bf16 的 55%）。FP8 不改这张 6NT 表。见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+1,325 对上计划的 ~1,325。那是 **联合 bf16** 的对照，不是 Phase B 发布墙钟。发布值是 **C1+NVFP4 = 571 H100-h**（联合 bf16 的 43%）。C1+FP8 = 729 是 Hopper/Ada 回退。NVFP4 不改这张 6NT 表。见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。
 
 **这不是 Chinchilla 预训练。** Hoffmann 最优大约 \(20 N\) tokens（dense）。50B / 6.36B ≈ **7.9 token / 激活参数**，属于上采样恢复 + 继续训练，不是从零训 12B。把 50–150B 写成 Phase B 恢复预算是对的；把它理解成「12B 已经训充分」则过满。
 
@@ -351,7 +351,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 | 无 μP：logit_scale = 1；残差恒等 | PASS |
 | freeze-enc ≈75% 联合；独立拼接 146%；C1 课程 79% | PASS（见课程篇） |
 
-解冻课程另 12 条（定稿 C1、detach、untied \(E\)、Adam 62%、合法 split ≤85% 等）与中间档 22 条、FP8 13 条合计 **`--verify` 47/47**，见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)、[`FP8_THEORY.md`](FP8_THEORY.md)。
+解冻课程另 12 条（定稿 C1、detach、untied \(E\)、Adam 62%、合法 split ≤85% 等）与中间档 22 条、FP8 回退 13 条、NVFP4 16 条合计 **`--verify` 63/63**，见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)、[`FP8_THEORY.md`](FP8_THEORY.md)、[`NVFP4_THEORY.md`](NVFP4_THEORY.md)。
 
 文本层（不进 `--verify`，已在上文展开）：
 
@@ -377,7 +377,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 5. **4K 主训练不要指望 CSA 省算力**；稀疏化放在 Phase C、长上下文放在 Phase D，与 FLOPs 曲线一致。
 6. 投影维数冻结后，用 `python3 scripts/param_budget.py --attn csa_mqa64 --full` 重跑；CSA/HCA 与 GQA 几乎同参，不要改层数拆分。
 7. **Phase B 按 C1 定稿**（两栈先 MoE、冻 Encoder、detach cache、冻输入表、B1 可训 lm_head、B2≥10B）。不要把两栈当独立 LM 再拼接。
-8. **Phase B 墙钟按 C1+FP8 定稿**（729 H100-h；B1/B2 MoE GEMM + 冻结 Encoder 前向；B0 student / L0 / indexer / 白名单高精度）。发布 1.5×，不改 6NT，不发布 2×。联合 bf16 只作对照。
+8. **Phase B 墙钟按 C1+NVFP4 定稿**（571 H100-h；不必须 bf16 的线性 GEMM；B0 student / L0 / indexer / embed / LN / router / softmax 高精度）。发布 2.0× vs bf16，不改 6NT，不发布 4×。联合 bf16 只作对照。C1+FP8 729 为 Hopper/Ada 回退。
 
 复算命令：
 
@@ -385,7 +385,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 python3 scripts/param_budget.py              # 中间档摘要
 python3 scripts/param_budget.py --tier all   # 三档对照
 python3 scripts/param_budget.py --full       # KV / 复杂度 / 无 μP / Nr 回搜
-python3 scripts/param_budget.py --verify     # 规格 + 解冻课程 + FP8 断言
-python3 scripts/param_budget.py --staged --curriculum --fp8
+python3 scripts/param_budget.py --verify     # 规格 + 解冻课程 + FP8 回退 + NVFP4 断言
+python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 python3 -m unittest tests.test_param_budget
 ```

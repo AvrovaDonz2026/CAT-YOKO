@@ -22,7 +22,7 @@ def _sdpa(
     *,
     causal: bool = False,
 ) -> torch.Tensor:
-    """Attention softmax in fp32 (C1+FP8 whitelist); output matches ``q.dtype``."""
+    """Attention softmax in fp32 (must-high-prec); output matches ``q.dtype``."""
     qf, kf, vf = q.float(), k.float(), v.float()
     if bias is None:
         out = F.scaled_dot_product_attention(qf, kf, vf, is_causal=causal)

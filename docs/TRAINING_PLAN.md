@@ -9,7 +9,7 @@
 > ⚠️ **关键**：总参数主要影响**显存/存储**；**训练算力 ∝ 激活参数 × tokens**。要真正降训练成本必须降**激活**（选更省算力档），而不是只降总参。
 >
 > 本文是可执行的工程训练计划。**实现默认已敲死**在 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)
-> / `cat_yoko.config.CATYokoConfig.middle_12b()`：因果 16/26、C1 全 MoE、C1+FP8、Phase B 滑窗 + 门控
+> / `cat_yoko.config.CATYokoConfig.middle_12b()`：因果 16/26、C1 全 MoE、C1+NVFP4、Phase B 滑窗 + 门控
 > cross-attn、AdamW；**KDA / mHC / MTP / Muon / 首层 dense / M2 不是发布默认**。本文其余档位与消融是敏感性，不是训练代码的开关默认。
 
 ---
@@ -27,7 +27,7 @@
 | `CSA HCA` | **Compressed Sparse Attention** + **Heavily Compressed Attention**（DeepSeek-V4 的两种压缩注意力，层间交错） | 见 §2 |
 
 > ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；**总参数 12.25B**（从 24B 下调）；激活默认 **≈2.03B-in / ≈4.33B-out**。
-> **发布配方已敲死**（[`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md) / `cat_yoko.config`）：因果 16/26、C1 全 MoE、C1+FP8 墙钟 729 H100-h、Phase B 滑窗+门控 cross-attn、M2/KDA/mHC/MTP/Muon 关。
+> **发布配方已敲死**（[`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md) / `cat_yoko.config`）：因果 16/26、C1 全 MoE、C1+NVFP4 墙钟 571 H100-h（目标 RTX PRO 6000 / 6000D）、Phase B 滑窗+门控 cross-attn、M2/KDA/mHC/MTP/Muon 关。
 > Encoder **不是**双向。仓库名 **CAT-YOKO** 中的 "YOKO" 即对应 **YOCO**。
 
 > ⚠️ **重要现实提示（务必先读）**：完整复刻这一架构并从 32T 级别数据预训练是**前沿实验室量级**的工程。
@@ -239,6 +239,7 @@ print(f"enc_active(input)={enc_act/1e9:.2f}B "
 python3 scripts/param_budget.py --full
 python3 scripts/param_budget.py --verify
 python3 scripts/param_budget.py --fp8
+python3 scripts/param_budget.py --nvfp4
 ```
 
 ---
@@ -263,9 +264,9 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
 
 YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decoder**，loss 在 Decoder 顶。Encoder 与 Decoder 的表示在 MiniCPM5 42 层里已经联合训过；定理 A（[`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)）说 gate=0 的 16/26 切分 **就是** 那条残差流。把两栈当成两个独立 LM 分别训再拼接，等于扔掉这份对齐。**禁止 franken-merge。**
 
-完整冻结边界、梯度截断、untied embedding、优化器/激活显存与 split 敏感性见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。FP8 模块策略与墙钟见 [`docs/FP8_THEORY.md`](FP8_THEORY.md)。数字：`python3 scripts/param_budget.py --staged --curriculum --fp8`。
+完整冻结边界、梯度截断、untied embedding、优化器/激活显存与 split 敏感性见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。NVFP4 模块策略与墙钟见 [`docs/NVFP4_THEORY.md`](NVFP4_THEORY.md)；Hopper/Ada FP8 回退见 [`docs/FP8_THEORY.md`](FP8_THEORY.md)。数字：`python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4`。
 
-**Phase B 配方已按 C1+FP8 定稿**：C1 冻结边界（Phase A 两栈都 MoE → B0/B1 冻 Encoder → B2 短联合）× 混合 FP8。延迟 Encoder MoE、全阶段 1.5×、峰值 2× 只作敏感性，不进配方。联合 bf16 只作 100% 对照。
+**Phase B 配方已按 C1+NVFP4 定稿**：C1 冻结边界（Phase A 两栈都 MoE → B0/B1 冻 Encoder → B2 短联合）× 混合 NVFP4。延迟 Encoder MoE、全阶段 2.0×、峰值 4× 只作敏感性，不进配方。联合 bf16 只作 100% 对照。C1+FP8 是无 Blackwell 时的回退。
 
 中间档 50B token、untied 下 emb 与 lm_head 各计一次（与一次前向相同）：
 
@@ -275,7 +276,8 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 | Encoder 冻结，只训 Decoder + cross-attn（全程；不共同适应） | 987 | 75% |
 | 只训新模块（cross-attn + \(W_K/W_V\)；骨干冻结） | 720 | 54% |
 | C1 解冻课程 8+27+15B（bf16 操作数账） | 1,046 | 79% |
-| **C1+FP8（定稿）** | **729** | **55%** |
+| **C1+FP8（Hopper/Ada 回退）** | 729 | 55% |
+| **C1+NVFP4（定稿）** | **571** | **43%** |
 | Encoder 当独立 LM 50B + 冻 Encoder 训 Decoder 50B + 20B 拼接恢复 | 1,940 | **146%（更贵）** |
 | Encoder 先当 LM 25B 再联合 25B | 874 | 66%（**质量赌博**：联合 token 减半是否够恢复） |
 
@@ -287,7 +289,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 4. 只训 cross-attn / indexer（Phase A 热身、Phase C 第 1 步）最省（约 54%），这是已经写进 Phase C 的做法，不是新发明。
 5. 贪心逐层加层（2 层 → 冻 → 再加 2 层）在 LLM 上没有稳定省算力的证据，还要最终联合微调，**不做**。
 6. DeepSeek 式「分域专家各自 SFT+RL 再蒸馏」只适用于 **Phase F/G 后训练**，不适用于这套 12B 预训练骨架。
-7. **C1 冻结边界已定稿；墙钟再敲死为 C1+FP8。** Phase A 对两栈都 virtual-group MoE，B0/B1 冻 Encoder：一次离线手术，token 0 就是 12.25B 中间档，B2 只解冻。B1/B2 MoE GEMM + 冻结 Encoder 前向走 FP8，B0 student 保持 bf16。发布墙钟 **729 H100-h**（联合 bf16 **1,325** 的 **55%**）。不把 Encoder 推迟到 B2 再上采样，也不把 1.5× 套到 B0 student 上（那是敏感性对照，不进配方）。
+7. **C1 冻结边界已定稿；墙钟再敲死为 C1+NVFP4。** Phase A 对两栈都 virtual-group MoE，B0/B1 冻 Encoder：一次离线手术，token 0 就是 12.25B 中间档，B2 只解冻。B1/B2 所有非必须-bf16 线性 GEMM（MoE、attn QKV/O、lm_head）+ 冻结 Encoder 前向走 NVFP4，B0 student 保持 bf16。发布墙钟 **571 H100-h**（联合 bf16 **1,325** 的 **43%**；目标 RTX PRO 6000 / 6000D）。不把 Encoder 推迟到 B2 再上采样，也不把 2.0× 套到 B0 student 上（那是敏感性对照，不进配方）。
 
 **冻结规则（定理 D/E，C1 定稿；MiniCPM5 为 untied；实现时写进 trainer，不是口头约定）：**
 
@@ -302,7 +304,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 禁止：Encoder 冻结时仍训练输入 embedding \(E\)（输入分布漂，定理 E）。**B1 可以训 `lm_head`**——MiniCPM5 不解绑也不共享。
 
-**定稿配方（预算紧时，用 C1+FP8 替换「Phase B 50B 全程联合 bf16」）：**
+**定稿配方（预算紧时，用 C1+NVFP4 替换「Phase B 50B 全程联合 bf16」）：**
 
 | 子阶段 | token | 可训练 | Encoder FFN | gate |
 | --- | ---: | --- | --- | --- |
@@ -310,7 +312,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 | B1 | 27B（20–40B） | 解冻 Decoder + **`lm_head`**；**Encoder + 输入 \(E\) 仍冻**；cache 仍 detach | 同上 | → 1 |
 | B2 | 15B（10–20B） | 两栈都解冻（含 embed 与 `lm_head`），LR 更小 | 解冻；专家开始特化 | 1 |
 
-总 token 仍约 50B。C1 操作数约 **79% 联合**；发布墙钟是 **C1+FP8 = 729 H100-h（联合 bf16 1,325 的 55%）**。C1 bf16 **1,046 H100-h**。Adam 状态在 B1 只有联合的 **62%**；detach 丢掉 Encoder 激活约 **38%**（保留 26/42）。质量不稳就把 B2 加长，而不是回去做两个独立 LM，也不是改回全程联合 bf16。Phase C 的「冻主干、只训 indexer」仍然叠在这套课程**后面**（层内 KL，不是穿过 cache 的 CE；indexer 保持 bf16）。
+总 token 仍约 50B。C1 操作数约 **79% 联合**；发布墙钟是 **C1+NVFP4 = 571 H100-h（联合 bf16 1,325 的 43%）**。C1 bf16 **1,046 H100-h**。C1+FP8 **729** 为 Hopper/Ada 回退。Adam 状态在 B1 只有联合的 **62%**；detach 丢掉 Encoder 激活约 **38%**（保留 26/42）。质量不稳就把 B2 加长，而不是回去做两个独立 LM，也不是改回全程联合 bf16。Phase C 的「冻主干、只训 indexer」仍然叠在这套课程**后面**（层内 KL，不是穿过 cache 的 CE；indexer 保持 bf16）。
 
 ### Phase A — 架构手术与初始化（离线）
 
@@ -341,7 +343,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 - **MoE 负载均衡**：aux-loss-free 偏置法（`e_score_correction_bias`，按各专家负载更新偏置，更新率如 1e-3）+ **轻量 sequence-wise balance loss**（权重 ~1e-3）防单序列极端不均衡。Encoder 专家从 B2 才开始更新，负载监控从 B2 起算 Encoder。
 - 学习率：**WSD**（Warmup-Stable-Decay）——短 warmup（0.5–1B token），进入 stable 段（LR ≈ MiniCPM 预训练峰值的 30–50%，因为是继续训练）。此阶段保持 stable 不衰减。B2 解冻 Encoder 时 LR 再降一档。
 - **Untied embedding**：B0/B1 **冻结输入 \(E\)**；B0 同时冻 `lm_head`，B1 **训 `lm_head`**；禁止 Encoder 冻着还训输入 \(E\)（定理 E）。
-- **预算紧时不要改成两个独立 LM**：用 §4.0 已定稿的 **C1+FP8**（B0 新模块 → B1 冻 Encoder → B2 短联合；B1/B2 MoE GEMM FP8），同样 ~50B token，墙钟 **729 H100-h（联合 bf16 1,325 的 55%）**。
+- **预算紧时不要改成两个独立 LM**：用 §4.0 已定稿的 **C1+NVFP4**（B0 新模块 → B1 冻 Encoder → B2 短联合；B1/B2 允许的线性 GEMM 走 NVFP4），同样 ~50B token，墙钟 **571 H100-h（联合 bf16 1,325 的 43%）**。
 
 ### Phase C — 注意力稀疏化对齐（关键、易翻车）
 
@@ -410,13 +412,13 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 | Muon | 对动量做 Newton-Schulz 正交化；配 **hybrid ZeRO** 实现（V4 做法）；lr 需单独调（通常比 Adam 大） |
 | LR 调度 | **WSD**：warmup(0.5–1B) → stable → decay；继续训练峰值取底座预训练峰值的 0.3–0.5× |
 | Batch | 全局 batch 随阶段增大（如 4M→16M token/step）；长上下文阶段用 seq packing |
-| 精度 | **混合精度定稿**（[`docs/FP8_THEORY.md`](docs/FP8_THEORY.md)）：B1/B2 的 MoE 专家 GEMM + 冻结 Encoder 前向 GEMM 用 FP8；B0 student、L0、Phase C indexer、**embed / `lm_head`**、RMSNorm、router、gate、attn softmax 保持高精度。不改 6NT；墙钟按 1.5× 计。V4 式 FP4 专家存储是后期可选项，不进本配方 |
+| 精度 | **混合精度定稿**（[`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)）：不必须 bf16 的线性 GEMM 全部 NVFP4（MoE 专家、attn QKV/O、lm_head、冻结 Encoder 前向）。B0 student、L0、Phase C indexer、**embed**、RMSNorm、router、gate、attn softmax 保持高精度。不改 6NT；墙钟按 2.0× vs bf16 计。C1+FP8 是 Hopper/Ada 回退。V4 式 FP4 专家存储是后期可选项，不进本配方 |
 | 正则/稳定 | zero-centered & weight-decayed RMSNorm、router z-loss（轻）、grad clip 1.0 |
 | MoE 均衡 | aux-loss-free 偏置更新 + 轻量 seq-balance loss；监控专家利用率/丢弃率 |
 | MTP | 辅助头权重 0.1–0.3；可只在 B–E 用，推理可丢弃或用于投机解码 |
 | μP | **无**。MiniCPM5 是 Llama，不要套 MiniCPM-2B 的 emb/residual/logits 缩放常量 |
 
-Muon 的 Newton-Schulz 正交化保持 fp32，与网络 FP8 GEMM 正交。不要在 L0 开 FP8。
+Muon 的 Newton-Schulz 正交化保持 fp32，与网络 NVFP4 GEMM 正交。不要在 L0 开 NVFP4。
 
 ---
 
@@ -437,7 +439,7 @@ BBH（推理），IFEval（指令遵循）。
 8. 上采样 vs 从底座 dense 直接继续训练（验证 upcycling 收益）；
 9. Muon vs AdamW；mHC vs 普通残差；cross-attn gate 渐开 vs 直接开；full 锚点层 NoPE vs RoPE。
 10. **解冻课程**：C1（定稿）vs 全程联合 vs **非法** B2=0（课程篇 §9；看恢复 PPL 与 RULER，不是只看 FLOPs）。延迟 Encoder MoE 只作敏感性，不进配方。
-11. **FP8**：B1 `fp8_moe` vs 全程 bf16（看恢复 PPL / 溢出，不是只看墙钟）；B0 student 误开 FP8 作负对照。白名单模块必须仍是高精度。
+11. **NVFP4**：B1 `nvfp4` vs 全程 bf16（看恢复 PPL / 溢出，不是只看墙钟）；B0 student 误开 NVFP4 作负对照。必须高精度集合不能进 4-bit。QKV/O 发散则退回高精度（MaxText 口径），不要改 C1。
 
 ---
 
@@ -449,7 +451,7 @@ BBH（推理），IFEval（指令遵循）。
 | 并行 | `ParallelPlan`：TP/PP/EP/CP/SP。12B：TP ∈ {1,2,4,8,16}（整除 16 头与 \(d=2048\)）；**EP ∈ {1,2,4,5,10,20}**（整除 20 routed）。PP>1 时 encoder|decoder 切在第 16 层（`pipeline_split_rank`）。长上下文用 Context/Sequence Parallel。YOCO **不是** Megatron `GPTModel`。 |
 | 注意力 kernel | **FlashMLA** 稀疏 prefill/decode kernel（支撑 DSA，FP8 KV）；**NSA** 的 Triton kernel 可参考压缩+选择+滑窗三分支实现 |
 | MoE kernel | 融合的 MoE dispatch/combine kernel（计算/通信/访存 overlap） |
-| 精度 | bf16 master + 定稿 FP8 GEMM（§6 / [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md)）；确定性/可复现 kernel（可选） |
+| 精度 | bf16 master + 定稿 NVFP4 GEMM（§6 / [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)）；Hopper/Ada 回退 FP8；确定性/可复现 kernel（可选） |
 | 显存 | 张量级重计算（`--grad-ckpt`）、B0/B1 冻结 Encoder CPU offload、B2 逐层 offload、Adam 动量 CPU offload（`--optim-cpu`）；规模化再 ZeRO / 专家 offload |
 | 推理 | vLLM / SGLang（已集成 DSA/FlashMLA 稀疏 kernel）用于评测与 RL rollout |
 
@@ -470,7 +472,7 @@ BBH（推理），IFEval（指令遵循）。
 | MiniCPM-2B μP 常量误植导致数值漂移 | MiniCPM5 是 Llama：`scale_emb=1`、残差恒等、logits 不除 9；手术后单测前向尺度，不要套 MiniCPM-2B μP |
 | Muon 不收敛/超参陌生 | 先用 AdamW 跑通基线，再切 Muon 并单独扫 lr；保留回退开关 |
 | kernel 缺失 | 先用 HF 参考实现验证正确性，再上高性能 kernel |
-| FP8 溢出 / loss 尖峰 | B0 student 保持 bf16；B1 切 `fp8_moe` 时盯 NaN 与专家利用率；回退该阶段 dtype，不改 C1 冻结边界 |
+| NVFP4 溢出 / loss 尖峰 | B0 student 保持 bf16；B1 切 `nvfp4` 时盯 NaN 与专家利用率；第一回退是 QKV/O 回高精度，再退 FP8/bf16；不改 C1 冻结边界 |
 | 长上下文外推差 | 分级 RoPE 缩放 + 长样本课程 + RULER 过程监控 |
 
 ---
@@ -494,9 +496,9 @@ BBH（推理），IFEval（指令遵循）。
 3. 有 GPU：`python3 -m cat_yoko.gpu_smoke`（tiny）；`python3 -m cat_yoko.gpu_smoke --middle`（12B B0 一步，≥28GiB，bf16 直接建图）；`--middle --phase B1`（Encoder 卸载 + CPU Adam）；`--c1`（同一张 12B 图 B0→B1→B2）
 4. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
 5. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
-6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt` 或 save 目录（权重 + packed 游标 + RNG；不恢复上一阶段 Adam / step）。`latest.pt` 在已有 `step_{last}.pt` 时 hardlink，不要对 12B 再写第二份 23GiB；ckpt 放到大盘（`/root/autodl-tmp`），不要放 `/tmp`。也可用 `--c1 --save-dir runs/c1 --steps N` 在同一张图上连跑三阶段，写出 `runs/c1/{B0,B1,B2}/latest.pt`。12B 默认不存 Adam。单卡 32GB + ~62GiB host cgroup：B0 直接一步；B1 卸冻结 Encoder + CPU Adam（一步 smoke 走 ephemeral 动量）；B2 逐层 offload，backward 完一层就 clip+Adam（`--accum 1`）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
+6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` 按 C1+NVFP4 开训。B1/B2 用 `--resume` 接 `latest.pt` 或 save 目录（权重 + packed 游标 + RNG；不恢复上一阶段 Adam / step）。`latest.pt` 在已有 `step_{last}.pt` 时 hardlink，不要对 12B 再写第二份 23GiB；ckpt 放到大盘（`/root/autodl-tmp`），不要放 `/tmp`。也可用 `--c1 --save-dir runs/c1 --steps N` 在同一张图上连跑三阶段，写出 `runs/c1/{B0,B1,B2}/latest.pt`。12B 默认不存 Adam。单卡 32GB + ~62GiB host cgroup：B0 直接一步；B1 卸冻结 Encoder + CPU Adam（一步 smoke 走 ephemeral 动量）；B2 逐层 offload，backward 完一层就 clip+Adam（`--accum 1`）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
 
-不要再改 16/26、C1、C1+FP8、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
+不要再改 16/26、C1、C1+NVFP4、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
 
 ---
 
@@ -514,7 +516,7 @@ BBH（推理），IFEval（指令遵循）。
 ### Tier 2 — 中风险高收益（base 稳定后加）
 
 - **MTP → 投机解码**：复用已挂的 MTP 头做 EAGLE 式自投机，推理提速；训练侧几乎零额外成本。
-- **FP8 训练**（[`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) 定稿）：B1/B2 MoE 专家 GEMM + 冻结 Encoder 前向；B0 student / indexer / 白名单模块保持高精度。发布墙钟 1.5×，不发布 2×。**FP4 专家存储**是后期可选项，不进本配方。
+- **NVFP4 训练**（[`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) 定稿）：不必须 bf16 的线性 GEMM；B0 student / indexer / 必须高精度集合保持高精度。发布墙钟 2.0× vs bf16，不发布 4×。**V4 式 FP4 专家存储**是后期可选项，不进本配方。Hopper/Ada 回退见 [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md)。
 - **attention logit soft-cap / QK-clip**（Gemma2 / Kimi）：抑制极端 logit，进一步稳训练。
 - **RoPE/NoPE 校准与频率缩放（YaRN）**：长上下文外推 + 缓解位置偏置。
 
@@ -532,16 +534,16 @@ BBH（推理），IFEval（指令遵循）。
 逐步引入 + 每步可回退 + 指标监控，是唯一稳妥路径。
 
 **去风险阶梯：**
-- **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。**精度 bf16，不开 FP8。**
+- **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。**精度 bf16，不开 NVFP4。**
 - **L1（半规模去风险原型，≈3–6B）**：用**完整新颖架构栈**但**专家数减半**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。廉价的架构验证台。
 - **L2（扩到 12B 目标）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，半规模→12B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
-- **每个新组件单独一步**：稀疏化 → KDA → mHC → Muon；**FP8 不进 L0**（tiny 保持 bf16），从 B1 开 MoE GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
+- **每个新组件单独一步**：稀疏化 → KDA → mHC → Muon；**NVFP4 不进 L0**（tiny 保持 bf16），从 B1 开允许的线性 GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
 
 **难度—收益取舍速查：**
 
 | 想省事/快出成果 | 想要极致长上下文效率 |
 | --- | --- |
-| 先 decoder-only + CSA/HCA（不上 YOCO/KDA/mHC/Muon），跑通再逐步加 | 全栈 YOCO + 3:1 KDA + CSA/HCA + FP8，但严格走 L0→L1→L2 |
+| 先 decoder-only + CSA/HCA（不上 YOCO/KDA/mHC/Muon），跑通再逐步加 | 全栈 YOCO + 3:1 KDA + CSA/HCA + NVFP4，但严格走 L0→L1→L2 |
 
 ---
 
@@ -588,11 +590,12 @@ BBH（推理），IFEval（指令遵循）。
 
 ### 15.1 训练算力估算
 
-`训练 FLOPs ≈ 6 × N_active × tokens`。下表 bf16 行按 40% MFU（H100 有效 ~4.0e14、A100 ~1.25e14 FLOPS）把操作数换成小时；**默认 Phase B 墙钟是 C1+FP8**，不是联合 bf16。
+`训练 FLOPs ≈ 6 × N_active × tokens`。下表 bf16 行按 40% MFU（H100 有效 ~4.0e14、A100 ~1.25e14 FLOPS）把操作数换成小时；**默认 Phase B 墙钟是 C1+NVFP4**，不是联合 bf16。RTX PRO 6000 Server BF16 峰值 ≈ H100，小时数可比。
 
 | 方案 | H100-h | A100-h | 8×H100 天 |
 | --- | ---: | ---: | ---: |
-| **C1+FP8（Phase B 定稿）** | **729** | **2,333** | **3.8** |
+| **C1+NVFP4（Phase B 定稿）** | **571** | **1,827** | **3.0** |
+| C1+FP8（Hopper/Ada 回退） | 729 | 2,333 | 3.8 |
 | C1 解冻课程 8+27+15B（bf16 操作数账） | 1,046 | 3,347 | 5.4 |
 | 12.25B 中间档 × 50B tok（联合 bf16 对照；untied 下与计划口径相同） | 1,325 | 4,239 | 6.9 |
 | 12.25B 中间档 × 200B tok | 5,299 | 16,956 | 27.6 |
@@ -603,12 +606,12 @@ BBH（推理），IFEval（指令遵循）。
 | ~1B × 20B tok | 51 | 160 | 0.3 |
 | ~0.5B × 10B tok（架构验证） | 13 | 40 | 0.1 |
 
-> **C1+FP8 = 729 是 Phase B 发布墙钟（联合 bf16 1,325 的 55%）。** 1,325 / 1,046 是 bf16 操作数对照。FP8 **不改** 6NT（[`FP8_THEORY.md`](FP8_THEORY.md)）。发布加速比 **1.5×**（MoE 活跃份额 81.9% 的 Amdahl 为 1.69×）；**2× 只是 H100 峰值上界，不写入配方**。蒸馏/upcycling 显著减少所需 tokens；长上下文阶段占比小、另计。
+> **C1+NVFP4 = 571 是 Phase B 发布墙钟（联合 bf16 1,325 的 43%）。** 1,325 / 1,046 是 bf16 操作数对照；729 是 C1+FP8 Hopper/Ada 回退。NVFP4 **不改** 6NT（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)）。发布加速比 **2.0× vs bf16**（相对 FP8 1.5× 再 ×1.33，落在 NVIDIA 1.31–1.73× vs FP8 低端）；**4× 只是 RTX PRO 6000 峰值上界，不写入配方**。蒸馏/upcycling 显著减少所需 tokens；长上下文阶段占比小、另计。
 
 ### 15.2 三条低预算路线（按实际卡数选）
 
 - **Route A — 架构验证（最省，≤ 几张卡，~10–50 H100-h，可租）**：upcycle 小 MiniCPM5（减专家）→ **0.5–1.5B 小 MoE**，装 YOCO+CSA/HCA(+可选 KDA)，继续训 10–20B tok。目标：证明这套注意力/编解码器能跑、不掉点、长上下文省 KV。**推荐作为默认起点。**
-- **Route B — 放大到 12B 目标（~8×A100/H100 两周档或租；Phase B 定稿 C1+FP8 ≈ 729 H100-h）**：MiniCPM5-2B → **12.25B** upcycle（可先经 3–6B 里程碑），继续训 50–60B tok + 短长上下文阶段，得到目标模型。联合 bf16 1,325 只作对照。
+- **Route B — 放大到 12B 目标（~8×A100/H100 或一张 RTX PRO 6000；Phase B 定稿 C1+NVFP4 ≈ 571 H100-h）**：MiniCPM5-2B → **12.25B** upcycle（可先经 3–6B 里程碑），继续训 50–60B tok + 短长上下文阶段，得到目标模型。联合 bf16 1,325 只作对照。
 - **Route C — PDSA 扩展（几乎不花训练算力，契合已有工作）**：冻结 backbone，仅训小组件（写入器/reranker/阈值）+ 落地"校准回退 / 可训练 editable memory"（§14）。**零预算最优**，直接产出 PDSA 的可训练生命周期后续。
 - **Route D — 24B（远期，暂不作为目标）**：仅在拿到真集群/算力资助后再考虑放大。
 
@@ -617,7 +620,7 @@ BBH（推理），IFEval（指令遵循）。
 1. **upcycling**（复用 MiniCPM5 权重，绝不 from-scratch）；2. **蒸馏**（teacher=`openbmb/MiniCPM5-2B-Base`，减 tokens）；
 3. **高稀疏 MoE**（减激活参数=减 FLOPs）；4. **4K 上下文占训练大头**，长上下文只短暂一段；
 5. **解冻课程**（§4.0 / [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)：**C1 定稿**——两栈先 MoE、B0/B1 冻 Encoder 与输入 embed、B0 冻 `lm_head` / B1 训 `lm_head`，约省 21% Phase B FLOPs、B1 Adam 状态 62%、Encoder 激活 ~38%；结尾必须短联合 B2≥10B）；
-6. **FP8**（[`FP8_THEORY.md`](FP8_THEORY.md)：**与 C1 敲死为 C1+FP8**——B1/B2 MoE 专家 GEMM + 冻结 Encoder 前向；B0 student / L0 / indexer / 白名单保持高精度；发布 1.5×。Phase B 墙钟 **729 H100-h，联合 bf16 1,325 的 55%**；2× 只作峰值上界）；7. **Muon**（减步数；Newton-Schulz 仍 fp32，与 FP8 GEMM 正交）；8. **新模块全训 + 其余 LoRA**（减优化器显存，能上更小/更少卡）；
+6. **NVFP4**（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)：**与 C1 敲死为 C1+NVFP4**——不必须 bf16 的线性 GEMM；B0 student / L0 / indexer / 必须高精度集合保持高精度；发布 2.0× vs bf16。Phase B 墙钟 **571 H100-h，联合 bf16 1,325 的 43%**；4× 只作峰值上界。Hopper/Ada 回退 C1+FP8 = 729）；7. **Muon**（减步数；Newton-Schulz 仍 fp32，与 NVFP4 GEMM 正交）；8. **新模块全训 + 其余 LoRA**（减优化器显存，能上更小/更少卡）；
 9. **关键短跑租 spot GPU**（不必自购）；10. seq packing + 激活重计算（塞进更少卡）。
 
 ### 15.4 修订后的默认路径
