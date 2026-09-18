@@ -11,11 +11,13 @@ import sys
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
 
+import cat_yoko.attention as attn_mod
 from cat_yoko.attention import CrossAttention, WindowAttention, _sdpa, _window_causal_bias
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, NVFP4_GEMM_SLOTS
 from cat_yoko.freeze import apply_freeze
@@ -51,6 +53,20 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertIn("scaled_dot_product_attention", src)
         self.assertIn("to(q.dtype)", src)
 
+        seen: list[torch.dtype] = []
+        orig = attn_mod.F.scaled_dot_product_attention
+
+        def _spy(q, k, v, *args, **kwargs):
+            seen.append(q.dtype)
+            return orig(q, k, v, *args, **kwargs)
+
+        q = torch.randn(1, 2, 4, 8)
+        k = torch.randn(1, 2, 4, 8)
+        v = torch.randn(1, 2, 4, 8)
+        with patch.object(attn_mod.F, "scaled_dot_product_attention", _spy):
+            _sdpa(q, k, v, causal=True)
+        self.assertEqual(seen, [torch.float32])
+
     def test_attention_module_has_no_csa_kernel(self) -> None:
         import cat_yoko.attention as attn_mod
 
@@ -80,6 +96,13 @@ class WrapDoesNotChangeTopologyTests(unittest.TestCase):
         self.assertIsInstance(enc.k_norm, RMSNorm)
         self.assertIsInstance(cross.q_norm, RMSNorm)
         self.assertNotIsInstance(enc.q_norm, Nvfp4Linear)
+        for name, mod in self.model.named_modules():
+            if name.endswith("q_norm") or name.endswith("k_norm"):
+                self.assertIsInstance(mod, RMSNorm, msg=name)
+                self.assertNotIsInstance(mod, Nvfp4Linear, msg=name)
+        params = list(inspect.signature(CrossAttention.forward).parameters)
+        self.assertIn("k", params)
+        self.assertIn("v", params)
 
     def test_window_attention_is_causal_after_wrap(self) -> None:
         attn = self.model.encoder[0].attn

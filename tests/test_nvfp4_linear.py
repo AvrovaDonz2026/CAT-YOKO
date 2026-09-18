@@ -83,20 +83,28 @@ class WrapPolicyTests(unittest.TestCase):
         cfg = _nv_tiny()
         model = CATYokoForCausalLM(cfg)
         apply_freeze(model, "B1")
+        keys_before = set(model.state_dict().keys())
         n = apply_nvfp4(model, "B1", enabled=True)
         names = nvfp4_module_names(model)
         self.assertGreater(n, 0)
+        self.assertEqual(set(model.state_dict().keys()), keys_before)
         self.assertIsInstance(model.lm_head, Nvfp4Linear)
-        self.assertIsInstance(model.encoder[0].attn.q_proj, Nvfp4Linear)
-        self.assertIsInstance(model.decoder[0].self_attn.o_proj, Nvfp4Linear)
+        enc_attn = model.encoder[0].attn
+        dec_attn = model.decoder[0].self_attn
+        for proj in (enc_attn.q_proj, enc_attn.k_proj, enc_attn.v_proj, enc_attn.o_proj):
+            self.assertIsInstance(proj, Nvfp4Linear)
+        for proj in (dec_attn.q_proj, dec_attn.k_proj, dec_attn.v_proj, dec_attn.o_proj):
+            self.assertIsInstance(proj, Nvfp4Linear)
         self.assertIsInstance(model.decoder[0].cross_attn.q_proj, Nvfp4Linear)
         self.assertIsInstance(model.decoder[0].cross_attn.o_proj, Nvfp4Linear)
         self.assertIsInstance(model.cache_k, Nvfp4Linear)
         self.assertIsInstance(model.cache_v, Nvfp4Linear)
         expert0 = model.decoder[0].mlp.experts[0].gate_proj
         self.assertIsInstance(expert0, Nvfp4Linear)
+        self.assertIsInstance(model.decoder[0].mlp.shared[0].down_proj, Nvfp4Linear)
         self.assertFalse(any(n.endswith("router") for n in names))
         self.assertNotIsInstance(model.encoder[0].mlp.router, Nvfp4Linear)
+        self.assertNotIsInstance(model.decoder[0].mlp.router, Nvfp4Linear)
 
     def test_disabled_is_noop(self) -> None:
         model = CATYokoForCausalLM(_nv_tiny())
@@ -113,13 +121,25 @@ class WrapPolicyTests(unittest.TestCase):
         model = CATYokoForCausalLM(cfg)
         apply_freeze(model, "B1")
         apply_nvfp4(model, "B1", enabled=True)
-        ids = torch.randint(0, cfg.vocab_size, (2, cfg.seq_len))
+        torch.manual_seed(0)
+        ids = torch.randint(0, cfg.vocab_size, (1, 4))
         out = model(input_ids=ids, labels=ids)
         self.assertTrue(torch.isfinite(out["nll"]))
+        self.assertGreater(float(out["nll"].detach()), 0.0)
         out["loss"].backward()
         grads = [p.grad for p in model.parameters() if p.requires_grad and p.grad is not None]
         self.assertTrue(grads)
         self.assertTrue(all(torch.isfinite(g).all() for g in grads))
+
+    def test_trainer_b1_hooks_wrap(self) -> None:
+        from cat_yoko.trainer import Trainer
+
+        cfg = _nv_tiny()
+        tr = Trainer(cfg, "B1", "cpu", steps=1, accum=1, micro_batch=1)
+        out = tr.run()
+        self.assertGreater(tr.nvfp4_n, 0)
+        self.assertTrue(out.nll == out.nll)
+        self.assertGreater(out.nll, 0)
 
 
 if __name__ == "__main__":

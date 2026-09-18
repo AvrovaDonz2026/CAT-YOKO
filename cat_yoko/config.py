@@ -53,7 +53,7 @@ class CATYokoConfig:
     router_z_loss: float = 1e-4
     seq_balance_loss: float = 1e-3
     use_muon: bool = False
-    use_nvfp4: bool = True  # published compute dtype; kernels later
+    use_nvfp4: bool = True  # published compute dtype; Nvfp4Linear wrap
     use_fp8: bool = True  # Hopper/Ada fallback placeholder
     attention_backend: str = "window"  # Phase B; "csa" is Phase C
     kd_temperature: float = 2.0

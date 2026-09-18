@@ -40,6 +40,7 @@ from cat_yoko.dist_util import (
     wrap_distributed,
 )
 from cat_yoko.nvfp4 import low_prec_enabled, should_autocast
+from cat_yoko.nvfp4_linear import apply_nvfp4, nvfp4_module_names
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
@@ -247,6 +248,17 @@ class Trainer:
             if accum <= 0
             else max(accum, 1)
         )
+        self.nvfp4_n = 0
+
+    def _apply_nvfp4(self, model: nn.Module) -> int:
+        """After freeze, before DDP. QKV/O Linears only; SDPA stays fp32."""
+        apply_nvfp4(
+            unwrap(model),
+            self.phase,
+            enabled=bool(getattr(self.cfg, "use_nvfp4", False)),
+        )
+        self.nvfp4_n = len(nvfp4_module_names(unwrap(model)))
+        return self.nvfp4_n
 
     def _cast(self, model: nn.Module) -> nn.Module:
         if self.dtype == "bf16":
@@ -275,7 +287,8 @@ class Trainer:
             f"nll={row['nll']:.4f} ppl={ppl_s} aux={row['aux']:.4f} "
             f"gate={row['gate']:.3f} gn={row['grad_norm']:.2f} "
             f"moe_cv={row.get('moe_cv', 0):.2f} trainable={row['trainable_m']:.2f}M "
-            f"lr={row['lr']:.2e} fp8={row['fp8']} tok={row['tokens_seen']:.0f} "
+            f"lr={row['lr']:.2e} fp8={row['fp8']} nvfp4={row.get('nvfp4', False)} "
+            f"tok={row['tokens_seen']:.0f} "
             f"tok/s={row['tok_s']:.0f} mem={row['mem_mib']:.0f}MiB"
         )
         print(line)
@@ -442,6 +455,7 @@ class Trainer:
             tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
         apply_freeze(unwrap(model), self.phase)
+        self._apply_nvfp4(model)
         self._resolve_offload()
         self._apply_runtime_flags(model)
         if extra.get("stream") is not None:
@@ -496,7 +510,8 @@ class Trainer:
             f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
             f"optim_cpu={self.optim_cpu} adam={adam_state} "
             f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
-            f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
+            f"nvfp4={bool(getattr(self.cfg, 'use_nvfp4', False))} "
+            f"nvfp4_n={self.nvfp4_n} PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
             flush=True,
         )
 
@@ -557,6 +572,7 @@ class Trainer:
                 upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
                 del self.upcycle_src
         apply_freeze(unwrap(model), self.phase)
+        self._apply_nvfp4(model)
         self._apply_runtime_flags(model)
         model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
         trainable = [p for p in model.parameters() if p.requires_grad]
@@ -609,6 +625,7 @@ class Trainer:
             cuda=str(self.device).startswith("cuda"),
             enabled=low_prec_enabled(self.cfg),
         )
+        use_nvfp4 = bool(getattr(self.cfg, "use_nvfp4", False))
         last = 0.0
         phase_budget = self.tokens_target
         max_steps = self.steps
@@ -731,6 +748,8 @@ class Trainer:
                         "trainable_m": n_train / 1e6,
                         "lr": lr,
                         "fp8": use_fp8,
+                        "nvfp4": use_nvfp4,
+                        "nvfp4_n": self.nvfp4_n,
                         "tokens_seen": tokens_seen,
                         "tokens_in_phase": tokens_in_phase,
                         "tok_s": (step_tokens * self.world) / dt,

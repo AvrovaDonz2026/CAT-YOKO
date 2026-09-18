@@ -73,7 +73,7 @@
 - 墙钟 **571 H100-h**（联合 bf16 1,325 的 **43%**；≈ RTX PRO 6000-h）。联合 bf16 1,325 是对照；C1 bf16 1,046 是操作数账；C1+FP8 729 是 Hopper/Ada 回退。
 - Phase C indexer **bf16**，叠在 B2 后。L0/单测 **bf16**，不开 NVFP4。
 - **必须高精度**：input embed、RMSNorm / QK-Norm、router、gate、indexer、attn softmax / SDPA score。**lm_head 与 attn QKV/O 投影不是必须 bf16，走 NVFP4。** 实现上 RMSNorm、router logits/softmax、attn softmax 在 autocast 下走 fp32。
-- NVFP4 加速比发布 **2.0× vs bf16**（相对旧 FP8 1.5× 再 ×1.33）。无 Blackwell 时退 FP8 placeholder，再退 bf16 autocast。本仓库**不**实现 TE kernel。
+- NVFP4 加速比发布 **2.0× vs bf16**（相对旧 FP8 1.5× 再 ×1.33）。无 Blackwell 时退 FP8 placeholder，再退 bf16 autocast。允许的线性 GEMM 由 ``Nvfp4Linear`` 仿真（E2M1/16）；fused TE WGRAD/RHT 仍不是硬依赖。注意力保持因果 YOCO window，softmax / SDPA 高精度。
 - `use_muon=True` 在 `build_optimizer` 抛 `NotImplementedError`（发布默认关）。
 
 ---

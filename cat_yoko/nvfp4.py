@@ -1,9 +1,11 @@
 """Published C1+NVFP4 compute policy. Master weights stay bf16.
 
 Anything that is not a must-bf16/fp32 op is an NVFP4 linear GEMM on
-Blackwell (RTX PRO 6000 / 6000D). True NVFP4 kernels need Transformer
-Engine (or an sm_120 equivalent) and are not in this repo yet: the
-trainer still falls back to bf16 autocast, same placeholder as FP8.
+Blackwell (RTX PRO 6000 / 6000D). ``cat_yoko.nvfp4_linear`` wraps allowed
+``nn.Linear`` modules (E2M1/16 emulation; Transformer Engine
+``NVFP4BlockScaling`` when importable). Outer ``torch.autocast(bf16)``
+still covers unwrapped ops. Attn softmax / SDPA stay fp32 in
+``attention._sdpa``; do not NVFP4 the score path.
 
 Must-high-prec (not NVFP4): embed lookup, RMSNorm / QK-Norm, router,
 scalar gate, indexer, attn softmax / SDPA scores. B0 student stays
@@ -40,7 +42,7 @@ def policy_for(phase: str) -> Nvfp4Policy:
 
 
 def should_autocast(phase: str, *, cuda: bool, enabled: bool) -> bool:
-    """Placeholder autocast for B1/B2 low-prec students. No TE GEMM here."""
+    """Outer bf16 autocast for B1/B2. Wrapped GEMMs quantize inside forward."""
     if not enabled or not cuda:
         return False
     return POLICY[phase].student in LOW_PREC_STUDENTS

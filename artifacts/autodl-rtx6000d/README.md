@@ -12,7 +12,7 @@ torch 2.8.0+cu128，驱动 595.71.05，CUDA 13.2。
 | `/root/autodl-tmp` | 50G xfs |
 | Hub | `HF_ENDPOINT=https://hf-mirror.com` |
 
-NVFP4 配方的目标卡就是这张。本目录不实现 TE kernel；trainer 仍是 bf16 autocast placeholder。sm_120 只记录能力。
+NVFP4 配方的目标卡就是这张。Trainer 在 freeze 之后把允许的 ``nn.Linear`` 换成 ``Nvfp4Linear``（E2M1/16 仿真；有 TE 时走 ``NVFP4BlockScaling``）。注意力仍是因果 YOCO window + fp32 SDPA / qk_norm，不改拓扑。fused TE WGRAD/RHT 仍不是本仓硬依赖。
 
 ## HuggingFace 走 hf-mirror
 

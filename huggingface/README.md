@@ -49,7 +49,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 墙钟（发布账本）
 
-50B token 信封上的理论墙钟，**不是**实测。NVFP4 kernel **未实现**；trainer 仍是 bf16 autocast placeholder。
+50B token 信封上的理论墙钟，**不是**实测。允许的线性 GEMM 由 ``Nvfp4Linear`` 走 NVFP4（无 TE 时 E2M1/16 仿真）。attn softmax / SDPA 仍 fp32。fused TE kernel 不是硬依赖。
 
 | 配方 | H100-h | 角色 |
 | --- | ---: | --- |
@@ -95,7 +95,7 @@ GitHub 仓库不再存权重、也不再用 Git LFS。
 
 **C1:** B0/B1 freeze the encoder. B0 trains new modules only. B1 trains decoder + `lm_head` + final RMSNorm. B2 trains all. Tokens B0/B1/B2 = 8/27/15B.
 
-**Published wall-clock** (50B-token envelope, not measured). NVFP4 kernels are **not** implemented; the trainer is still a bf16 autocast placeholder.
+**Published wall-clock** (50B-token envelope, not measured). Allowed linear GEMMs use ``Nvfp4Linear`` (E2M1/16 emulation without TE). Attn softmax / SDPA stay fp32.
 
 | Recipe | H100-h | Role |
 | --- | ---: | --- |
