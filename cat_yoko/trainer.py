@@ -394,13 +394,25 @@ class Trainer:
         elif self.offload_encoder:
             move_module(raw.encoder, "cpu")
 
+    def _begin_step_peak(self) -> None:
+        """Start peak tracking after freeze/offload, not at 12B ``build_model``.
+
+        Isolated B2 otherwise reports the full 22.82GiB graph that existed
+        only before per-block CPU offload. ``--c1`` B2 otherwise reports B1's
+        leftover decoder (~14.7GiB). B0/B1 still capture encoder-on-GPU
+        forward because that copy-back happens after this reset.
+        """
+        if not str(self.device).startswith("cuda") or not torch.cuda.is_available():
+            return
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+
     def run(self) -> TrainResult:
         if self.cfg.name == "CAT-YOKO-12B" and not str(self.device).startswith("cuda"):
             raise RuntimeError("CAT-YOKO-12B weights need --device cuda --dtype bf16 (CPU is --meta only)")
         seed_all(self.seed + self.rank)
         configure_cuda()
-        if str(self.device).startswith("cuda") and torch.cuda.is_available():
-            torch.cuda.reset_peak_memory_stats()
         self._resolve_offload()
         if self.save_optim_arg is None:
             self.save_optim = self.cfg.name != "CAT-YOKO-12B"
@@ -483,6 +495,7 @@ class Trainer:
                 opt.step_params(blk.parameters())
 
             set_after_block_backward(_on_block)
+        self._begin_step_peak()
         try:
             while True:
                 if max_steps is not None and step >= max_steps:

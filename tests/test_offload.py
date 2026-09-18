@@ -37,6 +37,19 @@ class AutoFlagsTests(unittest.TestCase):
         self.assertTrue(e)
         self.assertFalse(b)
         self.assertTrue(o)
+        e0, b0, o0 = auto_offload_flags(
+            phase="B0",
+            cfg_name="CAT-YOKO-12B",
+            device="cuda",
+            fsdp=False,
+            ddp=False,
+            offload_encoder=None,
+            offload_blocks=None,
+            optim_cpu=None,
+        )
+        self.assertTrue(e0)
+        self.assertFalse(b0)
+        self.assertFalse(o0)
         e2, b2, o2 = auto_offload_flags(
             phase="B2",
             cfg_name="CAT-YOKO-12B",

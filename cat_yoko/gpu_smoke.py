@@ -373,7 +373,7 @@ def run_middle_12b_phase(
                 reuse_model=model,
             )
             out = trainer.run()
-            peak = torch.cuda.max_memory_allocated() / 1024**3
+            peak = out.peak_mib / 1024.0 if out.peak_mib else torch.cuda.max_memory_allocated() / 1024**3
             ok = _finite(out.nll) and out.nll > 0 and out.step == steps
             result = {
                 "info": info,
