@@ -16,7 +16,9 @@ does not change the published middle-tier spec.
 
 Freeze-curriculum (Phase B): ``--staged`` for FLOPs vs joint; ``--curriculum``
 for freeze boundaries, Adam/activation memory, and token-split sensitivity.
-Default recipe is C2 (delayed encoder MoE). Do not franken-merge two LMs.
+Default recipe is C1 (MoE both stacks at Phase A, freeze encoder in
+B0/B1). C2 delayed encoder MoE is an optional extra save. Do not
+franken-merge two LMs.
 """
 
 from __future__ import annotations
@@ -55,6 +57,9 @@ WEIGHT_BYTES = 2  # bf16 weights
 TRAINABLE_FOOTPRINT = WEIGHT_BYTES + GRAD_BYTES + ADAM_STATE_BYTES  # 12
 FROZEN_FOOTPRINT = WEIGHT_BYTES  # 2
 DEFAULT_CURRICULUM_SPLIT = (8e9, 27e9, 15e9)  # B0 + B1 + B2 = 50B
+# C1 = both stacks MoE at Phase A, freeze encoder in B0/B1 (plan of record).
+# C2 = delayed encoder MoE (encoder_dense=True); optional extra save.
+DEFAULT_DELAYED_ENCODER_MOE = False
 
 # Hardware for GPU-hour estimates (plan §15.1): 40% MFU.
 H100_BF16_EFF = 4.0e14  # ~989 TFLOPS peak * 0.40
@@ -446,9 +451,9 @@ def staged_recipes(budget: ModelBudget, tokens: float = 50e9) -> list[StagedReci
         ),
         StagedRecipe(
             "unfreeze curriculum 8+27+15B",
-            flops_curriculum(budget, tokens, delayed=False),
+            flops_curriculum(budget, tokens, delayed=DEFAULT_DELAYED_ENCODER_MOE),
             tokens,
-            "C1: MoE both stacks, freeze enc in B0/B1",
+            "C1 (default): MoE both stacks, freeze enc in B0/B1",
         ),
         StagedRecipe(
             "delayed-enc-MoE curriculum 8+27+15B",
@@ -500,7 +505,7 @@ FREEZE_BOUNDARIES: tuple[FreezeBoundary, ...] = (
         detach_at_cache=True,
         tied_emb="freeze_tied",
         gate="0→0.3",
-        note="new modules only; encoder FFN = dense (C2) or frozen MoE copies (C1)",
+        note="new modules only; encoder FFN = frozen MoE copies (C1 default) or dense (C2)",
     ),
     FreezeBoundary(
         phase="B1",
@@ -518,7 +523,7 @@ FREEZE_BOUNDARIES: tuple[FreezeBoundary, ...] = (
         detach_at_cache=False,
         tied_emb="train_tied",
         gate="1",
-        note="short joint; C2 virtual-group upcycles encoder FFN here",
+        note="short joint; C1 unfreezes already-MoE encoder; C2 upcycles then unfreezes",
     ),
 )
 
@@ -674,6 +679,12 @@ def claims_curriculum(budget: ModelBudget) -> list[Claim]:
             DEFAULT_CURRICULUM_SPLIT[2] >= 10e9,
             f"{DEFAULT_CURRICULUM_SPLIT[2] / 1e9:.0f}B",
             "≥10B",
+        ),
+        Claim(
+            "default recipe is C1 (not delayed encoder MoE)",
+            DEFAULT_DELAYED_ENCODER_MOE is False,
+            str(DEFAULT_DELAYED_ENCODER_MOE),
+            "False (C1: both stacks MoE, freeze enc)",
         ),
     ]
 
@@ -969,7 +980,7 @@ def print_staged(budget: ModelBudget, tokens: float = 50e9) -> None:
 
 
 def print_curriculum(budget: ModelBudget, tokens: float = 50e9) -> None:
-    print("-- Freeze boundary (default C2; C1 differs only in encoder FFN) --")
+    print("-- Freeze boundary (default C1; C2 differs only in encoder FFN) --")
     print(
         f"  {'phase':<4s} {'detach':<7s} {'tied_emb':<16s} {'gate':<8s} "
         f"{'frozen':<42s} {'trainable'}"

@@ -1,6 +1,6 @@
 # CAT-YOKO 解冻课程理论验证
 
-> 与前两篇分工：[`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 核中间档参数 / FLOPs / KV；[`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) 核因果与 M1/M2/M3；**这篇核 Phase B 的可训练子集**——冻结边界、梯度在 cache 处截断、tied embedding、延迟 Encoder MoE、优化器/激活显存、token 切分。
+> 与前两篇分工：[`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 核中间档参数 / FLOPs / KV；[`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) 核因果与 M1/M2/M3；**这篇核 Phase B 的可训练子集**——冻结边界、梯度在 cache 处截断、tied embedding、**C1（默认）** 与可选的延迟 Encoder MoE（C2）、优化器/激活显存、token 切分。
 > 规格仍是中间档：16/24，≈12B / 2.3B-in / 4.5B-out。不引入新架构，不把两栈拆成两个独立 LM。
 > 可执行断言：`python3 scripts/param_budget.py --verify`（含课程 claim）、`--staged`、`--curriculum`；`python3 -m unittest tests.test_param_budget`。
 > 理论能证明的是 **FLOPs / 显存 / 梯度流 / 与定理 A 的兼容**；不能证明 12B 上采样后的质量。质量仍走 L0→L1 实验，B2 不够就加长 B2。
@@ -14,8 +14,8 @@
 | 做法 | 50B tok H100-h | vs 联合 |
 | --- | ---: | ---: |
 | 两栈一起训（基线） | 1,354 | 100% |
-| C1：两栈都先 MoE，B0/B1 冻 Encoder | 1,090 | **81%** |
-| **C2：Encoder 保持 MiniCPM dense 到 B2 再上采样（推荐）** | **1,044** | **77%** |
+| **C1：两栈都先 MoE，B0/B1 冻 Encoder（默认）** | **1,090** | **81%** |
+| C2：Encoder 保持 MiniCPM dense 到 B2 再上采样（可选） | 1,044 | 77% |
 | 独立 50B+50B+20B 拼接 | 2,054 | **152%（更贵）** |
 
 还必须钉死的几条：
@@ -23,12 +23,12 @@
 1. **梯度在全局 cache 处 `.detach()`。** Encoder 无权重梯度、无激活梯度；前向省不掉（YOCO 的 CE 在 Decoder 顶）。这是定理 D。
 2. **Tied embedding 必须随 Encoder 冻结，或解绑后只训 LM head。** MiniCPM 的 \(E\) 同时是输入表和输出头；B0/B1 若训练 tied \(E\)，冻结 Encoder 的输入分布会漂，定理 A 的残差流不再是「同一条」。这是定理 E。默认 **freeze_tied**。
 3. **\(W_K,W_V\) 是新模块**，挂在 `encoder.detach()` **之后**，B0 就可训。它们不在已发布的 12.05B 栈合计里（上界 \(2d^2=10.62\mathrm{M}\)）。
-4. **C1 在 Phase A 就把 Encoder 做成 MoE 再冻住，专家副本直到 B2 才特化**——白付 MoE 前向。C2 让 Encoder 在 B0/B1 保持 MiniCPM dense（每层 39.81M < 7×14.16M），定理 A 对 Encoder **精确**成立到 B2，前向更便宜。B2 再用 virtual-group 上采样 Encoder。
-5. **FLOPs 约省 19–23%；Adam 状态在 B1 只有联合的 60%；detach 丢掉 Encoder 激活约 40%。** 塞进更少卡时，显存杠杆可能比 FLOPs 杠杆更有用。
+4. **默认是 C1，不是 C2。** Phase A 对两栈都做 virtual-group MoE，B0/B1 冻 Encoder：一次离线手术、从 token 0 就是发布的 12.05B 中间档、B2 只解冻不改结构。冻结期间 Encoder ≈ MiniCPM 1–16（命题 F）。代价是 B0/B1 白付 MoE Encoder 前向（2.01B vs dense 1.06B），专家副本到 B2 才特化——所以 B2 默认 15B。C2 再省约 4 个百分点，但要在 B2 做第二次上采样，不作为默认。
+5. **FLOPs 约省 19%（C1）/ 23%（C2）；Adam 状态在 B1 只有联合的 60%；detach 丢掉 Encoder 激活约 40%。** 塞进更少卡时，显存杠杆可能比 FLOPs 杠杆更有用。
 6. **B2 不能为 0**（write/read 永不共同适应，PDSA 已警告）。默认 B2 = 15B ≥ 10B。质量不稳加长 B2，不要改回两个独立 LM。
 7. Phase C「冻主干、只训 indexer」叠在 B2 **之后**；indexer 对齐是层内 KL，不是穿过 cache 的 LM 反传。
 
-Claim ledger：中间档 22 条 + 课程 11 条，` --verify` **33/33** 通过。
+Claim ledger：中间档 22 条 + 课程 12 条，`--verify` **34/34** 通过。
 
 ---
 
@@ -152,11 +152,27 @@ ULMFiT（Howard & Ruder 2018）是「从顶向下解冻」：B0 新模块 → B1
 
 B0 的 token 与已有 5–10B gate 爬坡对齐（此处取 8B，gate 只升到 0.3，避免在冻结骨干上把 \(g\) 拉到 1 而导致 cross-attn 过拟合冻结特征——这是 LP-FT「随机头逼骨干改特征」的对称失败：这里头是好的，新分支是随机的）。
 
-B1 解冻 reader。Writer 仍是 MiniCPM-16（C2 精确，C1 virtual-group 近似）。
+B1 解冻 reader。Writer 在 C1 下是 **冻结的 virtual-group MoE Encoder**（≈ MiniCPM-16）；C2 下才是精确的 MiniCPM dense 1–16。
 
-B2 ≥ 10B：Encoder 专家（C2 才刚出现）需要负载熵；write/read 需要共同适应。质量不稳加长 B2，而不是加长 B0。
+B2 ≥ 10B：C1 的 Encoder 专家从这一刻才开始特化，需要负载熵；write/read 需要共同适应。质量不稳加长 B2，而不是加长 B0。
 
 **不要做：** 贪心逐层加层（2 层→冻→再加 2 层）。LLM 上没有稳定省算力的证据，结尾仍要联合，还破坏 16/24 切点。
+
+### C1 时间线（默认）
+
+```
+Phase A  离线：16/24 切开，gate=0，Encoder+Decoder 都 virtual-group MoE，
+         加 cross-attn 与 W_K/W_V。此后总参就是 12.05B。
+B0  8B   Encoder / Decoder 骨干 / tied E 全冻。只训新模块。
+         cache = X^16.detach() @ W_{K,V}。g: 0→0.3。
+         Encoder 前向 = 冻结的 MoE 副本 ≈ MiniCPM 1–16（命题 F）。
+B1  27B  解冻 Decoder。Encoder + tied E 仍冻，仍 detach。g→1。
+         Reader 学会用冻结记忆；writer 不改。
+B2  15B  去掉 detach，解冻 Encoder + E，LR 更小。
+         Encoder 专家从这里才开始特化；write/read 共同适应。
+```
+
+C1 的 MoE 初始化与冻结兼容：virtual-group 保证转换瞬间等于 dense；冻住路由和专家，这个等式一直维持到 B2。Encoder 上的 Hash-MoE 在 B0/B1 是多余的（路由已经冻死），放到 B2 解冻时再用。
 
 ---
 
@@ -172,7 +188,7 @@ Decoder 在 Phase A 上采样（两变体相同）：B0 冻 Decoder 骨干 ⇒ D
 
 ---
 
-## 6. 命题 G — 延迟 Encoder MoE（C2）严格更省，且理论更干净
+## 6. 命题 G — C2 严格更省，但不作为默认
 
 每层 MiniCPM dense SwiGLU \(3d\cdot5760=39.81\mathrm{M}\)。中间档 Encoder 激活专家 \(7\times14.16\mathrm{M}=99.12\mathrm{M}\)。16 层：
 
@@ -184,9 +200,9 @@ C2 的 \(T_0,T_1\) 前向更便宜；\(T_2\) 与 C1 同为 MoE 联合。故同�
 
 C2 还避免「冻结的专家副本占着 4.50B Encoder 权重却不特化」：B0/B1 只存 16× dense FFN（加注意力 ≈1.06B），B2 才展开成 18 专家/层。
 
-**C2 的 Phase A 修订：** 只对 **Decoder** 做 virtual-group；Encoder 保持 dense。B2 开始时对 Encoder 做同样的 virtual-group（0 token，离线），然后进入短联合。首层 dense 惯例仍可在这次上采样时采用（Enc routed 17→19 补回 12.05B，预算篇 §9）。
+**C1 仍是默认**，因为 Phase A 只需一次离线手术、从 token 0 就是发布的 12.05B / 2.29+4.49 中间档、B2 只解冻不改图。C2 要在 B2 再做一次 Encoder virtual-group，多一个失败点。若显存极紧或想再省 ~4pp FLOPs，再切 C2。
 
-C1 是「Phase A 已经两栈都 upcycled」时的回退，不是默认。
+**C2 的 Phase A 修订（可选）：** 只对 **Decoder** 做 virtual-group；Encoder 保持 dense。B2 开始时对 Encoder 做同样的 virtual-group（0 token，离线），然后进入短联合。首层 dense 惯例仍可在这次上采样时采用（Enc routed 17→19 补回 12.05B，预算篇 §9）。
 
 ---
 
@@ -200,8 +216,8 @@ C1 是「Phase A 已经两栈都 upcycled」时的回退，不是默认。
 | 冻 Encoder、训 Decoder（全程；write/read 不共同适应） | 1,035 | 76% |
 | 同上，Encoder 为 dense（C2 的 B1 极限） | 969 | 72% |
 | 只训新模块 | 779 | 58% |
-| **C1 解冻课程 8+27+15B** | **1,090** | **81%** |
-| **C2 延迟 Encoder MoE 8+27+15B** | **1,044** | **77%** |
+| **C1 解冻课程 8+27+15B（默认）** | **1,090** | **81%** |
+| C2 延迟 Encoder MoE 8+27+15B（可选） | 1,044 | 77% |
 | 独立 50B+50B+20B 拼接 | 2,054 | 152% |
 | Encoder 当 LM 25B 再联合 25B | 916 | 68%（质量赌博） |
 
@@ -270,7 +286,7 @@ Phase F/G 的分域专家蒸馏与这套预训练课程正交。
 | 独立拼接更贵、切点漂移 | 两栈当两个 LM | 只用 B0/B1/B2；定理 A |
 | Encoder 反传偷偷回来 | 没 detach，或 \(W_K\) 在 detach 前 | 定理 D 的代码顺序 |
 | 冻结 Encoder 但 \(X^0\) 在漂 | 训 tied \(E\) | 定理 E：freeze_tied 或解绑 head |
-| Encoder 专家占坑不特化 | C1 过早 upcycle 再冻 | **默认 C2** |
+| Encoder 专家占坑不特化 | C1 过早 upcycle 再冻 | **接受**：B2≥15B 才让 Encoder 专家特化；不要因此改回独立 LM。想避开就用可选 C2 |
 | write/read 上限卡住 | B2=0 或 B2≪10B | 默认 15B；不稳加长 B2 |
 | B0 上 \(g\to1\) 过拟合冻结特征 | 新分支随机、骨干冻 | B0 只到 \(g=0.3\) |
 | 把 early-exit 算进课程 FLOPs | 训练没有 early-exit | 架构篇定理 C；课程用全长 6NT |
@@ -298,6 +314,7 @@ Phase F/G 的分域专家蒸馏与这套预训练课程正交。
 | B2=0 更便宜但非法 | PASS |
 | cache 投影是 B0 新模块 | PASS（10.62M） |
 | 默认 B2 ≥10B | PASS（15B） |
+| **默认配方是 C1**（`DEFAULT_DELAYED_ENCODER_MOE=False`） | PASS |
 
 C1 ≤85% 仍在中间档账本里（81%）。
 
@@ -305,9 +322,9 @@ C1 ≤85% 仍在中间档账本里（81%）。
 
 ## 13. 对计划的修订（本 PR）
 
-1. §4.0：冻结边界表（detach、tied \(E\)、\(W_K/W_V\)）；**默认 C2**；C1 为已两栈 upcycle 的回退。
-2. Phase A：C2 **只上采样 Decoder**；Encoder 上采样挪到 B2 边界。
-3. §15.3 杠杆 #5：写明 FLOPs ~77–81%、B1 Adam 60%、激活 ~40%。
+1. §4.0：冻结边界表（detach、tied \(E\)、\(W_K/W_V\)）；**默认 C1**（两栈都先 MoE，B0/B1 冻 Encoder）；C2 为可选再省一档。
+2. Phase A：对 Encoder、Decoder **各自** virtual-group；C2 才推迟 Encoder 上采样。
+3. §15.3 杠杆 #5：C1 约省 19% Phase B FLOPs、B1 Adam 60%、激活 ~40%。
 4. 不写训练代码骨架（按用户要求，理论先闭环）。
 
 复算：

@@ -342,7 +342,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 | μP logits 缩放 = 9；残差保持 \(1.4/\sqrt{40}\) | PASS |
 | freeze-enc ≈76% 联合；独立拼接 152%；C1 课程 81% | PASS（见课程篇） |
 
-解冻课程另 11 条（C2 < C1、detach、tied \(E\)、Adam 60%、合法 split ≤85% 等）与中间档 22 条合计 **`--verify` 33/33**，见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。
+解冻课程另 12 条（默认 C1、C2 < C1、detach、tied \(E\)、Adam 60%、合法 split ≤85% 等）与中间档 22 条合计 **`--verify` 34/34**，见 [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。
 
 文本层（不进 `--verify`，已在上文展开）：
 
@@ -365,7 +365,7 @@ PDSA（Zou & Donz，arXiv 2606.28876）给出一条与参数预算正交、但�
 4. **μP 残差不要按新栈深重算**。
 5. **4K 主训练不要指望 CSA 省算力**；稀疏化放在 Phase C、长上下文放在 Phase D，与 FLOPs 曲线一致。
 6. 投影维数冻结后，用 `python3 scripts/param_budget.py --attn csa_mqa64 --full` 重跑，用 routed / top-\(k\) 补回 12.05B 与 2.3/4.5，不要改层数拆分。
-7. **Phase B 默认 C2 解冻课程**（detach cache、freeze_tied、B2≥10B）。不要把两栈当独立 LM 再拼接。
+7. **Phase B 默认 C1 解冻课程**（两栈先 MoE、冻 Encoder、detach cache、freeze_tied、B2≥10B）。不要把两栈当独立 LM 再拼接。C2 为可选。
 
 复算命令：
 

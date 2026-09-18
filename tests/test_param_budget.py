@@ -175,6 +175,11 @@ class CurriculumTheoryTests(unittest.TestCase):
     def test_activation_keep_is_decoder_layers(self) -> None:
         self.assertEqual(pb.activation_keep_frac(), 24 / 40)
 
+    def test_default_recipe_is_c1(self) -> None:
+        self.assertFalse(pb.DEFAULT_DELAYED_ENCODER_MOE)
+        rec = next(r for r in pb.staged_recipes(self.budget, 50e9) if r.name.startswith("unfreeze"))
+        self.assertAlmostEqual(rec.flops, pb.flops_curriculum(self.budget, 50e9, delayed=False))
+
     def test_curriculum_claims_pass(self) -> None:
         failed = [c for c in pb.claims_curriculum(self.budget) if not c.ok]
         self.assertEqual(failed, [], msg=[c.name for c in failed])
