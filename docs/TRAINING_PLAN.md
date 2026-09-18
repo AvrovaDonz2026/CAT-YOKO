@@ -204,6 +204,11 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 > 三项目标（总 24B、enc 激活 3B、dec 激活 6B）同时命中。注意力那 ×1.25 是占位估计；**一旦 MLA 秩 / 压缩维 `c` /
 > indexer 维度定稿，用下方脚本重算并微调 routed 专家数把总量精确对齐到 24.0B。**
 
+> 🔑 **参数由专家主导，与注意力类型基本无关**：本配置下**注意力仅占总参数 ≈6.6%，MoE 专家占 ≈92.3%**。
+> 因此**加入 KDA 不需要缩小总参数**——把 3/4 层换成 KDA 只让总量变化约 −0.16B（补 1 个专家即可回填），总量仍由
+> `n_routed` 决定。"总参数"和"用什么注意力"是两个正交旋钮：想要 24B 就保持专家数，想降到 12B 是**为了降迭代成本的选择**（见 §13），
+> 不是 KDA 的强制要求。
+
 ### 3.2 复算脚本（放到 `scripts/param_budget.py`）
 
 ```python
@@ -405,6 +410,51 @@ BBH（推理），IFEval（指令遵循）。
 
 ---
 
+## 12. 更多先进技术（按 价值/风险 分层，避免堆砌）
+
+> 原则：新颖组件越多、训练越难。以下按"低风险先上、高风险后上/可选"排序，每个都应能独立开关与回退。
+
+### Tier 1 — 低风险高收益（建议默认加）
+
+- **QK-Norm**（对 query/key 做 RMSNorm）+ **z-loss**（router-z 抑制路由 logit 爆炸 + 输出 logit z-loss）+ **双 RMSNorm（pre+post，OLMo2/Gemma2 式）**：深层 + MoE + 稀疏注意力这种新颖栈的关键稳定器，成本极低。
+- **文档感知注意力掩码**：packed 长序列内**不跨文档**注意，避免污染长上下文训练信号。
+- **FIM（Fill-in-the-Middle）**：代码数据填中训练，提升补全/编辑能力。
+- **IN2 / 信息密集型长上下文训练（FILM 类）**：合成"关键信息位于长文**中段**"的训练样本——**这才是修 lost-in-the-middle 的正解**，比加 KDA 直接有效（见 §2.5 的澄清）。
+
+### Tier 2 — 中风险高收益（base 稳定后加）
+
+- **MTP → 投机解码**：复用已挂的 MTP 头做 EAGLE 式自投机，推理提速；训练侧几乎零额外成本。
+- **FP8 训练 + FP4 专家权重存储**（DeepSeek-V4 做法）：省显存/带宽，长上下文尤甚；需 kernel 支持，逐步开。
+- **attention logit soft-cap / QK-clip**（Gemma2 / Kimi）：抑制极端 logit，进一步稳训练。
+- **RoPE/NoPE 校准与频率缩放（YaRN）**：长上下文外推 + 缓解位置偏置。
+
+### Tier 3 — 谨慎 / 最后上（默认先不上）
+
+- **mHC**（已在 §2，标可选）、**Muon**（留 AdamW 回退）、**3 路 KDA 混合**（§2.5）。
+- **零计算 / 弹性 top-k 专家**：按 token 难度自适应激活量（潜在契合"3B/6B 非对称"，但复杂、易不稳，作为研究项）。
+- **共享注意力块（Zamba 式）跨多层复用**：进一步省参/省 cache，但耦合强。
+
+---
+
+## 13. 训练难度管理：分级去风险（重要）
+
+**核心：不要一次点亮所有新组件。** 组合创新（YOCO + CSA/HCA + 可选 KDA + DeepSeekMoE + Muon + mHC + MTP）的风险是叠乘的，
+逐步引入 + 每步可回退 + 指标监控，是唯一稳妥路径。
+
+**去风险阶梯：**
+- **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。
+- **L1（12B 去风险原型）**：用**完整新颖架构栈**但**专家数减半（≈12B 总）**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。**这里的 12B 不是被 KDA 逼小的，而是廉价的架构验证台。**
+- **L2（扩到 24B）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，12B→24B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
+- **每个新组件单独一步**：稀疏化 → KDA → mHC → Muon → FP8，各自一步、留开关、盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
+
+**难度—收益取舍速查：**
+
+| 想省事/快出成果 | 想要极致长上下文效率 |
+| --- | --- |
+| 先 decoder-only + CSA/HCA（不上 YOCO/KDA/mHC/Muon），跑通再逐步加 | 全栈 YOCO + 3:1 KDA + CSA/HCA + FP8，但严格走 L0→L1→L2 |
+
+---
+
 ## 参考（本计划的架构依据）
 
 - **DeepSeek-V4**（CSA/HCA、mHC、Muon、MTP、Hash-MoE bootstrap；V4-Flash 284B/13B、1M ctx、32T tokens）：arXiv `2606.19348`；HuggingFace `transformers` `deepseek_v4` 模型文档（`layer_types`、`compress_rates`、`sliding_window`、`index_topk`、`mlp_layer_types` 等配置）。
@@ -418,3 +468,7 @@ BBH（推理），IFEval（指令遵循）。
 - **Kimi Linear / KDA**（Kimi Delta Attention：细粒度门控 Gated-DeltaNet + DPLR chunk kernel；3:1 KDA:MLA 混合，MLA 用 NoPE；1M KV cache ↓~75%、解码 ↑~6×）：arXiv `2510.26692`；`MoonshotAI/Kimi-Linear`。
 - **Hybrid Linear Attention 系统分析**（线性注意力召回弱、需 full 层补偿；gated-delta 在 3:1~6:1 达 Transformer 级召回）：arXiv `2507.06457`。
 - **Lost in the Middle**（中段位置偏置，softmax 亦有，靠位置编码校准缓解）：arXiv `2307.03172`。
+- **FILM / IN2 训练**（信息密集型长上下文训练，合成"关键信息在中段"样本以修 lost-in-the-middle）：`Make Your LLM Fully Utilize the Context`，arXiv `2404.16811`。
+- **OLMo 2 / Gemma 2**（QK-Norm、双 RMSNorm、logit soft-capping、z-loss 等稳定性技巧）：arXiv `2501.00656` / `2408.00118`。
+- **EAGLE / 投机解码**（复用 MTP 头做自投机加速）：arXiv `2401.15077`。
+- **YaRN**（RoPE 长上下文外推缩放）：arXiv `2309.00071`。
