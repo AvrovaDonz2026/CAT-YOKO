@@ -12,7 +12,8 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — causality, residual-cut equivalence, M1/M2/M3 cache interface
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum **C1** (MoE both stacks, freeze encoder in B0/B1)
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — **C1+FP8** frozen Phase B wall-clock (729 H100-h)
-- [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例销毁前迁出）
+- [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例已释放）
+- [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — RTX 6000D sm_120；Hub 走 `https://hf-mirror.com`
 
 ## Train (12B graph; tiny for tests)
 
@@ -26,6 +27,11 @@ python3 -m cat_yoko.b1 --try --resume checkpoints/b0 --save-dir checkpoints/b1
 python3 -m cat_yoko.b2 --try --resume checkpoints/b1 --save-dir checkpoints/b2
 # H100 包络（8/27/15B tokens；<40GiB 卡会拒绝，除非显式 --steps/--tokens）：
 # python3 -m cat_yoko.b0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin
+
+# 中国 AutoDL：Hub 走 hf-mirror；Xet 403 时 download 脚本改 ModelScope
+# source scripts/autodl_env.sh
+# python3 scripts/download_minicpm5.py
+# python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base
 ```
 
 ```bash
