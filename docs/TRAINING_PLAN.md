@@ -1,0 +1,420 @@
+# CAT-YOKO 训练计划：基于 MiniCPM-2B 上采样的 Causal Encoder-Decoder（YOCO 式）混合注意力 MoE
+
+> 目标：以 OpenBMB **MiniCPM-2B** 为底座，训练一个 **Causal Encoder-Decoder（YOCO / "You Only Cache Once" 式 decoder-decoder）** 模型：
+> **≈24B 总参数**；**Encoder（自解码器 self-decoder）处理输入，≈3B 激活/输入 token**；
+> **Decoder（交叉解码器 cross-decoder）生成输出，≈6B 激活/输出 token**；
+> 注意力用 **DeepSeek-V4-Flash 式 CSA + HCA 压缩注意力 + 8K 大滑动窗口**；原生长上下文（YOCO 单一全局 KV cache）。
+>
+> 本文是可执行的工程训练计划，包含：架构定义、参数预算、分阶段训练配方、数据、优化器、
+> 基础设施、评测与风险控制。文中所有具体数字为**推荐初值**，需在小规模标定后再冻结。
+
+---
+
+## 0. 需求澄清与关键假设
+
+你的原始描述里有几处需要显式确认的点，本计划先按下面的解释推进，如与你的意图不符请指出：
+
+| 你的表述 | 本计划的解释 | 备注 / 可调整项 |
+| --- | --- | --- |
+| `基于 openbmb 的 minicpm2b` | 底座 = **MiniCPM-2B**（dense，40 层，hidden 2304，FFN 5760，36 头，vocab 122753，tie embedding） | 也可换 `MiniCPM-2B-128k` 变体作为长上下文底座 |
+| `和 deepseekv4.1 flash 一样` | 对标 **DeepSeek-V4-Flash** 的架构范式（CSA/HCA 混合注意力 + DeepSeekMoE + mHC + Muon + MTP + Hash-MoE bootstrap） | V4-Flash 官方为 284B/13B decoder-only；我们做的是**同架构、缩小到 24B 且改造为 YOCO encoder-decoder（3B/6B 非对称激活）的复刻** |
+| `Causal-Encoder-Decoder，输入激活 3b，输出激活 6b，24b` | **YOCO 式 decoder-decoder**：**Encoder=self-decoder** 处理输入（**≈3B 激活/输入 token**）并产出**单一全局 KV cache**；**Decoder=cross-decoder** 生成输出（**≈6B 激活/输出 token**）并对该全局 cache 做 cross-attention。总参数 **≈24B**（命名 `CAT-YOKO-24B`） | 激活的非对称性来自**两个物理不同的栈**（encoder 较小、decoder 较大），不是变 top-k。见 §2、§3 |
+| `大滑窗注意力 8k` | 每个 CSA/HCA 层保留的**未压缩滑窗分支** `n_win = 8192` | DeepSeek-V4 默认 `n_win=128`，8K 是明显放大，成本更高但局部保真更好 |
+| `CSA HCA` | **Compressed Sparse Attention** + **Heavily Compressed Attention**（DeepSeek-V4 的两种压缩注意力，层间交错） | 见 §2 |
+
+> ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；总参数 24B；Encoder 输入激活 ≈3B、Decoder 输出激活 ≈6B。
+> 仓库名 **CAT-YOKO** 中的 "YOKO" 即对应 **YOCO**。若你希望的 encoder 是**双向**（非因果）编码器而非 YOCO 的因果 self-decoder，
+> 请告知——这会影响能否用 MiniCPM（因果）权重直接热启，以及能否做 prefill early-exit。
+
+> ⚠️ **重要现实提示（务必先读）**：完整复刻这一架构并从 32T 级别数据预训练是**前沿实验室量级**的工程。
+> 以 MiniCPM-2B 为底座做**上采样（upcycling）+ 继续训练**能把成本降到几百 B token 量级，
+> 但仍需要几十~上百张 H100/H800 级 GPU 的持续算力。本计划按"**上采样改造 + 继续预训练**"路线设计，
+> 这是在可控预算内得到该架构可用模型的唯一现实路径（从零 32T 预训练不在推荐范围）。
+
+---
+
+## 1. 底座与目标规格
+
+### 1.1 MiniCPM-2B（底座，来自官方 config）
+
+| 项 | 值 |
+| --- | --- |
+| 层数 `num_hidden_layers` | 40 |
+| 隐藏维 `hidden_size` | 2304 |
+| FFN 中间维 `intermediate_size` | 5760（SwiGLU） |
+| 注意力头 `num_attention_heads` | 36（MHA，`num_key_value_heads=36`） |
+| head_dim | 64 |
+| 词表 `vocab_size` | 122753 |
+| 激活 | SiLU / SwiGLU |
+| 位置编码 | RoPE |
+| Embedding | **tie（输入/输出共享）** |
+| 非词嵌入参数 | ≈2.4B（总含 emb ≈2.7B） |
+| 特殊设计 | **μP 风格缩放**（`scale_emb`、`scale_depth`、`dim_model_base`）+ **WSD 学习率调度** |
+
+> MiniCPM 的 μP 缩放常量（embedding 乘子、residual `scale_depth/√L`、logits 除以 `d/dim_model_base`）
+> 在架构手术后**必须保留一致**，否则前向数值尺度会漂移导致继续训练不稳定。
+
+### 1.2 目标模型 `CAT-YOKO-24B`（Causal Encoder-Decoder / YOCO 式）
+
+| 项 | 推荐值 | 说明 |
+| --- | --- | --- |
+| 架构 | **YOCO decoder-decoder**：Encoder(self-decoder) → 全局 KV cache → Decoder(cross-decoder) | 见 §2 |
+| 总参数 | **≈24B** | 见 §3 预算 |
+| **Encoder** 激活/输入 token | **≈3B** | 16 层，MoE，CSA/HCA+8K 滑窗，产出全局 cache |
+| **Decoder** 激活/输出 token | **≈6B** | 24 层，MoE，自注意力 + **cross-attn 到全局 cache** |
+| 隐藏维 | 2304（沿用底座，enc/dec 一致以便共享 emb 与热启） | |
+| FFN | **DeepSeekMoE** 细粒度专家，`moe_intermediate_size=2048` | Enc: 2 shared+22 routed, top-k 8；Dec: 2 shared+47 routed, top-k 12 |
+| 注意力 | **CSA/HCA 混合 + 8K 滑窗**；enc 内含长程压缩，dec 的 cross-attn 复用单一全局 cache；**可选叠加 KDA 线性注意力做 3:1 三路混合** | §2 / §2.5 |
+| KV cache | **单一全局 cache（You Only Cache Once）** + 压缩 → O(N) 级显存 | 长上下文关键收益 |
+| 残差 | **mHC**（可选，先用普通残差跑通） | 稳定性增强 |
+| 训练目标 | 主 CE + **MTP** 辅助头（可选） | |
+| 优化器 | **Muon（2D 权重）+ AdamW（emb/norm/router/bias）** | |
+| 上下文 | 阶段式 4K → 8K → 32K → 128K（可延伸更长） | 8K 滑窗 + 压缩长程 + YOCO |
+
+---
+
+## 2. 架构：YOCO 式 Causal Encoder-Decoder + CSA/HCA 压缩注意力
+
+### 2.0 总体骨架（decoder-decoder / YOCO）
+
+CAT-YOKO 由两个因果栈组成，行为上等价于一个 decoder-only Transformer，但"只缓存一次"：
+
+```
+输入 tokens ─► [Encoder = Self-Decoder, 16 层, ≈3B 激活/token]
+                 │  高效因果注意力（CSA/HCA + 8K 滑窗），逐层压缩长程
+                 ▼
+          顶层隐状态  ──►  产出【单一全局 KV cache  K̂, V̂】(You Only Cache Once)
+                 │
+                 ▼
+        [Decoder = Cross-Decoder, 24 层, ≈6B 激活/token]
+           每层 = 高效因果自注意力(生成序列, 滑窗)  +  Cross-Attn(→ K̂,V̂)  +  MoE-FFN
+                 ▼
+             RMSNorm ─► LM Head (tie emb) ─► 下一个 token
+```
+
+关键性质（来自 YOCO）：
+- **只缓存一次**：只有 encoder 顶层产出的一个全局 cache 被所有 cross-decoder 层复用，KV cache 显存从 `O(N·L)` 降到约 `O(N)`；叠加 CSA/HCA 的序列维压缩后，长上下文显存进一步压到极低。
+- **Prefill 可提前退出**：处理超长输入时，prefill 只需跑完 encoder（self-decoder）即可产出全局 cache，无需跑满全部层 → 长上下文首 token 延迟大幅下降。这正是"**输入侧更轻（≈3B）**"的动机。
+- **非对称激活来自两个物理栈**：encoder 较小（16 层、专家/激活更少 → ≈3B），decoder 较大（24 层、含 cross-attn、专家/激活更多 → ≈6B）。**不是**变 top-k。
+- **保留全局注意力能力**：cross-decoder 通过 cross-attn 访问全局 cache，等效全局感受野。
+
+> 设计取舍：YOCO 原论文 self-decoder 用 sliding-window attention 或 gated retention。我们把 self-decoder 的
+> 高效注意力替换为 **DeepSeek-V4 的 CSA/HCA + 8K 滑窗**，因为它同时提供（a）长程压缩以产出更紧凑的全局 cache，
+> （b）8K 未压缩滑窗保留局部保真。Decoder 的自注意力用轻量滑窗即可（生成序列通常不长），主力长程访问交给 cross-attn。
+
+### 2.1 CSA / HCA / 8K 滑窗（注意力细节）
+
+DeepSeek-V4 用**逐层交错的两种压缩注意力**替换 V3 的 MLA 全量注意力，核心目标是把长上下文注意力成本从
+`O(L²)` 降到近似 `O(L·k)`，并大幅压缩 KV cache。这套压缩注意力用在 **Encoder(self-decoder)** 内，也用于其自注意力。三类层：
+
+### 2.2 三种层类型（`layer_types`）
+
+1. **Sliding-window（bootstrap 层）**：只做局部滑窗因果注意力，窗口 = `sliding_window`，无长程分支。用于最前面几层稳定训练。
+2. **CSA（Compressed Sparse Attention）**
+   - 把每 `m=4` 个 token 的 KV 压成 1 条（带可学习压缩权重 `Z` 与位置偏置，overlapping window）。
+   - 用 **Lightning Indexer** 给 query 对压缩条目打分，取 **top-`index_topk`**（默认 512）条参与注意力（即在压缩序列上做 **DSA**）。
+   - 额外拼接一条**未压缩滑窗 K/V 分支**（大小 `n_win`）保留局部细节。
+3. **HCA（Heavily Compressed Attention）**
+   - 把每 `m'=128` 个 token 压成 1 条（non-overlapping），**不做 indexer**，对全部压缩条目**稠密注意力**。
+   - 同样拼接一条未压缩滑窗分支。
+
+> 实现要点（与官方参考一致）：CSA/HCA 都是把 **raw 滑窗 K/V** 与 **压缩 K/V** 沿序列轴 `concat`，
+> 构造一个组合 mask 后跑**一次**标准 masked attention；CSA 的 mask 经 `top_k` 过滤，HCA 的 mask 全可见。
+> 二者只差在"压缩率"和"是否 top-k"。
+
+### 2.3 本项目的注意力配置（推荐）
+
+| 参数 | 推荐值 | 对应 DeepSeek-V4 名 |
+| --- | --- | --- |
+| `sliding_window` (`n_win`) | **8192** | 你要求的"8K 大滑窗" |
+| `layer_types` | 前 3 层 `sliding` / `HCA` bootstrap，其余 **CSA:HCA = 1:1 交错** | `2× HCA bootstrap + interleaved CSA/HCA` |
+| CSA 压缩率 `m` | 4 | `compress_rate_csa` |
+| HCA 压缩率 `m'` | 128 | `compress_rate_hca` |
+| `index_topk` (CSA) | 256～512 | Lightning Indexer top-k |
+| 注意力底座 | 建议保留 **MLA / MQA 模式**（KV 头共享）以省 KV cache | V4 基于 MLA 的 MQA 模式实现 DSA |
+
+> **8K 滑窗的代价**：滑窗分支是未压缩的 `O(L·n_win)` 成本，`n_win=8192` 比默认 128 大 64×，
+> 局部注意力开销显著上升。若长上下文吞吐吃紧，可在长程能力足够时把 `n_win` 回调到 2K–4K，
+> 或仅在部分层用 8K 滑窗。建议在 §7 做 `n_win ∈ {2K,4K,8K}` 消融。
+
+### 2.4 从 MiniCPM MHA 迁移到 CSA/HCA + Encoder/Decoder 的初始化
+
+MiniCPM 是 40 层 decoder-only 标准 MHA，没有 MLA 潜在向量、压缩器/indexer，也没有 cross-attn。迁移思路：
+
+- **拆成两个栈**：把 MiniCPM 的 40 层权重切给 Encoder(16) + Decoder(24)，或按需复制/截取（见 §4 Phase A）。
+- **注意力主干**：`q/k/v/o` 投影继承 MHA 权重（若切到 MLA，用 SVD 把 K/V 投影分解为低秩 `W^{DKV}·W^{UK/UV}` 初始化，`q_lora_rank` 同理）。
+- **Decoder 的 cross-attn**：`q` 投影可从对应自注意力 `q` 初始化；`k/v` 投影从 encoder 顶层 KV 空间对齐初始化（或随机小尺度）；**先旁路 cross-attn（gate≈0）再逐步打开**以稳定训练。
+- **新增模块**（压缩器 `W^{aKV}/W^{bKV}/W^{aZ}/W^{bZ}`、位置偏置 `B`、Lightning Indexer）：小尺度随机初始化，**先"稠密对齐"再"稀疏化"**（见 §4 Phase C）。
+
+### 2.5 可选增强：加入 KDA 线性注意力（三路混合）
+
+**动机与一个必须澄清的误解**：直觉上会觉得"加 KDA 线性注意力能保证 CSA/HCA 在上下文**中段**不丢信息"。
+但文献结论其实相反——**线性注意力（含 KDA）恰恰是"中段精确召回"最弱的一环**：其固定大小 RNN 状态会发生
+记忆碰撞，落在局部窗口外的 needle 容易丢失（arXiv 2507.06457、LoLA）。混合模型能恢复召回，靠的是**保留
+full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **lost-in-the-middle 本质是位置偏置**（softmax 模型也有），
+主要靠 RoPE/NoPE 校准缓解，加线性注意力并不能直接修它。**因此保中段精确检索的是 CSA 的 top-k 与少量 full 锚点，不是 KDA。**
+
+**那为何仍推荐引入 KDA？** 两个互补收益：
+1. **效率杠杆（主）**：Kimi Linear 用 **3:1 KDA:MLA** 混合，1M 上下文 KV cache ↓~75%、解码 ↑~6×，且质量不降反升。
+   把多数层换成 KDA、少数层保留 CSA/HCA，可显著降低 24B 在长上下文的成本。
+2. **对 CSA 选择性失败的"兜底覆盖"（次）**：CSA 风险在于 Lightning Indexer 的 top-k **漏选**中段相关 block。
+   KDA 是**无 top-k、顺序敏感、每 token 都写入状态**的路径，提供 gist 级全序列覆盖，作为漏选时的安全网
+   （注意是粗覆盖，不替代精确检索）。
+
+**推荐配置（作为可选项，用消融定夺）**：
+- **Encoder(self-decoder) 三路混合**：约 **3:1 的 KDA : (CSA/HCA)**，例如每 4 层 `[KDA, KDA, KDA, CSA]`，每隔几组插 1 层 HCA，
+  并保留 **1–2 层高 `index_topk` 的 CSA 或真·full 注意力作为"召回锚点"**（hybrid-linear：gated-delta 类在 3:1~6:1 即达 Transformer 级召回）。
+- **位置编码**：KDA 用学习衰减提供位置/近因信息；full/CSA 锚点层可考虑 **NoPE**（Kimi Linear 做法）。
+- **Decoder(cross-decoder)**：自注意力处理较短生成序列，用 KDA/滑窗即可；跨段检索交给 cross-attn → 全局 cache。
+
+**代价 / 注意**：
+- KDA 需额外的 **DPLR chunked kernel** + **独立循环状态**管理（与 YOCO"只缓存一次"正交：YOCO 省 KV cache，KDA 状态是每层各自的小状态）。
+- 混合改造已知坑：**模型可能学会忽略线性路径**；上采样初始化时让 KDA 与被替换的注意力做行为对齐，训练中监控各路径贡献。
+- 参数上，KDA 层通常比 MHA/CSA 更省参（无大 KV 投影），把部分 CSA/HCA 层替换为 KDA 会略降每栈参数，需在 §3 脚本里按实际 KDA 维度重算并用 routed 专家数补回 24B。
+
+> 结论：**值得加，但定位是"效率 + 兜底覆盖"，不是"保中段精确检索"**。是否上、以及 KDA:CSA:HCA 的确切比例，用 §7 消融决定。
+
+---
+
+## 3. 参数预算推导（`CAT-YOKO-24B`，Encoder-Decoder 拆分）
+
+底座维度 `d=2304`、`vocab=122753`、tie embedding。Encoder 16 层、Decoder 24 层（共 40，沿用底座深度）。
+`moe_intermediate_size=2048`（DeepSeek-V4 同量级、对硬件友好），单专家 SwiGLU ≈ `3·d·2048 ≈ 14.16M`。
+
+### 3.1 预算表（推荐代表性配置）
+
+| 组成 | 配置 | Encoder(16L) | Decoder(24L) |
+| --- | --- | --- | --- |
+| 自注意力（CSA/HCA，估 ×1.25 于 MHA） | `1.25·4d²`/层 | ≈0.42B | ≈0.64B |
+| Cross-attn（q,k,v,o） | `4d²`/层，仅 decoder | — | ≈0.51B |
+| MoE 专家配置 | shared + routed，top-k | 2 + 22，top-k 8 | 2 + 47，top-k 12 |
+| **激活** MoE FFN | 层 ×(shared+top-k)×14.16M | ≈2.27B | ≈4.76B |
+| **总** MoE FFN | 层 ×(shared+routed)×14.16M | ≈5.44B | ≈16.65B |
+| Embedding（tie，全局共享） | `V·d` ≈0.283B | 计入激活/总 | — |
+| **该栈激活/token** | emb + attn(+cross) + active_moe | **≈3.0B（输入）** | **≈6.2B（输出）** |
+| **该栈总参数** | attn(+cross) + total_moe | ≈5.9B | ≈17.7B |
+
+| 汇总 | 值 |
+| --- | --- |
+| **总参数**（emb + Encoder 栈 + Decoder 栈） | **≈24B** |
+| **Encoder 激活/输入 token** | **≈3.0B** |
+| **Decoder 激活/输出 token** | **≈6.0–6.2B** |
+
+> 说明：层数拆分（16/24）、`moe_intermediate_size`、每栈 shared/routed/top-k 均为可调旋钮。以上组合已使
+> 三项目标（总 24B、enc 激活 3B、dec 激活 6B）同时命中。注意力那 ×1.25 是占位估计；**一旦 MLA 秩 / 压缩维 `c` /
+> indexer 维度定稿，用下方脚本重算并微调 routed 专家数把总量精确对齐到 24.0B。**
+
+### 3.2 复算脚本（放到 `scripts/param_budget.py`）
+
+```python
+d, V, moe_int = 2304, 122753, 2048
+emb    = V*d                       # tied, 全局共享
+expert = 3*d*moe_int               # SwiGLU 单专家
+attn   = int(1.25*4*d*d)           # 每层自注意力（用实际实现替换）
+cross  = 4*d*d                     # 每层 cross-attn（仅 decoder）
+
+Le, ns_e, tk_e, Nr_e = 16, 2,  8, 22   # Encoder = self-decoder
+Ld, ns_d, tk_d, Nr_d = 24, 2, 12, 47   # Decoder = cross-decoder
+
+enc_act = emb + attn*Le          + Le*(ns_e+tk_e)*expert
+dec_act = emb + (attn+cross)*Ld  + Ld*(ns_d+tk_d)*expert
+total   = emb + attn*Le + Le*(ns_e+Nr_e)*expert \
+              + (attn+cross)*Ld + Ld*(ns_d+Nr_d)*expert
+print(f"enc_active(input)={enc_act/1e9:.2f}B "
+      f"dec_active(output)={dec_act/1e9:.2f}B total={total/1e9:.2f}B")
+```
+
+---
+
+## 4. 分阶段训练配方（核心）
+
+整体思路：**上采样 + 手术式改造 + 分阶段继续训练**，用 MiniCPM-2B 已有能力做"暖启动"，
+每次只引入一个大变化并让模型恢复，避免一次性改动太多导致坍塌。Token 预算是数量级建议，非日历时间。
+
+```
+Phase A  架构手术与初始化        —— 0 token（离线权重变换）
+Phase B  上采样恢复性继续预训练   —— 50–150B token @ seq 4K（dense/滑窗注意力，先不稀疏）
+Phase C  注意力稀疏化对齐         —— 20–50B token（Indexer 稠密对齐 → 开 top-k → 开 HCA 压缩）
+Phase D  长上下文扩展            —— 20–60B token（8K→32K→128K，逐级 RoPE 缩放）
+Phase E  WSD 退火 / 高质量数据    —— 20–50B token（LR 衰减段，堆数学/代码/长文）
+Phase F  SFT                    —— 1–10B token（指令 + 长上下文 + 工具）
+Phase G  RL（GRPO/可选 DPO）      —— 按域分批
+（可选）  MTP 头联合训练           —— 从 Phase B 起挂一个 MTP 头，权重 0.1–0.3
+```
+
+### Phase A — 架构手术与初始化（离线）
+
+0. **切分为 Encoder / Decoder 两栈（YOCO 化）**：把 MiniCPM-2B 的 40 个 dense 层映射到 **Encoder 16 层 + Decoder 24 层**。
+   推荐方案：Encoder 取底座**前 16 层**权重、Decoder 取**后 24 层**权重（保持层深语义）；共享同一份 tie embedding / LM head。
+   Decoder 每层**新增 cross-attn 子层**（初始 gate≈0 旁路，见 §2.4），使初始前向≈原 decoder-only 行为，便于恢复。
+1. **MoE 上采样（dense FFN → 细粒度 MoE）**，对 Encoder、Decoder **各自**执行，采用 Megatron-LM `upcycling_utils.py`：
+   - 把 dense FFN 的中间维切成 G 段、每段复制成多个专家（**virtual-group 初始化**：保证转换瞬间 top-k 恰好选到每个分片的一份副本，等价于原 dense 函数）。
+   - **权重缩放**：SwiGLU 专家投影按 `(E·G²/T)^(1/3)` 量级缩放（论文验证约降 1.5% loss）。
+   - **路由**：`softmax-then-topK`（优于 topK-then-softmax）；亲和度打分用 **Sqrt(Softplus(·))**（V4 做法）。
+   - 每栈**首层保留 dense**（DeepSeekMoE 惯例：首层负载收敛慢）。
+   - **Hash-MoE bootstrap**：每栈最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。
+2. **注意力改造**：继承 `q/k/v/o`（或 SVD 到 MLA 低秩）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。
+3. **保留 MiniCPM μP 缩放常量**（emb 乘子、`scale_depth`、logits 缩放）。
+4. **可选 mHC**：先用普通残差跑通 Phase B/C，稳定后再切 mHC（把残差映射约束到 Birkhoff 多胞形/双随机矩阵，谱范数 ≤1）。
+
+> Encoder/Decoder 交界：Encoder 顶层输出经一个（可学习的）投影得到全局 `K̂,V̂` 供所有 cross-decoder 层复用（YOCO 单次缓存）。
+
+### Phase B — 上采样恢复性继续预训练
+
+- **目的**：让 MoE 化 + 注意力改造 + encoder-decoder 化后的模型恢复语言建模能力（含 cross-attn 逐步打开）。
+- 序列长度 4K，注意力仍为 dense/滑窗（未稀疏），数据用通用预训练混合（见 §5）。
+- **逐步打开 cross-attn**：Decoder cross-attn 的 gate 从 0 线性升到 1（前 ~5–10B token），让 decoder 平滑学会利用 encoder 全局 cache。
+- **蒸馏加速**：以 **MiniCPM-2B（dense，teacher）** 做 logit KD（KL(teacher‖student)，温度 1–2，权重 0.5→0 线性衰减），大幅缩短恢复期。
+- **MoE 负载均衡**：aux-loss-free 偏置法（`e_score_correction_bias`，按各专家负载更新偏置，更新率如 1e-3）+ **轻量 sequence-wise balance loss**（权重 ~1e-3）防单序列极端不均衡。
+- 学习率：**WSD**（Warmup-Stable-Decay）——短 warmup（0.5–1B token），进入 stable 段（LR ≈ MiniCPM 预训练峰值的 30–50%，因为是继续训练）。此阶段保持 stable 不衰减。
+
+### Phase C — 注意力稀疏化对齐（关键、易翻车）
+
+遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩：
+
+1. **Indexer 稠密对齐**：冻结主干，仅训练 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（对 indexer 输出与真实注意力分布做 KL/MSE 对齐）。此步不改变主输出，只教 indexer "该选谁"。
+2. **打开 CSA top-k**：把 CSA 层从"全可见"切到"top-`index_topk`"，小步继续训练让主干适应稀疏。
+3. **打开 HCA 压缩**：启用 `m'=128` 强压缩 + 稠密压缩注意力。
+4. **打开 8K 滑窗**：确认滑窗分支与压缩分支 concat/mask 正确，端到端联训。
+- 每一步都监控 loss 尖峰；出现不稳定就回退该步、延长对齐或降低 LR。
+
+### Phase D — 长上下文扩展
+
+- 逐级提升训练序列长度：**8K → 32K → 128K**（如需更长可继续）。
+- RoPE：按目标长度做频率缩放（NTK/YaRN 类）或直接长序列继续训练；MiniCPM-2B-128k 的 rope_scaling 可作参考。
+- CSA/HCA 让长程注意力成本可控；8K 未压缩滑窗保证局部保真。
+- 数据切到长文档 / 拼接长样本；用 needle & RULER 做过程监控。
+
+### Phase E — WSD 退火（高质量数据）
+
+- 进入 WSD 的 **Decay** 段：LR 快速（指数/1-sqrt）衰减到峰值的 ~1/100。
+- 数据配比切向**高质量 + 数学 + 代码 + 长上下文 + 指令化**（MiniCPM 经验：退火段喂高质量数据收益最大）。
+
+### Phase F — SFT
+
+- 指令/多轮对话/长上下文/工具调用/代码/数学；打包到目标长度，loss 只在 response。
+- 可按 DeepSeek-V4 的"**分域专家先各自 SFT+RL，再 on-policy 蒸馏成统一模型**"做，但本项目规模（24B）可先做单一混合 SFT。
+
+### Phase G — RL
+
+- **GRPO**（DeepSeek 系）为主，reward 覆盖数学可验证、代码可执行、指令遵循；可加 DPO 作为轻量偏好对齐。
+- RL 阶段注意 MoE 路由与稀疏注意力在长 rollout 下的稳定性。
+
+---
+
+## 5. 数据
+
+| 阶段 | 主要数据 | 量级（token） |
+| --- | --- | --- |
+| B 恢复 | 通用网页/中英双语/代码/数学（复刻 MiniCPM 类混合） | 50–150B |
+| C 稀疏化 | 与 B 同分布，偏长文档 | 20–50B |
+| D 长上下文 | 长文档、书籍、代码仓库级拼接、合成长依赖任务 | 20–60B |
+| E 退火 | 高质量精选 + 数学（如 open-web-math 类）+ 代码 + 指令化 SFT 前体 | 20–50B |
+| F SFT | 指令/多轮/长上下文/工具/agent 合成 | 1–10B |
+| G RL | 可验证任务 prompt 集（数学/代码/agent） | prompt 级 |
+
+要点：中英双语（沿用 MiniCPM tokenizer，vocab 122753）；长上下文样本用文档拼接 + 合成"大海捞针/多跳"任务；严格去重与污染过滤（评测集去污）。
+
+---
+
+## 6. 优化器 / 超参 / 稳定性
+
+| 项 | 推荐 |
+| --- | --- |
+| 优化器 | **Muon**（所有 2D 隐层权重矩阵）+ **AdamW**（embedding、LayerNorm/RMSNorm、router、bias、indexer 打分头） |
+| Muon | 对动量做 Newton-Schulz 正交化；配 **hybrid ZeRO** 实现（V4 做法）；lr 需单独调（通常比 Adam 大） |
+| LR 调度 | **WSD**：warmup(0.5–1B) → stable → decay；继续训练峰值取底座预训练峰值的 0.3–0.5× |
+| Batch | 全局 batch 随阶段增大（如 4M→16M token/step）；长上下文阶段用 seq packing |
+| 精度 | bf16 训练；**FP8** 前向/matmul（V4 路由专家甚至用 FP4 存储）视 kernel 支持逐步启用 |
+| 正则/稳定 | zero-centered & weight-decayed RMSNorm、router z-loss（轻）、grad clip 1.0 |
+| MoE 均衡 | aux-loss-free 偏置更新 + 轻量 seq-balance loss；监控专家利用率/丢弃率 |
+| MTP | 辅助头权重 0.1–0.3；可只在 B–E 用，推理可丢弃或用于投机解码 |
+| μP | 保留 MiniCPM 的 emb/residual/logits 缩放常量 |
+
+---
+
+## 7. 评测与消融
+
+**能力评测**：MMLU / CMMLU / C-Eval（知识），GSM8K / MATH（数学），HumanEval / MBPP（代码），
+BBH（推理），IFEval（指令遵循）。
+**长上下文**：**RULER**、**Needle-in-a-Haystack**、LongBench；核对 8K 滑窗 + 压缩长程 + YOCO 全局 cache 在 32K/128K/1M 的检索保真（YOCO 报告 1M 近乎满分 needle）。
+**效率**：单 token 推理 FLOPs、**KV cache 大小（YOCO 只缓存一次，应显著低于 decoder-only 基线）**、prefill 延迟（encoder early-exit 收益）、decode 吞吐。
+**必做消融**：
+1. **Encoder/Decoder 层数拆分**（如 16/24 vs 20/20 vs 12/28）对 3B/6B 激活与质量的影响；
+2. `n_win ∈ {2K, 4K, 8K}` 对质量/吞吐的权衡；
+3. CSA:HCA 层比例（1:1 vs 2:1 vs 3:1）；
+4. `index_topk ∈ {128,256,512}`；
+5. MoE 粒度/专家数（`moe_intermediate_size`、`n_routed`、`top_k`）对 24B 总量 / 3B·6B 激活目标的命中；
+6. **YOCO decoder-decoder vs 等参数 decoder-only**（验证 KV cache / prefill 收益且不掉点）；
+7. **是否引入 KDA 及 KDA:CSA:HCA 比例**（如纯 CSA/HCA vs 3:1 KDA混合 vs 6:1）——重点看 RULER/多跳中段召回是否**因加 KDA 而下降**（预期线性层会略降精确召回，需 full/CSA 锚点补偿）与长上下文吞吐/KV cache 收益；
+8. 上采样 vs 从底座 dense 直接继续训练（验证 upcycling 收益）；
+9. Muon vs AdamW；mHC vs 普通残差；cross-attn gate 渐开 vs 直接开；full 锚点层 NoPE vs RoPE。
+
+---
+
+## 8. 基础设施
+
+| 组件 | 建议 |
+| --- | --- |
+| 训练框架 | **Megatron-Core**（内置 MoE + **upcycling** + EP/TP/PP/DP）或 DeepSpeed-Megatron |
+| 并行 | Expert Parallel（EP）+ Tensor/Pipeline/Data Parallel；长上下文用 **Context/Sequence Parallel**（V4 用两阶段 CP 管理压缩注意力） |
+| 注意力 kernel | **FlashMLA** 稀疏 prefill/decode kernel（支撑 DSA，FP8 KV）；**NSA** 的 Triton kernel 可参考压缩+选择+滑窗三分支实现 |
+| MoE kernel | 融合的 MoE dispatch/combine kernel（计算/通信/访存 overlap） |
+| 精度 | bf16 + 逐步 FP8；确定性/可复现 kernel（可选） |
+| 显存 | 张量级重计算（fine-grained recompute）、ZeRO、专家 offload（必要时） |
+| 推理 | vLLM / SGLang（已集成 DSA/FlashMLA 稀疏 kernel）用于评测与 RL rollout |
+
+> 若无法自研 CSA/HCA kernel，**起步可用 HuggingFace `transformers` 的 `DeepseekV4` 参考实现**
+> （`layer_types`、`compress_rates`、`sliding_window`、`index_topk` 等已暴露）跑通正确性与小规模训练，
+> 再迁移到高性能 kernel 做规模化。
+
+---
+
+## 9. 风险与缓解
+
+| 风险 | 缓解 |
+| --- | --- |
+| 稀疏注意力训练不稳定 / 掉点 | 严格走 Phase C"稠密对齐→逐步稀疏"；indexer 先单独对齐；出问题即回退单步 |
+| MoE 负载坍塌 / 专家闲置 | aux-loss-free 偏置 + seq-balance loss + Hash-MoE bootstrap + 监控利用率 |
+| 上采样后能力回退 | virtual-group 初始化 + 权重缩放 + teacher 蒸馏 + LR 重置到较高 stable 段 |
+| 8K 滑窗成本过高 | 消融回调 `n_win`；仅部分层用 8K；长程交给 CSA/HCA |
+| μP 缩放丢失导致数值漂移 | 手术后保留 MiniCPM 全部缩放常量并单测前向尺度 |
+| Muon 不收敛/超参陌生 | 先用 AdamW 跑通基线，再切 Muon 并单独扫 lr；保留回退开关 |
+| kernel 缺失 | 先用 HF 参考实现验证正确性，再上高性能 kernel |
+| 长上下文外推差 | 分级 RoPE 缩放 + 长样本课程 + RULER 过程监控 |
+
+---
+
+## 10. 里程碑（以能力/预算计，不以日历计）
+
+1. **M1 手术就绪**：离线得到 `CAT-YOKO-24B`（Encoder 16L / Decoder 24L）初始权重，前向数值尺度自检通过，cross-attn 旁路下短跑 loss 不发散。
+2. **M2 恢复达标**：Phase B 后（cross-attn 全开），通用 benchmark 恢复到 MiniCPM-2B 的 ~95%+。
+3. **M3 稀疏化达标**：Phase C 后开启 CSA top-k + HCA + 8K 滑窗，短上下文质量与 M2 基本持平，效率明显改善。
+4. **M4 长上下文**：128K/1M RULER/Needle 通过；单 token FLOPs 与 **KV cache（YOCO 单缓存）** 显著低于 decoder-only 对照，prefill early-exit 收益兑现。
+5. **M5 后训练**：SFT + GRPO 后，指令/数学/代码达到目标区间，产出可发布 checkpoint。
+
+---
+
+## 11. 立即可做的下一步
+
+1. 冻结 §0 的假设（尤其 encoder 是否因果、Encoder/Decoder 层数拆分、`n_win=8K`、是否上 MLA 与 mHC）。
+2. 跑 `scripts/param_budget.py`，用**真实注意力实现**替换估算行，微调 `Nr_e/Nr_d/moe_intermediate_size` 把总量精确对齐到 24.0B、enc 激活 3.0B、dec 激活 6.0B。
+3. 搭一个 **tiny 配置**（YOCO 骨架 + HF `DeepseekV4` 式 CSA/HCA，例如 `hidden 256, enc 2L / dec 2L, sliding_window=8, m=4, m'=8, index_topk=2`）验证 encoder→全局 cache→cross-decoder 与 CSA/HCA mask 端到端正确性。
+4. 落地 Phase A 的**栈拆分 + cross-attn 注入 + 上采样脚本**（Megatron `upcycling_utils`）+ 注意力权重迁移脚本。
+5. 起一个 **50–150B token** 的 Phase B 恢复训练小实验，验证 cross-attn 渐开 + 蒸馏 + WSD 恢复曲线。
+
+---
+
+## 参考（本计划的架构依据）
+
+- **DeepSeek-V4**（CSA/HCA、mHC、Muon、MTP、Hash-MoE bootstrap；V4-Flash 284B/13B、1M ctx、32T tokens）：arXiv `2606.19348`；HuggingFace `transformers` `deepseek_v4` 模型文档（`layer_types`、`compress_rates`、`sliding_window`、`index_topk`、`mlp_layer_types` 等配置）。
+- **DeepSeek Sparse Attention (DSA)** 与 **FlashMLA** 稀疏 kernel（Lightning Indexer + top-k + FlashMLA）：DeepSeek-V3.2 报告；`deepseek-ai/FlashMLA`。
+- **Native Sparse Attention (NSA)**（压缩 + 选择 + 滑窗三分支、硬件对齐、可原生训练）：arXiv `2502.11089`。
+- **Upcycling LLMs into MoE**（virtual-group 初始化、权重缩放、softmax-then-topK；Megatron `upcycling_utils.py`）：arXiv `2410.07524`。
+- **DeepSeekMoE**（细粒度专家 + 共享专家）：arXiv `2401.06066`。
+- **MiniCPM**（2.4B 非嵌入参数、WSD 调度、μP 缩放；MiniCPM-2B-128k 长上下文变体）：OpenBMB 官方 config / 博客。
+- **Gemma 2 / Qwen3-Next**（局部滑窗 × 全局注意力交错、混合注意力层比例）：作为层调度与滑窗设计参考。
+- **YOCO — You Only Cache Once**（decoder-decoder：self-decoder 产出单一全局 KV cache，cross-decoder 复用；prefill early-exit；1M ctx 近满分 needle）：arXiv `2405.05254`；`microsoft/unilm` YOCO。
+- **Kimi Linear / KDA**（Kimi Delta Attention：细粒度门控 Gated-DeltaNet + DPLR chunk kernel；3:1 KDA:MLA 混合，MLA 用 NoPE；1M KV cache ↓~75%、解码 ↑~6×）：arXiv `2510.26692`；`MoonshotAI/Kimi-Linear`。
+- **Hybrid Linear Attention 系统分析**（线性注意力召回弱、需 full 层补偿；gated-delta 在 3:1~6:1 达 Transformer 级召回）：arXiv `2507.06457`。
+- **Lost in the Middle**（中段位置偏置，softmax 亦有，靠位置编码校准缓解）：arXiv `2307.03172`。
