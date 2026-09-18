@@ -14,6 +14,8 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — **C1+FP8** frozen Phase B wall-clock (729 H100-h)
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例已释放）
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — RTX 6000D sm_120；Hub 走 `https://hf-mirror.com`
+- [`huggingface/README.md`](huggingface/README.md) — HuggingFace model card；大权重 https://huggingface.co/AvrovaDonz/CAT-YOKO
+- [`docs/HF_HUB.md`](docs/HF_HUB.md) — GitHub LFS vs HuggingFace 分工；`scripts/push_to_hf.sh`
 
 ## Train (12B graph; tiny for tests)
 
