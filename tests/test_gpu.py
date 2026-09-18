@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""CUDA tests for the C1 trainer. Skip on CPU. 12B B0 needs ≥28GiB."""
+"""CUDA tests for the C1 trainer. Skip on CPU. 12B B0 needs ≥28GiB.
+
+GpuTwelveBTests share one unittest process. Each 12B case must free the
+12.25B graph before the next ``build_model``, or B1/C1 OOM on 32GB.
+"""
 
 from __future__ import annotations
 
+import gc
 import sys
 import unittest
 from pathlib import Path
@@ -27,11 +32,44 @@ from cat_yoko.train import main as train_main
 from cat_yoko.trainer import train_loop
 
 
+def _teardown_12b(*holders: object) -> None:
+    """Free 12B CUDA graphs so the next test in this process can allocate.
+
+    Drops model/opt/trainer held on dicts or objects, then GC, empty the
+    CUDA caching allocator, synchronize, and reset peak stats. setUp and
+    tearDown both call this so B0 → B1 → C1 do not stack two 12.25B graphs.
+    """
+    for obj in holders:
+        if obj is None:
+            continue
+        if isinstance(obj, dict):
+            for key in ("model", "opt", "trainer"):
+                val = obj.pop(key, None)
+                del val
+            continue
+        for name in ("model", "opt", "trainer"):
+            if hasattr(obj, name):
+                setattr(obj, name, None)
+    del holders
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
+    _teardown_cuda()
+
+
 class GpuSmokeSkipTests(unittest.TestCase):
     def test_main_skips_without_cuda(self) -> None:
         if torch.cuda.is_available():
             self.skipTest("CUDA present; skip-path is for CPU CI")
         self.assertEqual(gpu_smoke_main([]), 0)
+
+    def test_teardown_safe_without_cuda(self) -> None:
+        if torch.cuda.is_available():
+            self.skipTest("CUDA present; skip-path is for CPU CI")
+        _teardown_12b()
+        _teardown_cuda()
 
 
 @unittest.skipUnless(torch.cuda.is_available(), "CUDA GPU required")
@@ -168,35 +206,46 @@ class GpuTinyTests(unittest.TestCase):
 
 @unittest.skipUnless(torch.cuda.is_available(), "CUDA GPU required")
 class GpuTwelveBTests(unittest.TestCase):
+    def setUp(self) -> None:
+        _teardown_12b()
+
     def tearDown(self) -> None:
-        _teardown_cuda()
+        _teardown_12b()
 
     def test_12b_b0_one_step(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B B0 smoke needs ≥28GiB GPU")
         result = run_middle_12b_b0(seq_len=64, steps=1, micro_batch=1)
-        self.assertTrue(result["ok"], msg=result)
-        self.assertEqual(result["step"], 1)
-        self.assertLess(result["peak_gib"], 32.0)
+        try:
+            self.assertTrue(result["ok"], msg=result)
+            self.assertEqual(result["step"], 1)
+            self.assertLess(result["peak_gib"], 32.0)
+        finally:
+            _teardown_12b(result)
 
     def test_12b_b1_one_step(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B B1 smoke needs ≥28GiB GPU")
         result = run_middle_12b_phase("B1", seq_len=64, steps=1, micro_batch=1)
-        result.pop("model", None)
-        self.assertTrue(result["ok"], msg=result)
-        self.assertEqual(result["step"], 1)
-        self.assertLess(result["peak_gib"], 32.0)
+        try:
+            self.assertTrue(result["ok"], msg={k: v for k, v in result.items() if k != "model"})
+            self.assertEqual(result["step"], 1)
+            self.assertLess(result["peak_gib"], 32.0)
+        finally:
+            _teardown_12b(result)
 
     def test_12b_c1_chain(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B C1 smoke needs ≥28GiB GPU")
         result = run_middle_12b_c1(seq_len=32, steps=1, micro_batch=1)
-        self.assertTrue(result["phases"]["B0"]["ok"], msg=result)
-        self.assertTrue(result["b1_ok"], msg=result)
-        # Per-block B2 Adam fits a 32GB card + 62GiB cgroup; still allow OOM.
-        if not result["phases"].get("B2", {}).get("oom"):
-            self.assertTrue(result["phases"]["B2"]["ok"], msg=result)
+        try:
+            self.assertTrue(result["phases"]["B0"]["ok"], msg=result)
+            self.assertTrue(result["b1_ok"], msg=result)
+            # Per-block B2 Adam fits a 32GB card + 62GiB cgroup; still allow OOM.
+            if not result["phases"].get("B2", {}).get("oom"):
+                self.assertTrue(result["phases"]["B2"]["ok"], msg=result)
+        finally:
+            _teardown_12b(result)
 
 
 if __name__ == "__main__":

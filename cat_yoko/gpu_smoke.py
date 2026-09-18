@@ -17,6 +17,7 @@ from cat_yoko.ddp_smoke import run_fsdp_one, run_gloo_c1, run_gloo_ddp
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
+from cat_yoko.optim import trim_host_allocator
 from cat_yoko.prepare import prepare
 from cat_yoko.teacher import DummyTeacher
 from cat_yoko.tokenizer import HashTokenizer
@@ -266,9 +267,51 @@ def enough_vram_for_12b(min_gib: float = TWELVE_B_MIN_GIB) -> bool:
     return bool(info.get("cuda") and info.get("total_gib", 0) >= min_gib)
 
 
-def _teardown_cuda() -> None:
+def _drop_cuda_refs(obj: object) -> None:
+    """Clear ``.grad`` on a module so GC can collect the 12B graph."""
+    params = getattr(obj, "parameters", None)
+    if not callable(params):
+        return
+    for p in params():
+        p.grad = None
+
+
+def _teardown_cuda(*holders: object) -> None:
+    """Free CUDA graphs so a later 12B ``build_model`` can fit on 32GB.
+
+    Drops ``model`` / ``opt`` / ``trainer`` dict keys or attributes on
+    ``holders``, then GC + caching-allocator flush + sync + peak reset.
+    Does not unbind names in the caller: pass the dict/object that holds
+    them, and ``del`` locals too. Safe with no CUDA (CPU CI).
+    """
+    for obj in holders:
+        if obj is None:
+            continue
+        if isinstance(obj, dict):
+            for key in ("model", "opt", "optimizer", "trainer"):
+                val = obj.pop(key, None)
+                _drop_cuda_refs(val)
+                del val
+            continue
+        for name in ("model", "opt", "optimizer", "trainer"):
+            if hasattr(obj, name):
+                val = getattr(obj, name)
+                _drop_cuda_refs(val)
+                setattr(obj, name, None)
+                del val
+        _drop_cuda_refs(obj)
+    del holders
     gc.collect()
+    trim_host_allocator()
     if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        ipc = getattr(torch.cuda, "ipc_collect", None)
+        if callable(ipc):
+            ipc()
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
+        gc.collect()
         torch.cuda.empty_cache()
 
 
@@ -280,7 +323,13 @@ def run_middle_12b_phase(
     micro_batch: int = 1,
     reuse_model: CATYokoForCausalLM | None = None,
 ) -> dict:
-    """One C1 step of the real 12B graph. Auto encoder-offload / CPU Adam / block offload."""
+    """One C1 step of the real 12B graph. Auto encoder-offload / CPU Adam / block offload.
+
+    Isolated ``--middle --phase B0/B1/B2`` each build once. Pass ``reuse_model``
+    so a C1 chain never allocates a second 12.25B graph in the same process.
+    On OOM, a reused graph is kept; only a graph built here is dropped before
+    retrying a shorter sequence.
+    """
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for 12B GPU smoke")
     info = cuda_info()
@@ -295,15 +344,22 @@ def run_middle_12b_phase(
         if sl in tried:
             continue
         tried.append(sl)
-        _teardown_cuda()
+        if reuse_model is None:
+            _teardown_cuda()
+        else:
+            gc.collect()
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
         torch.cuda.reset_peak_memory_stats()
         model = reuse_model
+        trainer = None
+        opt = None
         built_here = False
         try:
             if model is None:
-                model = build_model(cfg, "cuda", dtype="bf16")
                 built_here = True
-            out = Trainer(
+                model = build_model(cfg, "cuda", dtype="bf16")
+            trainer = Trainer(
                 cfg,
                 phase,
                 "cuda",
@@ -315,7 +371,8 @@ def run_middle_12b_phase(
                 seq_len=sl,
                 seed=0,
                 reuse_model=model,
-            ).run()
+            )
+            out = trainer.run()
             peak = torch.cuda.max_memory_allocated() / 1024**3
             ok = _finite(out.nll) and out.nll > 0 and out.step == steps
             result = {
@@ -328,13 +385,23 @@ def run_middle_12b_phase(
                 "ok": ok,
                 "model": model,
             }
+            trainer.reuse_model = None
+            del trainer, opt
             return result
         except torch.cuda.OutOfMemoryError as exc:
             last_err = exc
-            if built_here or model is not None:
+            if trainer is not None:
+                trainer.reuse_model = None
+            del trainer, opt
+            if built_here:
+                _drop_cuda_refs(model)
                 del model
-            _teardown_cuda()
-            reuse_model = None
+                _teardown_cuda()
+                reuse_model = None
+            else:
+                gc.collect()
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
     assert last_err is not None
     raise last_err
 
@@ -342,13 +409,18 @@ def run_middle_12b_phase(
 def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
     """One C1 B0 step of the real 12B graph. Needs ~24GiB weights + a little activation."""
     result = run_middle_12b_phase("B0", seq_len=seq_len, steps=steps, micro_batch=micro_batch)
-    result.pop("model", None)
-    _teardown_cuda()
+    model = result.pop("model", None)
+    del model
+    _teardown_cuda(result)
     return result
 
 
 def run_middle_12b_c1(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1) -> dict:
-    """B0 then B1 then B2 on one 12B graph. B2 may OOM on 32GB even with block offload."""
+    """B0 then B1 then B2 on one 12B graph. B2 may OOM on 32GB even with block offload.
+
+    Builds the 12.25B graph once (first phase) and reuses it. Never calls
+    ``build_model`` again in this process — a second graph is what OOMs 32GB.
+    """
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for 12B C1 smoke")
     info = cuda_info()
@@ -356,42 +428,42 @@ def run_middle_12b_c1(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1
         raise RuntimeError(
             f"12B C1 smoke needs ≥{TWELVE_B_MIN_GIB}GiB, got {info['total_gib']}"
         )
-    cfg = CATYokoConfig.middle_12b()
     _teardown_cuda()
     torch.cuda.reset_peak_memory_stats()
-    model = build_model(cfg, "cuda", dtype="bf16")
+    model = None
     out: dict = {"info": info, "phases": {}, "seq_len": seq_len}
-    for phase in ("B0", "B1", "B2"):
-        _teardown_cuda()
-        torch.cuda.reset_peak_memory_stats()
-        try:
-            row = run_middle_12b_phase(
-                phase,
-                seq_len=seq_len,
-                steps=steps,
-                micro_batch=micro_batch,
-                reuse_model=model,
-            )
-            model = row.pop("model")
-            out["phases"][phase] = row
-        except torch.cuda.OutOfMemoryError as exc:
-            out["phases"][phase] = {
-                "ok": False,
-                "oom": True,
-                "err": str(exc).split("\n")[0][:240],
-            }
-            if phase == "B2":
-                break
-            raise
-    b0 = out["phases"].get("B0", {})
-    b1 = out["phases"].get("B1", {})
-    b2 = out["phases"].get("B2", {})
-    out["ok"] = bool(b0.get("ok") and b1.get("ok") and b2.get("ok"))
-    out["b1_ok"] = bool(b1.get("ok"))
-    out["b2_oom"] = bool(b2.get("oom"))
-    del model
-    _teardown_cuda()
-    return out
+    try:
+        for phase in ("B0", "B1", "B2"):
+            try:
+                row = run_middle_12b_phase(
+                    phase,
+                    seq_len=seq_len,
+                    steps=steps,
+                    micro_batch=micro_batch,
+                    reuse_model=model,
+                )
+                model = row.pop("model", None)
+                out["phases"][phase] = row
+            except torch.cuda.OutOfMemoryError as exc:
+                out["phases"][phase] = {
+                    "ok": False,
+                    "oom": True,
+                    "err": str(exc).split("\n")[0][:240],
+                }
+                if phase == "B2":
+                    break
+                raise
+        b0 = out["phases"].get("B0", {})
+        b1 = out["phases"].get("B1", {})
+        b2 = out["phases"].get("B2", {})
+        out["ok"] = bool(b0.get("ok") and b1.get("ok") and b2.get("ok"))
+        out["b1_ok"] = bool(b1.get("ok"))
+        out["b2_oom"] = bool(b2.get("oom"))
+        return out
+    finally:
+        _drop_cuda_refs(model)
+        del model
+        _teardown_cuda(out)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -425,33 +497,38 @@ def main(argv: list[str] | None = None) -> int:
     if args.c1:
         steps = 1 if args.steps is None else args.steps
         result = run_middle_12b_c1(seq_len=args.seq_len, steps=steps)
-        if args.json:
-            print(json.dumps({k: v for k, v in result.items() if k != "model"}, indent=2, default=str))
-        else:
-            print(f"12b C1 {result['info']['device']} seq={result.get('seq_len')} ok={result['ok']}")
-            for phase, row in result["phases"].items():
-                if row.get("oom"):
-                    print(f"  {phase} OOM {row.get('err', '')}")
-                else:
-                    print(
-                        f"  {phase} nll={row['nll']:.4f} seq={row['seq_len']} "
-                        f"peak_gib={row['peak_gib']} ok={row['ok']}"
-                    )
-        _teardown_cuda()
-        return 0 if result["ok"] or (result.get("b1_ok") and result.get("b2_oom")) else 1
+        try:
+            if args.json:
+                print(json.dumps({k: v for k, v in result.items() if k != "model"}, indent=2, default=str))
+            else:
+                print(f"12b C1 {result['info']['device']} seq={result.get('seq_len')} ok={result['ok']}")
+                for phase, row in result["phases"].items():
+                    if row.get("oom"):
+                        print(f"  {phase} OOM {row.get('err', '')}")
+                    else:
+                        print(
+                            f"  {phase} nll={row['nll']:.4f} seq={row['seq_len']} "
+                            f"peak_gib={row['peak_gib']} ok={row['ok']}"
+                        )
+            return 0 if result["ok"] or (result.get("b1_ok") and result.get("b2_oom")) else 1
+        finally:
+            _teardown_cuda(result)
     if args.middle:
         steps = 1 if args.steps is None else args.steps
         result = run_middle_12b_phase(args.phase, seq_len=args.seq_len, steps=steps)
-        result.pop("model", None)
-        if args.json:
-            print(json.dumps(result, indent=2))
-        else:
-            print(
-                f"12b {result['phase']} {result['info']['device']} nll={result['nll']:.4f} "
-                f"seq={result['seq_len']} peak_gib={result['peak_gib']} ok={result['ok']}"
-            )
-        _teardown_cuda()
-        return 0 if result["ok"] else 1
+        model = result.pop("model", None)
+        del model
+        try:
+            if args.json:
+                print(json.dumps(result, indent=2))
+            else:
+                print(
+                    f"12b {result['phase']} {result['info']['device']} nll={result['nll']:.4f} "
+                    f"seq={result['seq_len']} peak_gib={result['peak_gib']} ok={result['ok']}"
+                )
+            return 0 if result["ok"] else 1
+        finally:
+            _teardown_cuda(result)
     result = run_tiny_cuda(steps=2 if args.steps is None else args.steps)
     if args.json:
         print(json.dumps(result, indent=2))
