@@ -1,7 +1,10 @@
 # AutoDL RTX 4080 SUPER 销毁前迁移
 
+**实例已释放（2026-09-18）。** 不要再 SSH `connect.westc.seetacloud.com`；下一张卡走 RTX PRO 6000 / 6000D。
+
 实例 `autodl-container-6d164c9f44-4dccdd73`（torch 2.8.0+cu128，驱动 595.71.05）。
 清单时刻 UTC `2026-09-18T14:39:15Z`。权重已在 Git LFS：[`checkpoints/b0/trainable.pt`](../../checkpoints/b0/trainable.pt)。
+
 
 ## 已迁入本目录
 
