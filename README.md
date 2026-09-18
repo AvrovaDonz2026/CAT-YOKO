@@ -35,6 +35,8 @@ python3 -m cat_yoko.b2 --try --resume checkpoints/b1 --save-dir checkpoints/b2
 # source scripts/autodl_env.sh
 # python3 scripts/download_minicpm5.py
 # python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base
+# 6000D 发布档 B0（8e9 tokens, seq=4096, encoder on GPU）：
+# bash scripts/run_b0_full_autodl.sh
 ```
 
 ```bash

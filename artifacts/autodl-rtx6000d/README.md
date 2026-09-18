@@ -54,7 +54,7 @@ Disk at prep end: overlay `/` 1.8G/30G used (29G free); `/root/autodl-tmp` 7.4G/
 
 Transformer Engine: `transformer-engine==2.19.0` + `transformer_engine_cu12==2.19.0` installed. `import transformer_engine` works and `NVFP4BlockScaling` exists, but `import transformer_engine.pytorch` fails (`libtorch_cuda.so: undefined symbol: ncclCommWindowRegister`). Isolated `transformer-engine[pytorch]` also failed: pip tried to download torch 2.14, then `--no-build-isolation` compile died on missing `nccl_dev_cap.hpp` (not in torch 2.8). GPU test path is E2M1/16 emulation. Logs: `te_install.log`, `te_error_extract.txt`, `prep_status.txt`.
 
-After `cursor/nvfp4-train-6000d-02c6` is on origin, run [`smoke_commands.sh`](smoke_commands.sh) on the box (`git fetch/checkout`, `pip install -e .`, `python -m cat_yoko.gpu_smoke`, then B0 `--try` with `--upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base`; 12B already has `use_nvfp4=True`).
+After `cursor/nvfp4-train-6000d-02c6` is on origin, overlay the tree with tar/scp (GitHub `git fetch` hangs). Published B0 is [`scripts/run_b0_full_autodl.sh`](../../scripts/run_b0_full_autodl.sh): 8e9 tokens, seq=4096, `--no-offload-encoder`, resume `/root/autodl-tmp/runs/b0` if present. tmux `b0-full`. Overlay → Hub `checkpoints/b0-full/`；日志 → [`b0-full/`](b0-full/)。不要覆盖 Hub 上 32 步 `checkpoints/b0/`。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 

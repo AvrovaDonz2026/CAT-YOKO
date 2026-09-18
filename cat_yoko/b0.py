@@ -1,4 +1,9 @@
-"""C1 B0: 8B tokens, new-modules only, student bf16. ``python3 -m cat_yoko.b0 --try``."""
+"""C1 B0: 8B tokens, new-modules only, student bf16.
+
+``python3 -m cat_yoko.b0`` is the published 8e9-token envelope (seq=4096).
+``--try`` is the 32-step / seq=64 overlay path. 6000D: add
+``--no-offload-encoder``.
+"""
 
 from __future__ import annotations
 
