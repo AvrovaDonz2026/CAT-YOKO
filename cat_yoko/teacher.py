@@ -18,35 +18,39 @@ class DummyTeacher(nn.Module):
         return {"logits": self.head(self.embed(input_ids))}
 
 
-def load_teacher(path: Path, device: str) -> nn.Module:
+def load_teacher(source: str | Path, device: str) -> nn.Module:
     """Load a causal LM that returns `.logits` or `{\"logits\"}`.
 
-    Prefers HuggingFace `AutoModelForCausalLM` when `transformers` is installed;
-    otherwise loads a pickled nn.Module state via torch.load.
+    `.pt` pickle of an `nn.Module` is local. Hub ids / HF dirs need
+    `pip install 'cat-yoko[data]'` (transformers, `trust_remote_code`).
     """
-    path = Path(path)
+    path = Path(source)
+    if path.is_file():
+        obj = torch.load(path, map_location=device, weights_only=False)
+        if isinstance(obj, nn.Module):
+            obj.to(device)
+            obj.eval()
+            for p in obj.parameters():
+                p.requires_grad = False
+            return obj
+        raise RuntimeError(f"{path} is not a pickled nn.Module; use --teacher-hf for MiniCPM")
     try:
         from transformers import AutoModelForCausalLM
-
-        model = AutoModelForCausalLM.from_pretrained(path, torch_dtype=torch.float32)
-        model.to(device)
-        model.eval()
-        for p in model.parameters():
-            p.requires_grad = False
-        return _HfTeacher(model)
-    except ImportError:
-        pass
-    obj = torch.load(path, map_location=device, weights_only=False)
-    if isinstance(obj, nn.Module):
-        obj.to(device)
-        obj.eval()
-        for p in obj.parameters():
-            p.requires_grad = False
-        return obj
-    raise RuntimeError(
-        f"cannot load teacher from {path}: install transformers for MiniCPM "
-        "or pass a pickled nn.Module / --dummy-teacher"
+    except ImportError as exc:
+        raise ImportError(
+            "MiniCPM teacher needs transformers: pip install 'cat-yoko[data]'"
+        ) from exc
+    model = AutoModelForCausalLM.from_pretrained(
+        str(source),
+        trust_remote_code=True,
+        torch_dtype=torch.float32,
+        low_cpu_mem_usage=True,
     )
+    model.to(device)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad = False
+    return _HfTeacher(model)
 
 
 class _HfTeacher(nn.Module):

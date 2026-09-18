@@ -6,10 +6,11 @@ import argparse
 import sys
 from pathlib import Path
 
-import torch
-
 from cat_yoko.config import CATYokoConfig, C1_SPLIT
+from cat_yoko.data import resolve_eos
+from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.parallel import ParallelPlan, validate_parallel
+from cat_yoko.recipe import MINICPM_HF
 from cat_yoko.teacher import DummyTeacher, load_teacher
 from cat_yoko.trainer import Trainer, build_model, print_meta, train_loop
 from cat_yoko.upcycle import dummy_minicpm_state
@@ -37,13 +38,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--device", default="cpu")
     p.add_argument("--dtype", choices=["fp32", "bf16"], default="fp32")
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--data", type=Path, default=None, help="jsonl tokens or int32 .bin")
+    p.add_argument("--data", type=Path, default=None, help="packed .bin (mmap) or jsonl tokens")
     p.add_argument("--eval-data", type=Path, default=None)
     p.add_argument("--eos", type=int, default=None, help="document break id for packed .bin")
     p.add_argument("--meta", action="store_true", help="12B param count on meta device")
-    p.add_argument("--upcycle", type=Path, default=None, help="MiniCPM state_dict path (.pt)")
+    p.add_argument("--upcycle", type=Path, default=None, help="MiniCPM state_dict (.pt) or local HF dir")
+    p.add_argument(
+        "--upcycle-hf",
+        nargs="?",
+        const=MINICPM_HF,
+        default=None,
+        help="MiniCPM Hub id or HF dir (default openbmb/MiniCPM-2B-sft-bf16)",
+    )
     p.add_argument("--dummy-upcycle", action="store_true")
-    p.add_argument("--teacher", type=Path, default=None, help="MiniCPM teacher (HF dir or pickled module)")
+    p.add_argument("--teacher", type=Path, default=None, help="pickled nn.Module teacher")
+    p.add_argument(
+        "--teacher-hf",
+        nargs="?",
+        const=MINICPM_HF,
+        default=None,
+        help="MiniCPM teacher Hub id / HF dir for logit KD",
+    )
     p.add_argument("--dummy-teacher", action="store_true", help="logit KD against a dummy teacher")
     p.add_argument("--fsdp", action="store_true", help="FSDP (torch backend; requires dist init)")
     p.add_argument("--ddp", action="store_true", help="DDP (also auto when WORLD_SIZE>1)")
@@ -96,16 +111,29 @@ def main(argv: list[str] | None = None) -> int:
             args.steps = 3
         else:
             p.error("12b training needs --steps or --tokens (this VM cannot run the 8B-token B0 envelope)")
+    n_up = sum(x is not None for x in (True if args.dummy_upcycle else None, args.upcycle, args.upcycle_hf))
+    if n_up > 1:
+        p.error("pick one of --dummy-upcycle / --upcycle / --upcycle-hf")
+    n_t = sum(
+        x is not None for x in (True if args.dummy_teacher else None, args.teacher, args.teacher_hf)
+    )
+    if n_t > 1:
+        p.error("pick one of --dummy-teacher / --teacher / --teacher-hf")
     src = None
     if args.dummy_upcycle:
         src = dummy_minicpm_state(cfg)
     elif args.upcycle is not None:
-        src = torch.load(args.upcycle, map_location="cpu", weights_only=True)
+        src = load_minicpm_state(args.upcycle)
+    elif args.upcycle_hf is not None:
+        src = load_minicpm_state(args.upcycle_hf)
     teacher = None
     if args.dummy_teacher:
         teacher = DummyTeacher(cfg.vocab_size, cfg.hidden_size)
     elif args.teacher is not None:
         teacher = load_teacher(args.teacher, args.device)
+    elif args.teacher_hf is not None:
+        teacher = load_teacher(args.teacher_hf, args.device)
+    eos = resolve_eos(args.data, args.eos)
     tr = Trainer(
         cfg,
         args.phase,
@@ -117,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         data=args.data,
         eval_data=args.eval_data,
-        eos_id=args.eos,
+        eos_id=eos,
         upcycle_src=src,
         teacher=teacher,
         fsdp=args.fsdp,

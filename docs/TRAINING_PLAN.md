@@ -376,14 +376,20 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 | 阶段 | 主要数据 | 量级（token） |
 | --- | --- | --- |
-| B 恢复 | 通用网页/中英双语/代码/数学（复刻 MiniCPM 类混合） | 50–150B |
+| B 恢复 | **OpenBMB**：Ultra-FineWeb en 60% / zh 30% + UltraData-Math L2 10% | 50B 信封（prepare 按 `--max-tokens` 切片） |
 | C 稀疏化 | 与 B 同分布，偏长文档 | 20–50B |
 | D 长上下文 | 长文档、书籍、代码仓库级拼接、合成长依赖任务 | 20–60B |
-| E 退火 | 高质量精选 + 数学（如 open-web-math 类）+ 代码 + 指令化 SFT 前体 | 20–50B |
-| F SFT | 指令/多轮/长上下文/工具/agent 合成 | 1–10B |
+| E 退火 | 高质量精选 + 数学 + 代码 + 指令化 SFT 前体 | 20–50B |
+| F SFT | **UltraChat** 等指令/多轮（不是 Phase B） | 1–10B |
 | G RL | 可验证任务 prompt 集（数学/代码/agent） | prompt 级 |
 
-要点：中英双语（沿用 MiniCPM tokenizer，vocab 122753）；长上下文样本用文档拼接 + 合成"大海捞针/多跳"任务；严格去重与污染过滤（评测集去污）。
+要点：
+
+- **Tokenizer 必须是 MiniCPM-2B**（`openbmb/MiniCPM-2B-sft-bf16`，`V=122753`）。不要用 MiniCPM3 / MiniCPM4 tokenizer 去喂 2B 上采样图。Ultra-FineWeb 是 MiniCPM4 时代网页过滤集，**要重新 tokenize**。
+- 默认 mix `phase-b` 全是 OpenBMB。可选 `phase-b-code` 把 10% 换成 StarCoder（不是 OpenBMB；Ultra-FineWeb 论文评测 mix 用过 10% 代码）。
+- UltraChat / 指令对话留给 Phase F/G，不进 Phase B。
+- 实现：`python3 -m cat_yoko.prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 --out data/phaseb.bin --max-tokens 1e8` → int32 packed mmap；`cat_yoko.train --data data/phaseb.bin --upcycle-hf openbmb/MiniCPM-2B-sft-bf16`。sidecar `*.bin.meta.json` 带 `eos_id`。仓库 **不检入语料**。
+- 长上下文样本用文档拼接 + 合成"大海捞针/多跳"；严格去重与评测集去污。Ultra-FineWeb 许可证标 Apache 2.0，源网页版权仍按各站条款。
 
 ---
 
@@ -474,11 +480,11 @@ BBH（推理），IFEval（指令遵循）。
 
 发布规格已敲死，见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)。下一步是跑仓库里的 **12B 训练代码**（tiny 单测 → meta 12B 图 → `--dump-megatron` → 有卡再 FSDP / Megatron）。
 
-1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron`
-2. `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1`
+1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare`
+2. `python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy --config tiny --out /tmp/t.bin --max-tokens 256` 然后 `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin`
 3. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
 4. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
-5. 有 MiniCPM 权重与 GPU 时：`--config 12b --phase B0 --upcycle <minicpm> --data <jsonl|.bin> --save-dir runs/b0 --dtype bf16 --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（`--tokens-offset` 默认已计入前一阶段）。规模化再 `--backend megatron`。
+5. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（`--tokens-offset` 默认已计入前一阶段）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。
 
 不要再改 16/24、C1、C1+FP8、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
 

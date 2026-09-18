@@ -97,13 +97,14 @@
 
 - 12B 配置的 YOCO MoE 图、C1 冻结 API、C1+FP8 策略对象、WSD、上采样、单卡/DDP/FSDP 入口。
 - **C1 训练循环**：packing + 文档 mask、梯度累积、AdamW 分组、checkpoint / resume、jsonl 日志、可选 MiniCPM logit KD。tiny 单测（gate=0、detach 无 Encoder 梯度、freeze_tied、ckpt）。
+- **OpenBMB 数据路径**：`cat_yoko.prepare` 把 Ultra-FineWeb en/zh + UltraData-Math（默认 0.60/0.30/0.10）打成 seq_len 对齐的 int32 mmap `.bin`；tokenizer 默认 `openbmb/MiniCPM-2B-sft-bf16`。Trainer 对 `.bin` 走 `PackedBinStream`，并从 `*.bin.meta.json` 读 `eos_id`。`--upcycle-hf` / `--teacher-hf` 拉 MiniCPM-2B。
 - Megatron-LM 适配面：`ParallelPlan`（TP/PP/EP/CP）、双栈 `TransformerConfig` 映射、`model_provider` / `forward_step` 钩子。不 vendoring Megatron。
 
 不做（本步）：
 
 - 把 `GPTModel` / 双向 T5 encoder 当 YOCO；实现 EP/TP 训练循环（等装上 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 再填 provider）。
-- 自研 CSA kernel / FP4 / **50B 语料本身** / 评测套件 / Phase C indexer 训练循环。数据接口吃 jsonl `tokens` 或 int32 `.bin`。
-- 在本机 CPU 上分配 12B 权重（约 24GB bf16）。`--config 12b --meta` 只建 meta 图、数参数。12B 开训必须显式 `--steps` 或 `--tokens`。
+- 自研 CSA kernel / FP4 / **把 50B 语料检进 git** / 评测套件 / Phase C indexer 训练循环。数据接口吃 prepare 产出的 mmap `.bin`，或 jsonl `tokens`。
+- 在本机 CPU 上分配 12B 权重（约 24GB bf16），或在 CI / 小 VM 上下载 Ultra-FineWeb / MiniCPM 权重。`--config 12b --meta` 只建 meta 图、数参数。12B 开训必须显式 `--steps` 或 `--tokens`。
 
 Megatron 约束（已写进 `cat_yoko.parallel`）：
 

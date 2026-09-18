@@ -15,14 +15,24 @@ Default spec (**middle compute tier**): ≈12B total, Encoder ≈2.3B active / i
 
 ## Train (12B graph; tiny for tests)
 
+Phase B 语料走 OpenBMB：**Ultra-FineWeb**（en/zh）+ **UltraData-Math**，用 **MiniCPM-2B** tokenizer（`V=122753`，不要 MiniCPM3）。仓库不进 50B token；`prepare` 只切一块 mmap `.bin`。
+
 ```bash
-python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1
+# 本地 jsonl 烟测（不下载 HuggingFace）
+python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy \
+  --config tiny --out /tmp/t.bin --max-tokens 256
+python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin
+
 python3 -m cat_yoko.train --config 12b --meta
 python3 -m cat_yoko.train --config 12b --dump-megatron
-# 有卡 + MiniCPM 权重：
-# python3 -m cat_yoko.train --config 12b --phase B0 --upcycle minicpm.pt \
-#   --data tokens.jsonl --save-dir runs/b0 --steps 100 --dtype bf16
-python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron
+
+# 生产（需 pip install 'cat-yoko[data]'，会拉 Ultra-FineWeb；不要在 CI / 小 VM 上跑）
+# python3 -m cat_yoko.prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 \
+#   --config 12b --out data/phaseb.bin --max-tokens 1e8
+# python3 -m cat_yoko.train --config 12b --phase B0 \
+#   --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin \
+#   --dtype bf16 --steps N --save-dir runs/b0
+python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare
 ```
 
 ## Recalculate / verify
@@ -31,5 +41,5 @@ python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron
 python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 ledger
 python3 scripts/param_budget.py --staged --curriculum --fp8
 python3 scripts/arch_verify.py --verify      # architecture invariants
-python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron
+python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare
 ```

@@ -9,6 +9,22 @@ from typing import Iterator
 import torch
 
 
+def resolve_eos(path: Path | None, eos_id: int | None) -> int | None:
+    """Prefer an explicit --eos; else PackedBin sidecar ``*.bin.meta.json``."""
+    if eos_id is not None or path is None:
+        return eos_id
+    meta_path = Path(path).with_suffix(Path(path).suffix + ".meta.json")
+    if not meta_path.is_file():
+        return None
+    try:
+        obj = json.loads(meta_path.read_text())
+    except json.JSONDecodeError:
+        return None
+    if obj.get("eos_id") is None:
+        return None
+    return int(obj["eos_id"])
+
+
 def read_int32_bin(path: Path) -> torch.Tensor:
     data = Path(path).read_bytes()
     if len(data) % 4:
@@ -155,6 +171,45 @@ class FileStream:
         }
 
 
+def doc_ids_from_eos(ids: torch.Tensor, eos_id: int | None) -> torch.Tensor:
+    """Document index increases after each EOS (packed pretrain rows)."""
+    if eos_id is None:
+        return torch.zeros_like(ids)
+    hits = (ids == eos_id).to(torch.long)
+    return hits.cumsum(dim=-1) - hits
+
+
+class PackedBinStream:
+    """Memory-map a seq_len-packed int32 bin. Does not load the whole corpus."""
+
+    def __init__(self, path: Path, seq_len: int, *, eos_id: int | None = None) -> None:
+        self.path = Path(path)
+        self.seq_len = seq_len
+        self.eos_id = eos_id
+        nbytes = self.path.stat().st_size
+        if nbytes % 4:
+            raise ValueError(f"{self.path} is not int32-aligned")
+        ntok = nbytes // 4
+        self.nseq = ntok // seq_len
+        if self.nseq <= 0:
+            raise ValueError(f"{self.path} shorter than one sequence of {seq_len}")
+        usable = self.nseq * seq_len
+        try:
+            flat = torch.from_file(str(self.path), shared=False, size=usable, dtype=torch.int32)
+        except (RuntimeError, SystemError, TypeError):
+            flat = read_int32_bin(self.path)[:usable]
+        self.rows = flat.view(self.nseq, seq_len)
+        self._i = 0
+
+    def batch(self, micro_batch: int, device: str) -> dict[str, torch.Tensor]:
+        idx = [(self._i + k) % self.nseq for k in range(micro_batch)]
+        self._i += micro_batch
+        ids = torch.stack([self.rows[i].to(dtype=torch.long) for i in idx]).to(device)
+        docs = doc_ids_from_eos(ids, self.eos_id)
+        labels = labels_with_doc_boundaries(ids, docs) if self.eos_id is not None else ids.clone()
+        return {"input_ids": ids, "labels": labels, "doc_ids": docs}
+
+
 def open_stream(
     data: Path | None,
     vocab_size: int,
@@ -162,7 +217,11 @@ def open_stream(
     *,
     seed: int = 0,
     eos_id: int | None = None,
-) -> DummyStream | FileStream:
+) -> DummyStream | FileStream | PackedBinStream:
     if data is None:
         return DummyStream(vocab_size, seq_len, seed=seed)
-    return FileStream(Path(data), seq_len, eos_id=eos_id)
+    path = Path(data)
+    eos = resolve_eos(path, eos_id)
+    if path.suffix.lower() in {".bin", ".tok"}:
+        return PackedBinStream(path, seq_len, eos_id=eos)
+    return FileStream(path, seq_len, eos_id=eos)

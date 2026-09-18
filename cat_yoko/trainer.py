@@ -12,7 +12,7 @@ from torch import nn
 
 from cat_yoko.checkpoint import load_checkpoint, load_model_state, save_checkpoint
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.data import open_stream
+from cat_yoko.data import open_stream, resolve_eos
 from cat_yoko.dist_util import barrier, init_distributed, is_rank0, wrap_distributed
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
@@ -150,7 +150,7 @@ class Trainer:
             self.cfg.vocab_size,
             self.cfg.seq_len,
             seed=self.seed + 1,
-            eos_id=self.eos_id,
+            eos_id=resolve_eos(self.eval_data, self.eos_id),
         )
         raw = unwrap(model)
         raw.eval()
@@ -178,7 +178,7 @@ class Trainer:
             self.cfg.vocab_size,
             self.cfg.seq_len,
             seed=self.seed,
-            eos_id=self.eos_id,
+            eos_id=resolve_eos(self.data, self.eos_id),
         )
         step = 0
         tokens_in_phase = 0.0

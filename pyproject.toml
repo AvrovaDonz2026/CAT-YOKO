@@ -9,9 +9,11 @@ dependencies = ["torch>=2.4"]
 
 [project.optional-dependencies]
 megatron = ["megatron-core>=0.12"]
+data = ["datasets>=2.18", "transformers>=4.40"]
 
 [project.scripts]
 cat-yoko-train = "cat_yoko.train:main"
+cat-yoko-prepare = "cat_yoko.prepare:main"
 
 [project.urls]
 Megatron-LM = "https://github.com/NVIDIA/Megatron-LM"
