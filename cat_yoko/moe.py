@@ -1,6 +1,14 @@
-"""DeepSeek-style softmax-then-topK MoE with optional hash routing."""
+"""DeepSeek-style softmax-then-topK MoE with optional hash routing.
+
+Expert dispatch permutes tokens by expert id (one bincount sync per layer)
+instead of 20× ``nonzero`` / ``.any()`` CUDA syncs. Routed SwiGLU uses a
+padded batched GEMM (fused gate+up, then down). Serial expert loop remains
+as a numeric fallback. Routing math is unchanged.
+"""
 
 from __future__ import annotations
+
+from contextlib import nullcontext
 
 import torch
 import torch.nn.functional as F
@@ -16,6 +24,26 @@ def _like(ref: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     return t
 
 
+def _fused_gate_up(gate: nn.Module, up: nn.Module, x: torch.Tensor) -> torch.Tensor:
+    """One GEMM for gate and up; SiLU(gate)*up. Same math as two Linears."""
+    from cat_yoko.nvfp4_linear import Nvfp4Linear, quantize_nvfp4
+
+    if isinstance(gate, Nvfp4Linear) and isinstance(up, Nvfp4Linear):
+        ctx = torch.autocast(device_type="cuda", enabled=False) if x.is_cuda else nullcontext()
+        with ctx:
+            x_q = quantize_nvfp4(x) + x - x.detach()
+            w = torch.cat((gate.quantized_weight(), up.quantized_weight()), dim=0)
+            gu = F.linear(x_q, w, None)
+        g, u = gu.chunk(2, dim=-1)
+        return F.silu(g) * u
+    if isinstance(gate, nn.Linear) and isinstance(up, nn.Linear):
+        w = torch.cat((gate.weight, up.weight), dim=0)
+        gu = F.linear(x, w, None)
+        g, u = gu.chunk(2, dim=-1)
+        return F.silu(g) * u
+    return F.silu(gate(x)) * up(x)
+
+
 class SwiGLU(nn.Module):
     def __init__(self, hidden: int, intermediate: int) -> None:
         super().__init__()
@@ -24,7 +52,123 @@ class SwiGLU(nn.Module):
         self.down_proj = nn.Linear(intermediate, hidden, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
+        return self.down_proj(_fused_gate_up(self.gate_proj, self.up_proj, x))
+
+
+def _stack_linear_weight(linears: list[nn.Linear]) -> torch.Tensor:
+    from cat_yoko.nvfp4_linear import Nvfp4Linear
+
+    if all(isinstance(lin, Nvfp4Linear) for lin in linears):
+        return torch.stack([lin.quantized_weight() for lin in linears])
+    return torch.stack([lin.weight for lin in linears])
+
+
+def _experts_are_swiglu(experts: nn.ModuleList) -> bool:
+    if not experts:
+        return False
+    for e in experts:
+        if not isinstance(e, SwiGLU):
+            return False
+        if not all(isinstance(getattr(e, n), nn.Linear) for n in ("gate_proj", "up_proj", "down_proj")):
+            return False
+    return True
+
+
+def _swiglu_experts_serial(
+    experts: nn.ModuleList, x_sorted: torch.Tensor, counts: torch.Tensor
+) -> torch.Tensor:
+    parts: list[torch.Tensor] = []
+    offset = 0
+    for e, n in enumerate(counts.tolist()):
+        n = int(n)
+        if n == 0:
+            continue
+        parts.append(experts[e](x_sorted.narrow(0, offset, n)))
+        offset += n
+    if not parts:
+        return x_sorted.new_zeros(x_sorted.shape)
+    return torch.cat(parts, dim=0)
+
+
+def _swiglu_experts_batched(
+    experts: nn.ModuleList,
+    x_sorted: torch.Tensor,
+    expert_sorted: torch.Tensor,
+    counts: torch.Tensor,
+) -> torch.Tensor:
+    """Padded bmm over 20 experts. Empty experts stay zero-padded rows."""
+    from cat_yoko.nvfp4_linear import Nvfp4Linear, quantize_nvfp4
+
+    n_tok = x_sorted.size(0)
+    if n_tok == 0:
+        return x_sorted
+    max_n = int(counts.max().item())
+    if max_n <= 0:
+        return x_sorted.new_zeros(x_sorted.shape)
+    e_count = len(experts)
+    # Pathological imbalance: padding would do more GEMM than serial slices.
+    if max_n * e_count > 8 * n_tok:
+        return _swiglu_experts_serial(experts, x_sorted, counts)
+
+    d = x_sorted.size(-1)
+    x_pad = x_sorted.new_zeros(e_count, max_n, d)
+    offs = torch.zeros(e_count, dtype=torch.int64, device=x_sorted.device)
+    if e_count > 1:
+        offs[1:] = torch.cumsum(counts[:-1], dim=0)
+    local = torch.arange(n_tok, device=x_sorted.device) - offs[expert_sorted]
+    x_pad[expert_sorted, local] = x_sorted
+
+    gate_w = _stack_linear_weight([e.gate_proj for e in experts])
+    up_w = _stack_linear_weight([e.up_proj for e in experts])
+    down_w = _stack_linear_weight([e.down_proj for e in experts])
+    nv = all(isinstance(e.gate_proj, Nvfp4Linear) for e in experts) and all(
+        isinstance(e.up_proj, Nvfp4Linear) and isinstance(e.down_proj, Nvfp4Linear) for e in experts
+    )
+    if nv:
+        ctx = torch.autocast(device_type="cuda", enabled=False) if x_sorted.is_cuda else nullcontext()
+        with ctx:
+            x_q = quantize_nvfp4(x_pad) + x_pad - x_pad.detach()
+            gu_w = torch.cat((gate_w, up_w), dim=1)
+            gu = torch.bmm(x_q, gu_w.transpose(1, 2))
+            g, u = gu.chunk(2, dim=-1)
+            hidden = F.silu(g) * u
+            h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
+            y_pad = torch.bmm(h_q, down_w.transpose(1, 2))
+    else:
+        gu_w = torch.cat((gate_w, up_w), dim=1).to(dtype=x_pad.dtype)
+        down_w = down_w.to(dtype=x_pad.dtype)
+        gu = torch.bmm(x_pad, gu_w.transpose(1, 2))
+        g, u = gu.chunk(2, dim=-1)
+        y_pad = torch.bmm(F.silu(g) * u, down_w.transpose(1, 2))
+    return y_pad[expert_sorted, local]
+
+
+def _dispatch_experts(
+    experts: nn.ModuleList,
+    flat: torch.Tensor,
+    expert_idx: torch.Tensor,
+    token_idx: torch.Tensor,
+    gates: torch.Tensor,
+    n_routed: int,
+    *,
+    batched: bool,
+) -> torch.Tensor:
+    """``expert_idx`` / ``token_idx`` / ``gates`` are length ``T * k`` (or ``T``)."""
+    order = expert_idx.argsort()
+    expert_sorted = expert_idx.index_select(0, order)
+    token_sorted = token_idx.index_select(0, order)
+    gate_sorted = gates.index_select(0, order)
+    x_sorted = flat.index_select(0, token_sorted)
+    counts = torch.bincount(expert_sorted, minlength=n_routed)
+    use_batched = batched and _experts_are_swiglu(experts)
+    if use_batched:
+        y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts)
+    else:
+        y = _swiglu_experts_serial(experts, x_sorted, counts)
+    y = y * gate_sorted.unsqueeze(-1).to(dtype=y.dtype)
+    routed = torch.zeros_like(flat)
+    routed.index_add_(0, token_sorted, _like(routed, y))
+    return routed
 
 
 class MoE(nn.Module):
@@ -44,6 +188,8 @@ class MoE(nn.Module):
         self.hash_route = hash_route
         self.router_z_loss = cfg.router_z_loss
         self.seq_balance_loss = cfg.seq_balance_loss
+        # Tests may flip this to compare against the serial expert loop.
+        self.batched_experts = True
         d, mid = cfg.hidden_size, cfg.moe_intermediate_size
         self.shared = nn.ModuleList(SwiGLU(d, mid) for _ in range(cfg.n_shared))
         self.experts = nn.ModuleList(SwiGLU(d, mid) for _ in range(n_routed))
@@ -85,14 +231,21 @@ class MoE(nn.Module):
         shared_out = self.shared[0](flat)
         for m in self.shared[1:]:
             shared_out = shared_out + m(flat)
+        n_tok = b * s
         if self.hash_route and token_ids is not None:
-            ids = token_ids.reshape(b * s).to(torch.int64)
+            ids = token_ids.reshape(n_tok).to(torch.int64)
             expert_id = (ids * 2654435761).remainder(self.n_routed)
-            routed = torch.zeros_like(flat)
-            for e in range(self.n_routed):
-                mask = expert_id == e
-                if mask.any():
-                    routed[mask] = _like(routed, self.experts[e](flat[mask]))
+            token_idx = torch.arange(n_tok, device=flat.device)
+            gates = torch.ones(n_tok, device=flat.device, dtype=flat.dtype)
+            routed = _dispatch_experts(
+                self.experts,
+                flat,
+                expert_id,
+                token_idx,
+                gates,
+                self.n_routed,
+                batched=self.batched_experts,
+            )
             self.last_aux = flat.new_zeros(())
             self.last_load = None
             self._load_n = 0
@@ -105,20 +258,26 @@ class MoE(nn.Module):
         probs = torch.softmax(affinity + self.e_score_correction_bias.float(), dim=-1)
         topv, topi = torch.topk(probs, self.top_k, dim=-1)
         gates = topv / topv.sum(dim=-1, keepdim=True).clamp_min(1e-9)
-        routed = torch.zeros_like(flat)
-        for e in range(self.n_routed):
-            hit = topi == e
-            if not hit.any():
-                continue
-            tok_ix, slot = hit.nonzero(as_tuple=True)
-            weight = gates[tok_ix, slot].unsqueeze(-1)
-            contrib = weight * self.experts[e](flat[tok_ix])
-            routed[tok_ix] = routed[tok_ix] + _like(routed, contrib)
+        token_idx = (
+            torch.arange(n_tok, device=flat.device)
+            .unsqueeze(1)
+            .expand(-1, self.top_k)
+            .reshape(-1)
+        )
+        routed = _dispatch_experts(
+            self.experts,
+            flat,
+            topi.reshape(-1),
+            token_idx,
+            gates.reshape(-1),
+            self.n_routed,
+            batched=self.batched_experts,
+        )
 
         z_loss = logits.float().pow(2).mean()
         ones = torch.zeros(self.n_routed, device=x.device, dtype=x.dtype)
         ones.scatter_add_(0, topi.reshape(-1), _like(ones, gates.reshape(-1)))
-        load = ones / (b * s)
+        load = ones / n_tok
         balance = self.n_routed * (load * load).sum()
         self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
         if self.training:

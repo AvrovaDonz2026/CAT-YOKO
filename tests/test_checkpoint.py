@@ -104,6 +104,20 @@ class CheckpointCpuTests(unittest.TestCase):
             self.assertFalse(leftover.exists())
             self.assertTrue(latest.samefile(step))
 
+    def test_resolve_resume_prefers_newest_trainable_step_over_stale_pointer(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            stale = td / "trainable.pt"
+            old = td / "trainable_step_100.pt"
+            new = td / "trainable_step_540.pt"
+            old.write_bytes(b"old")
+            new.write_bytes(b"new")
+            stale.write_bytes(b"stale-hardlink")
+            self.assertEqual(resolve_resume_path(td), new)
+            latest = td / "latest.pt"
+            latest.write_bytes(b"full")
+            self.assertEqual(resolve_resume_path(td), latest)
+
     def test_resolve_resume_prefers_latest_then_step(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             td = Path(td)

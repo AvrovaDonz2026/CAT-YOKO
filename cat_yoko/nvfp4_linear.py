@@ -77,7 +77,8 @@ def hw_nvfp4_gemm_available() -> bool:
     """True when this PyTorch build can cast to float4 and run ``_scaled_mm``.
 
     torch 2.8.0+cu128 on sm_120 exposes ``torch.float4_e2m1fn_x2`` but
-    ``copy_`` is NotImplemented, so the cuBLAS NVFP4 GEMM is not reachable.
+    ``copy_`` is NotImplemented. Nightly cu130 (``venv-nightly``) is the
+    probe target; see ``scripts/upgrade_torch_te_nightly_autodl.sh``.
     """
     if not torch.cuda.is_available():
         return False
@@ -91,8 +92,19 @@ def hw_nvfp4_gemm_available() -> bool:
     return True
 
 
-def _e2m1_levels(device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    return torch.tensor(_E2M1_ABS, device=device, dtype=dtype)
+_E2M1_CACHE: dict[tuple[str, torch.dtype], tuple[torch.Tensor, torch.Tensor]] = {}
+
+
+def _e2m1_tables(device: torch.device, dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor]:
+    """Cached E2M1 midpoints and reconstruction levels (one tensor pair per device/dtype)."""
+    key = (str(device), dtype)
+    hit = _E2M1_CACHE.get(key)
+    if hit is not None and hit[0].device == device and hit[0].dtype == dtype:
+        return hit
+    thresh = torch.tensor(_E2M1_THRESH, device=device, dtype=dtype)
+    levels = torch.tensor(_E2M1_ABS, device=device, dtype=dtype)
+    _E2M1_CACHE[key] = (thresh, levels)
+    return thresh, levels
 
 
 def quantize_nvfp4(t: torch.Tensor, *, block: int = _BLOCK) -> torch.Tensor:
@@ -118,10 +130,9 @@ def quantize_nvfp4(t: torch.Tensor, *, block: int = _BLOCK) -> torch.Tensor:
         except (TypeError, RuntimeError, NotImplementedError):
             pass
     y = chunks / scale.unsqueeze(-1)
-    thresh = torch.tensor(_E2M1_THRESH, device=y.device, dtype=y.dtype)
+    thresh, levels = _e2m1_tables(y.device, y.dtype)
     ax = y.abs()
     idx = torch.bucketize(ax.reshape(-1), thresh).view_as(ax)
-    levels = _e2m1_levels(y.device, y.dtype)
     q = y.sign().where(y != 0, torch.ones_like(y)) * levels[idx]
     q = torch.where(ax < 1e-12, torch.zeros_like(q), q)
     recon = q * scale.unsqueeze(-1)
@@ -146,14 +157,46 @@ class Nvfp4Linear(nn.Linear):
         obj.out_features = lin.out_features
         obj.weight = lin.weight
         obj.bias = lin.bias
+        obj._wq_cache = None
+        obj._wq_ver = None
         return obj
+
+    def quantized_weight(self) -> torch.Tensor:
+        """STE-quantized weight, or a cached dequant for frozen masters.
+
+        B0 encoder GEMMs never receive Adam updates. Re-quantizing 1072
+        frozen matrices every forward is wasted work; cache the dequant.
+        Trainable B1/B2 slots still STE every call.
+        """
+        w = self.weight
+        if not w.requires_grad:
+            cache = getattr(self, "_wq_cache", None)
+            ver = getattr(self, "_wq_ver", None)
+            if (
+                cache is not None
+                and ver == w._version
+                and cache.device == w.device
+                and cache.dtype == w.dtype
+                and cache.shape == w.shape
+            ):
+                return cache
+            with torch.no_grad():
+                cache = quantize_nvfp4(w)
+            self._wq_cache = cache
+            self._wq_ver = w._version
+            return cache
+        return quantize_nvfp4(w) + w - w.detach()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Quantize the bf16 master, not an autocast-promoted copy.
+        def _go() -> torch.Tensor:
+            x_q = quantize_nvfp4(x) + x - x.detach()
+            return F.linear(x_q, self.quantized_weight(), self.bias)
+
         if x.is_cuda:
             with torch.autocast(device_type="cuda", enabled=False):
-                return nvfp4_linear(x, self.weight, self.bias)
-        return nvfp4_linear(x, self.weight, self.bias)
+                return _go()
+        return _go()
 
 
 def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:

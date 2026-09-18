@@ -22,16 +22,24 @@ echo "=== B1 try $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 echo "HF_ENDPOINT=${HF_ENDPOINT}"
 nvidia-smi --query-gpu=name,compute_cap,memory.total --format=csv,noheader
 df -h /root/autodl-tmp | tail -1
+has_overlay() {
+  local d="$1"
+  [ -d "$d" ] || return 1
+  [ -f "$d/trainable.pt" ] && return 0
+  [ -f "$d/latest.pt" ] && return 0
+  ls "$d"/trainable_step_*.pt >/dev/null 2>&1
+}
+
 if [ -z "${RESUME:-}" ]; then
-  if [ -f "$B0_FULL/trainable.pt" ] || [ -f "$B0_FULL/latest.pt" ]; then
+  if has_overlay "$B0_FULL"; then
     RESUME="$B0_FULL"
   else
     RESUME="$B0"
   fi
 fi
 echo "resume $RESUME"
-if [ ! -f "$RESUME/trainable.pt" ] && [ ! -f "$RESUME/latest.pt" ]; then
-  echo "missing B0 overlay in $RESUME (need trainable.pt or latest.pt)"
+if ! has_overlay "$RESUME"; then
+  echo "missing B0 overlay in $RESUME (need trainable.pt / latest.pt / trainable_step_*.pt)"
   exit 1
 fi
 UPCYCLE_ARGS=(--dummy-upcycle)

@@ -26,8 +26,8 @@ if [ ! -d "$RESUME" ]; then
   echo "missing B1 overlay dir $RESUME (sibling B1 / parent B0 must finish first)"
   exit 2
 fi
-if [ ! -f "$RESUME/trainable.pt" ] && [ ! -f "$RESUME/latest.pt" ]; then
-  echo "no trainable.pt / latest.pt in $RESUME"
+if [ ! -f "$RESUME/trainable.pt" ] && [ ! -f "$RESUME/latest.pt" ] && ! ls "$RESUME"/trainable_step_*.pt >/dev/null 2>&1; then
+  echo "no trainable.pt / latest.pt / trainable_step_*.pt in $RESUME"
   ls -lh "$RESUME" || true
   exit 2
 fi

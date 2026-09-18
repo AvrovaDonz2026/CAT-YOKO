@@ -72,7 +72,7 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # 12B ckpt 不要放 /tmp（23GiB×2 会写满 overlay）。save_every 命中末步时 latest.pt 是 step_N 的 hardlink：
 # python3 -m cat_yoko.gpu_smoke --middle --save-dir /root/autodl-tmp/b0ckpt
 # python3 -m cat_yoko.gpu_smoke --middle --steps 2 --resume /root/autodl-tmp/b0ckpt
-python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear
+python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear tests.test_moe_ops tests.test_b0_full
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke
 python3 -m cat_yoko.gpu_smoke --middle

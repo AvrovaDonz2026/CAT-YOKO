@@ -5,6 +5,10 @@
 # Does not download Ultra-FineWeb. Does not write 23GiB latest.pt.
 # Does not overwrite /root/autodl-tmp/runs/b0 (32-step --try).
 # GitHub fetch hangs on this box — overlay the tree via tar/scp first.
+#
+# Resume: directory prefers newest trainable_step_*.pt (stale trainable.pt
+# hardlink must not rewind tokens_in_phase). Same-phase B0 keeps the
+# envelope; new kernels pick up on process restart.
 set -uo pipefail
 ROOT="${ROOT:-/root/autodl-tmp/CAT-YOKO}"
 # shellcheck disable=SC1091
@@ -12,6 +16,11 @@ source "$ROOT/scripts/autodl_env.sh"
 export PYTHONPATH="$ROOT"
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+NIGHTLY="${NIGHTLY:-/root/autodl-tmp/venv-nightly}"
+if [ -z "${PY:-}" ] && [ -x "$NIGHTLY/bin/python" ] && [ -f "$NIGHTLY/NVFP4_PROBE_OK" ]; then
+  PY="$NIGHTLY/bin/python"
+  echo "using torch nightly venv $PY"
+fi
 PY="${PY:-/root/miniconda3/bin/python3}"
 SAVE="${SAVE:-/root/autodl-tmp/runs/b0-full}"
 PREV="${PREV:-/root/autodl-tmp/runs/b0}"
@@ -20,6 +29,31 @@ LOCAL="${LOCAL:-/root/autodl-tmp/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
 SAVE_EVERY="${SAVE_EVERY:-20}"
 KEEP_LAST="${KEEP_LAST:-2}"
+
+has_overlay() {
+  local d="$1"
+  [ -d "$d" ] || return 1
+  [ -f "$d/trainable.pt" ] && return 0
+  [ -f "$d/latest.pt" ] && return 0
+  ls "$d"/trainable_step_*.pt >/dev/null 2>&1
+}
+
+newest_trainable() {
+  local d="$1"
+  ls -1 "$d"/trainable_step_*.pt 2>/dev/null | sort -V | tail -1
+}
+
+# Point trainable.pt at the highest step file so a crash mid-envelope
+# resumes tokens_in_phase, not a stale hardlink from an older process.
+publish_trainable_pointer() {
+  local d="$1"
+  local newest
+  newest="$(newest_trainable "$d")"
+  if [ -n "$newest" ]; then
+    ln -f "$newest" "$d/trainable.pt"
+    echo "publish $newest -> $d/trainable.pt"
+  fi
+}
 
 mkdir -p "$SAVE"
 exec > >(tee -a "$LOG") 2>&1
@@ -33,13 +67,15 @@ if [ ! -d "$LOCAL" ]; then
   exit 2
 fi
 
+publish_trainable_pointer "$SAVE"
+
 RESUME_ARGS=()
-if [ -f "$SAVE/trainable.pt" ]; then
+if has_overlay "$SAVE"; then
   RESUME_ARGS=(--resume "$SAVE")
-  echo "resume published overlay $SAVE/trainable.pt"
-elif [ -f "$PREV/trainable.pt" ]; then
+  echo "resume published overlay $SAVE (newest trainable_step or trainable.pt)"
+elif has_overlay "$PREV"; then
   RESUME_ARGS=(--resume "$PREV")
-  echo "resume 32-step overlay $PREV/trainable.pt (same-phase B0 + MiniCPM5 upcycle)"
+  echo "resume 32-step overlay $PREV (same-phase B0 + MiniCPM5 upcycle)"
 else
   echo "fresh MiniCPM5 upcycle, no overlay"
 fi
@@ -70,7 +106,7 @@ for seq in "$SEQ" 2048 1024 512; do
   if [ "$ec" -eq 0 ]; then
     exit 0
   fi
-  if [ -f "$SAVE/trainable.pt" ]; then
+  if has_overlay "$SAVE"; then
     echo "overlay exists; not falling back seq. Re-run this script to resume."
     exit "$ec"
   fi

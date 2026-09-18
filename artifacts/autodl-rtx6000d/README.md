@@ -60,7 +60,22 @@ Transformer Engine: `transformer-engine==2.19.0` + `transformer_engine_cu12==2.1
 
 After `cursor/nvfp4-train-6000d-02c6` is on origin, overlay the tree with tar/scp (GitHub `git fetch` hangs). Published B0 is [`scripts/run_b0_full_autodl.sh`](../../scripts/run_b0_full_autodl.sh): 8e9 tokens, seq=4096, `--no-offload-encoder`, resume `/root/autodl-tmp/runs/b0` if present. tmux `b0-full`. Overlay → Hub `checkpoints/b0-full/`；日志 → [`b0-full/`](b0-full/)。不要覆盖 Hub 上 32 步 `checkpoints/b0/`。
 
-B0 发布跑完、GPU 空闲后再跑 B1 `--try`：[`scripts/run_b1_try_autodl.sh`](../../scripts/run_b1_try_autodl.sh)（resume `runs/b0-full` 否则 `runs/b0`，MiniCPM5 上采样，seq=64，32 步）。日志 → [`b1/`](b1/)。overlay → Hub `checkpoints/b1/`。
+B0 发布跑完、GPU 空闲后再跑 B1 `--try`：[`scripts/run_b1_try_autodl.sh`](../../scripts/run_b1_try_autodl.sh)（resume `runs/b0-full` 否则 `b0`，MiniCPM5 上采样，seq=64，32 步）。日志 → [`b1/`](b1/)。overlay → Hub `checkpoints/b1/`。
+
+## PyTorch / TE nightly（NVFP4 GEMM）
+
+torch **2.8.0+cu128** 暴露 `float4_e2m1fn_x2`，但 `copy_` 是 `NotImplemented`，cuBLAS NVFP4 GEMM 走不通。TE 2.19 的 `NVFP4BlockScaling` 在，可是 `transformer_engine.pytorch` 缺 `.so`（`ncclCommWindowRegister`）。
+
+升级走**新 venv**，不碰正在跑的 B0 miniconda 进程：
+
+```bash
+bash scripts/upgrade_torch_te_nightly_autodl.sh   # tmux nightly-upgrade
+# 探活：/root/autodl-tmp/venv-nightly/NVFP4_PROBE.json
+# 同阶段 resume（先 ln 最新 trainable_step → trainable.pt）：
+PY=/root/autodl-tmp/venv-nightly/bin/python bash scripts/run_b0_full_autodl.sh
+```
+
+Nightly 目标：`https://download.pytorch.org/whl/nightly/cu130` 上当天的 torch 2.15.dev + `transformer_engine[pytorch,core-cu13]`。TE 文档把 **NVFP4 训练 kernel 写成 SM100/103**；sm_120 是尽力探测（`disable_rht` / `disable_2d_quantization`）。探活失败就继续 E2M1/16 仿真，不改 C1 配方。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 

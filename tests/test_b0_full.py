@@ -25,6 +25,9 @@ class B0FullLauncherTests(unittest.TestCase):
         self.assertIn("4096", text)
         self.assertNotRegex(text, r"cat_yoko\.b0.*--try")
         self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertIn("trainable_step_", text)
+        self.assertIn("has_overlay", text)
+        self.assertIn("venv-nightly", text)
         self.assertNotRegex(text, r"31jEePeb|vDw8xU9c|PRIVATE KEY")
         self.assertNotIn("westc.seetacloud", text)
         self.assertIn("b0-full", text)
@@ -42,6 +45,20 @@ class B0FullLauncherTests(unittest.TestCase):
         self.assertIn("huggingface.co/AvrovaDonz/CAT-YOKO", body)
         self.assertIn("8e9", body)
         self.assertIn("checkpoints/b0/", body)
+
+    def test_nightly_upgrade_script(self) -> None:
+        up = ROOT / "scripts" / "upgrade_torch_te_nightly_autodl.sh"
+        probe = ROOT / "scripts" / "probe_nvfp4_hw.py"
+        self.assertTrue(up.is_file())
+        self.assertTrue(probe.is_file())
+        text = up.read_text()
+        self.assertIn("nightly/cu130", text)
+        self.assertIn("transformer_engine[pytorch,core-cu13]", text)
+        self.assertIn("venv-nightly", text)
+        self.assertIn("probe_nvfp4_hw.py", text)
+        self.assertNotIn("git fetch", text)
+        self.assertNotRegex(text, r"31jEePeb|vDw8xU9c|PRIVATE KEY")
+        self.assertNotIn("westc.seetacloud", text)
 
 
 if __name__ == "__main__":
