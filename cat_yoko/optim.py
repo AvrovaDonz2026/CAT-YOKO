@@ -233,6 +233,11 @@ def build_optimizer(
     state_dtype: torch.dtype = torch.float32,
     retain_state: bool = True,
 ) -> Optimizer:
+    if getattr(cfg, "use_muon", False):
+        raise NotImplementedError(
+            "Muon is frozen off (docs/FROZEN_SPEC.md). "
+            "Keep CATYokoConfig.use_muon=False; this trainer is AdamW-only."
+        )
     groups = [g for g in adamw_param_groups(model, cfg.weight_decay) if g["params"]]
     if cpu_offload:
         return CPUOffloadAdamW(

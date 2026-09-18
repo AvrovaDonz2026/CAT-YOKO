@@ -13,9 +13,12 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        var = x.pow(2).mean(dim=-1, keepdim=True)
-        x = x * torch.rsqrt(var + self.eps)
-        return self.weight * x
+        # C1+FP8 whitelist: RMSNorm in fp32, then cast back (Llama-style).
+        orig = x.dtype
+        x32 = x.float()
+        var = x32.pow(2).mean(dim=-1, keepdim=True)
+        y = x32 * torch.rsqrt(var + self.eps)
+        return (self.weight.float() * y).to(orig)
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:

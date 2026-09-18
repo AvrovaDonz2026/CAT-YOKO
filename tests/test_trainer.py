@@ -133,6 +133,8 @@ class LoopTests(unittest.TestCase):
             ).run()
             ckpt = torch.load(save / "latest.pt", map_location="cpu", weights_only=False)
             self.assertEqual(ckpt["extra"]["stream"]["i"], 2)
+            self.assertEqual(ckpt["extra"]["seed"], 0)
+            self.assertEqual(ckpt["extra"]["cfg"]["name"], "tiny")
             out = Trainer(
                 cfg, "B0", "cpu", steps=2, accum=1, micro_batch=2, data=path, resume=save / "latest.pt"
             ).run()
@@ -254,6 +256,16 @@ class LoopTests(unittest.TestCase):
         apply_freeze(model, "B0")
         groups = adamw_param_groups(model, 0.1)
         self.assertEqual(len(groups), 2)
+
+
+    def test_two_rank_gloo_one_step(self) -> None:
+        from cat_yoko.ddp_smoke import run_gloo_ddp
+
+        row = run_gloo_ddp(device="cpu", world=2, steps=1)
+        self.assertTrue(row["ok"], msg=row)
+        self.assertEqual(row["step"], 1)
+        self.assertEqual(row["world"], 2)
+        self.assertGreater(row["nll"], 0)
 
 
 class CliTests(unittest.TestCase):

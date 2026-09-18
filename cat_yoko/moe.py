@@ -84,10 +84,11 @@ class MoE(nn.Module):
             self.last_load = None
             return (shared_out + _like(shared_out, routed)).view(b, s, d)
 
-        logits = self.router(flat)
+        # Router logits + softmax stay fp32 (C1+FP8 whitelist).
+        logits = F.linear(flat.float(), self.router.weight.float())
         affinity = torch.sqrt(F.softplus(logits))
         # softmax-then-topK (upcycling paper); bias is aux-loss-free, pre-softmax.
-        probs = torch.softmax(affinity + self.e_score_correction_bias, dim=-1)
+        probs = torch.softmax(affinity + self.e_score_correction_bias.float(), dim=-1)
         topv, topi = torch.topk(probs, self.top_k, dim=-1)
         gates = topv / topv.sum(dim=-1, keepdim=True).clamp_min(1e-9)
         routed = torch.zeros_like(flat)

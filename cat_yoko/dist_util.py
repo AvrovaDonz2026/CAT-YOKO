@@ -21,13 +21,14 @@ def init_distributed(device: str) -> tuple[str, int, int]:
         return device, 0, 1
     import torch.distributed as dist
 
+    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available()
     if not dist.is_initialized():
-        backend = "nccl" if torch.cuda.is_available() else "gloo"
+        backend = "nccl" if want_cuda else "gloo"
         dist.init_process_group(backend)
     rank = dist.get_rank()
     world = dist.get_world_size()
     local = int(os.environ.get("LOCAL_RANK", rank))
-    if torch.cuda.is_available():
+    if want_cuda:
         torch.cuda.set_device(local)
         device = f"cuda:{local}"
     return device, rank, world

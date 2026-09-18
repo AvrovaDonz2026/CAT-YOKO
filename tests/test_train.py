@@ -141,6 +141,68 @@ class TinyTrainTests(unittest.TestCase):
         moe.step_router_bias()
         self.assertFalse(torch.equal(before, moe.e_score_correction_bias))
 
+    def test_new_modules_small_init(self) -> None:
+        from cat_yoko.upcycle import NEW_MODULE_INIT_STD
+
+        torch.manual_seed(0)
+        model = CATYokoForCausalLM(self.cfg)
+        self.assertAlmostEqual(
+            float(model.cache_k.weight.detach().std()), NEW_MODULE_INIT_STD, delta=0.008
+        )
+        self.assertAlmostEqual(
+            float(model.cache_v.weight.detach().std()), NEW_MODULE_INIT_STD, delta=0.008
+        )
+        self.assertAlmostEqual(
+            float(model.decoder[0].cross_attn.q_proj.weight.detach().std()),
+            NEW_MODULE_INIT_STD,
+            delta=0.008,
+        )
+        self.assertAlmostEqual(
+            float(model.decoder[0].mlp.router.weight.detach().std()),
+            NEW_MODULE_INIT_STD,
+            delta=0.015,
+        )
+
+    def test_meta_skips_weight_init(self) -> None:
+        model = build_model(self.cfg, "meta")
+        self.assertEqual(next(model.parameters()).device.type, "meta")
+
+    def test_rmsnorm_fp32_under_autocast(self) -> None:
+        from cat_yoko.rope import RMSNorm
+
+        torch.manual_seed(0)
+        n = RMSNorm(16)
+        x = torch.randn(4, 16)
+        y32 = n(x)
+        xbf = x.to(torch.bfloat16)
+        with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+            ybf = n(xbf)
+        self.assertEqual(ybf.dtype, torch.bfloat16)
+        self.assertTrue(torch.allclose(ybf.float(), y32, atol=2e-2, rtol=2e-2))
+
+    def test_router_logits_fp32_under_autocast(self) -> None:
+        from cat_yoko.moe import MoE
+
+        moe = MoE(self.cfg, self.cfg.n_routed_dec, self.cfg.top_k_dec)
+        moe.train()
+        x = torch.randn(2, self.cfg.seq_len, self.cfg.hidden_size)
+        with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+            y = moe(x)
+        self.assertEqual(tuple(y.shape), tuple(x.shape))
+        self.assertTrue(torch.isfinite(y).all())
+        self.assertIsNotNone(moe.last_aux)
+
+    def test_muon_switch_raises(self) -> None:
+        from dataclasses import replace
+
+        from cat_yoko.optim import build_optimizer
+
+        cfg = replace(self.cfg, use_muon=True)
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B0")
+        with self.assertRaises(NotImplementedError):
+            build_optimizer(model, cfg)
+
     def test_upcycle_copies_embed(self) -> None:
         model = CATYokoForCausalLM(self.cfg)
         src = dummy_minicpm_state(self.cfg)

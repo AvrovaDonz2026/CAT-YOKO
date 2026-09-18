@@ -13,6 +13,7 @@ from pathlib import Path
 import torch
 
 from cat_yoko.config import CATYokoConfig
+from cat_yoko.ddp_smoke import run_gloo_ddp
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
@@ -224,6 +225,8 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     model(input_ids=ids, labels=ids)["loss"].backward()
     enc_ok = all((not p.requires_grad) and p.grad is None for p in model.encoder.parameters())
     out["b0_encoder_frozen"] = {"ok": enc_ok}
+    ddp = run_gloo_ddp(device="cpu", world=2, steps=1)
+    out["ddp_gloo"] = ddp
     out["peak_mib"] = round(torch.cuda.max_memory_allocated() / 1024**2, 1)
     out["ok"] = all(
         [
@@ -241,6 +244,7 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             out["upcycle"]["ok"],
             out["eval"]["ok"],
             out["b0_encoder_frozen"]["ok"],
+            out["ddp_gloo"]["ok"],
             out["fp8_policy"]["b1_autocast"] is True,
             out["fp8_policy"]["b0_autocast"] is False,
         ]
@@ -388,7 +392,12 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="CAT-YOKO CUDA smoke (tiny, 12B B0 with --middle, C1 chain with --c1)"
     )
-    p.add_argument("--steps", type=int, default=2)
+    p.add_argument(
+        "--steps",
+        type=int,
+        default=None,
+        help="tiny default 2; 12B --middle/--c1 default 1",
+    )
     p.add_argument("--json", action="store_true")
     p.add_argument(
         "--middle",
@@ -408,7 +417,8 @@ def main(argv: list[str] | None = None) -> int:
         print("SKIP: no CUDA")
         return 0
     if args.c1:
-        result = run_middle_12b_c1(seq_len=args.seq_len, steps=1)
+        steps = 1 if args.steps is None else args.steps
+        result = run_middle_12b_c1(seq_len=args.seq_len, steps=steps)
         if args.json:
             print(json.dumps({k: v for k, v in result.items() if k != "model"}, indent=2, default=str))
         else:
@@ -424,7 +434,8 @@ def main(argv: list[str] | None = None) -> int:
         _teardown_cuda()
         return 0 if result["ok"] or (result.get("b1_ok") and result.get("b2_oom")) else 1
     if args.middle:
-        result = run_middle_12b_phase(args.phase, seq_len=args.seq_len, steps=1)
+        steps = 1 if args.steps is None else args.steps
+        result = run_middle_12b_phase(args.phase, seq_len=args.seq_len, steps=steps)
         result.pop("model", None)
         if args.json:
             print(json.dumps(result, indent=2))
@@ -435,7 +446,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         _teardown_cuda()
         return 0 if result["ok"] else 1
-    result = run_tiny_cuda(steps=args.steps)
+    result = run_tiny_cuda(steps=2 if args.steps is None else args.steps)
     if args.json:
         print(json.dumps(result, indent=2))
     else:
@@ -454,6 +465,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  b1_offload ok={result['b1_offload']['ok']}")
         print(f"  b2_block_offload ok={result['b2_block_offload']['ok']}")
         print(f"  c1_chain ok={result['c1_chain']['ok']} ckpts ok={result['c1_ckpts']['ok']}")
+        print(f"  ddp_gloo ok={result['ddp_gloo']['ok']}")
         print(f"  overall ok={result['ok']}")
     return 0 if result["ok"] else 1
 

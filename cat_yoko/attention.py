@@ -10,6 +10,14 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.rope import RMSNorm, RotaryEmbedding, apply_rope
 
 
+def _sdpa(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
+    """Attention softmax in fp32 (C1+FP8 whitelist); output matches ``q.dtype``."""
+    out = F.scaled_dot_product_attention(
+        q.float(), k.float(), v.float(), attn_mask=bias.float()
+    )
+    return out.to(q.dtype)
+
+
 def _window_causal_bias(
     q_len: int,
     k_len: int,
@@ -65,7 +73,7 @@ class WindowAttention(nn.Module):
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
         bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
-        out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias)
+        out = _sdpa(q, k, v, bias)
         return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
 
 
@@ -101,5 +109,5 @@ class CrossAttention(nn.Module):
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
         bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)  # window=s → causal only
-        out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias)
+        out = _sdpa(q, k, v, bias)
         return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))

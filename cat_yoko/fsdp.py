@@ -19,8 +19,15 @@ def wrap_fsdp(model: CATYokoForCausalLM, *, enabled: bool) -> nn.Module:
 
     if not dist.is_available() or not dist.is_initialized():
         raise RuntimeError("FSDP requires torch.distributed to be initialized")
+    import torch
+
     policy = partial(
         transformer_auto_wrap_policy,
         transformer_layer_cls={EncoderBlock, DecoderBlock},
     )
-    return FSDP(model, auto_wrap_policy=policy)
+    device_id = None
+    p = next(model.parameters(), None)
+    if p is not None and p.is_cuda:
+        idx = p.device.index
+        device_id = idx if idx is not None else torch.cuda.current_device()
+    return FSDP(model, auto_wrap_policy=policy, device_id=device_id)

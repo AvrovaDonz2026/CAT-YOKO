@@ -11,6 +11,40 @@ from torch import nn
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.model import CATYokoForCausalLM
 
+NEW_MODULE_INIT_STD = 0.02
+
+
+def _small_linear(lin: nn.Linear, std: float) -> None:
+    if lin.weight.device.type == "meta":
+        return
+    nn.init.normal_(lin.weight, mean=0.0, std=std)
+    if lin.bias is not None and lin.bias.device.type != "meta":
+        nn.init.zeros_(lin.bias)
+
+
+def init_new_modules(model: CATYokoForCausalLM, std: float = NEW_MODULE_INIT_STD) -> None:
+    """Small-scale random init for modules MiniCPM does not provide.
+
+    Frozen spec: cross-attn, cache W_K/W_V, router. Skip on the meta device.
+    """
+    p0 = next(model.parameters(), None)
+    if p0 is not None and p0.device.type == "meta":
+        return
+    _small_linear(model.cache_k, std)
+    _small_linear(model.cache_v, std)
+    for blk in model.decoder:
+        cross = getattr(blk, "cross_attn", None)
+        if cross is None:
+            continue
+        for name in ("q_proj", "o_proj"):
+            lin = getattr(cross, name, None)
+            if isinstance(lin, nn.Linear):
+                _small_linear(lin, std)
+    for blk in list(model.encoder) + list(model.decoder):
+        router = getattr(getattr(blk, "mlp", None), "router", None)
+        if isinstance(router, nn.Linear):
+            _small_linear(router, std)
+
 
 def _scale(n_experts: int, n_groups: int = 1, top_k: int = 1) -> float:
     return (n_experts * n_groups**2 / max(top_k, 1)) ** (1.0 / 3.0)

@@ -7,7 +7,7 @@ import math
 import random
 import time
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
@@ -345,6 +345,22 @@ class Trainer:
         del ckpt
         return step, tokens_in_phase, tokens_seen
 
+    def _extra(self, model: nn.Module, step: int, tokens_in_phase: float, tokens_seen: float, stream) -> dict:
+        return {
+            "phase": self.phase,
+            "step": step,
+            "tokens_in_phase": tokens_in_phase,
+            "tokens_seen": tokens_seen,
+            "gate": float(unwrap(model).decoder[0].gate),
+            "name": self.cfg.name,
+            "seq_len": self.seq_len,
+            "seed": self.seed,
+            "cfg": asdict(self.cfg),
+            "stream": stream.state_dict(),
+            "rng_torch": torch.get_rng_state(),
+            "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+        }
+
     def _apply_runtime_flags(self, model: nn.Module) -> None:
         raw = unwrap(model)
         raw.grad_checkpoint = self.grad_ckpt
@@ -518,18 +534,7 @@ class Trainer:
                 tokens_in_phase += step_tokens * self.world
                 tokens_seen += step_tokens * self.world
                 last = step_nll
-                extra = {
-                    "phase": self.phase,
-                    "step": step,
-                    "tokens_in_phase": tokens_in_phase,
-                    "tokens_seen": tokens_seen,
-                    "gate": float(unwrap(model).decoder[0].gate),
-                    "name": self.cfg.name,
-                    "seq_len": self.seq_len,
-                    "stream": stream.state_dict(),
-                    "rng_torch": torch.get_rng_state(),
-                    "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
-                }
+                extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
                 if step == 1 or step % self.log_every == 0 or (
                     max_steps is not None and step == max_steps
                 ):
@@ -574,18 +579,7 @@ class Trainer:
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                 if max_steps is None and phase_budget is None:
                     break
-            extra = {
-                "phase": self.phase,
-                "step": step,
-                "tokens_in_phase": tokens_in_phase,
-                "tokens_seen": tokens_seen,
-                "gate": float(unwrap(model).decoder[0].gate),
-                "name": self.cfg.name,
-                "seq_len": self.seq_len,
-                "stream": stream.state_dict(),
-                "rng_torch": torch.get_rng_state(),
-                "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
-            }
+            extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
             self._maybe_save(model, opt, extra, "latest.pt")
             barrier()
             peak = self._mem_mib()

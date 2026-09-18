@@ -45,6 +45,11 @@ class CATYokoForCausalLM(nn.Module):
         self.grad_checkpoint = False
         self.offload_encoder = False
         self.offload_blocks = False
+        p0 = next(self.parameters(), None)
+        if p0 is not None and p0.device.type != "meta":
+            from cat_yoko.upcycle import init_new_modules
+
+            init_new_modules(self)
 
     def set_detach(self, flag: bool) -> None:
         self.detach_cache = flag

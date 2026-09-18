@@ -227,6 +227,21 @@ class TrainerOffloadTests(unittest.TestCase):
         self.assertFalse(next(model.encoder.parameters()).requires_grad)
 
 
+    def test_fsdp_requires_dist(self) -> None:
+        from cat_yoko.fsdp import wrap_fsdp
+
+        with self.assertRaises(RuntimeError):
+            wrap_fsdp(CATYokoForCausalLM(CATYokoConfig.tiny()), enabled=True)
+
+    def test_fsdp_wrap_passes_device_id(self) -> None:
+        import inspect
+
+        from cat_yoko import fsdp as fsdp_mod
+
+        src = inspect.getsource(fsdp_mod.wrap_fsdp)
+        self.assertIn("device_id", src)
+
+
 class CliOffloadTests(unittest.TestCase):
     def test_tiny_c1_smoke(self) -> None:
         code = main(["--config", "tiny", "--c1-smoke", "--steps", "1", "--accum", "1"])

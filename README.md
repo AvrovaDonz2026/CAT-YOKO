@@ -36,6 +36,7 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 #   --dtype bf16 --grad-ckpt --device cuda --steps N --save-dir runs/b0
 # 12B 图在 ≥28GiB GPU 上跑 C1（bf16 直接建图，不经 CPU fp32）：
 # python3 -m cat_yoko.gpu_smoke --middle
+# python3 -m cat_yoko.gpu_smoke --middle --steps 2
 # python3 -m cat_yoko.gpu_smoke --middle --phase B1
 # python3 -m cat_yoko.gpu_smoke --c1
 # python3 -m cat_yoko.train --config 12b --device cuda --dtype bf16 --grad-ckpt \
