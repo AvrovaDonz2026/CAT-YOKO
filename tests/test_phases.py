@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B0/B1/B2 phase CLIs, trainable LFS checkpoints, sharded full graphs."""
+"""B0/B1/B2 phase CLIs, trainable overlays, sharded full graphs."""
 
 from __future__ import annotations
 

@@ -4,7 +4,7 @@
   "try": true,
   "dummy_upcycle": true,
   "upcycle_hf": null,
-  "note": "32GB path. Published B0 is 8e9 tokens; this artifact is 32 steps x seq=64 dummy-upcycle. hf-mirror hung at 20MiB of MiniCPM5-2B-Base model.safetensors. Resume B1 = MiniCPM5 upcycle + this overlay.",
+  "note": "32GB path on RTX 4080 SUPER. Dummy-upcycle; overlay removed from GitHub. Hub holds the RTX 6000D MiniCPM5-upcycle --try. Published B0 is 8e9 tokens.",
   "steps": 32,
   "seq_len": 64,
   "tokens_in_phase": 2048,

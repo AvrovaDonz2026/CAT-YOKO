@@ -1,3 +1,0 @@
-# GitHub LFS. 5GiB/file cap: B0 trainable.pt (~0.44GiB) fits; 23GiB latest.pt does not.
-checkpoints/**/*.pt filter=lfs diff=lfs merge=lfs -text
-checkpoints/**/*.bin filter=lfs diff=lfs merge=lfs -text

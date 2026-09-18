@@ -167,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--save-full",
         action="store_true",
-        help="write 23GiB full graphs (not GitHub LFS; default on for tiny)",
+        help="write 23GiB full graphs (not for GitHub; default on for tiny)",
     )
     p.add_argument(
         "--no-save-full",
@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--save-trainable",
         action="store_true",
-        help="write trainable.pt overlay (default for 12B; B0 ~0.44GiB, LFS-ok)",
+        help="write trainable.pt overlay (default for 12B; B0 ~0.44GiB, Hub)",
     )
     p.add_argument(
         "--no-save-trainable",

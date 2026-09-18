@@ -3,7 +3,7 @@
 **实例已释放（2026-09-18）。** 不要再 SSH `connect.westc.seetacloud.com`；下一张卡走 RTX PRO 6000 / 6000D。
 
 实例 `autodl-container-6d164c9f44-4dccdd73`（torch 2.8.0+cu128，驱动 595.71.05）。
-清单时刻 UTC `2026-09-18T14:39:15Z`。权重已在 Git LFS：[`checkpoints/b0/trainable.pt`](../../checkpoints/b0/trainable.pt)。
+清单时刻 UTC `2026-09-18T14:39:15Z`。dummy-upcycle overlay 已从 GitHub 拿掉；真实 MiniCPM5 上采样 overlay 在 [HuggingFace AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)。
 
 
 ## 已迁入本目录
@@ -20,7 +20,7 @@
 
 ## 未迁（有意丢掉）
 
-- 两份 23GiB 全图 `b0ckpt` / `old_b0ckpt`：迁出前已删；GitHub LFS 单文件上限 5GiB。
+- 两份 23GiB 全图 `b0ckpt` / `old_b0ckpt`：迁出前已删；权重不进 GitHub。
 - `trainable_step_24.pt`：与最终 overlay 同结构的中间步；曲线在 `metrics.jsonl`，最终权重是 step 32。
 - MiniCPM5-2B-Base `model.safetensors`：hf-mirror 卡在 20MiB incomplete；完整权重回 HuggingFace。
 - `miniconda3`、AutoDL `autopanel*.db`、gzip 分片。

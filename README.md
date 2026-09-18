@@ -16,13 +16,13 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例已释放）
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — RTX 6000D sm_120；Hub 走 `https://hf-mirror.com`
 - [`huggingface/README.md`](huggingface/README.md) — HuggingFace model card；大权重 https://huggingface.co/AvrovaDonz/CAT-YOKO
-- [`docs/HF_HUB.md`](docs/HF_HUB.md) — GitHub LFS vs HuggingFace 分工；`scripts/push_to_hf.sh`
+- [`docs/HF_HUB.md`](docs/HF_HUB.md) — 权重只走 HuggingFace；`scripts/push_to_hf.sh`
 
 ## Train (12B graph; tiny for tests)
 
 Phase B 语料走 OpenBMB：**Ultra-FineWeb**（en/zh）+ **UltraData-Math**，用 **MiniCPM5-2B** tokenizer（`openbmb/MiniCPM5-2B`，`V=130560`，不要 MiniCPM-2B / MiniCPM3）。仓库不进 50B token；`prepare` 只切一块 mmap `.bin`。
 
-发布入口是 **B0 / B1 / B2**，不是裸 `--phase`。12B 默认只写 Git LFS 能吃的 `trainable.pt`（B0 ≈0.44GiB bf16）；23GiB 全图 `latest.pt` **不进 git**（GitHub LFS 单文件 5GiB）。32GB 卡跑不完 8B token，用 `--try`（32 步、seq=64）。
+发布入口是 **B0 / B1 / B2**，不是裸 `--phase`。12B 默认写 `trainable.pt` overlay（B0 ≈0.44GiB bf16）到本地 / [HuggingFace](https://huggingface.co/AvrovaDonz/CAT-YOKO)；23GiB 全图 `latest.pt` **不进 GitHub**。32GB 卡跑不完 8B token，用 `--try`（32 步、seq=64）。
 
 ```bash
 python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0

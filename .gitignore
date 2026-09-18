@@ -3,11 +3,10 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
-# Full 23GiB graphs stay off git (GitHub LFS is 5GiB/file).
-**/step_*.pt
-**/latest.pt
+# Weights do not live on GitHub. Hub: https://huggingface.co/AvrovaDonz/CAT-YOKO
+*.pt
+*.bin
 **/*.pt.tmp
 # HuggingFace deploy keys stay on the machine, never in git.
 huggingface/SSH.md
 huggingface/SSH_PUBLIC_KEY.txt
-

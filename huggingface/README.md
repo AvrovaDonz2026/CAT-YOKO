@@ -66,17 +66,9 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 当前权重
 
-| 产物 | 来源 | 说明 |
-| --- | --- | --- |
-| GitHub LFS [`checkpoints/b0/trainable.pt`](https://github.com/AvrovaDonz2026/CAT-YOKO/blob/main/checkpoints/b0/trainable.pt) | RTX 4080 SUPER | `--try` 32 步、`--dummy-upcycle` |
-| 本 Hub `checkpoints/b0/trainable.pt` | AutoDL RTX 6000D sm_120 | `--try` 32 步、真实 MiniCPM5-2B-Base 上采样；gate 0.301；peak 24244 MiB |
+本 Hub `checkpoints/b0/trainable.pt`：AutoDL RTX 6000D sm_120 上 `--try` 32 步、真实 MiniCPM5-2B-Base 上采样；gate 0.301；peak 24244 MiB。**不是** 8B token 信封。尚未上传全图 / 8B 信封权重。
 
-两份都**不是** 8B token 信封。尚未上传全图 / 8B 信封权重。
-
-| 去向 | 规则 |
-| --- | --- |
-| GitHub LFS | 单文件上限 5GiB；**不要**上传 23GiB `latest.pt` 全图 |
-| HuggingFace | 大 shard 放这里；单 shard ≤4GiB |
+GitHub 仓库不再存权重、也不再用 Git LFS。
 
 无公开评测分数。
 
@@ -113,6 +105,6 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 Data: Ultra-FineWeb en/zh + UltraData-Math. Tokenizer: [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B).
 
-GitHub LFS `checkpoints/b0/trainable.pt` is the 4080 SUPER dummy-upcycle `--try`. This Hub copy is the RTX 6000D MiniCPM5-upcycle `--try` (32 steps, gate 0.301). Neither is the 8B-token envelope. Do not put 23GiB `latest.pt` on GitHub; HF is the home for large shards (≤4GiB each).
+This Hub copy is the RTX 6000D MiniCPM5-upcycle `--try` (32 steps, gate 0.301). It is not the 8B-token envelope. Weights do not live on GitHub.
 
 License: this repo BSD-3-Clause; MiniCPM5 base Apache-2.0. No eval scores.
