@@ -94,15 +94,16 @@ CAT-YOKO 由两个因果栈组成，行为上等价于一个 decoder-only Transf
              RMSNorm ─► LM Head (tie emb) ─► 下一个 token
 ```
 
-关键性质（来自 YOCO）：
-- **只缓存一次**：只有 encoder 顶层产出的一个全局 cache 被所有 cross-decoder 层复用，KV cache 显存从 `O(N·L)` 降到约 `O(N)`；叠加 CSA/HCA 的序列维压缩后，长上下文显存进一步压到极低。
-- **Prefill 可提前退出**：处理超长输入时，prefill 只需跑完 encoder（self-decoder）即可产出全局 cache，无需跑满全部层 → 长上下文首 token 延迟大幅下降。这正是"**输入侧更轻（≈2.3B）**"的动机。中间档激活份额约 34%（见 `docs/THEORY_VERIFICATION.md` §6）。
+关键性质（来自 YOCO；形式化与因果证明见 [`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)）：
+- **只缓存一次**：只有 encoder 顶层产出的一个全局 cache 被所有 cross-decoder 层复用，KV cache 显存从 `O(N·L)` 降到约 `O(N)`。Encoder 层内 CSA/HCA（**M1**）**不**自动减少这份 cache 的槽数；沿序列再池化（**M2**）才把槽数从 \(N\) 降到 \(N/m\)。
+- **Prefill 可提前退出（仅推理）**：提示只需跑完 encoder 即可写出全局 cache，decoder 只在最后一位上跑一次出首 token。训练仍是两栈全长前向。这正是"**输入侧更轻（≈2.3B）**"的动机。中间档 encoder 激活份额约 34%（见 `docs/THEORY_VERIFICATION.md` §6）。
 - **非对称激活来自两个物理栈**：encoder 较小（16 层、专家/激活更少 → ≈2.3B），decoder 较大（24 层、含 cross-attn、专家/激活更多 → ≈4.5B）。**不是**变 top-k。
-- **保留全局注意力能力**：cross-decoder 通过 cross-attn 访问全局 cache，等效全局感受野。
+- **保留全局注意力能力**：全局性来自 decoder **cross-attn 读 cache（M3）**，不是来自 encoder 滑窗堆叠感受野（16×8K=131072，盖不住 256K，也不需要盖住）。
 
-> 设计取舍：YOCO 原论文 self-decoder 用 sliding-window attention 或 gated retention。我们把 self-decoder 的
-> 高效注意力替换为 **DeepSeek-V4 的 CSA/HCA + 8K 滑窗**，因为它同时提供（a）长程压缩以产出更紧凑的全局 cache，
-> （b）8K 未压缩滑窗保留局部保真。Decoder 的自注意力用轻量滑窗即可（生成序列通常不长），主力长程访问交给 cross-attn。
+> 设计取舍：YOCO 原论文 self-decoder 用 sliding-window 或 gated retention。我们把 self-decoder 的
+> 层内注意力换成 **CSA/HCA + 8K 滑窗（M1）**，降低 encoder 在 \(n\gg 8K\) 时的二次项，并可选地对写入表示做长程混合。
+> **更紧凑的全局 cache 是 M2（可选池化），生成时的 query-aware 检索是 M3（decoder 侧 indexer / 校准回退）**——与 M1 不是同一件事。
+> Decoder **自注意力在训练时也看到全长序列**，必须用滑窗/KDA；「生成序列通常不长」只描述推理。长程一律走 cross-attn。
 
 ### 2.1 CSA / HCA / 8K 滑窗（注意力细节）
 
@@ -111,7 +112,7 @@ DeepSeek-V4 用**逐层交错的两种压缩注意力**替换 V3 的 MLA 全量�
 
 ### 2.2 三种层类型（`layer_types`）
 
-1. **Sliding-window（bootstrap 层）**：只做局部滑窗因果注意力，窗口 = `sliding_window`，无长程分支。用于最前面几层稳定训练。
+1. **Sliding-window（bootstrap 层）**：只做局部滑窗因果注意力，窗口 = `sliding_window`，无长程分支。Encoder **前 2 层**用它（冻结；16 层才能排下 7+7 CSA/HCA）。
 2. **CSA（Compressed Sparse Attention）**
    - 把每 `m=4` 个 token 的 KV 压成 1 条（带可学习压缩权重 `Z` 与位置偏置，overlapping window）。
    - 用 **Lightning Indexer** 给 query 对压缩条目打分，取 **top-`index_topk`**（默认 512）条参与注意力（即在压缩序列上做 **DSA**）。
@@ -128,11 +129,13 @@ DeepSeek-V4 用**逐层交错的两种压缩注意力**替换 V3 的 MLA 全量�
 
 | 参数 | 推荐值 | 对应 DeepSeek-V4 名 |
 | --- | --- | --- |
-| `sliding_window` (`n_win`) | **8192** | 你要求的"8K 大滑窗" |
-| `layer_types` | 前 3 层 `sliding` / `HCA` bootstrap，其余 **CSA:HCA = 1:1 交错** | `2× HCA bootstrap + interleaved CSA/HCA` |
+| `sliding_window` (`n_win`) | **8192** | 你要求的"8K 大滑窗"；且必须 \(\ge m'=128\) 才能补 HCA 自身块的洞 |
+| Encoder `layer_types` | **2× sliding bootstrap，其后 CSA:HCA=1:1** → 16 层为 **2 sliding + 7 CSA + 7 HCA** | V4-Flash 以 2 层 sliding 开头；16 层做不了「3 bootstrap + 1:1」 |
+| Decoder self-attn | **全部 sliding**（可选日后 KDA 混合）；**默认不再铺 CSA** | 全局混合已在 cross-attn（M3） |
 | CSA 压缩率 `m` | 4 | `compress_rate_csa` |
 | HCA 压缩率 `m'` | 128 | `compress_rate_hca` |
-| `index_topk` (CSA) | 256～512 | Lightning Indexer top-k |
+| `index_topk` (CSA, **M1**) | 256～512 | Encoder 层内 Lightning Indexer；**不要**复用到 decoder query |
+| Decoder 侧选择（**M3**） | 128K 起需要：dense→top-k 或校准回退 | 真正的生成期检索；见架构理论 §3 |
 | 注意力底座 | 建议保留 **MLA / MQA 模式**（KV 头共享）以省 KV cache | V4 基于 MLA 的 MQA 模式实现 DSA |
 
 > **8K 滑窗的代价**：滑窗分支是未压缩的 `O(L·n_win)` 成本，`n_win=8192` 比默认 128 大 64×，
@@ -145,7 +148,7 @@ MiniCPM 是 40 层 decoder-only 标准 MHA，没有 MLA 潜在向量、压缩器
 
 - **拆成两个栈**：把 MiniCPM 的 40 层权重切给 Encoder(16) + Decoder(24)，或按需复制/截取（见 §4 Phase A）。
 - **注意力主干**：`q/k/v/o` 投影继承 MHA 权重（若切到 MLA，用 SVD 把 K/V 投影分解为低秩 `W^{DKV}·W^{UK/UV}` 初始化，`q_lora_rank` 同理）。
-- **Decoder 的 cross-attn**：`q` 投影可从对应自注意力 `q` 初始化；`k/v` 投影从 encoder 顶层 KV 空间对齐初始化（或随机小尺度）；**先旁路 cross-attn（gate≈0）再逐步打开**以稳定训练。
+- **Decoder 的 cross-attn**：`q` 投影可从对应自注意力 `q` 初始化；`k/v` 投影从 encoder 顶层 KV 空间对齐初始化（或随机小尺度）；**先旁路 cross-attn（gate≈0）再逐步打开**以稳定训练。gate=0 时 16/24 切分与原 40 层残差流等价（架构理论定理 A）。
 - **新增模块**（压缩器 `W^{aKV}/W^{bKV}/W^{aZ}/W^{bZ}`、位置偏置 `B`、Lightning Indexer）：小尺度随机初始化，**先"稠密对齐"再"稀疏化"**（见 §4 Phase C）。
 
 ### 2.5 可选增强：加入 KDA 线性注意力（三路混合）
@@ -167,7 +170,7 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 - **Encoder(self-decoder) 三路混合**：约 **3:1 的 KDA : (CSA/HCA)**，例如每 4 层 `[KDA, KDA, KDA, CSA]`，每隔几组插 1 层 HCA，
   并保留 **1–2 层高 `index_topk` 的 CSA 或真·full 注意力作为"召回锚点"**（hybrid-linear：gated-delta 类在 3:1~6:1 即达 Transformer 级召回）。
 - **位置编码**：KDA 用学习衰减提供位置/近因信息；full/CSA 锚点层可考虑 **NoPE**（Kimi Linear 做法）。
-- **Decoder(cross-decoder)**：自注意力处理较短生成序列，用 KDA/滑窗即可；跨段检索交给 cross-attn → 全局 cache。
+- **Decoder(cross-decoder)**：自注意力用滑窗/KDA（训练时序列可以很长，不能改回全注意力）；跨段检索交给 cross-attn → 全局 cache（M3）。
 
 **代价 / 注意**：
 - KDA 需额外的 **DPLR chunked kernel** + **独立循环状态**管理（与 YOCO"只缓存一次"正交：YOCO 省 KV cache，KDA 状态是每层各自的小状态）。
@@ -409,8 +412,8 @@ BBH（推理），IFEval（指令遵循）。
 ## 11. 立即可做的下一步
 
 1. 冻结 §0 的假设（尤其 encoder 是否因果、Encoder/Decoder 层数拆分、`n_win=8K`、是否上 MLA 与 mHC）。
-2. 跑 `scripts/param_budget.py --verify`（中间档断言已通过）。用**真实注意力实现**替换占位行后，微调 `Nr_e/Nr_d/moe_intermediate_size` 把总量精确对齐到 **12.05B**、enc 激活 **2.3B**、dec 激活 **4.5B**（`--attn csa_mqa64` 可做敏感性；Phase A 首层 dense 时 Enc routed 17→19 即可补回总参）。理论核对见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)。
-3. 搭一个 **tiny 配置**（YOCO 骨架 + HF `DeepseekV4` 式 CSA/HCA，例如 `hidden 256, enc 2L / dec 2L, sliding_window=8, m=4, m'=8, index_topk=2`）验证 encoder→全局 cache→cross-decoder 与 CSA/HCA mask 端到端正确性。
+2. 跑 `scripts/param_budget.py --verify` 与 `scripts/arch_verify.py --verify`（中间档账本 + 架构因果/切分已通过）。用**真实注意力实现**替换占位行后，微调 `Nr_e/Nr_d/moe_intermediate_size` 把总量精确对齐到 **12.05B**、enc 激活 **2.3B**、dec 激活 **4.5B**。预算见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)，架构见 [`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)。
+3. 搭一个 **tiny 配置**（YOCO 骨架 + HF `DeepseekV4` 式 CSA/HCA，例如 `hidden 256, enc 2L / dec 2L, sliding_window=8, m=4, m'=8, index_topk=2`）验证 encoder→全局 cache→cross-decoder 与 CSA/HCA mask 端到端正确性（mask 不泄漏未来、自身块不走压缩支路）。
 4. 落地 Phase A 的**栈拆分 + cross-attn 注入 + 上采样脚本**（Megatron `upcycling_utils`）+ 注意力权重迁移脚本。
 5. 起一个 **50–150B token** 的 Phase B 恢复训练小实验，验证 cross-attn 渐开 + 蒸馏 + WSD 恢复曲线。
 

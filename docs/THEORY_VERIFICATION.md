@@ -3,6 +3,7 @@
 > 规格冻结为训练计划默认档：`CAT-YOKO-12B`，Encoder 激活 ≈2.3B / 输入 token，Decoder 激活 ≈4.5B / 输出 token。
 > 本文只做**可复算的理论核对**（参数、FLOPs、KV、复杂度、μP 一致性），不引入新架构。
 > 数字源：`python3 scripts/param_budget.py --full`；断言：`python3 scripts/param_budget.py --verify` 与 `python3 -m unittest tests.test_param_budget`。
+> 架构（因果、切分等价、M1/M2/M3）见 [`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)。
 
 ---
 
