@@ -41,6 +41,7 @@ class CATYokoForCausalLM(nn.Module):
         self.scale_emb = cfg.scale_emb
         self.logit_scale = cfg.logit_scale
         self.detach_cache = True
+        self.grad_checkpoint = False
 
     def set_detach(self, flag: bool) -> None:
         self.detach_cache = flag
@@ -52,14 +53,25 @@ class CATYokoForCausalLM(nn.Module):
         doc_ids: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         x = self.embed(input_ids) * self.scale_emb
+        if doc_ids is None:
+            doc_ids = torch.zeros_like(input_ids)
+        ckpt = self.grad_checkpoint and self.training
+
+        def _run(blk: nn.Module, *tensors: torch.Tensor) -> torch.Tensor:
+            if ckpt and any(t.requires_grad for t in tensors):
+                return torch.utils.checkpoint.checkpoint(
+                    blk, *tensors, use_reentrant=False
+                )
+            return blk(*tensors)
+
         for blk in self.encoder:
-            x = blk(x, input_ids, doc_ids)
+            x = _run(blk, x, input_ids, doc_ids)
         hidden = x.detach() if self.detach_cache else x
         k = self.cache_k(hidden)
         v = self.cache_v(hidden)
         y = hidden
         for blk in self.decoder:
-            y = blk(y, k, v, input_ids, doc_ids)
+            y = _run(blk, y, k, v, input_ids, doc_ids)
         logits = self.lm_head(self.norm(y)) / self.logit_scale
         out: dict[str, torch.Tensor] = {"logits": logits}
         if labels is not None:
@@ -76,6 +88,7 @@ class CATYokoForCausalLM(nn.Module):
                 moe_aux = getattr(blk.mlp, "last_aux", None)
                 if moe_aux is not None:
                     aux = aux + moe_aux
+            out["aux"] = aux
             out["loss"] = nll + aux
             out["nll"] = nll
         return out

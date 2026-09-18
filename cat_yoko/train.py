@@ -68,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--log", type=Path, default=None, help="jsonl metrics path")
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--eval-every", type=int, default=0)
+    p.add_argument("--seq-len", type=int, default=None, help="override cfg seq_len; must match packed .bin")
+    p.add_argument("--grad-ckpt", action="store_true", help="activation checkpoint encoder/decoder blocks")
     p.add_argument(
         "--backend",
         choices=["torch", "megatron"],
@@ -158,6 +160,8 @@ def main(argv: list[str] | None = None) -> int:
         eval_every=args.eval_every,
         dtype=args.dtype,
         global_tokens_offset=_tokens_offset(args.phase, args.tokens_offset),
+        grad_ckpt=args.grad_ckpt,
+        seq_len=args.seq_len,
     )
     tr.run()
     return 0

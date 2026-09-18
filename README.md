@@ -22,6 +22,8 @@ Phase B 语料走 OpenBMB：**Ultra-FineWeb**（en/zh）+ **UltraData-Math**，�
 python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy \
   --config tiny --out /tmp/t.bin --max-tokens 256
 python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin
+python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin \
+  --device cuda --dtype bf16 --grad-ckpt
 
 python3 -m cat_yoko.train --config 12b --meta
 python3 -m cat_yoko.train --config 12b --dump-megatron
@@ -31,7 +33,7 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 #   --config 12b --out data/phaseb.bin --max-tokens 1e8
 # python3 -m cat_yoko.train --config 12b --phase B0 \
 #   --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin \
-#   --dtype bf16 --steps N --save-dir runs/b0
+#   --dtype bf16 --grad-ckpt --device cuda --steps N --save-dir runs/b0
 python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke

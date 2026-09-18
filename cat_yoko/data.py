@@ -9,20 +9,42 @@ from typing import Iterator
 import torch
 
 
+def sidecar_path(path: Path) -> Path:
+    return Path(path).with_suffix(Path(path).suffix + ".meta.json")
+
+
+def sidecar_meta(path: Path | None) -> dict:
+    if path is None:
+        return {}
+    meta_path = sidecar_path(Path(path))
+    if not meta_path.is_file():
+        return {}
+    try:
+        obj = json.loads(meta_path.read_text())
+    except json.JSONDecodeError:
+        return {}
+    return obj if isinstance(obj, dict) else {}
+
+
 def resolve_eos(path: Path | None, eos_id: int | None) -> int | None:
     """Prefer an explicit --eos; else PackedBin sidecar ``*.bin.meta.json``."""
     if eos_id is not None or path is None:
         return eos_id
-    meta_path = Path(path).with_suffix(Path(path).suffix + ".meta.json")
-    if not meta_path.is_file():
+    meta = sidecar_meta(path)
+    if meta.get("eos_id") is None:
         return None
-    try:
-        obj = json.loads(meta_path.read_text())
-    except json.JSONDecodeError:
-        return None
-    if obj.get("eos_id") is None:
-        return None
-    return int(obj["eos_id"])
+    return int(meta["eos_id"])
+
+
+def resolve_seq_len(path: Path | None, seq_len: int) -> int:
+    """Packed bins must be viewed with the seq_len they were written with."""
+    meta = sidecar_meta(path)
+    if meta.get("seq_len") is None:
+        return seq_len
+    packed = int(meta["seq_len"])
+    if packed <= 0:
+        raise ValueError(f"sidecar seq_len must be positive, got {packed}")
+    return packed
 
 
 def read_int32_bin(path: Path) -> torch.Tensor:
@@ -87,6 +109,13 @@ class DummyStream:
         self.seq_len = seq_len
         self.gen = torch.Generator().manual_seed(seed)
 
+    def state_dict(self) -> dict:
+        return {"kind": "dummy", "gen": self.gen.get_state()}
+
+    def load_state_dict(self, st: dict) -> None:
+        if st.get("gen") is not None:
+            self.gen.set_state(st["gen"].cpu())
+
     def batch(self, micro_batch: int, device: str) -> dict[str, torch.Tensor]:
         ids = torch.randint(
             0,
@@ -135,10 +164,20 @@ def _bin_docs(path: Path, seq_len: int, eos_id: int | None) -> Iterator[list[int
 class FileStream:
     """Cycles packed sequences from jsonl or int32 `.bin`."""
 
-    def __init__(self, path: Path, seq_len: int, *, eos_id: int | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        seq_len: int,
+        *,
+        eos_id: int | None = None,
+        shard_id: int = 0,
+        num_shards: int = 1,
+    ) -> None:
         self.path = Path(path)
         self.seq_len = seq_len
         self.eos_id = eos_id
+        self.stride = max(int(num_shards), 1)
+        self._i = int(shard_id) % self.stride
         suffix = self.path.suffix.lower()
         docs = (
             list(_jsonl_docs(self.path))
@@ -157,13 +196,19 @@ class FileStream:
                 )
         if not self._packed:
             raise ValueError(f"no sequences packed from {self.path}")
-        self._i = 0
+
+    def state_dict(self) -> dict:
+        return {"kind": "file", "i": self._i, "stride": self.stride}
+
+    def load_state_dict(self, st: dict) -> None:
+        if "i" in st:
+            self._i = int(st["i"])
 
     def batch(self, micro_batch: int, device: str) -> dict[str, torch.Tensor]:
         rows = []
         for _ in range(micro_batch):
             rows.append(self._packed[self._i % len(self._packed)])
-            self._i += 1
+            self._i += self.stride
         return {
             "input_ids": torch.stack([r["input_ids"] for r in rows]).to(device),
             "labels": torch.stack([r["labels"] for r in rows]).to(device),
@@ -182,10 +227,20 @@ def doc_ids_from_eos(ids: torch.Tensor, eos_id: int | None) -> torch.Tensor:
 class PackedBinStream:
     """Memory-map a seq_len-packed int32 bin. Does not load the whole corpus."""
 
-    def __init__(self, path: Path, seq_len: int, *, eos_id: int | None = None) -> None:
+    def __init__(
+        self,
+        path: Path,
+        seq_len: int,
+        *,
+        eos_id: int | None = None,
+        shard_id: int = 0,
+        num_shards: int = 1,
+    ) -> None:
         self.path = Path(path)
         self.seq_len = seq_len
         self.eos_id = eos_id
+        self.stride = max(int(num_shards), 1)
+        self._i = int(shard_id) % self.stride
         nbytes = self.path.stat().st_size
         if nbytes % 4:
             raise ValueError(f"{self.path} is not int32-aligned")
@@ -199,12 +254,22 @@ class PackedBinStream:
         except (RuntimeError, SystemError, TypeError):
             flat = read_int32_bin(self.path)[:usable]
         self.rows = flat.view(self.nseq, seq_len)
-        self._i = 0
+
+    def state_dict(self) -> dict:
+        return {"kind": "packed", "i": self._i, "stride": self.stride, "nseq": self.nseq}
+
+    def load_state_dict(self, st: dict) -> None:
+        if "i" in st:
+            self._i = int(st["i"])
 
     def batch(self, micro_batch: int, device: str) -> dict[str, torch.Tensor]:
-        idx = [(self._i + k) % self.nseq for k in range(micro_batch)]
-        self._i += micro_batch
-        ids = torch.stack([self.rows[i].to(dtype=torch.long) for i in idx]).to(device)
+        idx = []
+        i = self._i
+        for _ in range(micro_batch):
+            idx.append(i % self.nseq)
+            i += self.stride
+        self._i = i
+        ids = torch.stack([self.rows[j].to(dtype=torch.long) for j in idx]).to(device)
         docs = doc_ids_from_eos(ids, self.eos_id)
         labels = labels_with_doc_boundaries(ids, docs) if self.eos_id is not None else ids.clone()
         return {"input_ids": ids, "labels": labels, "doc_ids": docs}
@@ -217,11 +282,18 @@ def open_stream(
     *,
     seed: int = 0,
     eos_id: int | None = None,
+    rank: int = 0,
+    world: int = 1,
 ) -> DummyStream | FileStream | PackedBinStream:
     if data is None:
         return DummyStream(vocab_size, seq_len, seed=seed)
     path = Path(data)
     eos = resolve_eos(path, eos_id)
+    packed_seq = resolve_seq_len(path, seq_len)
+    world = max(int(world), 1)
+    rank = int(rank) % world
     if path.suffix.lower() in {".bin", ".tok"}:
-        return PackedBinStream(path, seq_len, eos_id=eos)
-    return FileStream(path, seq_len, eos_id=eos)
+        return PackedBinStream(
+            path, packed_seq, eos_id=eos, shard_id=rank, num_shards=world
+        )
+    return FileStream(path, packed_seq, eos_id=eos, shard_id=rank, num_shards=world)

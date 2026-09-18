@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import random
+import time
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,7 +15,7 @@ from torch import nn
 
 from cat_yoko.checkpoint import load_checkpoint, load_model_state, save_checkpoint
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.data import open_stream, resolve_eos
+from cat_yoko.data import open_stream, resolve_eos, resolve_seq_len, sidecar_meta
 from cat_yoko.dist_util import barrier, init_distributed, is_rank0, wrap_distributed
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
@@ -27,6 +30,13 @@ def seed_all(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def configure_cuda() -> None:
+    if not torch.cuda.is_available():
+        return
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
 
 def build_model(cfg: CATYokoConfig, device: str) -> CATYokoForCausalLM:
@@ -47,8 +57,11 @@ def print_meta(cfg: CATYokoConfig) -> None:
             print(f"  {k:8s} {v / 1e9:.3f}B")
 
 
-def auto_accum(cfg: CATYokoConfig, micro_batch: int, world: int) -> int:
-    per = micro_batch * cfg.seq_len * max(world, 1)
+def auto_accum(
+    cfg: CATYokoConfig, micro_batch: int, world: int, seq_len: int | None = None
+) -> int:
+    sl = cfg.seq_len if seq_len is None else seq_len
+    per = micro_batch * sl * max(world, 1)
     return max(int(cfg.global_batch_tokens // per), 1)
 
 
@@ -86,6 +99,8 @@ class Trainer:
         eval_every: int = 0,
         dtype: str = "fp32",
         global_tokens_offset: float = 0.0,
+        grad_ckpt: bool = False,
+        seq_len: int | None = None,
     ) -> None:
         self.cfg = cfg
         self.phase = phase
@@ -108,22 +123,47 @@ class Trainer:
         self.eval_every = eval_every
         self.dtype = dtype
         self.global_tokens_offset = global_tokens_offset
+        self.grad_ckpt = grad_ckpt
         self.device, self.rank, self.world = init_distributed(device)
-        self.accum = auto_accum(cfg, micro_batch, self.world) if accum <= 0 else max(accum, 1)
+        if seq_len is not None:
+            packed = sidecar_meta(data).get("seq_len") if data is not None else None
+            if packed is not None and int(packed) != int(seq_len):
+                raise ValueError(f"seq_len override {seq_len} != packed bin seq_len {packed}")
+            self.seq_len = int(seq_len)
+        else:
+            self.seq_len = resolve_seq_len(data, cfg.seq_len)
+        self.accum = (
+            auto_accum(cfg, micro_batch, self.world, seq_len=self.seq_len)
+            if accum <= 0
+            else max(accum, 1)
+        )
 
     def _cast(self, model: nn.Module) -> nn.Module:
         if self.dtype == "bf16":
             return model.to(dtype=torch.bfloat16)
         return model
 
+    def _use_amp(self) -> bool:
+        cuda = str(self.device).startswith("cuda")
+        if should_autocast(self.phase, cuda=cuda, enabled=self.cfg.use_fp8):
+            return True
+        return cuda and self.dtype == "bf16"
+
+    def _amp(self):
+        if not self._use_amp():
+            return nullcontext()
+        device_type = "cuda" if str(self.device).startswith("cuda") else "cpu"
+        return torch.autocast(device_type=device_type, dtype=torch.bfloat16)
+
     def _log(self, row: dict) -> None:
         if not is_rank0(self.rank):
             return
         line = (
             f"{row['name']} {row['phase']} step {row['step']}/{row['steps_or_inf']} "
-            f"nll={row['nll']:.4f} gate={row['gate']:.3f} "
-            f"trainable={row['trainable_m']:.2f}M lr={row['lr']:.2e} "
-            f"fp8={row['fp8']} tok={row['tokens_seen']:.0f}"
+            f"nll={row['nll']:.4f} aux={row['aux']:.4f} gate={row['gate']:.3f} "
+            f"gn={row['grad_norm']:.2f} trainable={row['trainable_m']:.2f}M "
+            f"lr={row['lr']:.2e} fp8={row['fp8']} tok={row['tokens_seen']:.0f} "
+            f"tok/s={row['tok_s']:.0f} mem={row['mem_mib']:.0f}MiB"
         )
         print(line)
         if self.log_path is not None:
@@ -141,24 +181,42 @@ class Trainer:
             extra=extra,
         )
 
+    def _clip(self, model: nn.Module, trainable: list) -> float:
+        if hasattr(model, "clip_grad_norm_") and type(model).__name__ == "FullyShardedDataParallel":
+            gn = model.clip_grad_norm_(self.cfg.grad_clip)
+        else:
+            gn = torch.nn.utils.clip_grad_norm_(trainable, self.cfg.grad_clip)
+        return float(gn)
+
+    def _mem_mib(self) -> float:
+        if not str(self.device).startswith("cuda") or not torch.cuda.is_available():
+            return 0.0
+        return torch.cuda.max_memory_allocated() / 1024**2
+
+    def _open(self, path: Path | None, seed: int):
+        return open_stream(
+            path,
+            self.cfg.vocab_size,
+            self.seq_len,
+            seed=seed,
+            eos_id=resolve_eos(path, self.eos_id),
+            rank=self.rank,
+            world=self.world,
+        )
+
     @torch.no_grad()
     def _eval_nll(self, model: nn.Module, batches: int = 2) -> float:
         if self.eval_data is None and batches <= 0:
             return float("nan")
-        stream = open_stream(
-            self.eval_data,
-            self.cfg.vocab_size,
-            self.cfg.seq_len,
-            seed=self.seed + 1,
-            eos_id=resolve_eos(self.eval_data, self.eos_id),
-        )
+        stream = self._open(self.eval_data, self.seed + 1 + self.rank)
         raw = unwrap(model)
         raw.eval()
         total = 0.0
         n = 0
         for _ in range(max(batches, 1)):
             batch = stream.batch(self.micro_batch, self.device)
-            out = raw(**batch)
+            with self._amp():
+                out = raw(**batch)
             total += float(out["nll"])
             n += 1
         raw.train()
@@ -166,20 +224,18 @@ class Trainer:
 
     def run(self) -> TrainResult:
         seed_all(self.seed + self.rank)
+        configure_cuda()
+        if str(self.device).startswith("cuda") and torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
         model = build_model(self.cfg, self.device)
         model = self._cast(model)
+        unwrap(model).grad_checkpoint = self.grad_ckpt
         if self.upcycle_src is not None:
             upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
         apply_freeze(unwrap(model), self.phase)
         model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
         opt = build_optimizer(model, self.cfg)
-        stream = open_stream(
-            self.data,
-            self.cfg.vocab_size,
-            self.cfg.seq_len,
-            seed=self.seed,
-            eos_id=resolve_eos(self.data, self.eos_id),
-        )
+        stream = self._open(self.data, self.seed + self.rank)
         step = 0
         tokens_in_phase = 0.0
         tokens_seen = self.global_tokens_offset
@@ -194,6 +250,21 @@ class Trainer:
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
             self.phase = str(extra.get("phase", self.phase))
             apply_freeze(unwrap(model), self.phase)
+            unwrap(model).grad_checkpoint = self.grad_ckpt
+            if extra.get("stream") is not None:
+                stream.load_state_dict(extra["stream"])
+            if extra.get("rng_torch") is not None:
+                torch.set_rng_state(extra["rng_torch"].cpu())
+            rng_cuda = extra.get("rng_cuda")
+            if (
+                rng_cuda is not None
+                and torch.cuda.is_available()
+                and str(self.device).startswith("cuda")
+            ):
+                try:
+                    torch.cuda.set_rng_state_all([t.cpu() for t in rng_cuda])
+                except (RuntimeError, TypeError, ValueError):
+                    pass
 
         if self.teacher is not None:
             self.teacher.to(self.device)
@@ -203,7 +274,7 @@ class Trainer:
 
         unwrap(model).train()
         use_fp8 = should_autocast(
-            self.phase, cuda=self.device.startswith("cuda"), enabled=self.cfg.use_fp8
+            self.phase, cuda=str(self.device).startswith("cuda"), enabled=self.cfg.use_fp8
         )
         last = 0.0
         phase_budget = self.tokens_target
@@ -228,15 +299,13 @@ class Trainer:
             opt.zero_grad(set_to_none=True)
             step_nll = 0.0
             step_loss = 0.0
+            step_aux = 0.0
             step_tokens = 0
+            t0 = time.perf_counter()
             for _ in range(self.accum):
                 batch = stream.batch(self.micro_batch, self.device)
                 step_tokens += int(batch["input_ids"].numel())
-                if use_fp8:
-                    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                        out = model(**batch)
-                        loss = out["loss"] / self.accum
-                else:
+                with self._amp():
                     out = model(**batch)
                     loss = out["loss"] / self.accum
                 if self.teacher is not None:
@@ -256,8 +325,12 @@ class Trainer:
                 loss.backward()
                 step_nll += float(out["nll"].detach()) / self.accum
                 step_loss += float(out["loss"].detach()) / self.accum
-            torch.nn.utils.clip_grad_norm_(trainable, self.cfg.grad_clip)
+                step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
+            if not math.isfinite(step_nll):
+                raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
+            grad_norm = self._clip(model, trainable)
             opt.step()
+            dt = max(time.perf_counter() - t0, 1e-9)
             step += 1
             tokens_in_phase += step_tokens * self.world
             tokens_seen += step_tokens * self.world
@@ -269,6 +342,10 @@ class Trainer:
                 "tokens_seen": tokens_seen,
                 "gate": float(unwrap(model).decoder[0].gate),
                 "name": self.cfg.name,
+                "seq_len": self.seq_len,
+                "stream": stream.state_dict(),
+                "rng_torch": torch.get_rng_state(),
+                "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
             }
             if step == 1 or step % self.log_every == 0 or (
                 max_steps is not None and step == max_steps
@@ -280,12 +357,18 @@ class Trainer:
                     "steps_or_inf": max_steps if max_steps is not None else "-",
                     "nll": last,
                     "loss": step_loss,
+                    "aux": step_aux,
                     "gate": extra["gate"],
+                    "grad_norm": grad_norm,
                     "trainable_m": n_train / 1e6,
                     "lr": lr,
                     "fp8": use_fp8,
                     "tokens_seen": tokens_seen,
                     "tokens_in_phase": tokens_in_phase,
+                    "tok_s": (step_tokens * self.world) / dt,
+                    "mem_mib": self._mem_mib(),
+                    "seq_len": self.seq_len,
+                    "grad_ckpt": self.grad_ckpt,
                 }
                 self._log(row)
             if self.eval_every and step % self.eval_every == 0:
@@ -303,6 +386,10 @@ class Trainer:
             "tokens_seen": tokens_seen,
             "gate": float(unwrap(model).decoder[0].gate),
             "name": self.cfg.name,
+            "seq_len": self.seq_len,
+            "stream": stream.state_dict(),
+            "rng_torch": torch.get_rng_state(),
+            "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
         }
         self._maybe_save(model, opt, extra, "latest.pt")
         barrier()

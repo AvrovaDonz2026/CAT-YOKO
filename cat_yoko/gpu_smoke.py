@@ -66,6 +66,10 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
         fp8_cfg, "B1", steps=1, device=device, accum=1, micro_batch=micro_batch
     )
     out["b1_fp8_autocast"] = {"nll": float(nll_fp8), "ok": _finite(nll_fp8) and nll_fp8 > 0}
+    nll_ckpt = train_loop(
+        cfg, "B2", steps=1, device=device, accum=1, micro_batch=micro_batch, grad_ckpt=True
+    )
+    out["grad_ckpt"] = {"nll": float(nll_ckpt), "ok": _finite(nll_ckpt) and nll_ckpt > 0}
     tok = HashTokenizer(cfg.vocab_size)
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
@@ -114,6 +118,7 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             all(v["ok"] for v in out["phases"].values()),
             out.get("bf16", {"ok": True})["ok"],
             out["b1_fp8_autocast"]["ok"],
+            out["grad_ckpt"]["ok"],
             out["packed_resume"]["ok"],
             out["b0_encoder_frozen"]["ok"],
             out["fp8_policy"]["b1_autocast"] is True,
@@ -145,6 +150,7 @@ def main(argv: list[str] | None = None) -> int:
         if "bf16" in result:
             print(f"  bf16 nll={result['bf16']['nll']:.4f} ok={result['bf16']['ok']}")
         print(f"  packed_resume ok={result['packed_resume']['ok']} peak_mib={result['peak_mib']}")
+        print(f"  grad_ckpt ok={result['grad_ckpt']['ok']}")
         print(f"  overall ok={result['ok']}")
     return 0 if result["ok"] else 1
 

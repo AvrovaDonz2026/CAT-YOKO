@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch
 
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.data import FileStream, pack_documents
+from cat_yoko.data import FileStream, PackedBinStream, pack_documents, sidecar_meta
 from cat_yoko.optim import adamw_param_groups, wsd_lr
 from cat_yoko.train import main
 from cat_yoko.trainer import Trainer, auto_accum, train_loop
@@ -51,6 +51,34 @@ class PackTests(unittest.TestCase):
             self.assertEqual(batch["input_ids"][0].tolist(), list(range(16)))
 
 
+class StreamShardTests(unittest.TestCase):
+    def test_packed_shards_are_disjoint(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        toks = list(range(64))
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "tok.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            a = PackedBinStream(path, cfg.seq_len, shard_id=0, num_shards=2)
+            b = PackedBinStream(path, cfg.seq_len, shard_id=1, num_shards=2)
+            ba = a.batch(1, "cpu")["input_ids"][0].tolist()
+            bb = b.batch(1, "cpu")["input_ids"][0].tolist()
+            self.assertEqual(ba, list(range(16)))
+            self.assertEqual(bb, list(range(16, 32)))
+
+    def test_sidecar_seq_len_wins(self) -> None:
+        toks = list(range(32))
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "tok.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            (Path(str(path) + ".meta.json")).write_text(json.dumps({"seq_len": 8, "eos_id": 2}))
+            self.assertEqual(sidecar_meta(path)["seq_len"], 8)
+            from cat_yoko.data import open_stream
+
+            stream = open_stream(path, vocab_size=128, seq_len=16)
+            batch = stream.batch(1, "cpu")
+            self.assertEqual(tuple(batch["input_ids"].shape), (1, 8))
+
+
 class LoopTests(unittest.TestCase):
     def setUp(self) -> None:
         self.cfg = CATYokoConfig.tiny()
@@ -78,6 +106,46 @@ class LoopTests(unittest.TestCase):
                 self.cfg, "B0", "cpu", steps=2, accum=1, resume=ckpt, seed=1
             ).run()
             self.assertEqual(out.step, 2)
+
+    def test_resume_advances_packed_cursor(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        toks = list(range(64))
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            path = td / "tok.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            save = td / "run"
+            Trainer(
+                cfg, "B0", "cpu", steps=1, accum=1, micro_batch=2, data=path, save_dir=save, save_every=1
+            ).run()
+            ckpt = torch.load(save / "latest.pt", map_location="cpu", weights_only=False)
+            self.assertEqual(ckpt["extra"]["stream"]["i"], 2)
+            out = Trainer(
+                cfg, "B0", "cpu", steps=2, accum=1, micro_batch=2, data=path, resume=save / "latest.pt"
+            ).run()
+            self.assertEqual(out.step, 2)
+
+    def test_grad_ckpt_b2(self) -> None:
+        nll = train_loop(self.cfg, "B2", steps=1, device="cpu", accum=1, grad_ckpt=True)
+        self.assertTrue(nll > 0)
+
+    def test_seq_len_override_mismatch_raises(self) -> None:
+        toks = list(range(32))
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "tok.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            (Path(str(path) + ".meta.json")).write_text(json.dumps({"seq_len": 16}))
+            with self.assertRaises(ValueError):
+                Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, data=path, seq_len=8)
+
+    def test_log_includes_grad_norm(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            log = Path(td) / "m.jsonl"
+            Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, log_path=log).run()
+            row = json.loads(log.read_text().splitlines()[0])
+            self.assertIn("grad_norm", row)
+            self.assertIn("tok_s", row)
+            self.assertIn("aux", row)
 
     def test_wsd_b1_offset_skips_warmup(self) -> None:
         lr = wsd_lr(8e9, self.cfg, "B1")
