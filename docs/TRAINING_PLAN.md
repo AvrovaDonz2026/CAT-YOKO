@@ -1,9 +1,11 @@
 # CAT-YOKO 训练计划：基于 MiniCPM-2B 上采样的 Causal Encoder-Decoder（YOCO 式）混合注意力 MoE
 
 > 目标：以 OpenBMB **MiniCPM-2B** 为底座，训练一个 **Causal Encoder-Decoder（YOCO / "You Only Cache Once" 式 decoder-decoder）** 模型：
-> **≈24B 总参数**；**Encoder（自解码器 self-decoder）处理输入，≈3B 激活/输入 token**；
-> **Decoder（交叉解码器 cross-decoder）生成输出，≈6B 激活/输出 token**；
+> **≈12B 总参数**（已按算力预算从 24B 下调）；非对称激活 **默认：Encoder 处理输入 ≈2.3B 激活/token、Decoder 生成输出 ≈4.5B 激活/token**
+> （更省算力档 ≈1.6B/3.1B、近-dense 档 ≈3.0B/6.2B 见 §3）；
 > 注意力用 **DeepSeek-V4-Flash 式 CSA + HCA 压缩注意力 + 8K 大滑动窗口**；原生长上下文（YOCO 单一全局 KV cache）。
+>
+> ⚠️ **关键**：总参数主要影响**显存/存储**；**训练算力 ∝ 激活参数 × tokens**。要真正降训练成本必须降**激活**（选更省算力档），而不是只降总参。
 >
 > 本文是可执行的工程训练计划，包含：架构定义、参数预算、分阶段训练配方、数据、优化器、
 > 基础设施、评测与风险控制。文中所有具体数字为**推荐初值**，需在小规模标定后再冻结。
@@ -17,12 +19,12 @@
 | 你的表述 | 本计划的解释 | 备注 / 可调整项 |
 | --- | --- | --- |
 | `基于 openbmb 的 minicpm2b` | 底座 = **MiniCPM-2B**（dense，40 层，hidden 2304，FFN 5760，36 头，vocab 122753，tie embedding） | 也可换 `MiniCPM-2B-128k` 变体作为长上下文底座 |
-| `和 deepseekv4.1 flash 一样` | 对标 **DeepSeek-V4-Flash** 的架构范式（CSA/HCA 混合注意力 + DeepSeekMoE + mHC + Muon + MTP + Hash-MoE bootstrap） | V4-Flash 官方为 284B/13B decoder-only；我们做的是**同架构、缩小到 24B 且改造为 YOCO encoder-decoder（3B/6B 非对称激活）的复刻** |
-| `Causal-Encoder-Decoder，输入激活 3b，输出激活 6b，24b` | **YOCO 式 decoder-decoder**：**Encoder=self-decoder** 处理输入（**≈3B 激活/输入 token**）并产出**单一全局 KV cache**；**Decoder=cross-decoder** 生成输出（**≈6B 激活/输出 token**）并对该全局 cache 做 cross-attention。总参数 **≈24B**（命名 `CAT-YOKO-24B`） | 激活的非对称性来自**两个物理不同的栈**（encoder 较小、decoder 较大），不是变 top-k。见 §2、§3 |
+| `和 deepseekv4.1 flash 一样` | 对标 **DeepSeek-V4-Flash** 的架构范式（CSA/HCA 混合注意力 + DeepSeekMoE + mHC + Muon + MTP + Hash-MoE bootstrap） | V4-Flash 官方为 284B/13B decoder-only；我们做的是**同架构、缩小到 12B 且改造为 YOCO encoder-decoder（非对称激活）的复刻** |
+| `Causal-Encoder-Decoder，输入激活 3b，输出激活 6b`；后续 **`砍到12B`** | **YOCO 式 decoder-decoder**：**Encoder=self-decoder** 处理输入并产出**单一全局 KV cache**；**Decoder=cross-decoder** 生成输出并对该全局 cache 做 cross-attention。**总参数 ≈12B**（命名 `CAT-YOKO-12B`）；激活默认 **中间档（~2.3B-in/~4.5B-out）**，更省档 1.6/3.1、近-dense 档 3.0/6.2 见 §3 | 激活的非对称性来自**两个物理不同的栈**（encoder 较小、decoder 较大），不是变 top-k。见 §2、§3 |
 | `大滑窗注意力 8k` | 每个 CSA/HCA 层保留的**未压缩滑窗分支** `n_win = 8192` | DeepSeek-V4 默认 `n_win=128`，8K 是明显放大，成本更高但局部保真更好 |
 | `CSA HCA` | **Compressed Sparse Attention** + **Heavily Compressed Attention**（DeepSeek-V4 的两种压缩注意力，层间交错） | 见 §2 |
 
-> ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；总参数 24B；Encoder 输入激活 ≈3B、Decoder 输出激活 ≈6B。
+> ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；**总参数 12B**（从 24B 下调）；激活默认 **≈2.3B-in / ≈4.5B-out**（取 1.6/3.1 与 3.0/6.2 的中间档）。更省算力档与近-dense 档见 §3。
 > 仓库名 **CAT-YOKO** 中的 "YOKO" 即对应 **YOCO**。若你希望的 encoder 是**双向**（非因果）编码器而非 YOCO 的因果 self-decoder，
 > 请告知——这会影响能否用 MiniCPM（因果）权重直接热启，以及能否做 prefill early-exit。
 
@@ -54,16 +56,16 @@
 > MiniCPM 的 μP 缩放常量（embedding 乘子、residual `scale_depth/√L`、logits 除以 `d/dim_model_base`）
 > 在架构手术后**必须保留一致**，否则前向数值尺度会漂移导致继续训练不稳定。
 
-### 1.2 目标模型 `CAT-YOKO-24B`（Causal Encoder-Decoder / YOCO 式）
+### 1.2 目标模型 `CAT-YOKO-12B`（Causal Encoder-Decoder / YOCO 式）
 
-| 项 | 推荐值 | 说明 |
+| 项 | 推荐值（默认中间档） | 说明 |
 | --- | --- | --- |
 | 架构 | **YOCO decoder-decoder**：Encoder(self-decoder) → 全局 KV cache → Decoder(cross-decoder) | 见 §2 |
-| 总参数 | **≈24B** | 见 §3 预算 |
-| **Encoder** 激活/输入 token | **≈3B** | 16 层，MoE，CSA/HCA+8K 滑窗，产出全局 cache |
-| **Decoder** 激活/输出 token | **≈6B** | 24 层，MoE，自注意力 + **cross-attn 到全局 cache** |
+| 总参数 | **≈12B** | 见 §3 预算 |
+| **Encoder** 激活/输入 token | **≈2.3B**（档位可选 1.6/2.3/3.0） | 16 层，MoE，CSA/HCA+8K 滑窗，产出全局 cache |
+| **Decoder** 激活/输出 token | **≈4.5B**（档位可选 3.1/4.5/6.2） | 24 层，MoE，自注意力 + **cross-attn 到全局 cache** |
 | 隐藏维 | 2304（沿用底座，enc/dec 一致以便共享 emb 与热启） | |
-| FFN | **DeepSeekMoE** 细粒度专家，`moe_intermediate_size=2048` | Enc: 2 shared+22 routed, top-k 8；Dec: 2 shared+47 routed, top-k 12 |
+| FFN | **DeepSeekMoE** 细粒度专家，`moe_intermediate_size=2048` | Enc: 1 shared+17 routed, top-k 6；Dec: 1 shared+17 routed, top-k 8（默认档） |
 | 注意力 | **CSA/HCA 混合 + 8K 滑窗**；enc 内含长程压缩，dec 的 cross-attn 复用单一全局 cache；**可选叠加 KDA 线性注意力做 3:1 三路混合** | §2 / §2.5 |
 | KV cache | **单一全局 cache（You Only Cache Once）** + 压缩 → O(N) 级显存 | 长上下文关键收益 |
 | 残差 | **mHC**（可选，先用普通残差跑通） | 稳定性增强 |
@@ -156,7 +158,7 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 
 **那为何仍推荐引入 KDA？** 两个互补收益：
 1. **效率杠杆（主）**：Kimi Linear 用 **3:1 KDA:MLA** 混合，1M 上下文 KV cache ↓~75%、解码 ↑~6×，且质量不降反升。
-   把多数层换成 KDA、少数层保留 CSA/HCA，可显著降低 24B 在长上下文的成本。
+   把多数层换成 KDA、少数层保留 CSA/HCA，可显著降低模型在长上下文的成本。
 2. **对 CSA 选择性失败的"兜底覆盖"（次）**：CSA 风险在于 Lightning Indexer 的 top-k **漏选**中段相关 block。
    KDA 是**无 top-k、顺序敏感、每 token 都写入状态**的路径，提供 gist 级全序列覆盖，作为漏选时的安全网
    （注意是粗覆盖，不替代精确检索）。
@@ -170,46 +172,35 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 **代价 / 注意**：
 - KDA 需额外的 **DPLR chunked kernel** + **独立循环状态**管理（与 YOCO"只缓存一次"正交：YOCO 省 KV cache，KDA 状态是每层各自的小状态）。
 - 混合改造已知坑：**模型可能学会忽略线性路径**；上采样初始化时让 KDA 与被替换的注意力做行为对齐，训练中监控各路径贡献。
-- 参数上，KDA 层通常比 MHA/CSA 更省参（无大 KV 投影），把部分 CSA/HCA 层替换为 KDA 会略降每栈参数，需在 §3 脚本里按实际 KDA 维度重算并用 routed 专家数补回 24B。
+- 参数上，KDA 层通常比 MHA/CSA 更省参（无大 KV 投影），把部分 CSA/HCA 层替换为 KDA 会略降每栈参数，需在 §3 脚本里按实际 KDA 维度重算并用 routed 专家数补回 12B。
 
 > 结论：**值得加，但定位是"效率 + 兜底覆盖"，不是"保中段精确检索"**。是否上、以及 KDA:CSA:HCA 的确切比例，用 §7 消融决定。
 
 ---
 
-## 3. 参数预算推导（`CAT-YOKO-24B`，Encoder-Decoder 拆分）
+## 3. 参数预算推导（`CAT-YOKO-12B`，Encoder-Decoder 拆分）
 
 底座维度 `d=2304`、`vocab=122753`、tie embedding。Encoder 16 层、Decoder 24 层（共 40，沿用底座深度）。
 `moe_intermediate_size=2048`（DeepSeek-V4 同量级、对硬件友好），单专家 SwiGLU ≈ `3·d·2048 ≈ 14.16M`。
 
-### 3.1 预算表（推荐代表性配置）
+### 3.1 预算表（12B 总参，激活三档可选）
 
-| 组成 | 配置 | Encoder(16L) | Decoder(24L) |
-| --- | --- | --- | --- |
-| 自注意力（CSA/HCA，估 ×1.25 于 MHA） | `1.25·4d²`/层 | ≈0.42B | ≈0.64B |
-| Cross-attn（q,k,v,o） | `4d²`/层，仅 decoder | — | ≈0.51B |
-| MoE 专家配置 | shared + routed，top-k | 2 + 22，top-k 8 | 2 + 47，top-k 12 |
-| **激活** MoE FFN | 层 ×(shared+top-k)×14.16M | ≈2.27B | ≈4.76B |
-| **总** MoE FFN | 层 ×(shared+routed)×14.16M | ≈5.44B | ≈16.65B |
-| Embedding（tie，全局共享） | `V·d` ≈0.283B | 计入激活/总 | — |
-| **该栈激活/token** | emb + attn(+cross) + active_moe | **≈3.0B（输入）** | **≈6.2B（输出）** |
-| **该栈总参数** | attn(+cross) + total_moe | ≈5.9B | ≈17.7B |
+单专家 SwiGLU ≈ `3·d·2048 ≈ 14.16M`；Embedding（tie，全局共享）≈0.283B；三档总参数均 ≈12B，仅激活/稀疏度不同。
 
-| 汇总 | 值 |
-| --- | --- |
-| **总参数**（emb + Encoder 栈 + Decoder 栈） | **≈24B** |
-| **Encoder 激活/输入 token** | **≈3.0B** |
-| **Decoder 激活/输出 token** | **≈6.0–6.2B** |
+| 档位 | Enc 专家(shared+routed, top-k) | Dec 专家(shared+routed, top-k) | Enc 激活/输入 | Dec 激活/输出 | 稀疏度 enc/dec | 训练算力(×50B tok) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 省算力档 | 1+20，top-k 3 | 1+15，top-k 4 | ≈1.6B | ≈3.1B | 19% / 31% | ~950 H100-h |
+| **默认（中间档）** | **1+17，top-k 6** | **1+17，top-k 8** | **≈2.3B** | **≈4.5B** | **37% / 53%** | **~1,400 H100-h** |
+| 近-dense 档 | 2+10，top-k 8 | 2+20，top-k 12 | ≈3.0B | ≈6.2B | 83% / 64% | ~1,900 H100-h |
 
-> 说明：层数拆分（16/24）、`moe_intermediate_size`、每栈 shared/routed/top-k 均为可调旋钮。以上组合已使
-> 三项目标（总 24B、enc 激活 3B、dec 激活 6B）同时命中。注意力那 ×1.25 是占位估计；**一旦 MLA 秩 / 压缩维 `c` /
-> indexer 维度定稿，用下方脚本重算并微调 routed 专家数把总量精确对齐到 24.0B。**
+固定部分（三档相同）：Enc 自注意力 ≈0.42B、Dec 自注意力 ≈0.64B、Dec cross-attn ≈0.51B、emb ≈0.28B。
 
-> 🔑 **参数由专家主导，与注意力类型基本无关**：本配置下**注意力仅占总参数 ≈6.6%，MoE 专家占 ≈92.3%**。
-> 因此**加入 KDA 不需要缩小总参数**——把 3/4 层换成 KDA 只让总量变化约 −0.16B（补 1 个专家即可回填），总量仍由
-> `n_routed` 决定。"总参数"和"用什么注意力"是两个正交旋钮：想要 24B 就保持专家数，想降到 12B 是**为了降迭代成本的选择**（见 §13），
-> 不是 KDA 的强制要求。
+> 🔑 **总参数 ≈ 显存/存储；训练算力 ∝ 激活 × tokens。** 三档总参都是 12B，但训练成本随**激活**变（950 → 1,400 → 1,900 H100-h）。
+> 默认取中间档（enc 2.3B / dec 4.5B）——"1.6 太少、3.0 太多"的折中。层数拆分（16/24）、`moe_intermediate_size`、
+> 每栈 shared/routed/top-k 均为旋钮；注意力 ×1.25 为占位估计，定稿后用脚本重算并微调 routed 数对齐 12.0B。
+> 另注：注意力仅占总参 ~7%，**加 KDA 不改变总参预算**（见 §2.5）。
 
-### 3.2 复算脚本（放到 `scripts/param_budget.py`）
+### 3.2 复算脚本（`scripts/param_budget.py`，默认中间档）
 
 ```python
 d, V, moe_int = 2304, 122753, 2048
@@ -218,8 +209,10 @@ expert = 3*d*moe_int               # SwiGLU 单专家
 attn   = int(1.25*4*d*d)           # 每层自注意力（用实际实现替换）
 cross  = 4*d*d                     # 每层 cross-attn（仅 decoder）
 
-Le, ns_e, tk_e, Nr_e = 16, 2,  8, 22   # Encoder = self-decoder
-Ld, ns_d, tk_d, Nr_d = 24, 2, 12, 47   # Decoder = cross-decoder
+# 默认中间档（12B / ~2.3B-in / ~4.5B-out）
+Le, ns_e, tk_e, Nr_e = 16, 1, 6, 17   # Encoder = self-decoder
+Ld, ns_d, tk_d, Nr_d = 24, 1, 8, 17   # Decoder = cross-decoder
+# 省算力档: (1,3,20) / (1,4,15)   近-dense 档: (2,8,10) / (2,12,20)
 
 enc_act = emb + attn*Le          + Le*(ns_e+tk_e)*expert
 dec_act = emb + (attn+cross)*Ld  + Ld*(ns_d+tk_d)*expert
@@ -298,7 +291,7 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
 ### Phase F — SFT
 
 - 指令/多轮对话/长上下文/工具调用/代码/数学；打包到目标长度，loss 只在 response。
-- 可按 DeepSeek-V4 的"**分域专家先各自 SFT+RL，再 on-policy 蒸馏成统一模型**"做，但本项目规模（24B）可先做单一混合 SFT。
+- 可按 DeepSeek-V4 的"**分域专家先各自 SFT+RL，再 on-policy 蒸馏成统一模型**"做，但本项目规模（12B）可先做单一混合 SFT。
 
 ### Phase G — RL
 
@@ -349,7 +342,7 @@ BBH（推理），IFEval（指令遵循）。
 2. `n_win ∈ {2K, 4K, 8K}` 对质量/吞吐的权衡；
 3. CSA:HCA 层比例（1:1 vs 2:1 vs 3:1）；
 4. `index_topk ∈ {128,256,512}`；
-5. MoE 粒度/专家数（`moe_intermediate_size`、`n_routed`、`top_k`）对 24B 总量 / 3B·6B 激活目标的命中；
+5. MoE 粒度/专家数（`moe_intermediate_size`、`n_routed`、`top_k`）对 12B 总量 / 各档激活目标的命中；
 6. **YOCO decoder-decoder vs 等参数 decoder-only**（验证 KV cache / prefill 收益且不掉点）；
 7. **是否引入 KDA 及 KDA:CSA:HCA 比例**（如纯 CSA/HCA vs 3:1 KDA混合 vs 6:1）——重点看 RULER/多跳中段召回是否**因加 KDA 而下降**（预期线性层会略降精确召回，需 full/CSA 锚点补偿）与长上下文吞吐/KV cache 收益；
 8. 上采样 vs 从底座 dense 直接继续训练（验证 upcycling 收益）；
@@ -392,7 +385,7 @@ BBH（推理），IFEval（指令遵循）。
 
 ## 10. 里程碑（以能力/预算计，不以日历计）
 
-1. **M1 手术就绪**：离线得到 `CAT-YOKO-24B`（Encoder 16L / Decoder 24L）初始权重，前向数值尺度自检通过，cross-attn 旁路下短跑 loss 不发散。
+1. **M1 手术就绪**：离线得到 `CAT-YOKO-12B`（Encoder 16L / Decoder 24L）初始权重，前向数值尺度自检通过，cross-attn 旁路下短跑 loss 不发散。
 2. **M2 恢复达标**：Phase B 后（cross-attn 全开），通用 benchmark 恢复到 MiniCPM-2B 的 ~95%+。
 3. **M3 稀疏化达标**：Phase C 后开启 CSA top-k + HCA + 8K 滑窗，短上下文质量与 M2 基本持平，效率明显改善。
 4. **M4 长上下文**：128K/1M RULER/Needle 通过；单 token FLOPs 与 **KV cache（YOCO 单缓存）** 显著低于 decoder-only 对照，prefill early-exit 收益兑现。
@@ -443,8 +436,8 @@ BBH（推理），IFEval（指令遵循）。
 
 **去风险阶梯：**
 - **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。
-- **L1（12B 去风险原型）**：用**完整新颖架构栈**但**专家数减半（≈12B 总）**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。**这里的 12B 不是被 KDA 逼小的，而是廉价的架构验证台。**
-- **L2（扩到 24B）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，12B→24B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
+- **L1（半规模去风险原型，≈3–6B）**：用**完整新颖架构栈**但**专家数减半**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。廉价的架构验证台。
+- **L2（扩到 12B 目标）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，半规模→12B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
 - **每个新组件单独一步**：稀疏化 → KDA → mHC → Muon → FP8，各自一步、留开关、盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
 
 **难度—收益取舍速查：**
@@ -514,9 +507,9 @@ BBH（推理），IFEval（指令遵循）。
 ### 15.2 三条低预算路线（按实际卡数选）
 
 - **Route A — 架构验证（最省，≤ 几张卡，~10–50 H100-h，可租）**：upcycle 小 MiniCPM（1B/2B）→ **0.5–1.5B 小 MoE**，装 YOCO+CSA/HCA(+可选 KDA)，继续训 10–20B tok。目标：证明这套注意力/编解码器能跑、不掉点、长上下文省 KV。**推荐作为默认起点。**
-- **Route B — 可用小模型（~8×A100/H100 两周档或租，~300–900 H100-h）**：MiniCPM-2B → **3–6B** upcycle，继续训 50–60B tok + 短长上下文阶段，得到真能用的小长上下文模型。
+- **Route B — 放大到 12B 目标（~8×A100/H100 两周档或租；12B 中间档 ×50B tok ≈ ~1,400 H100-h）**：MiniCPM-2B → **12B** upcycle（可先经 3–6B 里程碑），继续训 50–60B tok + 短长上下文阶段，得到目标模型。
 - **Route C — PDSA 扩展（几乎不花训练算力，契合已有工作）**：冻结 backbone，仅训小组件（写入器/reranker/阈值）+ 落地"校准回退 / 可训练 editable memory"（§14）。**零预算最优**，直接产出 PDSA 的可训练生命周期后续。
-- **Route D — 24B（暂缓）**：仅在拿到真集群/算力资助后启动；否则不作为当前目标。
+- **Route D — 24B（远期，暂不作为目标）**：仅在拿到真集群/算力资助后再考虑放大。
 
 ### 15.3 省算力杠杆（优先级从高到低）
 
@@ -527,8 +520,8 @@ BBH（推理），IFEval（指令遵循）。
 
 ### 15.4 修订后的默认路径
 
-**L0 tiny 正确性 → Route A（0.5–1.5B 架构验证，出架构论文）→ 有预算再 Route B（3–6B 放大）→ 远期 Route D（24B）。**
-§1.2 的 24B 作为**目标规格**保留，但**当前默认执行 Route A**；§3 的预算脚本可直接把 `Nr_e/Nr_d` 调小到 0.5–1.5B 档。
+**L0 tiny 正确性 → Route A（0.5–1.5B 架构验证，出架构论文）→ 有预算再 Route B（放大到 12B 目标）→ 远期（可选）Route D（24B）。**
+§1.2 的 **12B 为目标规格**；预算紧时**当前默认先执行 Route A**，§3 的预算脚本可直接把 `Nr_e/Nr_d` 调小到 0.5–1.5B 档做验证。
 
 ---
 
