@@ -6,7 +6,7 @@ Usage::
     python3 -m cat_yoko.b1 --resume checkpoints/b0 --save-dir checkpoints/b1
     python3 -m cat_yoko.b2 --resume checkpoints/b1 --save-dir checkpoints/b2
 
-``--try`` is the 32GB path: seq=64, 32 optimizer steps, trainable.pt for Git LFS.
+``--try`` is the 32GB path: seq=64, 32 optimizer steps, trainable.pt overlay (Hub, not GitHub).
 Without ``--try`` the envelope is the published 8 / 27 / 15B tokens (H100-scale).
 """
 
@@ -43,7 +43,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         "--try",
         action="store_true",
         dest="try_run",
-        help=f"32GB / LFS path: {TRY_STEPS} steps, seq={TIGHT_GPU_SEQ}, trainable.pt only",
+        help=f"32GB path: {TRY_STEPS} steps, seq={TIGHT_GPU_SEQ}, trainable.pt overlay only",
     )
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--tokens", type=float, default=None)
@@ -96,7 +96,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         p.error(
             f"{phase} published envelope is {ph.tokens:.0e} tokens; a "
             f"<{int(TIGHT_12B_GPU_GIB)}GiB GPU cannot finish it. "
-            "Pass --try (32 steps, seq=64, trainable.pt for Git LFS) "
+            "Pass --try (32 steps, seq=64, trainable.pt overlay) "
             "or explicit --steps / --tokens."
         )
     seq = args.seq_len

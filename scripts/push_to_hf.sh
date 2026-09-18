@@ -8,7 +8,7 @@
 # Conservative:
 #   - does not source repo env files, tokens, or keys
 #   - never prints key material; never git-adds ~/.ssh/*
-#   - refuses files >50GiB; warns if a file is >5GiB (GitHub LFS cannot take it; HF can)
+#   - refuses files >50GiB; warns if a file is >5GiB
 #   - git-adds only the files copied this run
 #
 # Usage:
@@ -44,9 +44,10 @@ Push selected artifacts to HuggingFace Hub (AvrovaDonz/CAT-YOKO).
   --branch NAME     HF branch (default: main or $HF_BRANCH)
   --help            this help
 
-Default payload: checkpoints/b0/trainable.pt plus huggingface/README.md
-and huggingface/.gitattributes when those files exist. Extra path arguments
-are copied as additional artifacts (paths relative to the GitHub repo root).
+Default payload: huggingface/README.md (model card) plus huggingface/.gitattributes
+when those files exist. Extra path arguments are copied as additional artifacts
+(paths relative to the GitHub repo root, or absolute overlay files). Weights are
+not in the GitHub tree; pass a local .pt to upload.
 
 IdentityFile: $HF_SSH_KEY or $HOME/.ssh/id_ed25519_hf_cat_yoko
 EOF
@@ -184,10 +185,8 @@ resolve_extra() {
 
 if [[ -f "$ROOT/$DEFAULT_PT" ]]; then
   add_artifact "$ROOT/$DEFAULT_PT" "$DEFAULT_PT"
-elif [[ ${#EXTRA_FILES[@]} -eq 0 ]]; then
-  die "default artifact missing: $ROOT/$DEFAULT_PT"
 else
-  echo "warning: default artifact missing ($DEFAULT_PT); pushing extras only" >&2
+  echo "note: $DEFAULT_PT is not in git (weights live on HuggingFace); pass a local overlay to upload" >&2
 fi
 
 if [[ -f "$ROOT/huggingface/README.md" ]]; then
@@ -224,7 +223,7 @@ while [[ $i -lt ${#SRCS[@]} ]]; do
     die "refuse $dst: $(human_bytes "$sz") > 50GiB"
   fi
   if (( sz > WARN_BYTES )); then
-    echo "warning: $dst is $(human_bytes "$sz") > 5GiB (GitHub LFS cannot take it; HF can)" >&2
+    echo "warning: $dst is $(human_bytes "$sz") > 5GiB" >&2
   fi
   i=$((i + 1))
 done

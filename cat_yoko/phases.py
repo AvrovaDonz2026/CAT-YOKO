@@ -3,7 +3,7 @@
 Wall-clock target is C1+NVFP4 (571 H100-h for 8+27+15B tokens; RTX PRO
 6000 / 6000D). A 32GB card can run the same graph and freeze curriculum;
 it cannot finish the token envelopes and cannot run NVFP4. ``--try``
-writes a real (short) checkpoint for LFS.
+writes a real (short) trainable overlay for HuggingFace Hub.
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ PHASES: dict[str, PhaseSpec] = {
 }
 
 
-# GitHub LFS rejects files >5GiB. B0 trainable is ~0.44GiB bf16; B1/B2 need shards.
-GITHUB_LFS_MAX_BYTES = 4 * (1 << 30)
+# Hub shard cap. 4GiB keeps autodl-tmp / copy tools comfortable.
+HUB_SHARD_MAX_BYTES = 4 * (1 << 30)
 TIGHT_GPU_SEQ = 64
 TRY_STEPS = 32
 

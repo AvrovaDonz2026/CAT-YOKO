@@ -26,7 +26,7 @@ python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base \
 `openbmb/MiniCPM5-2B-Base` 的 `model.safetensors` 是 **5,033,557,128** 字节，sha256 `d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a`。
 hf-mirror 的 `/resolve/` 会 302 到 `cas-bridge.xethub.hf.co`；这台机器对该 host 返回 **403**（这就是上一张 4080 卡在 20MiB 的原因）。`download_minicpm5.py` 失败后改走 ModelScope `OpenBMB/MiniCPM5-2B-Base`（同大小、同 sha）。Tokenizer 仍可从 hf-mirror git 拉（`tokenizer.json` ≈9.8MiB，不是 Xet）。
 
-不要把 Hub 缓存在 overlay。不要把 SSH 密码或 HuggingFace deploy key 写进本目录。超过 GitHub LFS 上限的发布权重应落到 HuggingFace [AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)。
+不要把 Hub 缓存在 overlay。不要把 SSH 密码或 HuggingFace deploy key 写进本目录。发布权重落到 HuggingFace [AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)，不进 GitHub。
 
 ## B0 `--try`（真实 MiniCPM5 上采样）
 
@@ -40,4 +40,4 @@ MiniCPM5-2B-Base sha256 `d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366b
 | trainable | 219.21M / overlay 419MiB |
 | overlay sha256 | `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 
-日志：`runs/gpu_and_b0.log`、`runs/b0/metrics.jsonl`、`gpu_smoke/tiny.json`。overlay 进 HuggingFace，不进 GitHub LFS（GitHub 仍留 4080 dummy 对照）。
+日志：`runs/gpu_and_b0.log`、`runs/b0/metrics.jsonl`、`gpu_smoke/tiny.json`。overlay 只进 HuggingFace，不进 GitHub。

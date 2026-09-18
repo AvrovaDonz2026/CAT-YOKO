@@ -94,7 +94,7 @@ def resolve_resume_path(path: Path | str) -> Path:
     """File as-is; directory prefers full ``latest.pt``, then ``trainable.pt``.
 
     12B B0 on a 32GB card writes trainable-only (~0.4GiB) because a 23GiB
-    ``latest.pt`` will not fit GitHub LFS (5GiB/file) or a 50G data volume.
+    ``latest.pt`` will not fit a 50G data volume and does not belong on GitHub.
     """
     path = Path(path)
     if path.is_file():
@@ -204,7 +204,7 @@ def model_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
 
 
 def trainable_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:
-    """B0/B1 LFS payload: only ``requires_grad`` params (B0 ≈ 219M, ~0.44GiB bf16)."""
+    """B0/B1 Hub overlay: only ``requires_grad`` params (B0 ≈ 219M, ~0.44GiB bf16)."""
     out: dict[str, torch.Tensor] = {}
     for name, p in unwrap(model).named_parameters():
         if p.requires_grad:
@@ -232,7 +232,7 @@ def save_trainable_checkpoint(
     model: nn.Module,
     extra: dict[str, Any],
 ) -> None:
-    """Weights GitHub LFS can hold. Resume = MiniCPM5 upcycle + this overlay."""
+    """Trainable overlay for HuggingFace Hub. Resume = MiniCPM5 upcycle + this file."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     sd = trainable_state_dict(model)
@@ -256,7 +256,7 @@ def shard_state_dict(
     *,
     max_bytes: int,
 ) -> list[dict[str, torch.Tensor]]:
-    """Split a full 12B dict into GitHub-LFS-sized pieces (≤4GiB)."""
+    """Split a full 12B dict into Hub-sized pieces (≤4GiB)."""
     if max_bytes <= 0:
         raise ValueError("max_bytes must be positive")
     shards: list[dict[str, torch.Tensor]] = []
@@ -282,11 +282,11 @@ def save_sharded_checkpoint(
     max_bytes: int | None = None,
 ) -> Path:
     """Write ``shard-00000.pt`` … plus ``manifest.json``. B1/B2 full graphs."""
-    from cat_yoko.phases import GITHUB_LFS_MAX_BYTES
+    from cat_yoko.phases import HUB_SHARD_MAX_BYTES
 
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    cap = int(max_bytes) if max_bytes is not None else GITHUB_LFS_MAX_BYTES
+    cap = int(max_bytes) if max_bytes is not None else HUB_SHARD_MAX_BYTES
     sd = _cpu_copy(model_state_dict(model))
     shards = shard_state_dict(sd, max_bytes=cap)
     names: list[str] = []
