@@ -113,19 +113,17 @@ def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[to
 
 
 def clip_grad_norm_mixed(params: Iterable[nn.Parameter], max_norm: float) -> float:
-    """``clip_grad_norm_`` that allows mixed CPU / CUDA grads (block offload)."""
+    """``clip_grad_norm_`` that allows mixed CPU / CUDA grads (block offload).
+
+    Do not upcast whole grad tensors to fp32 — on B2 that would clone ~22GiB
+    and blow a 62GiB cgroup.
+    """
     grads = [p.grad for p in params if p.grad is not None]
     if not grads:
         return 0.0
-    kinds = {g.device.type for g in grads}
-    if len(kinds) == 1:
-        total = torch.nn.utils.clip_grad_norm_(
-            [p for p in params if p.grad is not None], max_norm
-        )
-        return float(total)
     sq = 0.0
     for g in grads:
-        sq += float(g.detach().float().norm(2).item() ** 2)
+        sq += float(g.detach().norm(2).item() ** 2)
     total_norm = math.sqrt(sq)
     coef = float(max_norm) / (total_norm + 1e-6)
     if coef < 1.0:

@@ -140,9 +140,13 @@ class CPUOffloadAdamW(AdamW):
             for p in group["params"]:
                 if p.grad is None:
                     continue
-                grad = p.grad.detach().to(device="cpu", dtype=torch.float32)
+                grad = p.grad.detach()
                 p.grad = None
-                p32 = p.detach().to(device="cpu", dtype=torch.float32)
+                if grad.device.type != "cpu" or grad.dtype != torch.float32:
+                    grad = grad.to(device="cpu", dtype=torch.float32)
+                p32 = p.detach()
+                if p32.device.type != "cpu" or p32.dtype != torch.float32:
+                    p32 = p32.to(device="cpu", dtype=torch.float32)
                 state = self.state[p]
                 if self.retain_state:
                     if len(state) == 0:
