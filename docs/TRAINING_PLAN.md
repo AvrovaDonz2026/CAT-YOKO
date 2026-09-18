@@ -53,8 +53,8 @@
 | 非词嵌入参数 | ≈2.4B（总含 emb ≈2.7B） |
 | 特殊设计 | **μP 风格缩放**（`scale_emb`、`scale_depth`、`dim_model_base`）+ **WSD 学习率调度** |
 
-> MiniCPM 的 μP 缩放常量（embedding 乘子、residual `scale_depth/√L`、logits 除以 `d/dim_model_base`）
-> 在架构手术后**必须保留一致**，否则前向数值尺度会漂移导致继续训练不稳定。
+> MiniCPM 的 μP 缩放常量（embedding 乘子、residual `scale_depth/√L` 中的 \(L=40\)、logits 除以 `d/dim_model_base=9`）
+> 在拆成 16+24 之后**必须保持原值**（不要改成 √16 / √24），否则继承权重的残差尺度会漂。核对见理论验证 §9。
 
 ### 1.2 目标模型 `CAT-YOKO-12B`（Causal Encoder-Decoder / YOCO 式）
 
@@ -82,13 +82,13 @@
 CAT-YOKO 由两个因果栈组成，行为上等价于一个 decoder-only Transformer，但"只缓存一次"：
 
 ```
-输入 tokens ─► [Encoder = Self-Decoder, 16 层, ≈3B 激活/token]
+输入 tokens ─► [Encoder = Self-Decoder, 16 层, ≈2.3B 激活/token]
                  │  高效因果注意力（CSA/HCA + 8K 滑窗），逐层压缩长程
                  ▼
           顶层隐状态  ──►  产出【单一全局 KV cache  K̂, V̂】(You Only Cache Once)
                  │
                  ▼
-        [Decoder = Cross-Decoder, 24 层, ≈6B 激活/token]
+        [Decoder = Cross-Decoder, 24 层, ≈4.5B 激活/token]
            每层 = 高效因果自注意力(生成序列, 滑窗)  +  Cross-Attn(→ K̂,V̂)  +  MoE-FFN
                  ▼
              RMSNorm ─► LM Head (tie emb) ─► 下一个 token
@@ -96,8 +96,8 @@ CAT-YOKO 由两个因果栈组成，行为上等价于一个 decoder-only Transf
 
 关键性质（来自 YOCO）：
 - **只缓存一次**：只有 encoder 顶层产出的一个全局 cache 被所有 cross-decoder 层复用，KV cache 显存从 `O(N·L)` 降到约 `O(N)`；叠加 CSA/HCA 的序列维压缩后，长上下文显存进一步压到极低。
-- **Prefill 可提前退出**：处理超长输入时，prefill 只需跑完 encoder（self-decoder）即可产出全局 cache，无需跑满全部层 → 长上下文首 token 延迟大幅下降。这正是"**输入侧更轻（≈3B）**"的动机。
-- **非对称激活来自两个物理栈**：encoder 较小（16 层、专家/激活更少 → ≈3B），decoder 较大（24 层、含 cross-attn、专家/激活更多 → ≈6B）。**不是**变 top-k。
+- **Prefill 可提前退出**：处理超长输入时，prefill 只需跑完 encoder（self-decoder）即可产出全局 cache，无需跑满全部层 → 长上下文首 token 延迟大幅下降。这正是"**输入侧更轻（≈2.3B）**"的动机。中间档激活份额约 34%（见 `docs/THEORY_VERIFICATION.md` §6）。
+- **非对称激活来自两个物理栈**：encoder 较小（16 层、专家/激活更少 → ≈2.3B），decoder 较大（24 层、含 cross-attn、专家/激活更多 → ≈4.5B）。**不是**变 top-k。
 - **保留全局注意力能力**：cross-decoder 通过 cross-attn 访问全局 cache，等效全局感受野。
 
 > 设计取舍：YOCO 原论文 self-decoder 用 sliding-window attention 或 gated retention。我们把 self-decoder 的
@@ -189,16 +189,17 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 
 | 档位 | Enc 专家(shared+routed, top-k) | Dec 专家(shared+routed, top-k) | Enc 激活/输入 | Dec 激活/输出 | 稀疏度 enc/dec | 训练算力(×50B tok) |
 | --- | --- | --- | --- | --- | --- | --- |
-| 省算力档 | 1+20，top-k 3 | 1+15，top-k 4 | ≈1.6B | ≈3.1B | 19% / 31% | ~950 H100-h |
-| **默认（中间档）** | **1+17，top-k 6** | **1+17，top-k 8** | **≈2.3B** | **≈4.5B** | **37% / 53%** | **~1,400 H100-h** |
-| 近-dense 档 | 2+10，top-k 8 | 2+20，top-k 12 | ≈3.0B | ≈6.2B | 83% / 64% | ~1,900 H100-h |
+| 省算力档 | 1+20，top-k 3 | 1+15，top-k 4 | 1.61B | 3.13B | 19.0% / 31.2% | 988 H100-h |
+| **默认（中间档）** | **1+17，top-k 6** | **1+17，top-k 8** | **2.29B** | **4.49B** | **38.9% / 50.0%** | **1,413 H100-h** |
+| 近-dense 档 | 2+10，top-k 8 | 2+20，top-k 12 | 2.97B | 6.19B | 83.3% / 63.6% | 1,908 H100-h |
 
 固定部分（三档相同）：Enc 自注意力 ≈0.42B、Dec 自注意力 ≈0.64B、Dec cross-attn ≈0.51B、emb ≈0.28B。
+三档 **专家实例都是 720**（只重分配 shared/routed/top-k），所以总参同为 12.05B、训练成本只随激活变。
 
-> 🔑 **总参数 ≈ 显存/存储；训练算力 ∝ 激活 × tokens。** 三档总参都是 12B，但训练成本随**激活**变（950 → 1,400 → 1,900 H100-h）。
-> 默认取中间档（enc 2.3B / dec 4.5B）——"1.6 太少、3.0 太多"的折中。层数拆分（16/24）、`moe_intermediate_size`、
-> 每栈 shared/routed/top-k 均为旋钮；注意力 ×1.25 为占位估计，定稿后用脚本重算并微调 routed 数对齐 12.0B。
-> 另注：注意力仅占总参 ~7%，**加 KDA 不改变总参预算**（见 §2.5）。
+> 🔑 **总参数 ≈ 显存/存储；训练算力 ∝ 激活 × tokens。** 三档总参都是 12.05B，但训练成本随**激活**变（988 → 1,413 → 1,908 H100-h @ 50B tok）。
+> 默认取中间档（enc 2.29B / dec 4.49B）——"1.6 太少、3.0 太多"的折中。层数拆分（16/24）、`moe_intermediate_size`、
+> 每栈 shared/routed/top-k 均为旋钮；注意力 ×1.25 为占位估计，定稿后用脚本重算并微调 routed 数对齐 12.05B。
+> 另注：12B 下占位注意力占总参 **~13%**（MoE ~85%），**加 KDA 仍不改变总参预算**（见 §2.5）。逐项复算、KV/FLOPs/μP 与 claim ledger 见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)。
 
 ### 3.2 复算脚本（`scripts/param_budget.py`，默认中间档）
 
@@ -220,6 +221,13 @@ total   = emb + attn*Le + Le*(ns_e+Nr_e)*expert \
               + (attn+cross)*Ld + Ld*(ns_d+Nr_d)*expert
 print(f"enc_active(input)={enc_act/1e9:.2f}B "
       f"dec_active(output)={dec_act/1e9:.2f}B total={total/1e9:.2f}B")
+```
+
+完整复算（KV / FLOPs / μP / 三档对照 / 规格断言）以 `scripts/param_budget.py` 为准，推导见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)：
+
+```bash
+python3 scripts/param_budget.py --full
+python3 scripts/param_budget.py --verify
 ```
 
 ---
@@ -249,7 +257,8 @@ Phase G  RL（GRPO/可选 DPO）      —— 按域分批
    - 把 dense FFN 的中间维切成 G 段、每段复制成多个专家（**virtual-group 初始化**：保证转换瞬间 top-k 恰好选到每个分片的一份副本，等价于原 dense 函数）。
    - **权重缩放**：SwiGLU 专家投影按 `(E·G²/T)^(1/3)` 量级缩放（论文验证约降 1.5% loss）。
    - **路由**：`softmax-then-topK`（优于 topK-then-softmax）；亲和度打分用 **Sqrt(Softplus(·))**（V4 做法）。
-   - 每栈**首层保留 dense**（DeepSeekMoE 惯例：首层负载收敛慢）。
+   - 每栈**首层保留 dense**（DeepSeekMoE 惯例：首层负载收敛慢）。规格表按全 MoE 记账为 12.05B；首层 dense 后总参约 11.62B，把 Encoder routed **17→19**（top-k 不变）即可补回 12.04B，激活仍为 ≈2.23B / ≈4.40B。
+   - **μP**：残差乘子继续用 `scale_depth/√40`，不要按 16/24 重算（见理论验证 §9）。
    - **Hash-MoE bootstrap**：每栈最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。
 2. **注意力改造**：继承 `q/k/v/o`（或 SVD 到 MLA 低秩）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。
 3. **保留 MiniCPM μP 缩放常量**（emb 乘子、`scale_depth`、logits 缩放）。
@@ -342,7 +351,7 @@ BBH（推理），IFEval（指令遵循）。
 **长上下文**：**RULER**、**Needle-in-a-Haystack**、LongBench；核对 8K 滑窗 + 压缩长程 + YOCO 全局 cache 在 32K/128K/1M 的检索保真（YOCO 报告 1M 近乎满分 needle）。
 **效率**：单 token 推理 FLOPs、**KV cache 大小（YOCO 只缓存一次，应显著低于 decoder-only 基线）**、prefill 延迟（encoder early-exit 收益）、decode 吞吐。
 **必做消融**：
-1. **Encoder/Decoder 层数拆分**（如 16/24 vs 20/20 vs 12/28）对 3B/6B 激活与质量的影响；
+1. **Encoder/Decoder 层数拆分**（如 16/24 vs 20/20 vs 12/28）对 2.3B/4.5B 激活与质量的影响；
 2. `n_win ∈ {2K, 4K, 8K}` 对质量/吞吐的权衡；
 3. CSA:HCA 层比例（1:1 vs 2:1 vs 3:1）；
 4. `index_topk ∈ {128,256,512}`；
@@ -400,7 +409,7 @@ BBH（推理），IFEval（指令遵循）。
 ## 11. 立即可做的下一步
 
 1. 冻结 §0 的假设（尤其 encoder 是否因果、Encoder/Decoder 层数拆分、`n_win=8K`、是否上 MLA 与 mHC）。
-2. 跑 `scripts/param_budget.py`，用**真实注意力实现**替换估算行，微调 `Nr_e/Nr_d/moe_intermediate_size` 把总量精确对齐到 24.0B、enc 激活 3.0B、dec 激活 6.0B。
+2. 跑 `scripts/param_budget.py --verify`（中间档断言已通过）。用**真实注意力实现**替换占位行后，微调 `Nr_e/Nr_d/moe_intermediate_size` 把总量精确对齐到 **12.05B**、enc 激活 **2.3B**、dec 激活 **4.5B**（`--attn csa_mqa64` 可做敏感性；Phase A 首层 dense 时 Enc routed 17→19 即可补回总参）。理论核对见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)。
 3. 搭一个 **tiny 配置**（YOCO 骨架 + HF `DeepseekV4` 式 CSA/HCA，例如 `hidden 256, enc 2L / dec 2L, sliding_window=8, m=4, m'=8, index_topk=2`）验证 encoder→全局 cache→cross-decoder 与 CSA/HCA mask 端到端正确性。
 4. 落地 Phase A 的**栈拆分 + cross-attn 注入 + 上采样脚本**（Megatron `upcycling_utils`）+ 注意力权重迁移脚本。
 5. 起一个 **50–150B token** 的 Phase B 恢复训练小实验，验证 cross-attn 渐开 + 蒸馏 + WSD 恢复曲线。
@@ -428,7 +437,7 @@ BBH（推理），IFEval（指令遵循）。
 ### Tier 3 — 谨慎 / 最后上（默认先不上）
 
 - **mHC**（已在 §2，标可选）、**Muon**（留 AdamW 回退）、**3 路 KDA 混合**（§2.5）。
-- **零计算 / 弹性 top-k 专家**：按 token 难度自适应激活量（潜在契合"3B/6B 非对称"，但复杂、易不稳，作为研究项）。
+- **零计算 / 弹性 top-k 专家**：按 token 难度自适应激活量（潜在契合"2.3B/4.5B 非对称"，但复杂、易不稳，作为研究项）。
 - **共享注意力块（Zamba 式）跨多层复用**：进一步省参/省 cache，但耦合强。
 
 ---
@@ -499,8 +508,11 @@ BBH（推理），IFEval（指令遵循）。
 
 | 方案 | H100-h | A100-h | 8×H100 天 |
 | --- | ---: | ---: | ---: |
-| 24B × 200B tok（认真继续预训练） | 7,583 | 24,038 | 39.5 |
-| 24B × 50B tok（最小恢复） | 1,896 | 6,010 | 9.9 |
+| **12B 中间档 × 50B tok（enc+dec 激活，默认）** | **1,413** | **4,520** | **7.4** |
+| 12B 中间档 × 50B tok（emb 只计一次） | 1,354 | 4,331 | 7.1 |
+| 12B 中间档 × 200B tok | 5,652 | 18,080 | 29.4 |
+| 24B × 200B tok（远期；按当时 3B+6B 激活） | 7,583 | 24,038 | 39.5 |
+| 24B × 50B tok（远期最小恢复） | 1,896 | 6,010 | 9.9 |
 | ~6B × 60B tok | 885 | 2,804 | 4.6 |
 | ~3B × 50B tok | 316 | 1,002 | 1.6 |
 | ~1B × 20B tok | 51 | 160 | 0.3 |
@@ -544,10 +556,11 @@ BBH（推理），IFEval（指令遵循）。
 | decoder-only + MHA（全部 40 层缓存） | ≈369 GB（放不下） |
 | decoder-only + GQA4 / MLA | ≈41 / 46 GB |
 | **YOCO + MLA（单一全局 cache）** | **≈1.15 GB** |
-| **YOCO + MLA + CSA/HCA（÷8 序列压缩）** | **≈0.14 GB** |
-| （加 24 层 8K 滑窗分支，与 N 无关） | +≈0.2 GB |
+| **YOCO + MLA + CSA \(m=4\)（全局 cache 沿序列 ÷4）** | **≈0.29 GB** |
+| YOCO + MLA + 额外序列÷8（stretch，非 CSA 默认） | ≈0.14 GB |
+| （加 24 层 8K 滑窗分支，与 N 无关） | +≈0.23 GB |
 
-再叠加 **encoder(self-decoder) 的 prefill early-exit**——超长输入只需跑完 encoder 产出全局 cache，不必跑满全部层——1M **prefill 也便宜**。这正是"输入侧轻(≈2.3B)"的意义。YOCO 原论文在 1M 报告近满分 needle 检索。**所以 1M 推理在中等硬件上都可行。**
+再叠加 **encoder(self-decoder) 的 prefill early-exit**——超长输入只需跑完 encoder 产出全局 cache，不必跑满全部层——1M **prefill 也便宜**。这正是"输入侧轻(≈2.3B)"的意义。中间档 prefill 激活份额约 34%。**Decode 侧**：若全局 cache 不压缩，128K/256K 上 24 层 cross-attn 分别约为 decoder MLP 的 3.2× / 6.5×，必须走 CSA \(m=4\) 或 top-\(k\) 选择，否则 encoder 省下的算力会在 cross-attn 被吐回（见理论验证 §6）。YOCO 原论文在 1M 报告近满分 needle 检索。**所以 1M 推理在中等硬件上都可行。**
 
 ### 16.2 训练出"支持 1M（needle/RULER 通过）"：现实，但要花心思
 
