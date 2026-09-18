@@ -239,6 +239,7 @@ class TinyTrainTests(unittest.TestCase):
         upcycle_from_minicpm(model, src, self.cfg)
         self.assertTrue(torch.equal(model.embed.weight, src["model.embed_tokens.weight"]))
         self.assertTrue(torch.equal(model.lm_head.weight, src["lm_head.weight"]))
+        self.assertTrue(torch.equal(model.norm.weight, src["model.norm.weight"]))
 
     def test_causal_mask_no_future(self) -> None:
         from cat_yoko.attention import _window_causal_bias

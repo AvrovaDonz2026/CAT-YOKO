@@ -75,8 +75,9 @@ def upcycle_from_minicpm(
 
     MiniCPM5 dense SwiGLU 6144 / moe 2048 = 3 (exact groups). Each expert still
     takes the leading ``moe_intermediate_size`` rows, then scaled. Phase B
-    recovers the rest. GQA K/V are ``(kv_dim, d)``. Attention and embedding
-    copies are exact-shape; MiniCPM-2B (d=2304, MHA) cannot silently truncate.
+    recovers the rest. GQA K/V are ``(kv_dim, d)``. Attention, embedding, and
+    final ``model.norm.weight`` copies are exact-shape; MiniCPM-2B (d=2304, MHA)
+    cannot silently truncate.
     """
     cfg = cfg or model.cfg
 
@@ -103,6 +104,14 @@ def upcycle_from_minicpm(
                     f"got {tuple(head.shape)}"
                 )
             model.lm_head.weight.data.copy_(head)
+    norm = _take("model.norm.weight", "norm.weight")
+    if norm is not None:
+        if tuple(norm.shape) != tuple(model.norm.weight.shape):
+            raise ValueError(
+                f"norm: expected MiniCPM5-2B {tuple(model.norm.weight.shape)}, "
+                f"got {tuple(norm.shape)}"
+            )
+        model.norm.weight.data.copy_(norm)
 
     def layer_prefix(i: int) -> str:
         for p in (f"model.layers.{i}.", f"layers.{i}."):
@@ -181,6 +190,7 @@ def dummy_minicpm_state(cfg: CATYokoConfig) -> dict[str, torch.Tensor]:
     sd: dict[str, torch.Tensor] = {
         "model.embed_tokens.weight": torch.randn(v, d) * 0.02,
         "lm_head.weight": torch.randn(v, d) * 0.02,
+        "model.norm.weight": torch.randn(d),
     }
     for i in range(n):
         p = f"model.layers.{i}."

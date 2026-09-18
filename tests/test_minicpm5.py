@@ -104,6 +104,7 @@ class MiniCPM5UpcyleShapeTests(unittest.TestCase):
         src = dummy_minicpm_state(self.cfg)
         upcycle_from_minicpm(model, src, self.cfg)
         self.assertTrue(torch.equal(model.embed.weight, src["model.embed_tokens.weight"]))
+        self.assertTrue(torch.equal(model.norm.weight, src["model.norm.weight"]))
 
     def test_mha_k_proj_is_rejected(self) -> None:
         model = CATYokoForCausalLM(self.cfg)
