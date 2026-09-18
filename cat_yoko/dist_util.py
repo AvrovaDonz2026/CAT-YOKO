@@ -102,6 +102,9 @@ def wrap_distributed(
             idx = torch.cuda.current_device()
         if torch.cuda.device_count() >= dist.get_world_size():
             device_ids = [idx]
+    # B0 freezes encoder + decoder backbone, so many params get no grad and
+    # DDP needs find_unused_parameters=True. B2 trains everything, so unused
+    # is not required; wrap stays True here (trainer wrap is owned elsewhere).
     return DDP(model, device_ids=device_ids, find_unused_parameters=True)
 
 

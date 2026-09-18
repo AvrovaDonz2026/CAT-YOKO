@@ -77,6 +77,71 @@ class AutoFlagsTests(unittest.TestCase):
         )
         self.assertFalse(e or b or o)
 
+    def test_dist_keeps_auto_offload_off(self) -> None:
+        e, b, o = auto_offload_flags(
+            phase="B1",
+            cfg_name="CAT-YOKO-12B",
+            device="cuda",
+            fsdp=False,
+            ddp=True,
+            offload_encoder=None,
+            offload_blocks=None,
+            optim_cpu=None,
+        )
+        self.assertFalse(e)
+        self.assertFalse(b)
+        self.assertTrue(o)
+        e2, b2, o2 = auto_offload_flags(
+            phase="B2",
+            cfg_name="CAT-YOKO-12B",
+            device="cuda",
+            fsdp=True,
+            ddp=False,
+            offload_encoder=None,
+            offload_blocks=None,
+            optim_cpu=None,
+        )
+        self.assertFalse(e2)
+        self.assertFalse(b2)
+        self.assertTrue(o2)
+        e0, b0, o0 = auto_offload_flags(
+            phase="B0",
+            cfg_name="CAT-YOKO-12B",
+            device="cuda",
+            fsdp=True,
+            ddp=True,
+            offload_encoder=False,
+            offload_blocks=False,
+            optim_cpu=None,
+        )
+        self.assertFalse(e0 or b0)
+        self.assertFalse(o0)
+
+    def test_dist_rejects_explicit_offload(self) -> None:
+        msg = "DDP/FSDP cannot mix CPU offload on 12B; use ZeRO or single GPU"
+        with self.assertRaisesRegex(ValueError, msg):
+            auto_offload_flags(
+                phase="B1",
+                cfg_name="CAT-YOKO-12B",
+                device="cuda",
+                fsdp=False,
+                ddp=True,
+                offload_encoder=True,
+                offload_blocks=None,
+                optim_cpu=None,
+            )
+        with self.assertRaisesRegex(ValueError, msg):
+            auto_offload_flags(
+                phase="B2",
+                cfg_name="CAT-YOKO-12B",
+                device="cuda",
+                fsdp=True,
+                ddp=False,
+                offload_encoder=None,
+                offload_blocks=True,
+                optim_cpu=None,
+            )
+
 
 class OffloadBlockTests(unittest.TestCase):
     def test_checkpoint_offload_matches_eager(self) -> None:

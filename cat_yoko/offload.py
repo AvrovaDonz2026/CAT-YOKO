@@ -159,6 +159,12 @@ def auto_offload_flags(
     cuda = str(device).startswith("cuda")
     big = cfg_name == "CAT-YOKO-12B"
     dist = bool(fsdp or ddp)
+    # Explicit --offload-encoder/--offload-blocks with DDP/FSDP would put
+    # some params on CPU while the reducer expects a single device.
+    if dist and (offload_encoder is True or offload_blocks is True):
+        raise ValueError(
+            "DDP/FSDP cannot mix CPU offload on 12B; use ZeRO or single GPU"
+        )
     if offload_blocks is None:
         offload_blocks = bool(big and cuda and phase == "B2" and not dist)
     if offload_encoder is None:
