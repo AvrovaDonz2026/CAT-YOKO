@@ -7,4 +7,7 @@ __pycache__/
 **/step_*.pt
 **/latest.pt
 **/*.pt.tmp
+# HuggingFace deploy keys stay on the machine, never in git.
+huggingface/SSH.md
+huggingface/SSH_PUBLIC_KEY.txt
 
