@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """CUDA tests for the C1 trainer. Skip on CPU. 12B B0 needs ≥28GiB.
 
-GpuTwelveBTests share one unittest process. Each 12B case must free the
-12.25B graph before the next ``build_model``, or B1/C1 OOM on 32GB.
+12B cases each spawn a fresh ``python -m cat_yoko.gpu_smoke`` process.
+In-process teardown cannot reliably drop a 12.25B graph on 32GB.
 """
 
 from __future__ import annotations
@@ -23,9 +23,6 @@ from cat_yoko.gpu_smoke import (
     cuda_info,
     enough_vram_for_12b,
     main as gpu_smoke_main,
-    run_middle_12b_b0,
-    run_middle_12b_c1,
-    run_middle_12b_phase,
     run_tiny_cuda,
 )
 from cat_yoko.train import main as train_main
@@ -206,46 +203,57 @@ class GpuTinyTests(unittest.TestCase):
 
 @unittest.skipUnless(torch.cuda.is_available(), "CUDA GPU required")
 class GpuTwelveBTests(unittest.TestCase):
-    def setUp(self) -> None:
-        _teardown_12b()
+    """One 12.25B graph per OS process. Isolated CLI smokes already fit 32GB."""
 
-    def tearDown(self) -> None:
-        _teardown_12b()
+    def _isolated(self, *args: str) -> dict:
+        import json
+        import os
+        import subprocess
+
+        env = os.environ.copy()
+        env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+        proc = subprocess.run(
+            [sys.executable, "-m", "cat_yoko.gpu_smoke", *args, "--json"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(Path(__file__).resolve().parents[1]),
+        )
+        text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        idx = text.rfind("\n{")
+        blob = text[idx + 1 :] if idx >= 0 else text[text.find("{") :]
+        try:
+            result = json.JSONDecoder().raw_decode(blob)[0]
+        except (ValueError, json.JSONDecodeError):
+            self.fail(f"gpu_smoke json parse failed rc={proc.returncode}\n{text[-4000:]}")
+        if proc.returncode != 0 and not (result.get("b1_ok") and result.get("b2_oom")):
+            self.fail(f"gpu_smoke rc={proc.returncode}\n{text[-4000:]}")
+        return result
 
     def test_12b_b0_one_step(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B B0 smoke needs ≥28GiB GPU")
-        result = run_middle_12b_b0(seq_len=64, steps=1, micro_batch=1)
-        try:
-            self.assertTrue(result["ok"], msg=result)
-            self.assertEqual(result["step"], 1)
-            self.assertLess(result["peak_gib"], 32.0)
-        finally:
-            _teardown_12b(result)
+        result = self._isolated("--middle", "--phase", "B0", "--seq-len", "64")
+        self.assertTrue(result["ok"], msg=result)
+        self.assertEqual(result["step"], 1)
+        self.assertLess(result["peak_gib"], 32.0)
 
     def test_12b_b1_one_step(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B B1 smoke needs ≥28GiB GPU")
-        result = run_middle_12b_phase("B1", seq_len=64, steps=1, micro_batch=1)
-        try:
-            self.assertTrue(result["ok"], msg={k: v for k, v in result.items() if k != "model"})
-            self.assertEqual(result["step"], 1)
-            self.assertLess(result["peak_gib"], 32.0)
-        finally:
-            _teardown_12b(result)
+        result = self._isolated("--middle", "--phase", "B1", "--seq-len", "64")
+        self.assertTrue(result["ok"], msg=result)
+        self.assertEqual(result["step"], 1)
+        self.assertLess(result["peak_gib"], 32.0)
 
     def test_12b_c1_chain(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B C1 smoke needs ≥28GiB GPU")
-        result = run_middle_12b_c1(seq_len=32, steps=1, micro_batch=1)
-        try:
-            self.assertTrue(result["phases"]["B0"]["ok"], msg=result)
-            self.assertTrue(result["b1_ok"], msg=result)
-            # Per-block B2 Adam fits a 32GB card + 62GiB cgroup; still allow OOM.
-            if not result["phases"].get("B2", {}).get("oom"):
-                self.assertTrue(result["phases"]["B2"]["ok"], msg=result)
-        finally:
-            _teardown_12b(result)
+        result = self._isolated("--c1", "--seq-len", "64")
+        self.assertTrue(result["phases"]["B0"]["ok"], msg=result)
+        self.assertTrue(result["b1_ok"], msg=result)
+        if not result["phases"].get("B2", {}).get("oom"):
+            self.assertTrue(result["phases"]["B2"]["ok"], msg=result)
 
 
 if __name__ == "__main__":
