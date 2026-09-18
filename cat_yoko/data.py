@@ -76,12 +76,16 @@ def read_int32_bin(path: Path) -> torch.Tensor:
 
 
 def labels_with_doc_boundaries(ids: torch.Tensor, doc_ids: torch.Tensor) -> torch.Tensor:
-    """Ignore next-token loss across packed document boundaries."""
+    """Ignore next-token loss across packed document boundaries.
+
+    Operates on the last dim so ``PackedBinStream.batch`` can pass ``[B, S]``.
+    ``doc_ids[1:]`` would be the batch axis and silently skip a micro_batch=1 row.
+    """
     labels = ids.clone()
-    if ids.numel() <= 1:
+    if ids.shape[-1] <= 1:
         return labels
-    cross = doc_ids[1:] != doc_ids[:-1]
-    labels[1:][cross] = -100
+    cross = doc_ids[..., 1:] != doc_ids[..., :-1]
+    labels[..., 1:] = labels[..., 1:].masked_fill(cross, -100)
     return labels
 
 

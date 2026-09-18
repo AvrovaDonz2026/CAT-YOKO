@@ -76,12 +76,17 @@ def host_memory_limit_bytes() -> int | None:
 
 
 def host_memory_used_bytes() -> int:
-    path = Path("/sys/fs/cgroup/memory.current")
-    if path.is_file():
+    """Cgroup current usage so CPU Adam can size fp32 vs fp16 moments."""
+    for path in (
+        Path("/sys/fs/cgroup/memory.current"),
+        Path("/sys/fs/cgroup/memory/memory.usage_in_bytes"),
+    ):
+        if not path.is_file():
+            continue
         try:
             return int(path.read_text().strip())
         except ValueError:
-            pass
+            continue
     return 0
 
 

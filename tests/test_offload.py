@@ -17,7 +17,7 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.offload import auto_offload_flags, clip_grad_norm_mixed, move_module, offload_checkpoint_block
-from cat_yoko.optim import CPUOffloadAdamW, build_optimizer
+from cat_yoko.optim import CPUOffloadAdamW, build_optimizer, host_memory_used_bytes
 from cat_yoko.train import main
 from cat_yoko.trainer import Trainer, run_c1_chain, train_loop
 
@@ -200,6 +200,25 @@ class CpuAdamTests(unittest.TestCase):
         opt.step()
         after = next(p for p in model.parameters() if p.requires_grad)
         self.assertFalse(torch.equal(before, after))
+
+    def test_cpu_adam_keeps_router_nodecay_not_gate_proj(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B1")
+        opt = build_optimizer(model, cfg, cpu_offload=True)
+        nodecay = {id(p) for g in opt.param_groups if g["weight_decay"] == 0.0 for p in g["params"]}
+        decay = {id(p) for g in opt.param_groups if g["weight_decay"] != 0.0 for p in g["params"]}
+        self.assertIn(id(model.decoder[0].mlp.router.weight), nodecay)
+        self.assertIn(id(model.decoder[0].mlp.experts[0].gate_proj.weight), decay)
+
+    def test_host_memory_used_is_nonneg_int(self) -> None:
+        import inspect
+
+        n = host_memory_used_bytes()
+        self.assertIsInstance(n, int)
+        self.assertGreaterEqual(n, 0)
+        src = inspect.getsource(host_memory_used_bytes)
+        self.assertIn("memory.usage_in_bytes", src)
 
     def test_cpu_adam_fp16_and_ephemeral(self) -> None:
         cfg = CATYokoConfig.tiny()

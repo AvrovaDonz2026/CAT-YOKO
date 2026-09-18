@@ -18,8 +18,10 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import (
     PackedBinStream,
     doc_ids_from_eos,
+    labels_with_doc_boundaries,
     open_stream,
     resolve_eos,
+    sidecar_path,
 )
 from cat_yoko.hf_minicpm import _unwrap_state, load_minicpm_state
 from cat_yoko.prepare import iter_hf_texts, iter_local_jsonl, main as prepare_main, mix_documents, prepare
@@ -120,8 +122,9 @@ class PrepareTrainTests(unittest.TestCase):
             self.assertEqual(meta["sequences"], 4)
             self.assertEqual(meta["eos_id"], tok.eos_id)
             self.assertTrue(out.is_file())
-            sidecar = Path(str(out) + ".meta.json")
+            sidecar = sidecar_path(out)
             self.assertTrue(sidecar.is_file())
+            self.assertEqual(sidecar, Path(str(out) + ".meta.json"))
             self.assertEqual(resolve_eos(out, None), tok.eos_id)
             stream = open_stream(out, cfg.vocab_size, cfg.seq_len)
             self.assertIsInstance(stream, PackedBinStream)
@@ -222,6 +225,29 @@ class SidecarAndDocTests(unittest.TestCase):
         ids = torch.tensor([[7, 2, 8, 9]])
         docs = doc_ids_from_eos(ids, eos_id=2)
         self.assertEqual(docs.tolist(), [[0, 0, 1, 1]])
+
+    def test_labels_mask_last_dim_not_batch(self) -> None:
+        ids = torch.tensor([[7, 2, 8, 9], [1, 1, 1, 1]])
+        docs = torch.tensor([[0, 0, 1, 1], [0, 0, 0, 0]])
+        labels = labels_with_doc_boundaries(ids, docs)
+        self.assertEqual(labels[0].tolist(), [7, 2, -100, 9])
+        self.assertEqual(labels[1].tolist(), [1, 1, 1, 1])
+        self.assertEqual(labels_with_doc_boundaries(ids[0], docs[0]).tolist(), [7, 2, -100, 9])
+        row = labels_with_doc_boundaries(ids[:1], docs[:1])
+        self.assertEqual(row.tolist(), [[7, 2, -100, 9]])
+
+    def test_packed_bin_micro_batch_one_masks_eos_boundary(self) -> None:
+        import struct
+
+        cfg = CATYokoConfig.tiny()
+        seq = [7, 2, 8, 9] + [1] * (cfg.seq_len - 4)
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "t.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(seq), *seq))
+            stream = PackedBinStream(path, cfg.seq_len, eos_id=2)
+            batch = stream.batch(1, "cpu")
+            self.assertEqual(int(batch["labels"][0, 2].item()), -100)
+            self.assertNotEqual(int(batch["labels"][0, 1].item()), -100)
 
     def test_explicit_eos_wins_over_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as td:

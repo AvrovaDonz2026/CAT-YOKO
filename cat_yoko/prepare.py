@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Iterator
 
 from cat_yoko.config import CATYokoConfig
+from cat_yoko.data import sidecar_path
 from cat_yoko.recipe import MINICPM5_TOKENIZER, Source, mix_named
 from cat_yoko.tokenizer import HashTokenizer, Tokenizer, load_tokenizer
 
@@ -156,7 +157,7 @@ def prepare(
         "vocab_size": tokenizer.vocab_size,
         "tokenizer": getattr(tokenizer, "name", type(tokenizer).__name__),
     }
-    meta_path = out.with_suffix(out.suffix + ".meta.json")
+    meta_path = sidecar_path(out)
     meta_path.write_text(json.dumps(meta, indent=2) + "\n")
     return meta
 

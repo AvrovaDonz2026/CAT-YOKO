@@ -18,22 +18,39 @@ class DummyTeacher(nn.Module):
         return {"logits": self.head(self.embed(input_ids))}
 
 
+def teacher_param_dtype(device: str) -> torch.dtype:
+    """CUDA teacher stays bf16 (frozen spec); CPU tests stay fp32."""
+    if str(device).startswith("cuda") and torch.cuda.is_available():
+        return torch.bfloat16
+    return torch.float32
+
+
+def place_teacher(model: nn.Module, device: str) -> nn.Module:
+    """Move a teacher, freeze it, and wrap so `.forward` returns ``{\"logits\"}``."""
+    dt = teacher_param_dtype(device)
+    model.to(device=device, dtype=dt)
+    model.eval()
+    for p in model.parameters():
+        p.requires_grad = False
+    cfg = getattr(model, "config", None)
+    if cfg is not None and hasattr(cfg, "use_cache"):
+        cfg.use_cache = False
+    return _HfTeacher(model)
+
+
 def load_teacher(source: str | Path, device: str) -> nn.Module:
     """Load a causal LM that returns `.logits` or `{\"logits\"}`.
 
     `.pt` pickle of an `nn.Module` is local. Hub ids / HF dirs need
     `pip install 'cat-yoko[data]'` (transformers; MiniCPM5 is Llama, no
-    ``trust_remote_code``). MiniCPM-2B Hub ids are rejected.
+    ``trust_remote_code``). MiniCPM-2B Hub ids are rejected. CUDA teachers
+    are bf16; HF forward disables ``use_cache``.
     """
     path = Path(source)
     if path.is_file():
-        obj = torch.load(path, map_location=device, weights_only=False)
+        obj = torch.load(path, map_location="cpu", weights_only=False)
         if isinstance(obj, nn.Module):
-            obj.to(device)
-            obj.eval()
-            for p in obj.parameters():
-                p.requires_grad = False
-            return obj
+            return place_teacher(obj, device)
         raise RuntimeError(f"{path} is not a pickled nn.Module; use --teacher-hf for MiniCPM5")
     from cat_yoko.recipe import assert_minicpm5_hf_config, assert_minicpm5_id
 
@@ -44,27 +61,33 @@ def load_teacher(source: str | Path, device: str) -> nn.Module:
         raise ImportError(
             "MiniCPM5 teacher needs transformers: pip install 'cat-yoko[data]'"
         ) from exc
-    want_cuda = str(device).startswith("cuda") and torch.cuda.is_available()
-    dt = torch.bfloat16 if want_cuda else torch.float32
+    dt = teacher_param_dtype(device)
     model = AutoModelForCausalLM.from_pretrained(
         str(source),
         torch_dtype=dt,
         low_cpu_mem_usage=True,
     )
     assert_minicpm5_hf_config(model.config)
-    model.to(device)
-    model.eval()
-    for p in model.parameters():
-        p.requires_grad = False
-    return _HfTeacher(model)
+    return place_teacher(model, device)
 
 
 class _HfTeacher(nn.Module):
     def __init__(self, inner: nn.Module) -> None:
         super().__init__()
         self.inner = inner
+        cfg = getattr(inner, "config", None)
+        if cfg is not None and hasattr(cfg, "use_cache"):
+            cfg.use_cache = False
 
     def forward(self, input_ids: torch.Tensor) -> dict[str, torch.Tensor]:
-        out = self.inner(input_ids=input_ids)
-        logits = out.logits if hasattr(out, "logits") else out["logits"]
+        try:
+            out = self.inner(input_ids=input_ids, use_cache=False)
+        except TypeError:
+            out = self.inner(input_ids)
+        if torch.is_tensor(out):
+            logits = out
+        elif hasattr(out, "logits"):
+            logits = out.logits
+        else:
+            logits = out["logits"]
         return {"logits": logits}
