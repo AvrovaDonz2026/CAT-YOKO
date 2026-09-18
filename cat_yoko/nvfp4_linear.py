@@ -3,6 +3,8 @@
 Master weights stay the original ``nn.Linear`` Parameter (bf16). Allowed
 slots (attn QKV/O, MoE experts, cross Q/O, cache KV, lm_head, frozen
 encoder linears) run this forward. Router / embed / RMSNorm stay out.
+B0 wraps frozen encoder GEMMs only; B1/B2 wrap the rest of the allowed
+slots. Decoder self-attn stays ``WindowAttention`` either way.
 
 On Blackwell, Transformer Engine ``NVFP4BlockScaling`` is preferred when
 importable. Otherwise this module emulates E2M1 with 16-wide blocks
@@ -116,7 +118,7 @@ class Nvfp4Linear(nn.Linear):
 
 
 def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
-    """Router stays high-prec. B0 student (trainable) stays bf16."""
+    """Router stays high-prec. B0 wraps frozen encoder GEMMs only."""
     if isinstance(lin, Nvfp4Linear):
         return False
     leaf = name.rsplit(".", 1)[-1]
@@ -128,7 +130,10 @@ def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
     if phase in {"L0", "C"}:
         return False
     if phase == "B0":
-        # Frozen encoder / frozen decoder GEMMs only. cache/cross stay bf16.
+        # Published: frozen encoder forward NVFP4. Student cache/cross, frozen
+        # decoder self-attn/MoE, and frozen lm_head stay bf16 until B1.
+        if not name.startswith("encoder."):
+            return False
         return not any(p.requires_grad for p in lin.parameters())
     return True
 

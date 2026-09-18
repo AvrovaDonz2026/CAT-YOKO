@@ -76,6 +76,19 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertIn("class WindowAttention", src)
         self.assertIn("class CrossAttention", src)
 
+    def test_encoder_kind_labels_do_not_swap_window_module(self) -> None:
+        from cat_yoko.config import encoder_layer_kind
+
+        kinds = [encoder_layer_kind(i) for i in range(16)]
+        self.assertEqual((kinds.count("sliding"), kinds.count("csa"), kinds.count("hca")), (2, 7, 7))
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        for blk in model.encoder:
+            self.assertIsInstance(blk.attn, WindowAttention)
+        self.assertFalse(any("indexer" in n for n, _ in model.named_modules()))
+        self.assertFalse(hasattr(model.decoder[0].cross_attn, "k_proj"))
+        self.assertFalse(hasattr(model.decoder[0].cross_attn, "v_proj"))
+
 
 class WrapDoesNotChangeTopologyTests(unittest.TestCase):
     def setUp(self) -> None:

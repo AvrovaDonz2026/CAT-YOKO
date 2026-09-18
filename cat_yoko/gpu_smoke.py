@@ -249,8 +249,9 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     out["nvfp4_b0_wrap"] = {
         "n": n_b0,
         "new": n_b0_new,
-        "lm_head": isinstance(nv_model.lm_head, Nvfp4Linear),
+        "lm_head_bf16": not isinstance(nv_model.lm_head, Nvfp4Linear),
         "enc_q": isinstance(attn0.q_proj, Nvfp4Linear),
+        "dec_self_bf16": not isinstance(nv_model.decoder[0].self_attn.q_proj, Nvfp4Linear),
         "cache_k_bf16": not isinstance(nv_model.cache_k, Nvfp4Linear),
         "cross_q_bf16": not isinstance(nv_model.decoder[0].cross_attn.q_proj, Nvfp4Linear),
         "router_bf16": not any(n.endswith("router") for n in names_b0),
@@ -260,8 +261,9 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     out["nvfp4_b0_wrap"]["ok"] = all(
         [
             n_b0 > 0,
-            out["nvfp4_b0_wrap"]["lm_head"],
+            out["nvfp4_b0_wrap"]["lm_head_bf16"],
             out["nvfp4_b0_wrap"]["enc_q"],
+            out["nvfp4_b0_wrap"]["dec_self_bf16"],
             out["nvfp4_b0_wrap"]["cache_k_bf16"],
             out["nvfp4_b0_wrap"]["cross_q_bf16"],
             out["nvfp4_b0_wrap"]["router_bf16"],

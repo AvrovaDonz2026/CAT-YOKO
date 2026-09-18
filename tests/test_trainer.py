@@ -355,6 +355,7 @@ class LoopTests(unittest.TestCase):
                     "trainable_m": 1.0,
                     "lr": 1e-4,
                     "fp8": False,
+                    "nvfp4": False,
                     "tokens_seen": 1.0,
                     "tok_s": 1.0,
                     "mem_mib": 0.0,
