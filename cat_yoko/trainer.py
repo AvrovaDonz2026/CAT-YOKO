@@ -184,7 +184,7 @@ class Trainer:
         tokens_in_phase = 0.0
         tokens_seen = self.global_tokens_offset
         if self.resume is not None:
-            ckpt = load_checkpoint(self.resume, map_location="cpu")
+            ckpt = load_checkpoint(self.resume, map_location=self.device)
             load_model_state(model, ckpt["model"])
             if ckpt.get("optimizer") is not None:
                 opt.load_state_dict(ckpt["optimizer"])

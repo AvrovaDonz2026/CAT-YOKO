@@ -480,11 +480,12 @@ BBH（推理），IFEval（指令遵循）。
 
 发布规格已敲死，见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)。下一步是跑仓库里的 **12B 训练代码**（tiny 单测 → meta 12B 图 → `--dump-megatron` → 有卡再 FSDP / Megatron）。
 
-1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare`
+1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu`
 2. `python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy --config tiny --out /tmp/t.bin --max-tokens 256` 然后 `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin`
-3. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
-4. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
-5. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（`--tokens-offset` 默认已计入前一阶段）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。
+3. 有 GPU：`python3 -m cat_yoko.gpu_smoke`（tiny CUDA；不建 12B 权重）
+4. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
+5. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
+6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM-2B-sft-bf16 --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --steps N` 按 C1+FP8 开训。B1/B2 用 `--resume` 接 `latest.pt`（`--tokens-offset` 默认已计入前一阶段）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。
 
 不要再改 16/24、C1、C1+FP8、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
 

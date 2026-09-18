@@ -32,7 +32,10 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # python3 -m cat_yoko.train --config 12b --phase B0 \
 #   --upcycle-hf openbmb/MiniCPM-2B-sft-bf16 --data data/phaseb.bin \
 #   --dtype bf16 --steps N --save-dir runs/b0
-python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare
+python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu
+# 有 CUDA 的机器：
+python3 -m cat_yoko.gpu_smoke
+python3 -m unittest tests.test_gpu
 ```
 
 ## Recalculate / verify
@@ -41,5 +44,5 @@ python3 -m unittest tests.test_train tests.test_trainer tests.test_megatron test
 python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 ledger
 python3 scripts/param_budget.py --staged --curriculum --fp8
 python3 scripts/arch_verify.py --verify      # architecture invariants
-python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare
+python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu
 ```
