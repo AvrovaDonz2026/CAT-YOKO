@@ -237,7 +237,7 @@ def run_middle_12b_phase(
             return result
         except torch.cuda.OutOfMemoryError as exc:
             last_err = exc
-            if built_here:
+            if built_here or model is not None:
                 del model
             _teardown_cuda()
             reuse_model = None
@@ -249,6 +249,7 @@ def run_middle_12b_b0(*, seq_len: int = 64, steps: int = 1, micro_batch: int = 1
     """One C1 B0 step of the real 12B graph. Needs ~24GiB weights + a little activation."""
     result = run_middle_12b_phase("B0", seq_len=seq_len, steps=steps, micro_batch=micro_batch)
     result.pop("model", None)
+    _teardown_cuda()
     return result
 
 

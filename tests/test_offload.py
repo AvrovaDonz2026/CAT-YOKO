@@ -94,6 +94,20 @@ class OffloadBlockTests(unittest.TestCase):
         self.assertIs(next(m.parameters()), p)
 
 
+class RouterBiasOffloadTests(unittest.TestCase):
+    def test_step_router_bias_casts_load_to_buffer(self) -> None:
+        from cat_yoko.moe import MoE
+
+        cfg = CATYokoConfig.tiny()
+        moe = MoE(cfg, cfg.n_routed_dec, cfg.top_k_dec)
+        moe.train()
+        moe.last_load = torch.ones(cfg.n_routed_dec, dtype=torch.float64)
+        before = moe.e_score_correction_bias.clone()
+        moe.step_router_bias()
+        self.assertFalse(torch.equal(before, moe.e_score_correction_bias))
+        self.assertIsNone(moe.last_load)
+
+
 class CpuAdamTests(unittest.TestCase):
     def test_cpu_adam_changes_trainable(self) -> None:
         cfg = CATYokoConfig.tiny()

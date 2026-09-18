@@ -14,6 +14,7 @@ import torch
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.gpu_smoke import (
+    _teardown_cuda,
     cuda_info,
     enough_vram_for_12b,
     main as gpu_smoke_main,
@@ -87,6 +88,9 @@ class GpuTinyTests(unittest.TestCase):
 
 @unittest.skipUnless(torch.cuda.is_available(), "CUDA GPU required")
 class GpuTwelveBTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        _teardown_cuda()
+
     def test_12b_b0_one_step(self) -> None:
         if not enough_vram_for_12b():
             self.skipTest("12B B0 smoke needs ≥28GiB GPU")

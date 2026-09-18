@@ -58,7 +58,11 @@ class MoE(nn.Module):
             return
         with torch.no_grad():
             target = 1.0 / self.n_routed
-            load = self.last_load.to(dtype=self.e_score_correction_bias.dtype)
+            # last_load is a Python attr; module.to("cpu") does not move it.
+            load = self.last_load.to(
+                device=self.e_score_correction_bias.device,
+                dtype=self.e_score_correction_bias.dtype,
+            )
             self.e_score_correction_bias += 1e-3 * (target - load)
         self.last_load = None
 
