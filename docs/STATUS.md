@@ -22,7 +22,8 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 精度 | student / 冻 decoder **bf16**；冻 encoder GEMM **NVFP4 FPROP** |
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
-| C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel；未开 GPU 跑 |
+| C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel |
+| 计划探针 | **bf16-probe A→E GPU 已过**（RTX 3090，142/142 claims，0 fail，2 deferred，3.1s）。dense GQA=Flash，masked/HCA=cuDNN bf16，`math_fp32=0`。目录 `/root/autodl-tmp/bf16-verify/`。DummyStream：`cat_yoko.plan_verify --graph bf16` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。日志 [`artifacts/autodl-rtx3090/bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)。算子 roofline：[`docs/AMPERE_OPS_MFU.md`](AMPERE_OPS_MFU.md)。不到 F/G。不拉 50B。不写完整图 checkpoint |
 
 ## 机器沿革
 
@@ -31,6 +32,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | RTX 4080 SUPER | 图 / `--try` 烟测 | 已释放；日志 [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
 | RTX 6000D sm_120 | 发布档 B0 开跑（NVFP4 **仿真**） | step **16020**，`tokens_in_phase=65,488,896`；日志 [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
 | Vast B200 SM 10.0 | 发布档 B0 续训（硬件 NVFP4 FPROP） | step **26940**；日志 [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
+| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline | **142 claims ok**；Flash **85%** / MoE bmm **81%** of 71.16T；日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)。旧 plan-probe：[`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md) |
 
 同阶段 resume：`tokens_in_phase` 按 8192/step 接着加。step **22100** 时是 90,392,576。
 

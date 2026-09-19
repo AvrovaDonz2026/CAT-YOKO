@@ -23,6 +23,11 @@ from cat_yoko.attention import (
 from cat_yoko.rope import apply_rope
 
 
+_KEEP_CACHE: dict[tuple, torch.Tensor] = {}
+_HCA_BIAS_CACHE: dict[tuple, torch.Tensor] = {}
+_SPARSE_CACHE_MAX = 24
+
+
 def compressed_keep_matrix(
     seq: int,
     group: int,
@@ -30,9 +35,18 @@ def compressed_keep_matrix(
 ) -> torch.Tensor:
     """``[S, S]`` bool: key ``p`` sits in a block strictly before query ``t``."""
     g = max(int(group), 1)
+    dev = torch.device(device)
+    key = ("comp", int(seq), g, dev.type, dev.index)
+    hit = _KEEP_CACHE.get(key)
+    if hit is not None:
+        return hit
     t = torch.arange(seq, device=device)
     p = torch.arange(seq, device=device)
-    return (p.unsqueeze(0) // g) < (t.unsqueeze(1) // g)
+    out = (p.unsqueeze(0) // g) < (t.unsqueeze(1) // g)
+    if len(_KEEP_CACHE) >= _SPARSE_CACHE_MAX:
+        _KEEP_CACHE.clear()
+    _KEEP_CACHE[key] = out
+    return out
 
 
 def window_keep_matrix(
@@ -118,10 +132,19 @@ def hca_causal_bias(
     doc_ids: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Compressed-slot bias. Own block is **excluded** (theorem B)."""
+    if doc_ids is None:
+        dev = torch.device(device)
+        key = (int(q_len), int(group), int(k_len), dev.type, dev.index, str(dtype))
+        hit = _HCA_BIAS_CACHE.get(key)
+        if hit is not None:
+            return hit
     keep = hca_slot_keep(q_len, group, k_len, device)
     bias = torch.zeros(q_len, k_len, device=device, dtype=dtype)
     bias = bias.masked_fill(~keep, torch.finfo(dtype).min)
     if doc_ids is None:
+        if len(_HCA_BIAS_CACHE) >= _SPARSE_CACHE_MAX:
+            _HCA_BIAS_CACHE.clear()
+        _HCA_BIAS_CACHE[key] = bias
         return bias
     g = max(int(group), 1)
     slot = torch.arange(k_len, device=device)
@@ -156,9 +179,7 @@ def csa_attend(
 ) -> torch.Tensor:
     """Window GQA with compressed-block keys lifted (union mask, not a CSA kernel)."""
     b, s, d = x.shape
-    q, k, v, h, n_kv = _qkv_rope(attn, x)
-    k = _repeat_kv(k, h // n_kv)
-    v = _repeat_kv(v, h // n_kv)
+    q, k, v, _, _ = _qkv_rope(attn, x)
     bias = _window_causal_bias(s, s, attn.n_win, x.device, q.dtype, doc_ids)
     same = _same_doc(doc_ids, s, x.device)
     keep = compress_keep
@@ -195,9 +216,7 @@ def hca_attend(attn, x: torch.Tensor, doc_ids: torch.Tensor | None, group: int) 
     b, s, d = x.shape
     if group <= 1 or group >= s:
         return attn(x, doc_ids)
-    q, k, v, h, n_kv = _qkv_rope(attn, x)
-    k = _repeat_kv(k, h // n_kv)
-    v = _repeat_kv(v, h // n_kv)
+    q, k, v, _, _ = _qkv_rope(attn, x)
     k_c, v_c = compress_kv(k, v, group)
     if k_c.size(2) == k.size(2):
         return attn(x, doc_ids)

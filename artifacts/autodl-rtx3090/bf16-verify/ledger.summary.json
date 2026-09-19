@@ -1,0 +1,621 @@
+{
+  "ok": true,
+  "n_claims": 142,
+  "n_fail": 0,
+  "n_deferred": 2,
+  "elapsed_s": 3.1,
+  "device": "cuda",
+  "graph": "bf16",
+  "name": "bf16-probe",
+  "dtype": "bf16",
+  "head_dim": 32,
+  "seq_len": 128,
+  "n_win": 32,
+  "encoder_layers": 3,
+  "use_kda": false,
+  "use_nvfp4": false,
+  "use_fp8": false,
+  "ops": {
+    "probe": {
+      "device": "cuda",
+      "dtype": "bfloat16",
+      "dense_gqa": "flash",
+      "dense_equal": "flash",
+      "masked_equal": "cudnn",
+      "hca_concat": "cudnn",
+      "head_dim": 32,
+      "seq": 128,
+      "flash_rejects_mask": true
+    },
+    "phases": {
+      "A": {
+        "phase": "A",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 12,
+          "masked_bf16": 30,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "B0": {
+        "phase": "B0",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "B1": {
+        "phase": "B1",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "B2": {
+        "phase": "B2",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32",
+          "grouped_mm"
+        ]
+      },
+      "C-index": {
+        "phase": "C-index",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "indexer_fp32",
+          "masked_window",
+          "fused_qkv"
+        ]
+      },
+      "C-topk": {
+        "phase": "C-topk",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_csa_union",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "C-hca": {
+        "phase": "C-hca",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "masked_csa_union",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "C-win": {
+        "phase": "C-win",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "masked_csa_union",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "D-8k": {
+        "phase": "D-8k",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "dummy_needle",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "E": {
+        "phase": "E",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "wsd",
+          "fused_qkv",
+          "tf32"
+        ]
+      }
+    }
+  },
+  "phases": {
+    "A": {
+      "nll": 4.84375,
+      "step": 0,
+      "ok": true,
+      "peak_mib": 0.0,
+      "tokens": 0,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 12,
+        "masked_bf16": 30,
+        "math_fp32": 0
+      }
+    },
+    "B0": {
+      "nll": 4.897709403451033,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 24.2880859375,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "B1": {
+      "nll": 4.897374430979331,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 28.1669921875,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "B2": {
+      "nll": 4.897286482683317,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.02294921875,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-index": {
+      "nll": 0.12389485538005829,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 23.35693359375,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-topk": {
+      "nll": 4.898465374323327,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.11669921875,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-hca": {
+      "nll": 4.896816944512795,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.13134765625,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-win": {
+      "nll": 4.89680252675935,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.12744140625,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "D-8k": {
+      "nll": 4.89634644515871,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.09033203125,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "E": {
+      "nll": 4.896816944512795,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.11474609375,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    }
+  },
+  "failed": [],
+  "deferred": [
+    {
+      "name": "pdsa.tier1_calibrated_fallback",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "not in published graph",
+      "expected": "FROZEN_SPEC PDSA off; inference-side, not this mini-train",
+      "note": "Tier 1 confidence-gated expand/fallback is planned, not C1 B0",
+      "deferred": true
+    },
+    {
+      "name": "pdsa.tier3_editable_memory",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "YOCO cache is append-only",
+      "expected": "bounded lifecycle is a later milestone",
+      "note": "",
+      "deferred": true
+    }
+  ],
+  "out": "/root/autodl-tmp/bf16-verify/runs",
+  "claim_names": [
+    "arch.MiniCPM5 depth splits 16+26=42",
+    "arch.n_win covers CSA own-block (n_win\u2265m)",
+    "arch.n_win covers HCA own-block (n_win\u2265m')",
+    "arch.encoder schedule is 2 sliding + 7 CSA + 7 HCA",
+    "arch.window-only encoder RF = 131072 < 256K",
+    "arch.window-only encoder RF \u2265 128K primary target",
+    "arch.shared global cache is 1 writer, Ld readers",
+    "arch.early-exit is inference-only",
+    "arch.CSA/HCA masks are causal (n=64)",
+    "arch.CSA compressed path excludes own block",
+    "arch.window covers own-block hole (n_win\u2265m)",
+    "arch.YOCO cross-attn is causal",
+    "arch.indexer top-k \u2286 causal compressed set",
+    "arch.three mechanisms are distinct",
+    "attention.no_csa_cuda_kernel",
+    "theorem_b.union_causal",
+    "theorem_b.window_covers_own_block",
+    "theorem_b.compression_reaches_beyond_window",
+    "theorem_b.indexer_deletes_only",
+    "theorem_b.indexer_actually_deletes",
+    "theorem_b.hca_excludes_own_slot",
+    "pdsa.hca_concat_is_query_time_fallback",
+    "pdsa.window_lt_seq_so_compression_matters",
+    "attention.window_gqa_causal",
+    "attention.csa_union_runs_causal",
+    "pdsa.hca_runtime_concat_slots",
+    "attention.hca_concat_runs_causal",
+    "yoco.cross_attn_q_o_only",
+    "yoco.cross_attn_cache_causal",
+    "yoco.theorem_a_gate_multiplies_cross",
+    "yoco.split_16_26_published",
+    "yoco.published_2_7_7",
+    "yoco.published_n_win_covers_hca",
+    "yoco.probe_has_sliding_csa_hca",
+    "yoco.m2_off_flag",
+    "pdsa.query_aware_before_write_first",
+    "plan.kda_lights_first_when_implemented",
+    "plan.attn_softmax_high_prec",
+    "plan.e_wsd_decay",
+    "plan.mini_train_is_a_through_e",
+    "plan.fg_registered_after_e",
+    "plan.d8k_published_keeps_hca",
+    "pdsa.tier1_calibrated_fallback",
+    "pdsa.tier3_editable_memory",
+    "plan.c1_token_split",
+    "plan.b0_gate_0_to_0.3",
+    "plan.b1_gate_to_1",
+    "ops.dense_sdpa_prefers_flash",
+    "ops.masked_sdpa_skips_flash",
+    "ops.masked_tries_bf16_before_fp32",
+    "ops.dense_kernel_list_not_tuple",
+    "ops.compute_is_bf16",
+    "ops.kda_off",
+    "ops.grouped_mm_recorded",
+    "ops.flash_shaped",
+    "ops.theorem_b_hole_kept",
+    "ops.dense_gqa_fused",
+    "ops.masked_equal_bf16",
+    "ops.hca_concat_bf16",
+    "ops.fused_qkv_smoke",
+    "ops.tf32",
+    "train.A.zero_tokens",
+    "train.A.both_stacks_moe",
+    "train.A.no_first_dense",
+    "train.A.gate_zero",
+    "train.A.sparse_still_window",
+    "train.A.hash_moe_decoder_bootstrap",
+    "train.A.theorem_a_cache_irrelevant",
+    "train.A.no_mup",
+    "train.A.finite_nll",
+    "train.A.no_future_leak",
+    "train.A.m2_off_cache_slots",
+    "train.A.yoco_cache_once",
+    "train.A.m1_indexer_not_on_decoder",
+    "train.B0.finite_nll",
+    "train.B0.no_future_leak",
+    "train.B0.m2_off_cache_slots",
+    "train.B0.yoco_cache_once",
+    "train.B0.m1_indexer_not_on_decoder",
+    "train.B0.encoder_frozen",
+    "train.B0.cross_and_cache_trainable",
+    "train.B0.gate_in_unit_interval",
+    "train.B1.finite_nll",
+    "train.B1.no_future_leak",
+    "train.B1.m2_off_cache_slots",
+    "train.B1.yoco_cache_once",
+    "train.B1.m1_indexer_not_on_decoder",
+    "train.B1.encoder_still_frozen",
+    "train.B1.decoder_trainable",
+    "train.B1.gate_opened",
+    "train.B2.finite_nll",
+    "train.B2.no_future_leak",
+    "train.B2.m2_off_cache_slots",
+    "train.B2.yoco_cache_once",
+    "train.B2.m1_indexer_not_on_decoder",
+    "train.B2.detach_off",
+    "train.B2.encoder_unfrozen",
+    "train.C-index.finite_nll",
+    "train.C-index.no_future_leak",
+    "train.C-index.m2_off_cache_slots",
+    "train.C-index.yoco_cache_once",
+    "train.C-index.m1_indexer_not_on_decoder",
+    "train.C-index.indexer_on_csa_only",
+    "train.C-index.only_indexer_trainable",
+    "train.C-index.kl_finite",
+    "train.C-index.recall_in_unit",
+    "train.C-topk.finite_nll",
+    "train.C-topk.no_future_leak",
+    "train.C-topk.m2_off_cache_slots",
+    "train.C-topk.yoco_cache_once",
+    "train.C-topk.m1_indexer_not_on_decoder",
+    "train.C-topk.csa_lights_topk",
+    "train.C-topk.hca_not_yet",
+    "train.C-hca.finite_nll",
+    "train.C-hca.no_future_leak",
+    "train.C-hca.m2_off_cache_slots",
+    "train.C-hca.yoco_cache_once",
+    "train.C-hca.m1_indexer_not_on_decoder",
+    "train.C-hca.hca_concat_lit",
+    "train.C-hca.csa_keeps_topk",
+    "train.C-win.finite_nll",
+    "train.C-win.no_future_leak",
+    "train.C-win.m2_off_cache_slots",
+    "train.C-win.yoco_cache_once",
+    "train.C-win.m1_indexer_not_on_decoder",
+    "train.C-win.hca_concat_lit",
+    "train.C-win.csa_keeps_topk",
+    "train.D-8k.finite_nll",
+    "train.D-8k.no_future_leak",
+    "train.D-8k.m2_off_cache_slots",
+    "train.D-8k.yoco_cache_once",
+    "train.D-8k.m1_indexer_not_on_decoder",
+    "train.D-8k.hca_concat_lit",
+    "train.D-8k.csa_keeps_topk",
+    "train.D.needle_in_dummy",
+    "train.E.finite_nll",
+    "train.E.no_future_leak",
+    "train.E.m2_off_cache_slots",
+    "train.E.yoco_cache_once",
+    "train.E.m1_indexer_not_on_decoder",
+    "train.E.hca_concat_lit",
+    "train.E.csa_keeps_topk"
+  ]
+}
