@@ -81,7 +81,8 @@ PHASES: dict[str, PhaseSpec] = {
     ),
     # Phase C: 25e9 inside the published 20–50B band. No CSA CUDA kernel.
     # Default chain (use_kda=False): indexer → topk → hca → win (2+7+7).
-    # Opt-in 3:1 KDA: C-kda first (majority path), CSA/HCA later (anchors).
+    # Implement-then-light: --use-kda on B builds 3:1 + KDAGates (still window);
+    # C then lights C-kda first, CSA/HCA later. Do not add KDA modules at C.
     "C-kda": PhaseSpec(
         name="C-kda",
         tokens=5e9,

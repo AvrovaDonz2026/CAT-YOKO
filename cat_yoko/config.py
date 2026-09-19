@@ -62,7 +62,7 @@ class CATYokoConfig:
     use_nvfp4: bool = True  # published compute dtype; Nvfp4Linear wrap
     use_fp8: bool = True  # Hopper/Ada fallback placeholder
     attention_backend: str = "window"  # Phase B; "csa" is Phase C
-    use_kda: bool = False  # opt-in 3:1 KDA mix; Phase B compute stays window
+    use_kda: bool = False  # implement 3:1 graph; Phase B stays window; C lights
     kda_decoder: bool = True  # when use_kda, mix decoder self-attn (decode KV)
     kda_group: int = 4  # 3 KDA : 1 sparse/sliding anchor
     kd_temperature: float = 2.0
@@ -159,8 +159,9 @@ def encoder_layer_kind(
     12B (16 layers) default is 2 sliding + 7 CSA + 7 HCA. With ``use_kda``,
     non-bootstrap layers are 3:1 KDA:(CSA/HCA) (group of 4): 2 sliding +
     11 KDA + 2 CSA + 1 HCA. Tiny graphs keep a sliding bootstrap and a
-    CSA indexer anchor so C-index still has something to train. Phase C
-    lights KDA first (``C-kda``), then CSA, then HCA.
+    CSA indexer anchor so C-index still has something to train. Phase B
+    **implements** the labels (and KDAGates when ``use_kda``) but compute
+    stays window. Phase C **lights** KDA first (``C-kda``), then CSA, then HCA.
     """
     n = int(n_layers)
     i = int(index)

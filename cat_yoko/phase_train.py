@@ -79,7 +79,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument(
         "--use-kda",
         action="store_true",
-        help="opt-in 3:1 KDA mix; --chain lights C-kda before indexer/CSA/HCA",
+        help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
     )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--keep-last", type=int, default=2)
@@ -293,16 +293,33 @@ def _cli_chain(phases: tuple[str, ...], argv: list[str] | None) -> int:
     return rc
 
 
+def _argv_implemented_kda(cli: bool, argv: list[str]) -> bool:
+    from cat_yoko.checkpoint import peek_checkpoint_extra
+    from cat_yoko.kda import resolve_implemented_kda
+
+    extra = None
+    if "--resume" in argv:
+        i = argv.index("--resume")
+        if i + 1 < len(argv):
+            extra = peek_checkpoint_extra(argv[i + 1])
+    return resolve_implemented_kda(cli=cli, extra=extra)
+
+
 def main_c(argv: list[str] | None = None) -> int:
     chain, rest = _strip_bool(argv, "--chain")
     use_kda, rest = _strip_bool(rest, "--use-kda")
+    try:
+        use_kda = _argv_implemented_kda(use_kda, rest)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     if use_kda:
         rest = ["--use-kda", *rest]
     if chain:
         if "--stage" in rest:
             raise SystemExit(
                 "--chain runs indexer→topk→hca→win "
-                "(or kda→index→topk→hca→win with --use-kda); do not pass --stage"
+                "(or kda→index→topk→hca→win after B implements --use-kda); "
+                "do not pass --stage"
             )
         return _cli_chain(c_chain(use_kda=use_kda), rest)
     stage, rest = _peel_flag(rest, "--stage", "indexer")

@@ -6,9 +6,11 @@ from __future__ import annotations
 import inspect
 import math
 import sys
+import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -21,8 +23,16 @@ from cat_yoko.config import (
     decoder_layer_kind,
     encoder_layer_kind,
 )
+from cat_yoko.freeze import apply_freeze, trainable_names
 from cat_yoko.indexer import set_sparse_mode
-from cat_yoko.kda import KDAGates, gated_delta_scan, kda_attend, kv_ledger
+from cat_yoko.kda import (
+    KDAGates,
+    extra_use_kda,
+    gated_delta_scan,
+    kda_attend,
+    kv_ledger,
+    resolve_implemented_kda,
+)
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.phases import c_chain, resolve_phase_spec
 from cat_yoko.trainer import Trainer
@@ -183,6 +193,95 @@ class GraphTests(unittest.TestCase):
     def test_default_tiny_has_no_kda_params(self) -> None:
         model = CATYokoForCausalLM(CATYokoConfig.tiny())
         self.assertFalse(any("kda" in n for n, _ in model.named_parameters()))
+
+
+class ImplementThenLightTests(unittest.TestCase):
+    def test_b_implements_kda_but_stays_window(self) -> None:
+        cfg = replace(CATYokoConfig.tiny(), encoder_layers=4, decoder_layers=4, use_kda=True)
+        model = CATYokoForCausalLM(cfg)
+        self.assertTrue(any(b.kind == "kda" for b in model.encoder))
+        self.assertEqual(model.encoder[1].sparse_mode, "window")
+        apply_freeze(model, "B0")
+        self.assertFalse(any("kda" in n for n in trainable_names(model)))
+        apply_freeze(model, "B1")
+        self.assertFalse(any("kda" in n for n in trainable_names(model)))
+        apply_freeze(model, "B2")
+        self.assertFalse(any("kda" in n for n in trainable_names(model)))
+        nll = Trainer(cfg, "B0", "cpu", steps=1, accum=1, micro_batch=1).run().nll
+        self.assertTrue(math.isfinite(nll))
+
+    def test_c_kda_trains_gates(self) -> None:
+        cfg = replace(CATYokoConfig.tiny(), encoder_layers=4, decoder_layers=4, use_kda=True)
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "C-kda")
+        self.assertTrue(any("kda" in n for n in trainable_names(model)))
+
+    def test_late_implement_refused(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                cfg,
+                "B0",
+                "cpu",
+                steps=1,
+                accum=1,
+                micro_batch=1,
+                save_dir=save,
+                save_every=1,
+                save_full=False,
+                save_trainable=True,
+            ).run()
+            late = replace(cfg, use_kda=True)
+            with self.assertRaises(RuntimeError) as ctx:
+                Trainer(
+                    late,
+                    "C-kda",
+                    "cpu",
+                    steps=1,
+                    accum=1,
+                    micro_batch=1,
+                    resume=save,
+                ).run()
+            self.assertIn("implement-then-light", str(ctx.exception))
+
+    def test_c_inherits_kda_from_b_overlay(self) -> None:
+        cfg = replace(CATYokoConfig.tiny(), encoder_layers=4, decoder_layers=4, use_kda=True)
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                cfg,
+                "B0",
+                "cpu",
+                steps=1,
+                accum=1,
+                micro_batch=1,
+                save_dir=save,
+                save_every=1,
+                save_full=False,
+                save_trainable=True,
+            ).run()
+            nll = (
+                Trainer(
+                    replace(cfg, use_kda=False),
+                    "C-kda",
+                    "cpu",
+                    steps=1,
+                    accum=1,
+                    micro_batch=1,
+                    resume=save,
+                )
+                .run()
+                .nll
+            )
+            self.assertTrue(math.isfinite(nll))
+
+    def test_extra_use_kda_legacy_cfg_is_false(self) -> None:
+        self.assertIs(extra_use_kda({"cfg": {"name": "tiny"}}), False)
+        self.assertIs(extra_use_kda({"use_kda": True}), True)
+        self.assertTrue(resolve_implemented_kda(cli=False, extra={"use_kda": True}))
+        with self.assertRaises(RuntimeError):
+            resolve_implemented_kda(cli=True, extra={"use_kda": False})
 
 
 if __name__ == "__main__":

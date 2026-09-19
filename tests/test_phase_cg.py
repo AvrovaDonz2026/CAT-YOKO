@@ -169,6 +169,29 @@ class PhaseEnvelopeTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--tokens") + 1], str(5e9))
         self.assertIn("--use-kda", argv)
 
+    def test_c_chain_rejects_late_kda(self) -> None:
+        with patch(
+            "cat_yoko.checkpoint.peek_checkpoint_extra",
+            return_value={"use_kda": False},
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                main_c(["--chain", "--use-kda", "--try", "--resume", "/tmp/b2"])
+        self.assertIn("implement-then-light", str(ctx.exception))
+
+    def test_c_chain_inherits_kda_from_resume(self) -> None:
+        with patch(
+            "cat_yoko.checkpoint.peek_checkpoint_extra",
+            return_value={"use_kda": True},
+        ):
+            with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+                self.assertEqual(
+                    main_c(["--chain", "--try", "--resume", "/tmp/b2", "--save-dir", "/tmp/c"]),
+                    0,
+                )
+        names = [c.args[0] for c in run.call_args_list]
+        self.assertEqual(names, ["C-kda", "C-index", "C-topk", "C-hca", "C-win"])
+        self.assertIn("--use-kda", run.call_args_list[0].args[1])
+
     def test_c_chain_rejects_stage(self) -> None:
         with self.assertRaises(SystemExit):
             main_c(["--chain", "--stage", "topk"])

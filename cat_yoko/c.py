@@ -2,7 +2,8 @@
 
 ``python3 -m cat_yoko.c --try --stage indexer``
 ``--stage kda|indexer|topk|hca|win`` or ``--chain`` (indexer→topk→hca→win).
-``--use-kda --chain`` lights C-kda first (majority linear path), then CSA/HCA.
+Implement KDA on B (``python3 -m cat_yoko.b0 --use-kda``); C only lights.
+``--chain`` after a ``use_kda`` overlay: C-kda first, then CSA/HCA.
 No CSA CUDA kernel: theorem-B union mask + HCA concat only.
 """
 

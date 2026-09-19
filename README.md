@@ -40,7 +40,7 @@ bash scripts/run_b0_next.sh
 | FFN / MoE | SwiGLU 6144；1 shared + 20 routed；top-\(k\) 7/10（enc/dec） |
 | Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
 
-发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G**（`python3 -m cat_yoko.c|d|e|f|g`，C/D 可 `--chain`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 Phase B 是滑窗 GQA；Phase C 按定理 B 做滑窗∪压缩，**不是 CSA kernel**。KDA（省每层 self KV）默认关；`--use-kda` 时 Phase C 先点亮 KDA、再 CSA、最后 HCA，见 `cat_yoko.kda`。
+发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G**（`python3 -m cat_yoko.c|d|e|f|g`，C/D 可 `--chain`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 **先实现、后点亮**：Phase B 是滑窗 GQA（`--use-kda` 只把 3:1 图建进图）；Phase C 再点亮 KDA→CSA→HCA。**不是 CSA kernel**。见 `cat_yoko.kda`。
 
 ## 课程 C1
 

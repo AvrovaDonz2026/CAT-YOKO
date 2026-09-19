@@ -179,7 +179,7 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 
 **代价 / 注意**：
 - KDA 需额外的 **DPLR chunked kernel** + **独立循环状态**管理（与 YOCO"只缓存一次"正交：YOCO 省 KV cache，KDA 状态是每层各自的小状态）。
-- 混合改造已知坑：**模型可能学会忽略线性路径**（若先训 CSA/HCA 强检索、再把多数层换成 KDA）。3:1 是真架构时，Phase C 点亮必须 **KDA 先、CSA 锚点后、HCA 最后**（`C-kda` → indexer → topk → hca → win）。不要删 CSA/HCA 代码；HCA 层最少且 write-first，放最后。发布默认仍 `use_kda=False`，B0 仍是全滑窗。
+- 混合改造已知坑：**模型可能学会忽略线性路径**（若先训 CSA/HCA 强检索、再把多数层换成 KDA）。所以 **先实现 3:1 图（B，仍滑窗），再按 KDA→CSA→HCA 点亮（C）**。不要在 C 才改层类型。HCA 层最少且 write-first，点亮放最后。发布默认仍 `use_kda=False`。
 - 参数上，KDA 层通常比 GQA/CSA 更省参（无大 KV 投影），把部分 CSA/HCA 层替换为 KDA 会略降每栈参数，需在 §3 脚本里按实际 KDA 维度重算并用 routed 专家数补回 12.25B。
 
 > 结论：**值得加，但定位是"效率 + 兜底覆盖"，不是"保中段精确检索"**。是否上、以及 KDA:CSA:HCA 的确切比例，用 §7 消融决定。
@@ -348,6 +348,13 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 ### Phase C — 注意力稀疏化对齐（关键、易翻车）
 
+**流程：先实现，后点亮。** 代码与层标签在 B 就进图；C 只改 `sparse_mode`，不在 C 才把模块焊上去。
+
+| 步 | 何时 | 做什么 |
+| --- | --- | --- |
+| **实现** | Phase A 手术 + **B 建图** | 默认层标签 2 sliding+7 CSA+7 HCA；`--use-kda` 则 2+11 KDA+2 CSA+1 HCA，`KDAGates` 进图。**计算仍是滑窗 GQA**（`sparse_mode=window`）。KDA 参数在 B 冻结，不进 Adam。发布 B0 默认 `use_kda=False`（132 张量 overlay）。 |
+| **点亮** | Phase C | 无 KDA：indexer→topk→hca→win。有 KDA（B 已实现）：**C-kda → indexer → topk → hca（最后）→ win**。禁止把 KDA 模块补到 `use_kda=False` 的 B overlay 上。 |
+
 遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩。**发布默认**（2 sliding + 7 CSA + 7 HCA，`use_kda=False`）：
 
 1. **Indexer 稠密对齐**：冻结主干，仅训练 Encoder CSA 上的 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（层内 KL）。此步不改变主输出，只教 indexer "该选谁"。监督叠在 B2 **之后**。Indexer top-k 只从压缩块集合 \(S_{\mathrm{comp}}\) 里删，不许加（定理 B）。
@@ -362,7 +369,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 1. **Indexer**：KDA 保持点亮；只在剩下的 CSA 锚点上做层内 KL（12B 仅 2 层，token 从 10e9 砍到 5e9，C 合计仍 25e9）。
 2. **CSA top-k**，然后 **HCA 最后**（1 层、write-first），再 `C-win`。
 
-CSA/HCA **实现不后移、不删除**；后移的是**点亮**。B0 默认仍 `use_kda=False`。
+CSA/HCA **实现不后移、不删除**；后移的是**点亮**。KDA 也一样：B `--use-kda` 实现，C 点亮。B0 默认仍 `use_kda=False`。
 
 ### Phase D — 长上下文扩展
 
@@ -546,7 +553,7 @@ BBH（推理），IFEval（指令遵循）。
 - **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。**精度 bf16，不开 NVFP4。**
 - **L1（半规模去风险原型，≈3–6B）**：用**完整新颖架构栈**但**专家数减半**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。廉价的架构验证台。
 - **L2（扩到 12B 目标）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，半规模→12B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
-- **每个新组件单独一步**：默认稀疏化（indexer→CSA→HCA）；**3:1 KDA 图则 KDA → 稀疏化** → mHC → Muon。**NVFP4 不进 L0**（tiny 保持 bf16），从 B1 开允许的线性 GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
+- **每个新组件单独一步**：先把模块**实现进图**（B 仍滑窗），再**点亮**。默认点亮 indexer→CSA→HCA；**3:1 KDA 图则 C-kda → 稀疏化**。**NVFP4 不进 L0**（tiny 保持 bf16），从 B1 开允许的线性 GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
 
 **难度—收益取舍速查：**
 

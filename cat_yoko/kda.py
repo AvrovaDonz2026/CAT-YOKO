@@ -10,9 +10,11 @@ KDA does **not** shrink the YOCO global cache (that is M2). It does
 not provide decoder query-aware retrieval (that is M3). Mid-context
 exact recall still needs CSA / window anchors.
 
-Lighting (Phase C, ``use_kda=True``): C-kda → C-index → C-topk →
-C-hca → C-win. Majority linear path first; CSA anchors then HCA last.
-Without ``use_kda`` the published chain is still indexer→topk→hca→win.
+Pipeline: **implement then light**. ``use_kda=True`` on Phase B builds
+the 3:1 graph (KDAGates exist) but compute stays window GQA. Phase C
+lights ``C-kda → C-index → C-topk → C-hca → C-win``. Do not add KDA
+modules at C onto a ``use_kda=False`` B overlay. Without ``use_kda``
+the published chain is still indexer→topk→hca→win.
 """
 
 from __future__ import annotations
@@ -246,3 +248,43 @@ def kv_ledger(
             "YOCO global cache is unchanged (M2). Not mid-context exact recall."
         ),
     )
+
+
+LATE_KDA_IMPLEMENT = (
+    "implement-then-light: pass --use-kda on B0/B1/B2 so the 3:1 graph exists "
+    "(Phase B is still window GQA). Phase C only lights C-kda. Refusing to add "
+    "KDA modules onto a use_kda=False overlay."
+)
+
+
+def extra_use_kda(extra: dict | None) -> bool | None:
+    """KDA implement flag stored on a checkpoint. ``None`` = no overlay info."""
+    if not extra:
+        return None
+    if "use_kda" in extra:
+        return bool(extra["use_kda"])
+    cfg = extra.get("cfg")
+    if isinstance(cfg, dict) and "use_kda" in cfg:
+        return bool(cfg["use_kda"])
+    if isinstance(cfg, dict) and cfg:
+        return False
+    return None
+
+
+def resolve_implemented_kda(*, cli: bool, extra: dict | None) -> bool:
+    """Inherit ``use_kda`` from B overlay. Error if C tries to implement late."""
+    ckpt = extra_use_kda(extra)
+    if ckpt is False and cli:
+        raise RuntimeError(LATE_KDA_IMPLEMENT)
+    if ckpt is True:
+        return True
+    return bool(cli)
+
+
+def model_has_kda(model: nn.Module) -> bool:
+    for blk in list(getattr(model, "encoder", [])) + list(getattr(model, "decoder", [])):
+        if getattr(blk, "kind", None) == "kda":
+            return True
+        if getattr(blk, "kda", None) is not None:
+            return True
+    return False

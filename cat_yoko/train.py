@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--use-kda",
         action="store_true",
-        help="opt-in 3:1 KDA mix; Phase C lights C-kda before CSA/HCA",
+        help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
     )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
@@ -268,12 +268,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.c1_smoke and args.resume is not None:
         p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
     if args.resume is not None:
-        from cat_yoko.checkpoint import resolve_resume_path
+        from cat_yoko.checkpoint import peek_checkpoint_extra, resolve_resume_path
+        from cat_yoko.kda import resolve_implemented_kda
 
         try:
             args.resume = resolve_resume_path(args.resume)
         except FileNotFoundError as exc:
             p.error(str(exc))
+        try:
+            args.use_kda = resolve_implemented_kda(
+                cli=bool(args.use_kda), extra=peek_checkpoint_extra(args.resume)
+            )
+        except RuntimeError as exc:
+            p.error(str(exc))
+        if args.use_kda:
+            cfg = replace(cfg, use_kda=True)
     if args.c1_smoke and args.tokens is not None:
         p.error("--c1-smoke is step-limited; do not pass --tokens")
     if args.config == "12b" and not str(args.device).startswith("cuda"):

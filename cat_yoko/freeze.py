@@ -63,6 +63,18 @@ def freeze_mode(phase: str) -> str:
     raise ValueError(phase)
 
 
+def _kda_params(model: CATYokoForCausalLM):
+    for n, p in model.named_parameters():
+        if "kda" in n.split("."):
+            yield p
+
+
+def _freeze_unlit_kda(model: CATYokoForCausalLM) -> None:
+    """Implemented in the graph, not in Adam, until Phase C lights C-kda."""
+    for p in _kda_params(model):
+        p.requires_grad = False
+
+
 def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
     mode = freeze_mode(phase)
     model = unwrap(model)
@@ -70,6 +82,8 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
         p.requires_grad = True
     model.set_detach(mode in {"b0", "b1", "indexer"})
     if mode == "none" or mode == "b2":
+        if mode == "b2":
+            _freeze_unlit_kda(model)
         _clear_trainable_cache(model)
         return
     if mode == "indexer":
@@ -112,6 +126,8 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
             if id(p) not in keep:
                 p.requires_grad = False
     # B1: decoder stack (self-attn, mlp, ln1/ln2, final norm) stays trainable.
+    # KDAGates stay frozen until C-kda lights them (implement, then light).
+    _freeze_unlit_kda(model)
     _clear_trainable_cache(model)
 
 

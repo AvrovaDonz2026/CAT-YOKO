@@ -8,7 +8,7 @@ import os
 import random
 import time
 from contextlib import nullcontext
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import torch
@@ -21,6 +21,7 @@ from cat_yoko.checkpoint import (
     load_model_state,
     load_optimizer_state,
     load_trainable_state,
+    peek_checkpoint_extra,
     prune_step_checkpoints,
     publish_latest,
     resolve_resume_path,
@@ -533,6 +534,24 @@ class Trainer:
         del ckpt
         return step, tokens_in_phase, tokens_seen
 
+    def _inherit_implemented_kda(self) -> None:
+        """B overlay owns the 3:1 graph. C inherits; C cannot implement late."""
+        from cat_yoko.kda import resolve_implemented_kda
+
+        extra = peek_checkpoint_extra(self.resume) if self.resume is not None else None
+        want = resolve_implemented_kda(
+            cli=bool(getattr(self.cfg, "use_kda", False)), extra=extra
+        )
+        if want == bool(getattr(self.cfg, "use_kda", False)):
+            return
+        self.cfg = replace(self.cfg, use_kda=want)
+        ph = resolve_phase_spec(self.phase, use_kda=want)
+        if ph is None:
+            return
+        self.loss_mode = ph.loss
+        self.phase_sparse = ph.sparse
+        self.phase_align = bool(ph.align_indexer)
+
     def _extra(self, model: nn.Module, step: int, tokens_in_phase: float, tokens_seen: float, stream) -> dict:
         return {
             "phase": self.phase,
@@ -544,6 +563,8 @@ class Trainer:
             "seq_len": self.seq_len,
             "seed": self.seed,
             "cfg": asdict(self.cfg),
+            "use_kda": bool(getattr(self.cfg, "use_kda", False)),
+            "sparse": self.phase_sparse,
             "stream": stream.state_dict(),
             "rng_py": random.getstate(),
             "rng_torch": torch.get_rng_state(),
@@ -705,6 +726,7 @@ class Trainer:
                 "B2 --offload-blocks Adams each layer during backward and cannot "
                 "gradient-accumulate; use --accum 1, or ZeRO/multi-GPU for the 4M-token batch"
             )
+        self._inherit_implemented_kda()
         if self.reuse_model is not None:
             model = unwrap(self.reuse_model)
         else:
