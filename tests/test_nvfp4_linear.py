@@ -19,11 +19,14 @@ from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.nvfp4_linear import (
     Nvfp4Linear,
     apply_nvfp4,
+    fused_cat_linear,
     hw_nvfp4_gemm_available,
     nvfp4_linear,
     nvfp4_module_names,
     quantize_nvfp4,
     should_wrap_linear,
+    te_nvfp4_linear_enabled,
+    _try_te_nvfp4_linear,
 )
 
 
@@ -48,6 +51,25 @@ class QuantizeTests(unittest.TestCase):
 
     def test_hw_nvfp4_gemm_probe_does_not_throw(self) -> None:
         self.assertIsInstance(hw_nvfp4_gemm_available(), bool)
+
+    def test_try_te_nvfp4_linear_cpu_is_none(self) -> None:
+        w = torch.randn(16, 16)
+        w.requires_grad_(False)
+        x = torch.randn(16, 16)
+        self.assertIsNone(_try_te_nvfp4_linear(x, w, None))
+        y = nvfp4_linear(x, w, None)
+        self.assertEqual(tuple(y.shape), (16, 16))
+        self.assertTrue(torch.isfinite(y).all())
+        self.assertIsInstance(te_nvfp4_linear_enabled(), bool)
+
+    def test_fused_cat_linear_matches_two_linears(self) -> None:
+        torch.manual_seed(0)
+        a = nn.Linear(8, 4, bias=False)
+        b = nn.Linear(8, 4, bias=False)
+        x = torch.randn(3, 8)
+        y = fused_cat_linear([a, b], x)
+        ref = torch.cat([a(x), b(x)], dim=-1)
+        self.assertTrue(torch.allclose(y, ref, atol=1e-5, rtol=1e-5))
 
     def test_ste_linear_has_weight_grad(self) -> None:
         w = nn.Parameter(torch.randn(8, 4))

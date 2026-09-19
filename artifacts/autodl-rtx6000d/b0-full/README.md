@@ -17,4 +17,6 @@ overlay 只写 `trainable.pt`（Hub `checkpoints/b0-full/`），不写 23GiB `la
 | mem | 30789 MiB | 42092 MiB（冻结 encoder 权重量化缓存） |
 | NVFP4 GEMM | E2M1/16 仿真 | 仍仿真（nightly `float4` `copy_` 仍 NotImplemented；TE pytorch 已能 import） |
 
+代码里已落地、**需同阶段 restart 才进当前 B0 进程**的下一档算子：jagged `grouped_mm` MoE（CUDA；失败回退 padded bmm）、WindowAttention 融合 QKV、无 teacher 时分块 `lm_head`+CE（不物化 `[B,S,V]` logits）、冻结 GEMM 上 best-effort TE NVFP4（先 16×128 dummy probe，不 `copy_` 进 TE；失败则整进程禁用回仿真）。不要为 B1/B2 `--try` 杀掉这份 B0。
+
 Hub overlay step **9720**（`tokens_in_phase=39,684,096`，信封 8e9 的 ≈0.50%）：[`checkpoints/b0-full/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full)。实例随时可能没，这是快照，B0 **还没训完**。

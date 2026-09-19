@@ -20,6 +20,8 @@ B1/B2) only. Causal YOCO window / GQA / qk_norm / fp32 SDPA stay in
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -141,7 +143,172 @@ def quantize_nvfp4(t: torch.Tensor, *, block: int = _BLOCK) -> torch.Tensor:
     return recon.to(dtype=orig_dtype)
 
 
+def te_nvfp4_linear_enabled() -> bool:
+    """True after a successful TE NVFP4 Linear probe/GEMM this process."""
+    return getattr(_try_te_nvfp4_linear, "_state", None) is True
+
+
+def fused_cat_linear(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
+    """One GEMM with weights concatenated on the out axis. Same math as sequential Linears.
+
+    Used for SwiGLU gate+up and WindowAttention QKV. No bias (recipe Linears are bias-free).
+    """
+    if len(linears) == 1:
+        return linears[0](x)
+    if all(isinstance(lin, Nvfp4Linear) for lin in linears):
+        ctx = torch.autocast(device_type="cuda", enabled=False) if x.is_cuda else nullcontext()
+        with ctx:
+            x_q = quantize_nvfp4(x) + x - x.detach()
+            w = torch.cat([lin.quantized_weight() for lin in linears], dim=0)
+            return F.linear(x_q, w, None)
+    if all(isinstance(lin, nn.Linear) for lin in linears):
+        w = torch.cat([lin.weight for lin in linears], dim=0)
+        return F.linear(x, w, None)
+    parts = [lin(x) for lin in linears]
+    return torch.cat(parts, dim=-1)
+
+
+def _probe_te_nvfp4_once() -> bool:
+    """Throwaway 16×128 Linear. Never touches 12B masters.
+
+    Share must keep the dummy Parameter identity and dtype. ``copy_`` into TE
+    is not a fallback (bandwidth + sm_120 float4 ``copy_`` is NotImplemented).
+    """
+    state = getattr(_try_te_nvfp4_linear, "_state", None)
+    if state is not None:
+        return bool(state)
+    if not torch.cuda.is_available():
+        _try_te_nvfp4_linear._state = False
+        return False
+    try:
+        import transformer_engine.pytorch as te
+        from transformer_engine.common.recipe import NVFP4BlockScaling
+    except Exception:
+        _try_te_nvfp4_linear._state = False
+        return False
+    try:
+        recipe = NVFP4BlockScaling(disable_rht=True, disable_2d_quantization=True)
+    except TypeError:
+        try:
+            recipe = NVFP4BlockScaling()
+        except Exception:
+            _try_te_nvfp4_linear._state = False
+            return False
+    try:
+        device = torch.device("cuda")
+        w = torch.randn(128, 128, device=device, dtype=torch.bfloat16)
+        x = torch.randn(16, 128, device=device, dtype=torch.bfloat16)
+        ptr = w.data_ptr()
+        layer = te.Linear(128, 128, bias=False, params_dtype=torch.bfloat16)
+        layer = layer.to(device=device, dtype=torch.bfloat16)
+        try:
+            layer.weight = w
+        except Exception:
+            _try_te_nvfp4_linear._state = False
+            return False
+        if getattr(layer, "weight", None) is not w:
+            _try_te_nvfp4_linear._state = False
+            return False
+        with te.autocast(enabled=True, recipe=recipe):
+            y = layer(x)
+        if (
+            getattr(layer, "weight", None) is not w
+            or w.dtype != torch.bfloat16
+            or w.data_ptr() != ptr
+            or tuple(y.shape) != (16, 128)
+            or not bool(torch.isfinite(y.float()).all())
+        ):
+            _try_te_nvfp4_linear._state = False
+            return False
+        _try_te_nvfp4_linear._state = True
+        _try_te_nvfp4_linear._recipe = recipe
+        _try_te_nvfp4_linear._te = te
+        return True
+    except Exception:
+        _try_te_nvfp4_linear._state = False
+        return False
+
+
+def _try_te_nvfp4_linear(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor | None) -> torch.Tensor | None:
+    """Best-effort Transformer Engine NVFP4 GEMM sharing ``weight``. None = use emulation.
+
+    Does not clone the 12B master. Probe uses a dummy 16×128 Linear first.
+    If TE refuses to share a Parameter or the sm_120 kernel faults, disable
+    for the rest of the process. Never ``copy_`` into TE.
+    """
+    if getattr(_try_te_nvfp4_linear, "_state", None) is False:
+        return None
+    if not x.is_cuda or not weight.is_cuda:
+        return None
+    if weight.requires_grad:
+        # Trainable STE must hit the bf16 master; TE share is frozen-only.
+        return None
+    n = x.reshape(-1, x.shape[-1]).size(0)
+    k = int(x.shape[-1])
+    n_out = int(weight.shape[0])
+    if n % 16 != 0 or k % 16 != 0 or n_out % 16 != 0:
+        return None
+    if not _probe_te_nvfp4_once():
+        return None
+    te = getattr(_try_te_nvfp4_linear, "_te", None)
+    recipe = getattr(_try_te_nvfp4_linear, "_recipe", None)
+    if te is None or recipe is None:
+        _try_te_nvfp4_linear._state = False
+        return None
+    cache: dict = getattr(_try_te_nvfp4_linear, "_layers", None)
+    if cache is None:
+        cache = {}
+        _try_te_nvfp4_linear._layers = cache
+    key = (int(weight.shape[1]), int(weight.shape[0]), str(weight.device), str(weight.dtype), bias is not None)
+    layer = cache.get(key)
+    try:
+        if layer is None:
+            layer = te.Linear(
+                weight.shape[1],
+                weight.shape[0],
+                bias=bias is not None,
+                params_dtype=weight.dtype,
+            )
+            layer = layer.to(device=weight.device, dtype=weight.dtype)
+            cache[key] = layer
+        if getattr(layer, "weight", None) is not weight:
+            try:
+                layer.weight = weight
+            except Exception:
+                _try_te_nvfp4_linear._state = False
+                cache.pop(key, None)
+                return None
+        if getattr(layer, "weight", None) is not weight:
+            _try_te_nvfp4_linear._state = False
+            cache.pop(key, None)
+            return None
+        if bias is not None:
+            try:
+                layer.bias = bias
+            except Exception:
+                _try_te_nvfp4_linear._state = False
+                cache.pop(key, None)
+                return None
+        ptr = weight.data_ptr()
+        dt = weight.dtype
+        with te.autocast(enabled=True, recipe=recipe):
+            y = layer(x)
+        if getattr(layer, "weight", None) is not weight or weight.dtype != dt or weight.data_ptr() != ptr:
+            _try_te_nvfp4_linear._state = False
+            cache.pop(key, None)
+            return None
+        return y
+    except Exception:
+        _try_te_nvfp4_linear._state = False
+        cache.pop(key, None)
+        return None
+
+
 def nvfp4_linear(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor | None) -> torch.Tensor:
+    if not weight.requires_grad:
+        hw = _try_te_nvfp4_linear(x, weight, bias)
+        if hw is not None:
+            return hw
     x_q = quantize_nvfp4(x) + x - x.detach()
     w_q = quantize_nvfp4(weight) + weight - weight.detach()
     return F.linear(x_q, w_q, bias)
@@ -190,6 +357,12 @@ class Nvfp4Linear(nn.Linear):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Quantize the bf16 master, not an autocast-promoted copy.
+        # Frozen encoder: TE NVFP4 GEMM when the kernel accepts this shape.
+        if not self.weight.requires_grad:
+            hw = _try_te_nvfp4_linear(x, self.weight, self.bias)
+            if hw is not None:
+                return hw
+
         def _go() -> torch.Tensor:
             x_q = quantize_nvfp4(x) + x - x.detach()
             return F.linear(x_q, self.quantized_weight(), self.bias)

@@ -40,11 +40,16 @@ from cat_yoko.dist_util import (
     wrap_distributed,
 )
 from cat_yoko.nvfp4 import low_prec_enabled, should_autocast
-from cat_yoko.nvfp4_linear import apply_nvfp4, nvfp4_module_names
+from cat_yoko.nvfp4_linear import (
+    apply_nvfp4,
+    nvfp4_module_names,
+    te_available,
+    te_nvfp4_linear_enabled,
+)
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
-from cat_yoko.moe import moe_utilization
+from cat_yoko.moe import grouped_mm_available, moe_utilization
 from cat_yoko.offload import (
     auto_offload_flags,
     clip_grad_norm_mixed,
@@ -503,6 +508,8 @@ class Trainer:
         raw.grad_checkpoint = self.grad_ckpt
         raw.offload_encoder = self.offload_encoder
         raw.offload_blocks = self.offload_blocks
+        # Chunked lm_head+CE unless KD needs the full student logit tensor.
+        raw.return_logits = self.teacher is not None
         if self.offload_blocks:
             for blk in list(raw.encoder) + list(raw.decoder):
                 move_module(blk, "cpu")
@@ -511,19 +518,23 @@ class Trainer:
 
     def _print_built(self, model: nn.Module, n_train: int, adam_state: str) -> None:
         """Rank-0 CUDA banner after the graph exists. Includes allocator conf."""
+        raw = unwrap(model)
         alloc = 0.0
         if str(self.device).startswith("cuda") and torch.cuda.is_available():
             alloc = torch.cuda.memory_allocated() / 1024**3
         alloc_conf = enable_expandable_segments()
         print(
             f"built {self.cfg.name} on {self.device} dtype={self.dtype} "
-            f"params={unwrap(model).param_count():,} alloc={alloc:.2f}GiB "
+            f"params={raw.param_count():,} alloc={alloc:.2f}GiB "
             f"grad_ckpt={self.grad_ckpt} seq={self.seq_len} "
             f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
             f"optim_cpu={self.optim_cpu} adam={adam_state} "
             f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
             f"nvfp4={bool(getattr(self.cfg, 'use_nvfp4', False))} "
-            f"nvfp4_n={self.nvfp4_n} PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
+            f"nvfp4_n={self.nvfp4_n} grouped_mm={grouped_mm_available()} "
+            f"te={te_available()} te_nvfp4={te_nvfp4_linear_enabled()} "
+            f"return_logits={bool(getattr(raw, 'return_logits', True))} "
+            f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
             flush=True,
         )
 
@@ -762,6 +773,8 @@ class Trainer:
                         "fp8": use_fp8,
                         "nvfp4": use_nvfp4,
                         "nvfp4_n": self.nvfp4_n,
+                        "grouped_mm": grouped_mm_available(),
+                        "te_nvfp4": te_nvfp4_linear_enabled(),
                         "tokens_seen": tokens_seen,
                         "tokens_in_phase": tokens_in_phase,
                         "tok_s": (step_tokens * self.world) / dt,

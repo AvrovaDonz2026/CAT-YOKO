@@ -79,6 +79,8 @@ Nightly 目标：`https://download.pytorch.org/whl/nightly/cu130` 上当天的 t
 
 **已切换（2026-09-18T18:06Z）：** B0 从 step 1400 overlay 同阶段 resume，进程是 nightly Python。`transformer_engine.pytorch` 2.19 可以 import；`float4_e2m1fn_x2` 的 `copy_` 仍失败，所以 GEMM 还是仿真。探活 JSON：[`nvfp4/NVFP4_PROBE_nightly.json`](nvfp4/NVFP4_PROBE_nightly.json)。吞吐约 1350 → 1670 tok/s。
 
+下一档算子（grouped MoE / 融合 QKV / 分块 lm_head+CE / TE NVFP4 尽力）已进仓库；要进当前 B0 内存图，需等一次完整 `trainable_step_*.pt` 后同阶段 restart，不要为 B1/B2 `--try` 杀 B0。
+
 ## NVFP4 wrap 烟测（2026-09-18）
 
 tiny CUDA wrap + 因果 window 通过；12B B0 `--try` 2 步 `nvfp4=True`，wrap 2815 个 Linear，peak 34442 MiB。日志在 [`nvfp4/`](nvfp4/)。**419MiB overlay 只上 HuggingFace** [`checkpoints/b0-nvfp4-try/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-nvfp4-try)，不覆盖 32 步 `checkpoints/b0/trainable.pt`。Transformer Engine 2.19 cu12 装上了，但 `transformer_engine.pytorch` 因 `ncclCommWindowRegister` 导不进，本跑走 E2M1/16 仿真。

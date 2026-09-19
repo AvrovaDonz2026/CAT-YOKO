@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch
 
 import cat_yoko.attention as attn_mod
-from cat_yoko.attention import CrossAttention, WindowAttention, _sdpa, _window_causal_bias
+from cat_yoko.attention import CrossAttention, WindowAttention, _fused_qkv, _sdpa, _window_causal_bias
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, NVFP4_GEMM_SLOTS
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
@@ -170,6 +170,34 @@ class WrapDoesNotChangeTopologyTests(unittest.TestCase):
         bias = _window_causal_bias(4, 4, 8, torch.device("cpu"), torch.float32)
         self.assertLess(bias[1, 2].item(), -1e4)
         self.assertEqual(bias[2, 2].item(), 0.0)
+
+
+class FusedQkvTests(unittest.TestCase):
+    def test_fused_qkv_matches_three_linears(self) -> None:
+        torch.manual_seed(0)
+        d, kv, s = 32, 16, 5
+        q = torch.nn.Linear(d, d, bias=False)
+        k = torch.nn.Linear(d, kv, bias=False)
+        v = torch.nn.Linear(d, kv, bias=False)
+        q2 = torch.nn.Linear(d, d, bias=False)
+        k2 = torch.nn.Linear(d, kv, bias=False)
+        v2 = torch.nn.Linear(d, kv, bias=False)
+        q2.load_state_dict(q.state_dict())
+        k2.load_state_dict(k.state_dict())
+        v2.load_state_dict(v.state_dict())
+        x = torch.randn(2, s, d, requires_grad=True)
+        x2 = x.detach().clone().requires_grad_(True)
+        fq, fk, fv = _fused_qkv(q, k, v, x)
+        rq, rk, rv = q2(x2), k2(x2), v2(x2)
+        self.assertTrue(torch.allclose(fq, rq, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(fk, rk, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(fv, rv, atol=1e-5, rtol=1e-5))
+        (fq.sum() + fk.sum() + fv.sum()).backward()
+        (rq.sum() + rk.sum() + rv.sum()).backward()
+        self.assertTrue(torch.allclose(x.grad, x2.grad, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(q.weight.grad, q2.weight.grad, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(k.weight.grad, k2.weight.grad, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(v.weight.grad, v2.weight.grad, atol=1e-5, rtol=1e-5))
 
 
 class SdpaNumericTests(unittest.TestCase):

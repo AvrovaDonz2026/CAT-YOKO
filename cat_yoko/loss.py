@@ -8,6 +8,42 @@ import torch
 import torch.nn.functional as F
 
 
+def linear_cross_entropy(
+    hidden: torch.Tensor,
+    labels: torch.Tensor,
+    lm_head: torch.nn.Module,
+    *,
+    logit_scale: float = 1.0,
+    ignore_index: int = -100,
+    chunk_tokens: int = 512,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Token-mean CE without materializing full ``[B, S, V]`` logits.
+
+    Same reduction as ``F.cross_entropy(..., ignore_index)``: mean over
+    non-ignored tokens. Chunks along the token axis so V=130560 at seq=4096
+    never allocates a 2GiB logit tensor.
+    """
+    h = hidden.reshape(-1, hidden.size(-1))
+    y = labels.reshape(-1)
+    valid = y != ignore_index
+    n_valid = valid.sum()
+    total = h.new_zeros(())
+    step = max(int(chunk_tokens), 1)
+    for i in range(0, h.size(0), step):
+        logits = lm_head(h[i : i + step])
+        if logit_scale != 1.0:
+            logits = logits / logit_scale
+        total = total + F.cross_entropy(
+            logits.float(),
+            y[i : i + step],
+            ignore_index=ignore_index,
+            reduction="sum",
+        )
+    denom = n_valid.clamp_min(1).to(dtype=total.dtype)
+    nll = total / denom
+    return nll, n_valid
+
+
 def kd_kl(
     student_logits: torch.Tensor,
     teacher_logits: torch.Tensor,

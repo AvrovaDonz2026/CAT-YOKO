@@ -46,6 +46,8 @@ class CATYokoForCausalLM(nn.Module):
         self.grad_checkpoint = False
         self.offload_encoder = False
         self.offload_blocks = False
+        # Trainer turns this off unless KD needs student logits.
+        self.return_logits = True
         p0 = next(self.parameters(), None)
         if p0 is not None and p0.device.type != "meta":
             from cat_yoko.upcycle import init_new_modules
@@ -95,17 +97,31 @@ class CATYokoForCausalLM(nn.Module):
         for blk in self.decoder:
             y, a = self._run_block(blk, y, k, v, input_ids, doc_ids)
             aux = aux + a
-        logits = self.lm_head(self.norm(y)) / self.logit_scale
-        out: dict[str, torch.Tensor] = {"logits": logits}
+        logits = None
+        if labels is None or self.return_logits:
+            logits = self.lm_head(self.norm(y)) / self.logit_scale
+        out: dict[str, torch.Tensor] = {}
+        if logits is not None:
+            out["logits"] = logits
         if labels is not None:
-            shift_logits = logits[:, :-1].contiguous()
-            shift_labels = labels[:, 1:].contiguous()
-            nll = F.cross_entropy(
-                shift_logits.reshape(-1, shift_logits.size(-1)),
-                shift_labels.reshape(-1),
-                ignore_index=-100,
-            )
-            n_valid = (shift_labels != -100).sum()
+            if logits is None:
+                from cat_yoko.loss import linear_cross_entropy
+
+                nll, n_valid = linear_cross_entropy(
+                    self.norm(y)[:, :-1],
+                    labels[:, 1:],
+                    self.lm_head,
+                    logit_scale=self.logit_scale,
+                )
+            else:
+                shift_logits = logits[:, :-1].contiguous()
+                shift_labels = labels[:, 1:].contiguous()
+                nll = F.cross_entropy(
+                    shift_logits.reshape(-1, shift_logits.size(-1)),
+                    shift_labels.reshape(-1),
+                    ignore_index=-100,
+                )
+                n_valid = (shift_labels != -100).sum()
             out["aux"] = aux
             out["loss"] = nll + aux
             out["nll"] = nll

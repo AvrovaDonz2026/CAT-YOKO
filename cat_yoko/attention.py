@@ -14,6 +14,17 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.rope import RMSNorm, RotaryEmbedding, apply_rope
 
 
+def _fused_qkv(
+    q_proj: nn.Linear, k_proj: nn.Linear, v_proj: nn.Linear, x: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """One GEMM for Q/K/V. Same math as three Linears."""
+    from cat_yoko.nvfp4_linear import fused_cat_linear
+
+    qkv = fused_cat_linear([q_proj, k_proj, v_proj], x)
+    d_q, d_k, d_v = q_proj.out_features, k_proj.out_features, v_proj.out_features
+    return qkv.split((d_q, d_k, d_v), dim=-1)
+
+
 def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     """``[B, n_kv, S, hd]`` → ``[B, n_heads, S, hd]``."""
     if n_rep == 1:
@@ -124,9 +135,10 @@ class WindowAttention(nn.Module):
     def forward(self, x: torch.Tensor, doc_ids: torch.Tensor | None = None) -> torch.Tensor:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
-        q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
-        k = self.k_proj(x).view(b, s, n_kv, hd).transpose(1, 2)
-        v = self.v_proj(x).view(b, s, n_kv, hd).transpose(1, 2)
+        q, k, v = _fused_qkv(self.q_proj, self.k_proj, self.v_proj, x)
+        q = q.view(b, s, h, hd).transpose(1, 2)
+        k = k.view(b, s, n_kv, hd).transpose(1, 2)
+        v = v.view(b, s, n_kv, hd).transpose(1, 2)
         if self.q_norm is not None:
             q = self.q_norm(q)
             k = self.k_norm(k)

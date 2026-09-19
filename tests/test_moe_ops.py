@@ -14,7 +14,7 @@ import torch
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
-from cat_yoko.moe import MoE, SwiGLU, _fused_gate_up
+from cat_yoko.moe import MoE, SwiGLU, _fused_gate_up, _grouped_linear, _swiglu_experts_grouped, _swiglu_experts_serial
 from cat_yoko.nvfp4_linear import Nvfp4Linear, apply_nvfp4
 
 
@@ -95,6 +95,80 @@ class FrozenNvfp4CacheTests(unittest.TestCase):
         self.assertTrue(torch.isfinite(out["nll"]))
         out["loss"].backward()
         self.assertIsNotNone(model.cache_k.weight.grad)
+
+
+def _grouped_mm_ref(mat_a: torch.Tensor, mat_b: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
+    """CPU stand-in for jagged grouped GEMM: ``mat_a[T,K] @ mat_b[E,K,N]``."""
+    parts: list[torch.Tensor] = []
+    prev = 0
+    for e, end in enumerate(offs.tolist()):
+        end_i = int(end)
+        sl = mat_a[prev:end_i]
+        if sl.size(0):
+            parts.append(sl @ mat_b[e])
+        prev = end_i
+    if not parts:
+        return mat_a.new_zeros(mat_a.size(0), mat_b.size(-1))
+    return torch.cat(parts, dim=0)
+
+
+class GroupedMoETests(unittest.TestCase):
+    def test_grouped_swiglu_matches_serial_with_empty_expert(self) -> None:
+        from unittest.mock import patch
+
+        from cat_yoko.moe import _swiglu_expert_weights
+
+        cfg = CATYokoConfig.tiny()
+        torch.manual_seed(2)
+        moe = MoE(cfg, cfg.n_routed_dec, cfg.top_k_dec)
+        x = torch.randn(7, cfg.hidden_size)
+        counts = torch.tensor([2, 0, 3, 2])
+        with patch("cat_yoko.moe._raw_grouped_mm", _grouped_mm_ref):
+            y_g = _swiglu_experts_grouped(moe.experts, x, counts)
+        y_s = _swiglu_experts_serial(moe.experts, x, counts)
+        self.assertTrue(torch.allclose(y_g, y_s, atol=1e-5, rtol=1e-5))
+        pack_a = _swiglu_expert_weights(moe.experts, moe)
+        pack_b = _swiglu_expert_weights(moe.experts, moe)
+        self.assertIsNot(pack_a, pack_b)
+        for p in moe.parameters():
+            p.requires_grad_(False)
+        frozen_a = _swiglu_expert_weights(moe.experts, moe)
+        frozen_b = _swiglu_expert_weights(moe.experts, moe)
+        self.assertIs(frozen_a, frozen_b)
+
+    def test_grouped_linear_dx_through_frozen_weights(self) -> None:
+        from unittest.mock import patch
+
+        torch.manual_seed(3)
+        x = torch.randn(6, 8, requires_grad=True)
+        w = torch.randn(2, 4, 8)
+        w.requires_grad_(False)
+        offs = torch.tensor([3, 6], dtype=torch.int32)
+        with patch("cat_yoko.moe._raw_grouped_mm", _grouped_mm_ref):
+            y = _grouped_linear(x, w, offs)
+            y.sum().backward()
+        dx_ref = _grouped_mm_ref(torch.ones(6, 4), w, offs)
+        self.assertTrue(torch.allclose(x.grad, dx_ref, atol=1e-5, rtol=1e-5))
+
+    def test_grouped_linear_dw_matches_serial(self) -> None:
+        from unittest.mock import patch
+
+        torch.manual_seed(4)
+        x = torch.randn(5, 8, requires_grad=True)
+        w = torch.randn(2, 4, 8, requires_grad=True)
+        offs = torch.tensor([2, 5], dtype=torch.int32)
+        with patch("cat_yoko.moe._raw_grouped_mm", _grouped_mm_ref):
+            y = _grouped_linear(x, w, offs)
+            y.sum().backward()
+        dw_ref = torch.zeros_like(w)
+        prev = 0
+        ones = torch.ones(5, 4)
+        for e, end in enumerate(offs.tolist()):
+            end_i = int(end)
+            if end_i > prev:
+                dw_ref[e] = ones[prev:end_i].T @ x.detach()[prev:end_i]
+            prev = end_i
+        self.assertTrue(torch.allclose(w.grad, dw_ref, atol=1e-5, rtol=1e-5))
 
 
 if __name__ == "__main__":

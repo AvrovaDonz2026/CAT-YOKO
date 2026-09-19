@@ -1,9 +1,10 @@
 """DeepSeek-style softmax-then-topK MoE with optional hash routing.
 
 Expert dispatch permutes tokens by expert id (one bincount sync per layer)
-instead of 20× ``nonzero`` / ``.any()`` CUDA syncs. Routed SwiGLU uses a
-padded batched GEMM (fused gate+up, then down). Serial expert loop remains
-as a numeric fallback. Routing math is unchanged.
+instead of 20× ``nonzero`` / ``.any()`` CUDA syncs. Routed SwiGLU prefers
+``grouped_mm`` (jagged tokens, no padding). Padded batched GEMM is the
+fallback; serial expert loop remains as a numeric reference. Routing math
+is unchanged.
 """
 
 from __future__ import annotations
@@ -17,6 +18,51 @@ from torch import nn
 from cat_yoko.config import CATYokoConfig
 
 
+def grouped_mm_available() -> bool:
+    """True when this PyTorch build exposes grouped GEMM (``F.grouped_mm`` / ``_grouped_mm``)."""
+    return callable(getattr(F, "grouped_mm", None)) or callable(getattr(torch, "_grouped_mm", None))
+
+
+def _raw_grouped_mm(mat_a: torch.Tensor, mat_b: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
+    """``mat_a`` [T, K], ``mat_b`` [E, K, N], ``offs`` int32 cumulative token ends."""
+    fn = getattr(F, "grouped_mm", None)
+    if callable(fn):
+        return fn(mat_a, mat_b, offs=offs)
+    return torch._grouped_mm(mat_a, mat_b, offs=offs)
+
+
+class _GroupedLinear(torch.autograd.Function):
+    """``y = grouped_mm(x, W.T, offs)`` with dX / optional dW. Native autograd is missing."""
+
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, weight: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(x, weight, offs)
+        ctx.weight_requires_grad = bool(weight.requires_grad)
+        b = weight.transpose(-2, -1).contiguous()
+        return _raw_grouped_mm(x.contiguous(), b, offs)
+
+    @staticmethod
+    def backward(ctx, dy: torch.Tensor):
+        x, weight, offs = ctx.saved_tensors
+        dy = dy.contiguous()
+        dx = _raw_grouped_mm(dy, weight.contiguous(), offs)
+        dw = None
+        if ctx.weight_requires_grad:
+            dw = torch.zeros_like(weight)
+            prev = 0
+            ends = offs.detach().cpu().tolist()
+            for e, end in enumerate(ends):
+                end_i = int(end)
+                if end_i > prev:
+                    dw[e] = dy[prev:end_i].T @ x[prev:end_i]
+                prev = end_i
+        return dx, dw, None
+
+
+def _grouped_linear(x: torch.Tensor, weight: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
+    return _GroupedLinear.apply(x, weight, offs)
+
+
 def _like(ref: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     """Autocast experts emit bf16 into an fp32 residual buffer; align dtypes."""
     if t.dtype != ref.dtype or t.device != ref.device:
@@ -26,19 +72,10 @@ def _like(ref: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
 
 def _fused_gate_up(gate: nn.Module, up: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """One GEMM for gate and up; SiLU(gate)*up. Same math as two Linears."""
-    from cat_yoko.nvfp4_linear import Nvfp4Linear, quantize_nvfp4
+    from cat_yoko.nvfp4_linear import fused_cat_linear
 
-    if isinstance(gate, Nvfp4Linear) and isinstance(up, Nvfp4Linear):
-        ctx = torch.autocast(device_type="cuda", enabled=False) if x.is_cuda else nullcontext()
-        with ctx:
-            x_q = quantize_nvfp4(x) + x - x.detach()
-            w = torch.cat((gate.quantized_weight(), up.quantized_weight()), dim=0)
-            gu = F.linear(x_q, w, None)
-        g, u = gu.chunk(2, dim=-1)
-        return F.silu(g) * u
     if isinstance(gate, nn.Linear) and isinstance(up, nn.Linear):
-        w = torch.cat((gate.weight, up.weight), dim=0)
-        gu = F.linear(x, w, None)
+        gu = fused_cat_linear([gate, up], x)
         g, u = gu.chunk(2, dim=-1)
         return F.silu(g) * u
     return F.silu(gate(x)) * up(x)
@@ -61,6 +98,28 @@ def _stack_linear_weight(linears: list[nn.Linear]) -> torch.Tensor:
     if all(isinstance(lin, Nvfp4Linear) for lin in linears):
         return torch.stack([lin.quantized_weight() for lin in linears])
     return torch.stack([lin.weight for lin in linears])
+
+
+def _swiglu_expert_weights(
+    experts: nn.ModuleList, owner: nn.Module | None
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, bool]:
+    from cat_yoko.nvfp4_linear import Nvfp4Linear
+
+    nv = all(isinstance(e.gate_proj, Nvfp4Linear) for e in experts) and all(
+        isinstance(e.up_proj, Nvfp4Linear) and isinstance(e.down_proj, Nvfp4Linear) for e in experts
+    )
+    trainable = any(e.gate_proj.weight.requires_grad for e in experts)
+    if owner is not None and not trainable:
+        hit = getattr(owner, "_swiglu_w", None)
+        if hit is not None:
+            return hit
+    gate_w = _stack_linear_weight([e.gate_proj for e in experts])
+    up_w = _stack_linear_weight([e.up_proj for e in experts])
+    down_w = _stack_linear_weight([e.down_proj for e in experts])
+    pack = (gate_w, up_w, down_w, nv)
+    if owner is not None and not trainable:
+        owner._swiglu_w = pack
+    return pack
 
 
 def _experts_are_swiglu(experts: nn.ModuleList) -> bool:
@@ -95,9 +154,10 @@ def _swiglu_experts_batched(
     x_sorted: torch.Tensor,
     expert_sorted: torch.Tensor,
     counts: torch.Tensor,
+    owner: nn.Module | None = None,
 ) -> torch.Tensor:
-    """Padded bmm over 20 experts. Empty experts stay zero-padded rows."""
-    from cat_yoko.nvfp4_linear import Nvfp4Linear, quantize_nvfp4
+    """Padded bmm over experts. Empty experts stay zero-padded rows."""
+    from cat_yoko.nvfp4_linear import quantize_nvfp4
 
     n_tok = x_sorted.size(0)
     if n_tok == 0:
@@ -118,12 +178,7 @@ def _swiglu_experts_batched(
     local = torch.arange(n_tok, device=x_sorted.device) - offs[expert_sorted]
     x_pad[expert_sorted, local] = x_sorted
 
-    gate_w = _stack_linear_weight([e.gate_proj for e in experts])
-    up_w = _stack_linear_weight([e.up_proj for e in experts])
-    down_w = _stack_linear_weight([e.down_proj for e in experts])
-    nv = all(isinstance(e.gate_proj, Nvfp4Linear) for e in experts) and all(
-        isinstance(e.up_proj, Nvfp4Linear) and isinstance(e.down_proj, Nvfp4Linear) for e in experts
-    )
+    gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
     if nv:
         ctx = torch.autocast(device_type="cuda", enabled=False) if x_sorted.is_cuda else nullcontext()
         with ctx:
@@ -143,6 +198,39 @@ def _swiglu_experts_batched(
     return y_pad[expert_sorted, local]
 
 
+def _swiglu_experts_grouped(
+    experts: nn.ModuleList,
+    x_sorted: torch.Tensor,
+    counts: torch.Tensor,
+    owner: nn.Module | None = None,
+) -> torch.Tensor:
+    """Jagged grouped GEMM. ``x_sorted`` is already packed by expert id."""
+    from cat_yoko.nvfp4_linear import quantize_nvfp4
+
+    n_tok = x_sorted.size(0)
+    if n_tok == 0:
+        return x_sorted
+    if int(counts.max().item()) <= 0:
+        return x_sorted.new_zeros(x_sorted.shape)
+    offs = torch.cumsum(counts, dim=0).to(dtype=torch.int32)
+    gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
+    gu_w = torch.cat((gate_w, up_w), dim=1)
+    if nv:
+        ctx = torch.autocast(device_type="cuda", enabled=False) if x_sorted.is_cuda else nullcontext()
+        with ctx:
+            x_q = quantize_nvfp4(x_sorted) + x_sorted - x_sorted.detach()
+            gu = _grouped_linear(x_q, gu_w, offs)
+            g, u = gu.chunk(2, dim=-1)
+            hidden = F.silu(g) * u
+            h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
+            return _grouped_linear(h_q, down_w, offs)
+    gu_w = gu_w.to(dtype=x_sorted.dtype)
+    down_w = down_w.to(dtype=x_sorted.dtype)
+    gu = _grouped_linear(x_sorted, gu_w, offs)
+    g, u = gu.chunk(2, dim=-1)
+    return _grouped_linear(F.silu(g) * u, down_w, offs)
+
+
 def _dispatch_experts(
     experts: nn.ModuleList,
     flat: torch.Tensor,
@@ -152,6 +240,8 @@ def _dispatch_experts(
     n_routed: int,
     *,
     batched: bool,
+    grouped: bool = True,
+    owner: nn.Module | None = None,
 ) -> torch.Tensor:
     """``expert_idx`` / ``token_idx`` / ``gates`` are length ``T * k`` (or ``T``)."""
     order = expert_idx.argsort()
@@ -161,8 +251,19 @@ def _dispatch_experts(
     x_sorted = flat.index_select(0, token_sorted)
     counts = torch.bincount(expert_sorted, minlength=n_routed)
     use_batched = batched and _experts_are_swiglu(experts)
-    if use_batched:
-        y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts)
+    want_grouped = (
+        use_batched
+        and grouped
+        and grouped_mm_available()
+        and x_sorted.is_cuda
+    )
+    if want_grouped:
+        try:
+            y = _swiglu_experts_grouped(experts, x_sorted, counts, owner=owner)
+        except (RuntimeError, NotImplementedError):
+            y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts, owner=owner)
+    elif use_batched:
+        y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts, owner=owner)
     else:
         y = _swiglu_experts_serial(experts, x_sorted, counts)
     y = y * gate_sorted.unsqueeze(-1).to(dtype=y.dtype)
@@ -188,8 +289,9 @@ class MoE(nn.Module):
         self.hash_route = hash_route
         self.router_z_loss = cfg.router_z_loss
         self.seq_balance_loss = cfg.seq_balance_loss
-        # Tests may flip this to compare against the serial expert loop.
+        # Tests may flip these to compare against the serial expert loop.
         self.batched_experts = True
+        self.grouped_experts = True
         d, mid = cfg.hidden_size, cfg.moe_intermediate_size
         self.shared = nn.ModuleList(SwiGLU(d, mid) for _ in range(cfg.n_shared))
         self.experts = nn.ModuleList(SwiGLU(d, mid) for _ in range(n_routed))
@@ -245,6 +347,8 @@ class MoE(nn.Module):
                 gates,
                 self.n_routed,
                 batched=self.batched_experts,
+                grouped=self.grouped_experts,
+                owner=self,
             )
             self.last_aux = flat.new_zeros(())
             self.last_load = None
@@ -272,6 +376,8 @@ class MoE(nn.Module):
             gates.reshape(-1),
             self.n_routed,
             batched=self.batched_experts,
+            grouped=self.grouped_experts,
+            owner=self,
         )
 
         z_loss = logits.float().pow(2).mean()
