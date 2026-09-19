@@ -11,10 +11,10 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
 | 阶段 | B0 |
-| step | 24640 |
-| tokens_in_phase | 111,200,256（信封 8e9 的 ≈1.39%） |
+| step | 25460 |
+| tokens_in_phase | 117,917,696（信封 8e9 的 ≈1.47%） |
 | seq | 4096 |
-| sha256 | `0e81f0851b881c5ab36c3aae490cdd4e71b0be7230d3b83fc0178ffa6c313a64` |
+| sha256 | `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c` |
 | 可训练张量 | 132（无 Adam） |
 | 机器 | Vast NVIDIA B200 SM 10.0 |
 | 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |

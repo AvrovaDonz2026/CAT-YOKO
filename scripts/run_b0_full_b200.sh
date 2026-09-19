@@ -2,7 +2,7 @@
 # NVIDIA B200 (SM 10.0 / 10.3): published C1 B0, 8e9 DummyStream tokens, seq=4096.
 #
 # Hardware NVFP4 via te.Linear + default NVFP4BlockScaling (RHT+2D+SR).
-# Resume Hub overlay checkpoints/b0-full (step 24640) after MiniCPM5 upcycle.
+# Resume Hub overlay checkpoints/b0-full (step 25460) after MiniCPM5 upcycle.
 # Does not download Ultra-FineWeb. Does not write 23GiB latest.pt.
 # 183GiB HBM: encoder on GPU, no activation checkpoint.
 # Default micro-batch=2 on this card (~15.7k tok/s, ~138GiB). MICRO_BATCH=1 to fall back.
