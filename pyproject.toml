@@ -24,6 +24,7 @@ cat-yoko-g = "cat_yoko.phase_train:main_g"
 cat-yoko-prepare = "cat_yoko.prepare:main"
 cat-yoko-gpu-smoke = "cat_yoko.gpu_smoke:main"
 cat-yoko-hw-recipe = "cat_yoko.hw_recipe:main"
+cat-yoko-mini-verify = "cat_yoko.mini_verify:main"
 
 [project.urls]
 Megatron-LM = "https://github.com/NVIDIA/Megatron-LM"
@@ -32,4 +33,4 @@ Megatron-LM = "https://github.com/NVIDIA/Megatron-LM"
 include = ["cat_yoko*"]
 
 [tool.setuptools.package-data]
-cat_yoko = ["py.typed"]
+cat_yoko = ["py.typed", "kernels/LICENSE.flash-attn-triton"]

@@ -41,6 +41,15 @@ from cat_yoko.dist_util import (
     wrap_distributed,
 )
 from cat_yoko.nvfp4 import low_prec_enabled, should_autocast
+
+
+def _int8_backend() -> str:
+    try:
+        from cat_yoko.int8_attn import last_backend
+
+        return last_backend()
+    except Exception:
+        return "none"
 from cat_yoko.nvfp4_linear import (
     apply_nvfp4,
     nvfp4_module_names,
@@ -327,6 +336,7 @@ class Trainer:
             f"gate={row['gate']:.3f} gn={row['grad_norm']:.2f} "
             f"moe_cv={row.get('moe_cv', 0):.2f} trainable={row['trainable_m']:.2f}M "
             f"lr={row['lr']:.2e} fp8={row['fp8']} nvfp4={row.get('nvfp4', False)} "
+            f"int8={row.get('int8', False)} "
             f"tok={row['tokens_seen']:.0f} "
             f"tok/s={row['tok_s']:.0f} mem={row['mem_mib']:.0f}MiB"
         )
@@ -668,6 +678,7 @@ class Trainer:
             f"optim_cpu={self.optim_cpu} adam={adam_state} "
             f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
             f"nvfp4={bool(getattr(self.cfg, 'use_nvfp4', False))} "
+            f"int8={bool(getattr(self.cfg, 'use_int8', False))} "
             f"nvfp4_n={self.nvfp4_n} nvfp4_family={compute_family()} "
             f"te_linear={prefer_te_linear()} grouped_mm={grouped_mm_available()} "
             f"te={te_available()} te_nvfp4={te_nvfp4_linear_enabled()} "
@@ -974,6 +985,8 @@ class Trainer:
                         "lr": lr,
                         "fp8": use_fp8,
                         "nvfp4": use_nvfp4,
+                        "int8": bool(getattr(self.cfg, "use_int8", False)),
+                        "int8_backend": _int8_backend(),
                         "nvfp4_n": self.nvfp4_n,
                         "grouped_mm": grouped_mm_available(),
                         "te_nvfp4": te_nvfp4_linear_enabled(),

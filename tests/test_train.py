@@ -30,6 +30,7 @@ class ConfigFrozenTests(unittest.TestCase):
         self.assertEqual(c.n_win, 8192)
         self.assertEqual(c.attention_backend, "window")
         self.assertFalse(c.use_muon)
+        self.assertFalse(c.use_int8)
         self.assertFalse(c.use_mup)
         self.assertEqual(c.residual_scale, 1)
         self.assertEqual(c.logit_scale, 1)

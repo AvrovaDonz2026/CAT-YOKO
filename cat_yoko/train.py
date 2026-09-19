@@ -106,10 +106,24 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="CAT-YOKO-12B C1 trainer")
     p.add_argument("--config", choices=["12b", "tiny"], default="tiny")
     p.add_argument("--phase", choices=sorted(PHASES), default="B0")
+    p.add_argument("--use-kda", action="store_true", help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)")
     p.add_argument(
-        "--use-kda",
-        action="store_true",
-        help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
+        "--nvfp4",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="wrap published NVFP4 GEMMs (12b default on; tiny off). --no-nvfp4 for BF16/FP8 fallback",
+    )
+    p.add_argument(
+        "--fp8",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Hopper/Ada FP8 policy (bf16 autocast on B1+). --no-fp8 to force pure bf16",
+    )
+    p.add_argument(
+        "--int8",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="SageBwd INT8 QK on dense causal SDPA (Triton / Ampere _int_mm). Default off",
     )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
@@ -237,6 +251,12 @@ def main(argv: list[str] | None = None) -> int:
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
     if args.use_kda:
         cfg = replace(cfg, use_kda=True)
+    if args.nvfp4 is not None:
+        cfg = replace(cfg, use_nvfp4=bool(args.nvfp4))
+    if args.fp8 is not None:
+        cfg = replace(cfg, use_fp8=bool(args.fp8))
+    if args.int8 is not None:
+        cfg = replace(cfg, use_int8=bool(args.int8))
     plan = ParallelPlan(
         tensor_parallel=args.tp,
         pipeline_parallel=args.pp,

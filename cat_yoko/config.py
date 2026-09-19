@@ -61,6 +61,7 @@ class CATYokoConfig:
     use_muon: bool = False
     use_nvfp4: bool = True  # published compute dtype; Nvfp4Linear wrap
     use_fp8: bool = True  # Hopper/Ada fallback placeholder
+    use_int8: bool = False  # SageBwd INT8 QK on dense causal SDPA; default off
     attention_backend: str = "window"  # Phase B; "csa" is Phase C
     use_kda: bool = False  # implement 3:1 graph; Phase B stays window; C lights
     kda_decoder: bool = True  # when use_kda, mix decoder self-attn (decode KV)
@@ -139,11 +140,30 @@ class CATYokoConfig:
             lr=3e-4,
             use_nvfp4=False,
             use_fp8=False,
+            use_int8=False,
             use_kda=False,
             global_batch_tokens=128,
             # Tiny is test-only. Match MiniCPM5 RMS; keep short-rope for seq_len=16.
             rope_theta=10_000.0,
             rms_eps=1e-6,
+        )
+
+    @classmethod
+    def int8_probe(cls) -> CATYokoConfig:
+        """Kernel-shaped tiny graph: hd=32, seq%64==0, window covers seq."""
+        return replace(
+            cls.tiny(),
+            name="int8-probe",
+            hidden_size=128,
+            num_heads=4,
+            num_kv_heads=2,
+            seq_len=64,
+            n_win=64,
+            dim_model_base=128,
+            global_batch_tokens=128,
+            use_int8=True,
+            use_nvfp4=False,
+            use_fp8=False,
         )
 
 

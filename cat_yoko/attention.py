@@ -74,12 +74,14 @@ def _sdpa(
     bias: torch.Tensor | None = None,
     *,
     causal: bool = False,
+    use_int8: bool = False,
 ) -> torch.Tensor:
     """Softmax stays high-prec; QKV stay in ``q.dtype`` on the CUDA fast path.
 
     Flash / cuDNN SDPA accumulate the softmax in fp32. Materializing fp32 Q/K/V
     disables those kernels and is only the CPU / explicit-mask fallback.
     ``enable_gqa`` keeps 2 KV heads instead of repeating to 16 Q heads.
+    ``use_int8`` is SageBwd INT8 ``QK^T`` on the dense causal path only.
     """
     gqa = k.size(-3) != q.size(-3)
 
@@ -100,6 +102,12 @@ def _sdpa(
         and q.is_cuda
         and q.dtype in (torch.bfloat16, torch.float16)
     )
+    if cuda_fast and use_int8 and causal and bias is None:
+        from cat_yoko.int8_attn import try_int8_attention
+
+        out = try_int8_attention(q, k, v, causal=True)
+        if out is not None:
+            return out
     if cuda_fast:
         with _cuda_sdpa_kernel():
             return _call(q, k, v, is_causal=causal)
@@ -200,6 +208,7 @@ class WindowAttention(nn.Module):
         self.q_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.k_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.rope = RotaryEmbedding(self.head_dim, cfg.rope_theta)
+        self.use_int8 = bool(getattr(cfg, "use_int8", False))
 
     def forward(
         self,
@@ -227,10 +236,10 @@ class WindowAttention(nn.Module):
             bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
             if extra_bias is not None:
                 bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
-            out = _sdpa(q, k, v, bias)
+            out = _sdpa(q, k, v, bias, use_int8=False)
         else:
             # GQA: 16 Q / 2 KV. Do not repeat KV; SDPA enable_gqa on CUDA.
-            out = _sdpa(q, k, v, causal=True)
+            out = _sdpa(q, k, v, causal=True, use_int8=self.use_int8)
         y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
         if return_probs:
             return y, _mean_head_probs(q, k, self.n_win, doc_ids)
@@ -251,6 +260,7 @@ class CrossAttention(nn.Module):
         self.q_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.k_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.rope = RotaryEmbedding(self.head_dim, cfg.rope_theta)
+        self.use_int8 = bool(getattr(cfg, "use_int8", False))
 
     def forward(
         self,
@@ -279,9 +289,9 @@ class CrossAttention(nn.Module):
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
             if extra_bias is not None:
                 bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
-            out = _sdpa(q, k, v, bias)
+            out = _sdpa(q, k, v, bias, use_int8=False)
         else:
-            out = _sdpa(q, k, v, causal=True)
+            out = _sdpa(q, k, v, causal=True, use_int8=self.use_int8)
         y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
         if return_probs:
             return y, _mean_head_probs(q, k, s, doc_ids)

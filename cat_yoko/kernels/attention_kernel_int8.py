@@ -1,0 +1,328 @@
+"""
+SageBwd-style INT8 Flash Attention for Turing (sm_75).
+
+Turing INT8 tensor cores deliver 2x the fp16 peak (T4: 130 vs 65 TOPS). This
+implements an INT8 forward + backward following SageBwd (arXiv 2505.11594,
+2603.02170): most attention matmuls run on INT8 tensor cores, while the
+accuracy-critical dP = dO @ V^T is kept in FP16.
+
+Granularity is per-token for QK^T and per-token for PV (SageAttention-style),
+fp32 accumulation. Upstream gates to sm_75; CAT-YOKO also tries Ampere+
+(sm_80 / sm_86 INT8 tensor cores) and falls back if Triton packing is wrong.
+Volta (sm_70) has no INT8 tensor cores and must use the fp16 path.
+
+CAT-YOKO modifications (still BSD-3-Clause, Copyright 2025 Alyssa Vance):
+replace the dense FP16 ``_dense_backward`` import with SageBwd-style SDPA
+backward (PV and dP stay FP16). Not a CSA CUDA kernel.
+
+Equal-length, non-window, non-alibi inputs only. The head dim must be a power of
+two >= 32: Triton's Turing INT8 MMA packing assumes a 32-wide K step, so a
+narrower head dim silently mis-packs the operands (head dim 16 returns garbage,
+head dim 32 and 64 are exact).
+"""
+import math
+
+import torch
+import triton
+import triton.language as tl
+
+# CAT-YOKO: do not vendor the 66KB dense FP16 kernel. SageBwd keeps the
+# entire backward in FP16; PyTorch SDPA is that path.
+import torch.nn.functional as F
+
+
+def _dense_backward(q, k, v, o, M, do, **kwargs):
+    del o, M
+    causal = bool(kwargs.get("causal", True))
+    sm_scale = kwargs.get("sm_scale")
+    qn = q.detach().requires_grad_(True)
+    kn = k.detach().requires_grad_(True)
+    vn = v.detach().requires_grad_(True)
+    extra = {}
+    if sm_scale is not None:
+        extra["scale"] = sm_scale
+    with torch.enable_grad():
+        try:
+            out = F.scaled_dot_product_attention(qn, kn, vn, is_causal=causal, **extra)
+        except TypeError:
+            out = F.scaled_dot_product_attention(qn, kn, vn, is_causal=causal)
+        out.backward(do)
+    return qn.grad, kn.grad, vn.grad
+
+
+
+@triton.jit
+def _round_i8(x):
+    """Round to nearest then cast to int8 (Triton 3.2 has no tl.math.round)."""
+    return tl.where(x >= 0, tl.math.floor(x + 0.5), tl.math.ceil(x - 0.5)).to(tl.int8)
+
+
+@triton.jit
+def _quantize_rows(x):
+    """Per-row INT8 quantization. x: [BLOCK_M, D] -> (x_hat int8, s [BLOCK_M])."""
+    amax = tl.max(tl.abs(x), axis=1)
+    s = tl.maximum(amax, 1.0) / 127.0
+    x_hat = _round_i8(x / s[:, None])
+    return x_hat, s
+
+
+@triton.jit
+def _quantize_cols(x):
+    """Per-column INT8 quantization. x: [D, BLOCK_N] -> (x_hat int8, s [BLOCK_N])."""
+    amax = tl.max(tl.abs(x), axis=0)
+    s = tl.maximum(amax, 1.0) / 127.0
+    x_hat = _round_i8(x / s[None, :])
+    return x_hat, s
+
+
+@triton.jit
+def _quantize_block(x):
+    """Single per-block INT8 scale (factors out of any dot reduction)."""
+    amax = tl.max(tl.abs(x))
+    s = tl.maximum(amax, 1.0) / 127.0
+    x_hat = _round_i8(x / s)
+    return x_hat, s
+@triton.jit
+def _quantize_k_rows(K, K8, SK, N_CTX, HEAD_DIM: tl.constexpr, BLOCK_R: tl.constexpr):
+    """Per-key-token INT8 quantization of K, hoisted out of the attention loop.
+
+    K is re-read by every query block, so quantizing it inside the inner loop
+    repeats the same work S/BLOCK_M times: on Turing that costs ~4x more than the
+    INT8 mma it feeds (measured), which is why the in-loop form is a net loss.
+    """
+    pid = tl.program_id(0)
+    bh = tl.program_id(1)
+    offs_r = pid * BLOCK_R + tl.arange(0, BLOCK_R)
+    offs_d = tl.arange(0, HEAD_DIM)
+    k_base = K + bh.to(tl.int64) * N_CTX * HEAD_DIM
+    k8_base = K8 + bh.to(tl.int64) * N_CTX * HEAD_DIM
+    k = tl.load(k_base + offs_r[:, None] * HEAD_DIM + offs_d[None, :],
+                mask=offs_r[:, None] < N_CTX, other=0.0)
+    amax = tl.max(tl.abs(k), axis=1)
+    s = tl.maximum(amax, 1.0) / 127.0
+    k_hat = _round_i8(k * (1.0 / s)[:, None])
+    tl.store(k8_base + offs_r[:, None] * HEAD_DIM + offs_d[None, :], k_hat,
+             mask=offs_r[:, None] < N_CTX)
+    tl.store(SK + bh.to(tl.int64) * N_CTX + offs_r, s, mask=offs_r < N_CTX)
+
+
+@triton.jit
+def _attn_fwd_int8_inner(acc, l_i, m_i, q, s_q,  #
+                         K8_block_ptr, s_k_ptrs, V_block_ptr,  #
+                         start_m, qk_scale,  #
+                         BLOCK_M: tl.constexpr, HEAD_DIM: tl.constexpr, BLOCK_N: tl.constexpr,  #
+                         STAGE: tl.constexpr, offs_m, offs_n,  #
+                         N_CTX: tl.constexpr, SEQ_LEN_K: tl.constexpr, SEQ_LEN_Q: tl.constexpr):
+    if STAGE == 1:
+        lo, hi = 0, start_m * BLOCK_M
+    elif STAGE == 2:
+        lo, hi = start_m * BLOCK_M, (start_m + 1) * BLOCK_M
+        lo = tl.multiple_of(lo, BLOCK_M)
+    else:
+        lo, hi = 0, N_CTX
+    K8_block_ptr = tl.advance(K8_block_ptr, (0, lo))
+    V_block_ptr = tl.advance(V_block_ptr, (lo, 0))
+    # Triton 3.2 cannot feed an int8 kernel parameter into tl.dot, so quantize q
+    # here from its fp16 form (once per query block).
+    q_hat = _round_i8(q / s_q[:, None])
+    for start_n in range(lo, hi, BLOCK_N):
+        # -- QK^T in INT8, K loaded already quantized (see _quantize_k_rows) --
+        k_hat = tl.load(K8_block_ptr)                # [HEAD_DIM, BLOCK_N] int8
+        s_k = tl.load(s_k_ptrs + start_n + offs_n,
+                      mask=(start_n + offs_n) < N_CTX, other=1.0)  # [BLOCK_N]
+        qk = tl.dot(q_hat, k_hat, out_dtype=tl.int32).to(tl.float32)
+        qk = qk * (s_q[:, None] * s_k[None, :]) * qk_scale
+        query_positions = offs_m + SEQ_LEN_K - SEQ_LEN_Q
+        if STAGE == 2:
+            mask = query_positions[:, None] >= (start_n + offs_n[None, :])
+            if SEQ_LEN_K < N_CTX:
+                mask = mask & ((start_n + offs_n[None, :]) < SEQ_LEN_K)
+            qk = qk + tl.where(mask, 0, -1.0e6)
+            m_ij = tl.maximum(m_i, tl.max(qk, 1))
+            qk -= m_ij[:, None]
+        else:
+            if SEQ_LEN_K < N_CTX:
+                pad_mask = ((start_n + offs_n[None, :]) < SEQ_LEN_K)
+                qk = qk + tl.where(pad_mask, 0, -1.0e6)
+                m_ij = tl.maximum(m_i, tl.max(qk, 1))
+                qk -= m_ij[:, None]
+            else:
+                m_ij = tl.maximum(m_i, tl.max(qk, 1))
+                qk = qk - m_ij[:, None]
+        p = tl.math.exp2(qk)
+        l_ij = tl.sum(p, 1)
+        alpha = tl.math.exp2(m_i - m_ij)
+        l_i = l_i * alpha + l_ij
+        acc = acc * alpha[:, None]
+        # -- PV in FP16. The INT8 PV dot corrupts its result on sm_75 when the
+        # int8 operand comes from an in-kernel chain (q_rows(exp2(qk))): Triton
+        # 3.2 skips the MMA layout conversion, returning garbage. Loaded int8
+        # operands are fine, so QK^T stays INT8; PV is FP16 like the backward's
+        # dP (SageBwd), which is also strictly more accurate.
+        p16 = p.to(tl.float16)
+        v = tl.load(V_block_ptr)                     # [BLOCK_N, HEAD_DIM]
+        acc += tl.dot(p16, v, out_dtype=tl.float32)
+        m_i = m_ij
+        V_block_ptr = tl.advance(V_block_ptr, (BLOCK_N, 0))
+        K8_block_ptr = tl.advance(K8_block_ptr, (0, BLOCK_N))
+    return acc, l_i, m_i
+
+
+def _int8_fwd_launch_config(head_dim, seqlen):
+    """Tile choice from interleaved per-config measurements on a 2080 Ti.
+
+    Pinned rather than autotuned: the candidates span 1.3-2.4x, and Triton's
+    autotuner times each one once, in sequence, so on a noisy device it picks a
+    slow tile about as often as the right one -- measured end-to-end it landed
+    1.2-1.6x off the best config in this table.
+
+    A 128-row query tile is the fastest choice at head dim 64 (1.3-1.6x over 64
+    rows) but it is only usable when the sequence divides evenly: with a partial
+    row block the rows in that block's first half come out wrong (verified
+    against an fp32 reference on 3.1.0 -- 64/192/320 all diverge, 128/256/512 do
+    not). BLOCK_M=64 always divides, since the caller requires a multiple of 64.
+
+    BLOCK_M must also stay >= BLOCK_N: the causal stages split the key range on
+    BLOCK_M boundaries and only the diagonal stage masks, so a wider key tile
+    would walk past the split.
+    """
+    if head_dim <= 64 and seqlen % 128 == 0:
+        return {"BLOCK_M": 128, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2}
+    return {"BLOCK_M": 64, "BLOCK_N": 64, "num_warps": 4, "num_stages": 2}
+
+
+@triton.jit
+def _attn_fwd_int8(Q, K8, SK, V, sm_scale, M, Out,  #
+                   stride_qz, stride_qh, stride_qm, stride_qk,  #
+                   stride_kz, stride_kh, stride_kn, stride_kk,  #
+                   stride_vz, stride_vh, stride_vk, stride_vn,  #
+                   stride_oz, stride_oh, stride_om, stride_on,  #
+                   Z, H, N_CTX, HEAD_DIM: tl.constexpr,  #
+                   BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr,  #
+                   STAGE: tl.constexpr, SEQ_LEN_K: tl.constexpr, SEQ_LEN_Q: tl.constexpr):
+    start_m = tl.program_id(0)
+    off_hz = tl.program_id(1)
+    off_z = off_hz // H
+    off_h = off_hz % H
+    q_offset = off_z.to(tl.int64) * stride_qz + off_h.to(tl.int64) * stride_qh
+    kv_offset = off_z.to(tl.int64) * stride_kz + off_h.to(tl.int64) * stride_kh
+    Q_block_ptr = tl.make_block_ptr(
+        base=Q + q_offset, shape=(N_CTX, HEAD_DIM), strides=(stride_qm, stride_qk),
+        offsets=(start_m * BLOCK_M, 0), block_shape=(BLOCK_M, HEAD_DIM), order=(1, 0))
+    V_block_ptr = tl.make_block_ptr(
+        base=V + kv_offset, shape=(N_CTX, HEAD_DIM), strides=(stride_vk, stride_vn),
+        offsets=(0, 0), block_shape=(BLOCK_N, HEAD_DIM), order=(1, 0))
+    K8_block_ptr = tl.make_block_ptr(
+        base=K8 + off_hz.to(tl.int64) * N_CTX * HEAD_DIM, shape=(HEAD_DIM, N_CTX),
+        strides=(1, HEAD_DIM), offsets=(0, 0), block_shape=(HEAD_DIM, BLOCK_N), order=(0, 1))
+    s_k_ptrs = SK + off_hz.to(tl.int64) * N_CTX
+    O_block_ptr = tl.make_block_ptr(
+        base=Out + q_offset, shape=(N_CTX, HEAD_DIM), strides=(stride_om, stride_on),
+        offsets=(start_m * BLOCK_M, 0), block_shape=(BLOCK_M, HEAD_DIM), order=(1, 0))
+    offs_m = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    offs_n = tl.arange(0, BLOCK_N)
+    m_i = tl.zeros([BLOCK_M], dtype=tl.float32) - float("inf")
+    l_i = tl.zeros([BLOCK_M], dtype=tl.float32) + 1.0
+    acc = tl.zeros([BLOCK_M, HEAD_DIM], dtype=tl.float32)
+    qk_scale = sm_scale * 1.44269504
+    q = tl.load(Q_block_ptr)
+    _, s_q = _quantize_rows(q)
+    if STAGE & 1:
+        acc, l_i, m_i = _attn_fwd_int8_inner(acc, l_i, m_i, q, s_q, K8_block_ptr, s_k_ptrs,
+                                             V_block_ptr, start_m, qk_scale, BLOCK_M, HEAD_DIM,
+                                             BLOCK_N, 4 - STAGE, offs_m, offs_n, N_CTX,
+                                             SEQ_LEN_K, SEQ_LEN_Q)
+    if STAGE & 2:
+        acc, l_i, m_i = _attn_fwd_int8_inner(acc, l_i, m_i, q, s_q, K8_block_ptr, s_k_ptrs,
+                                             V_block_ptr, start_m, qk_scale, BLOCK_M, HEAD_DIM,
+                                             BLOCK_N, 2, offs_m, offs_n, N_CTX,
+                                             SEQ_LEN_K, SEQ_LEN_Q)
+    m_i += tl.math.log2(l_i)
+    acc = acc / l_i[:, None]
+    m_ptrs = M + off_hz * N_CTX + offs_m
+    tl.store(m_ptrs, m_i, mask=offs_m < N_CTX)
+    tl.store(O_block_ptr, acc.to(Out.type.element_ty))
+
+
+class _attention_int8(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, q, k, v, causal, sm_scale, seq_len_k, seq_len_q):
+        o = torch.empty_like(q)
+        M = torch.empty((q.shape[0], q.shape[1], q.shape[2]), device=q.device, dtype=torch.float32)
+        stage = 3 if causal else 1
+        BATCH, N_HEAD, N_CTX = q.shape[:3]
+        # Hoist K's quantization out of the query loop; the attention kernel then
+        # loads INT8 K directly instead of re-quantizing every key tile per query
+        # block (which measured ~4x more expensive than the mma it feeds).
+        k8 = torch.empty((BATCH * N_HEAD, N_CTX, q.shape[3]), device=q.device, dtype=torch.int8)
+        s_k = torch.empty((BATCH * N_HEAD, N_CTX), device=q.device, dtype=torch.float32)
+        _quantize_k_rows[(triton.cdiv(N_CTX, 64), BATCH * N_HEAD)](
+            k, k8, s_k, N_CTX, HEAD_DIM=q.shape[3], BLOCK_R=64, num_warps=4,
+        )
+        cfg = _int8_fwd_launch_config(q.shape[3], q.shape[2])
+        grid = (triton.cdiv(N_CTX, cfg["BLOCK_M"]), BATCH * N_HEAD, 1)
+        _attn_fwd_int8[grid](
+            q, k8, s_k, v, sm_scale, M, o,
+            q.stride(0), q.stride(1), q.stride(2), q.stride(3),
+            k.stride(0), k.stride(1), k.stride(2), k.stride(3),
+            v.stride(0), v.stride(1), v.stride(2), v.stride(3),
+            o.stride(0), o.stride(1), o.stride(2), o.stride(3),
+            q.shape[0], q.shape[1], q.shape[2],
+            HEAD_DIM=q.shape[3],
+            STAGE=stage, SEQ_LEN_K=seq_len_k, SEQ_LEN_Q=seq_len_q,
+            **cfg,
+        )
+        ctx.save_for_backward(q, k, v, o, M)
+        ctx.sm_scale = sm_scale
+        ctx.causal = causal
+        ctx.seq_len_k = seq_len_k
+        ctx.seq_len_q = seq_len_q
+        return o
+
+    @staticmethod
+    def backward(ctx, do):
+        q, k, v, o, M = ctx.saved_tensors
+        # SageBwd keeps dP in FP16, and QK^T is the only INT8 matmul here, so the
+        # gradient path is fp16 throughout: reuse the dense fp16 backward rather
+        # than carry a second, slower implementation of the same math.
+        dq, dk, dv = _dense_backward(
+            q, k, v, o, M, do,
+            sm_scale=ctx.sm_scale, head_dim=q.shape[-1], causal=ctx.causal,
+            seq_len_k=ctx.seq_len_k, seq_len_q=ctx.seq_len_q,
+            kv_heads=k.shape[1],
+        )
+        return dq, dk, dv, None, None, None, None
+
+
+def attention_int8(q, k, v, causal=False, sm_scale=None, seq_len_k=None, seq_len_q=None):
+    """INT8 flash attention (sm_75; Ampere+ attempted). q,k,v: [B, H, S, D]."""
+    head_dim = q.shape[-1]
+    if not q.is_cuda:
+        raise ValueError("The INT8 kernel requires CUDA tensors")
+    cap = torch.cuda.get_device_capability(q.device)
+    # Upstream is sm_75-only (Triton INT8 MMA packing). Ampere+ has INT8 tensor
+    # cores; CAT-YOKO allows the launch and numerically probes in int8_attn.
+    if cap == (7, 0) or cap[0] < 7 or (cap[0] == 7 and cap[1] < 5):
+        raise ValueError(
+            f"The INT8 kernel needs INT8 tensor cores (sm_75+); got {cap}"
+        )
+    if head_dim < 32 or head_dim & (head_dim - 1):
+        raise ValueError(
+            "The INT8 kernel requires a power-of-two head dim of at least 32"
+        )
+    if q.shape[2] % 64:
+        raise ValueError("The INT8 kernel requires sequence lengths divisible by 64")
+    if not (q.is_contiguous() and k.is_contiguous() and v.is_contiguous()):
+        raise ValueError(
+            "The INT8 kernel requires contiguous inputs; its backward addresses "
+            "K/V with Q's strides and a strided input silently gives wrong results"
+        )
+    if q.shape[2] != k.shape[2] or k.shape[2] != v.shape[2]:
+        raise ValueError("The INT8 kernel requires equal sequence lengths")
+    if sm_scale is None:
+        sm_scale = 1.0 / math.sqrt(q.shape[-1])
+    if seq_len_k is None:
+        seq_len_k = q.shape[2]
+    if seq_len_q is None:
+        seq_len_q = q.shape[2]
+    return _attention_int8.apply(q, k, v, causal, sm_scale, seq_len_k, seq_len_q)
