@@ -31,6 +31,36 @@ def _raw_grouped_mm(mat_a: torch.Tensor, mat_b: torch.Tensor, offs: torch.Tensor
     return torch._grouped_mm(mat_a, mat_b, offs=offs)
 
 
+def _grouped_wgrad(x: torch.Tensor, dy: torch.Tensor, weight: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
+    """``dW[e] = dy_e.T @ x_e``. Prefer one padded bmm; serial slices if hugely imbalanced."""
+    e, n_out, k = weight.shape
+    n_tok = int(x.size(0))
+    offs64 = offs.to(dtype=torch.int64, device=x.device)
+    counts = torch.diff(offs64, prepend=offs64.new_zeros(1))
+    max_n = int(counts.max().item()) if e else 0
+    if max_n <= 0 or n_tok == 0:
+        return torch.zeros_like(weight)
+    if max_n * e > 8 * n_tok:
+        dw = torch.zeros_like(weight)
+        prev = 0
+        for ei, end in enumerate(offs64.tolist()):
+            end_i = int(end)
+            if end_i > prev:
+                dw[ei] = dy[prev:end_i].T @ x[prev:end_i]
+            prev = end_i
+        return dw
+    starts = torch.zeros(e, dtype=torch.int64, device=x.device)
+    if e > 1:
+        starts[1:] = offs64[:-1]
+    expert_sorted = torch.repeat_interleave(torch.arange(e, device=x.device), counts)
+    local = torch.arange(n_tok, device=x.device) - torch.repeat_interleave(starts, counts)
+    x_pad = x.new_zeros(e, max_n, k)
+    dy_pad = dy.new_zeros(e, max_n, n_out)
+    x_pad[expert_sorted, local] = x
+    dy_pad[expert_sorted, local] = dy
+    return torch.bmm(dy_pad.transpose(1, 2), x_pad)
+
+
 class _GroupedLinear(torch.autograd.Function):
     """``y = grouped_mm(x, W.T, offs)`` with dX / optional dW. Native autograd is missing."""
 
@@ -46,16 +76,7 @@ class _GroupedLinear(torch.autograd.Function):
         x, weight, offs = ctx.saved_tensors
         dy = dy.contiguous()
         dx = _raw_grouped_mm(dy, weight.contiguous(), offs)
-        dw = None
-        if ctx.weight_requires_grad:
-            dw = torch.zeros_like(weight)
-            prev = 0
-            ends = offs.detach().cpu().tolist()
-            for e, end in enumerate(ends):
-                end_i = int(end)
-                if end_i > prev:
-                    dw[e] = dy[prev:end_i].T @ x[prev:end_i]
-                prev = end_i
+        dw = _grouped_wgrad(x, dy, weight, offs) if ctx.weight_requires_grad else None
         return dx, dw, None
 
 

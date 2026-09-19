@@ -61,7 +61,13 @@ fi
 echo "install transformers / hub"
 "${PIP[@]}" "transformers>=4.51" safetensors accelerate huggingface_hub
 "$PY" -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'cap', torch.cuda.get_device_capability(0) if torch.cuda.is_available() else None)"
-"$PY" -c "import transformer_engine as te, transformer_engine.pytorch; print('te', getattr(te, '__version__', 'ok'))" || echo "TE pytorch import failed"
+if ! "$PY" -c "import transformer_engine as te, transformer_engine.pytorch; print('te', getattr(te, '__version__', 'ok'))"; then
+  echo "TE pytorch import failed; source-build against venv torch"
+  if [ -f "$ROOT/scripts/build_te_from_source.sh" ]; then
+    bash "$ROOT/scripts/build_te_from_source.sh" || echo "TE source build failed"
+  fi
+  "$PY" -c "import transformer_engine as te, transformer_engine.pytorch; print('te', getattr(te, '__version__', 'ok'))" || echo "TE pytorch import failed"
+fi
 PROBE_JSON="${PROBE_JSON:-$ROOT/runs/NVFP4_PROBE.json}"
 mkdir -p "$(dirname "$PROBE_JSON")"
 if [ -f "$ROOT/scripts/probe_nvfp4_hw.py" ]; then

@@ -150,12 +150,16 @@ def fused_cat_linear(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
     """One GEMM with weights concatenated on the out axis. Same math as sequential Linears.
 
     Used for SwiGLU gate+up and WindowAttention QKV. No bias (recipe Linears are bias-free).
-    On SM100, sequential native ``te.Linear`` beats one emulated fused GEMM;
-    concatenating TE masters would silently drop NVFP4.
+    Frozen ``TeNvfp4Linear`` on SM100: one copy-once fused ``te.Linear``.
+    Trainable TE keeps sequential native GEMM so Adam still sees each leaf.
+    Concatenating TE masters into an emulated GEMM would silently drop NVFP4.
     """
     if len(linears) == 1:
         return linears[0](x)
     if any(isinstance(lin, TeNvfp4Linear) for lin in linears):
+        fused = _fused_frozen_te_cat(linears, x)
+        if fused is not None:
+            return fused
         parts = [lin(x) for lin in linears]
         return torch.cat(parts, dim=-1)
     if all(isinstance(lin, Nvfp4Linear) for lin in linears):
@@ -169,6 +173,70 @@ def fused_cat_linear(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
         return F.linear(x, w, None)
     parts = [lin(x) for lin in linears]
     return torch.cat(parts, dim=-1)
+
+
+def _fused_frozen_te_cat(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor | None:
+    """One ``te.Linear`` for frozen QKV / gate+up. None → sequential TE."""
+    from cat_yoko.nvfp4_hw import (
+        nvfp4_leading_ok,
+        pad_leading_to_block,
+        shape_fail_note,
+        shape_failed,
+    )
+
+    if not linears or not all(isinstance(lin, TeNvfp4Linear) for lin in linears):
+        return None
+    if any(lin.bias is not None for lin in linears):
+        return None
+    if any(bool(lin.weight.requires_grad) for lin in linears):
+        return None
+    in_f = int(linears[0].in_features)
+    if any(int(lin.in_features) != in_f for lin in linears):
+        return None
+    packs = [getattr(lin, "_te_pack", None) for lin in linears]
+    if any(p is None for p in packs):
+        return None
+    out_f = sum(int(lin.out_features) for lin in linears)
+    k = int(x.shape[-1])
+    if k % 16 != 0 or out_f % 16 != 0:
+        return None
+    lead = x.shape[:-1]
+    owner = linears[0]
+    key = tuple(id(lin) for lin in linears)
+    cache = getattr(owner, "_te_fused_cat", None)
+    layer = recipe = te = None
+    if isinstance(cache, list) and cache and cache[0] == key:
+        _, layer, recipe, te = cache
+    else:
+        te = packs[0][2]
+        recipe = packs[0][1]
+        try:
+            fused = te.Linear(in_f, out_f, bias=False, params_dtype=linears[0].weight.dtype)
+        except TypeError:
+            fused = te.Linear(in_f, out_f, bias=False)
+        try:
+            fused = fused.to(device=x.device, dtype=linears[0].weight.dtype)
+        except Exception:
+            fused = fused.to(device=x.device)
+        with torch.no_grad():
+            fused.weight.copy_(torch.cat([lin.weight.detach() for lin in linears], dim=0))
+        layer = fused
+        owner._te_fused_cat = [key, layer, recipe, te]
+    x2, n = pad_leading_to_block(x)
+    n_pad = int(x2.size(0))
+    if shape_failed(n_pad, k, out_f):
+        return None
+    if not nvfp4_leading_ok(n_pad, k, out_f) and n_pad > 0:
+        return None
+    try:
+        with te.autocast(enabled=True, recipe=recipe):
+            y = layer(x2)
+        if n_pad != n:
+            y = y[:n]
+        return y.reshape(*lead, out_f)
+    except Exception:
+        shape_fail_note(n_pad, k, out_f)
+        return None
 
 
 def _probe_te_nvfp4_once() -> bool:
@@ -450,22 +518,36 @@ class TeNvfp4Linear(Nvfp4Linear):
         return self.weight
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        from cat_yoko.nvfp4_hw import nvfp4_leading_ok, shape_fail_note, shape_failed
+        from cat_yoko.nvfp4_hw import (
+            nvfp4_leading_ok,
+            pad_leading_to_block,
+            shape_fail_note,
+            shape_failed,
+        )
 
         pack = self._te_pack
         if pack is None:
             return nvfp4_linear(x, self.weight, self.bias)
-        n = int(x.reshape(-1, x.shape[-1]).size(0))
         k = int(x.shape[-1])
         n_out = int(self.weight.shape[0])
-        if shape_failed(n, k, n_out) or not nvfp4_leading_ok(n, k, n_out):
+        if k % 16 != 0 or n_out % 16 != 0:
+            return nvfp4_linear(x, self.weight, self.bias)
+        lead = x.shape[:-1]
+        x2, n = pad_leading_to_block(x)
+        n_pad = int(x2.size(0))
+        if n == 0:
+            return F.linear(x, self.weight, self.bias)
+        if shape_failed(n_pad, k, n_out) or not nvfp4_leading_ok(n_pad, k, n_out):
             return nvfp4_linear(x, self.weight, self.bias)
         layer, recipe, te = pack
         try:
             with te.autocast(enabled=True, recipe=recipe):
-                return layer(x)
+                y = layer(x2)
+            if n_pad != n:
+                y = y[:n]
+            return y.reshape(*lead, n_out)
         except Exception:
-            shape_fail_note(n, k, n_out)
+            shape_fail_note(n_pad, k, n_out)
             return nvfp4_linear(x, self.weight, self.bias)
 
 

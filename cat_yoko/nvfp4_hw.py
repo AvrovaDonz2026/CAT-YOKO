@@ -159,6 +159,81 @@ def nvfp4_leading_ok(n: int, k: int, n_out: int) -> bool:
     return n % 16 == 0 and k % 16 == 0 and n_out % 16 == 0
 
 
+def nvfp4_pad_tokens(n: int, block: int = 16) -> int:
+    """Smallest ``>= n`` multiple of ``block``. ``0`` stays ``0``."""
+    if n <= 0:
+        return 0
+    r = n % block
+    return n if r == 0 else n + (block - r)
+
+
+def pad_leading_to_block(x: torch.Tensor, block: int = 16) -> tuple[torch.Tensor, int]:
+    """Flatten ``[..., K]`` to ``[N, K]``, pad ``N`` to a multiple of ``block``.
+
+    Returns ``(padded_2d, original_n)``. Zero rows do not change real-token
+    GEMM rows; caller slices ``[:original_n]`` and reshapes.
+    """
+    k = int(x.shape[-1])
+    x2 = x.reshape(-1, k)
+    n = int(x2.size(0))
+    pad = nvfp4_pad_tokens(n, block) - n
+    if pad:
+        x2 = F.pad(x2, (0, 0, 0, pad))
+    return x2, n
+
+
+def pad_packed_counts(x_sorted: torch.Tensor, counts: torch.Tensor, block: int = 16) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]]]:
+    """Insert zero rows so each expert's token count is 0 or a multiple of ``block``.
+
+    ``x_sorted`` is packed by expert id. Returns padded packed tensor, new
+    counts (length ``E``), and ``[(padded_start, n_real), ...]`` for experts
+    with ``n_real > 0`` so the caller can drop pad rows.
+    """
+    counts_list = [int(v) for v in counts.tolist()]
+    if not counts_list:
+        return x_sorted, counts, []
+    if all(c == 0 or c % block == 0 for c in counts_list):
+        keeps = []
+        off = 0
+        for c in counts_list:
+            if c:
+                keeps.append((off, c))
+            off += c
+        return x_sorted, counts.to(dtype=torch.int64), keeps
+    parts: list[torch.Tensor] = []
+    new_counts: list[int] = []
+    keeps: list[tuple[int, int]] = []
+    offset = 0
+    padded_off = 0
+    k = int(x_sorted.shape[-1])
+    for n in counts_list:
+        if n <= 0:
+            new_counts.append(0)
+            continue
+        sl = x_sorted.narrow(0, offset, n)
+        pad = nvfp4_pad_tokens(n, block) - n
+        if pad:
+            sl = F.pad(sl, (0, 0, 0, pad))
+        parts.append(sl)
+        new_counts.append(n + pad)
+        keeps.append((padded_off, n))
+        padded_off += n + pad
+        offset += n
+    if not parts:
+        return x_sorted, x_sorted.new_zeros(len(counts_list), dtype=torch.int64), []
+    return torch.cat(parts, dim=0), x_sorted.new_tensor(new_counts, dtype=torch.int64), keeps
+
+
+def unpad_packed(y_padded: torch.Tensor, keeps: list[tuple[int, int]], n_tok: int) -> torch.Tensor:
+    """Gather real rows after ``pad_packed_counts``."""
+    if not keeps:
+        return y_padded.new_zeros(n_tok, y_padded.size(-1))
+    if int(y_padded.size(0)) == n_tok:
+        return y_padded
+    parts = [y_padded.narrow(0, start, n) for start, n in keeps]
+    return torch.cat(parts, dim=0)
+
+
 def _env_te_flag() -> str | None:
     raw = os.environ.get("CAT_YOKO_TE_NVFP4", "").strip().lower()
     return raw or None
@@ -289,6 +364,7 @@ def te_grouped_swiglu(
     dtype = experts[0].gate_proj.weight.dtype
     device = x_sorted.device
     trainable = any(bool(e.gate_proj.weight.requires_grad) for e in experts)
+    x_use, counts_use, keeps = pad_packed_counts(x_sorted, counts.to(dtype=torch.int64))
     pack = None if owner is None else getattr(owner, "_te_grouped", None)
     if pack is None:
 
@@ -306,15 +382,15 @@ def te_grouped_swiglu(
                 layer = cls(n_exp, in_features, out_features, bias=False, params_dtype=dtype)
                 return layer.to(device=device, dtype=dtype)
 
-        gate_g = _make(in_f, mid)
-        up_g = _make(in_f, mid)
-        down_g = _make(mid, in_f)
-        with torch.no_grad():
-            for i, exp in enumerate(experts):
-                getattr(gate_g, f"weight{i}").copy_(exp.gate_proj.weight.detach())
-                getattr(up_g, f"weight{i}").copy_(exp.up_proj.weight.detach())
-                getattr(down_g, f"weight{i}").copy_(exp.down_proj.weight.detach())
         if trainable:
+            gate_g = _make(in_f, mid)
+            up_g = _make(in_f, mid)
+            down_g = _make(mid, in_f)
+            with torch.no_grad():
+                for i, exp in enumerate(experts):
+                    getattr(gate_g, f"weight{i}").copy_(exp.gate_proj.weight.detach())
+                    getattr(up_g, f"weight{i}").copy_(exp.up_proj.weight.detach())
+                    getattr(down_g, f"weight{i}").copy_(exp.down_proj.weight.detach())
             for i, exp in enumerate(experts):
                 for proj, grouped in (
                     (exp.gate_proj, gate_g),
@@ -330,16 +406,37 @@ def te_grouped_swiglu(
                             pack_te[0].weight = w
                         except Exception:
                             pass
-        pack = (gate_g, up_g, down_g)
+            pack = ("split", gate_g, up_g, down_g)
+        else:
+            gu_g = _make(in_f, 2 * mid)
+            down_g = _make(mid, in_f)
+            with torch.no_grad():
+                for i, exp in enumerate(experts):
+                    getattr(gu_g, f"weight{i}").copy_(
+                        torch.cat(
+                            [exp.gate_proj.weight.detach(), exp.up_proj.weight.detach()],
+                            dim=0,
+                        )
+                    )
+                    getattr(down_g, f"weight{i}").copy_(exp.down_proj.weight.detach())
+            pack = ("fused_gu", gu_g, down_g)
         if owner is not None:
             owner._te_grouped = pack
-    gate_g, up_g, down_g = pack
-    splits = counts.to(dtype=torch.int64)
+    splits = counts_use.to(dtype=torch.int64)
     try:
         with te.autocast(enabled=True, recipe=recipe):
-            g = gate_g(x_sorted, splits)
-            u = up_g(x_sorted, splits)
-            hidden = F.silu(g) * u
-            return down_g(hidden, splits)
+            if pack[0] == "fused_gu":
+                _, gu_g, down_g = pack
+                gu = gu_g(x_use, splits)
+                g, u = gu.chunk(2, dim=-1)
+                hidden = F.silu(g) * u
+                y = down_g(hidden, splits)
+            else:
+                _, gate_g, up_g, down_g = pack
+                g = gate_g(x_use, splits)
+                u = up_g(x_use, splits)
+                hidden = F.silu(g) * u
+                y = down_g(hidden, splits)
+        return unpad_packed(y, keeps, n_tok)
     except Exception:
         return None

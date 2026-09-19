@@ -136,6 +136,17 @@ class FamilyTests(unittest.TestCase):
         self.assertTrue(nvfp4_leading_ok(16, 128, 128))
         self.assertTrue(nvfp4_leading_ok(4096, 2048, 2048))
         self.assertFalse(nvfp4_leading_ok(8, 128, 128))
+        from cat_yoko.nvfp4_hw import nvfp4_pad_tokens, pad_packed_counts
+
+        self.assertEqual(nvfp4_pad_tokens(0), 0)
+        self.assertEqual(nvfp4_pad_tokens(16), 16)
+        self.assertEqual(nvfp4_pad_tokens(17), 32)
+        x = torch.randn(12, 16)
+        counts = torch.tensor([5, 7], dtype=torch.int64)
+        xp, cp, keeps = pad_packed_counts(x, counts)
+        self.assertEqual(cp.tolist(), [16, 16])
+        self.assertEqual(int(xp.size(0)), 32)
+        self.assertEqual(keeps, [(0, 5), (16, 7)])
 
 
 class TeWrapTests(unittest.TestCase):
@@ -169,14 +180,28 @@ class TeWrapTests(unittest.TestCase):
         self.assertIsNotNone(wrapped.weight.grad)
         self.assertTrue(torch.isfinite(wrapped.weight.grad).all())
 
-    def test_fused_cat_is_sequential_te_not_stacked_emulation(self) -> None:
-        torch.manual_seed(1)
-        a = TeNvfp4Linear.from_linear(nn.Linear(16, 8, bias=False))
-        b = TeNvfp4Linear.from_linear(nn.Linear(16, 8, bias=False))
+    def test_pad_leading_keeps_te_kernel(self) -> None:
+        lin = nn.Linear(16, 16, bias=False)
+        wrapped = TeNvfp4Linear.from_linear(lin)
+        x = torch.randn(8, 16)
+        y = wrapped(x)
+        self.assertEqual(tuple(y.shape), (8, 16))
+        self.assertTrue(torch.allclose(y, F.linear(x, wrapped.weight), atol=1e-5, rtol=1e-5))
+        self.assertFalse(shape_failed(8, 16, 16))
+
+    def test_frozen_fused_cat_is_one_gemm(self) -> None:
+        torch.manual_seed(2)
+        a0 = nn.Linear(16, 16, bias=False)
+        b0 = nn.Linear(16, 16, bias=False)
+        a0.weight.requires_grad_(False)
+        b0.weight.requires_grad_(False)
+        a = TeNvfp4Linear.from_linear(a0)
+        b = TeNvfp4Linear.from_linear(b0)
         x = torch.randn(16, 16)
         y = fused_cat_linear([a, b], x)
-        ref = torch.cat([a(x), b(x)], dim=-1)
+        ref = torch.cat([F.linear(x, a.weight), F.linear(x, b.weight)], dim=-1)
         self.assertTrue(torch.allclose(y, ref, atol=1e-5, rtol=1e-5))
+        self.assertIsNotNone(getattr(a, "_te_fused_cat", None))
 
     def test_illegal_shape_falls_back_without_process_wide_disable(self) -> None:
         reset_te_probe()
@@ -248,6 +273,28 @@ class TeWrapTests(unittest.TestCase):
         counts = torch.tensor([16, 16], dtype=torch.int64)
         y_g = te_grouped_swiglu(moe.experts, x, counts, owner=moe)
         self.assertIsNotNone(y_g)
+        y_s = _swiglu_experts_serial(moe.experts, x, counts)
+        self.assertTrue(torch.allclose(y_g, y_s, atol=1e-4, rtol=1e-4))
+
+    def test_te_grouped_swiglu_pads_and_fuses_frozen_gate_up(self) -> None:
+        from cat_yoko.config import CATYokoConfig
+        from cat_yoko.moe import MoE, _swiglu_experts_serial
+
+        cfg = CATYokoConfig.tiny()
+        moe = MoE(cfg, 2, 1)
+        for e in moe.experts:
+            e.gate_proj.weight.requires_grad_(False)
+            e.up_proj.weight.requires_grad_(False)
+            e.down_proj.weight.requires_grad_(False)
+            e.gate_proj = TeNvfp4Linear.from_linear(e.gate_proj)
+            e.up_proj = TeNvfp4Linear.from_linear(e.up_proj)
+            e.down_proj = TeNvfp4Linear.from_linear(e.down_proj)
+        torch.manual_seed(3)
+        x = torch.randn(16, cfg.hidden_size)
+        counts = torch.tensor([8, 8], dtype=torch.int64)
+        y_g = te_grouped_swiglu(moe.experts, x, counts, owner=moe)
+        self.assertIsNotNone(y_g)
+        self.assertEqual(getattr(moe, "_te_grouped")[0], "fused_gu")
         y_s = _swiglu_experts_serial(moe.experts, x, counts)
         self.assertTrue(torch.allclose(y_g, y_s, atol=1e-4, rtol=1e-4))
 
