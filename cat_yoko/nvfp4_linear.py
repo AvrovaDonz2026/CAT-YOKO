@@ -228,9 +228,12 @@ def _fused_frozen_te_cat(linears: list[nn.Linear], x: torch.Tensor) -> torch.Ten
         return None
     if not nvfp4_leading_ok(n_pad, k, out_f) and n_pad > 0:
         return None
+    fprop_only = not bool(x.requires_grad)
+    inner = torch.no_grad() if fprop_only else nullcontext()
     try:
-        with te.autocast(enabled=True, recipe=recipe):
-            y = layer(x2)
+        with inner:
+            with te.autocast(enabled=True, recipe=recipe):
+                y = layer(x2)
         if n_pad != n:
             y = y[:n]
         return y.reshape(*lead, out_f)
@@ -540,9 +543,13 @@ class TeNvfp4Linear(Nvfp4Linear):
         if shape_failed(n_pad, k, n_out) or not nvfp4_leading_ok(n_pad, k, n_out):
             return nvfp4_linear(x, self.weight, self.bias)
         layer, recipe, te = pack
+        # Frozen + no dX: keep grad disabled so TE does not look up WGRAD.
+        fprop_only = not bool(self.weight.requires_grad) and not bool(x.requires_grad)
+        inner = torch.no_grad() if fprop_only else nullcontext()
         try:
-            with te.autocast(enabled=True, recipe=recipe):
-                y = layer(x2)
+            with inner:
+                with te.autocast(enabled=True, recipe=recipe):
+                    y = layer(x2)
             if n_pad != n:
                 y = y[:n]
             return y.reshape(*lead, n_out)

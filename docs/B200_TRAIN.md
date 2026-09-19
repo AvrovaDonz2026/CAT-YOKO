@@ -9,14 +9,18 @@ sm_120（RTX PRO 6000D）继续走 `Nvfp4Linear` E2M1/16 仿真。那张卡没�
 | 槽 | B200（SM100） | 6000D（sm_120） |
 | --- | --- | --- |
 | attn QKV/O、cross Q/O、cache KV、lm_head、shared SwiGLU | `TeNvfp4Linear`：wrap 时 `copy_` 一次进 `te.Linear`，`te.autocast(recipe=NVFP4BlockScaling())` | `Nvfp4Linear` 仿真 |
-| fused QKV / gate+up | 冻住：一次 fused `te.Linear`（copy-once 拼接 out 维）。可训练：顺序 native TE | 仿真 fused cat |
-| MoE routed experts | `te.GroupedLinear`；expert count 补到 16；冻住 gate+up 合成一次 GroupedLinear。禁止 stack TE master 进 bf16 `grouped_mm` | permute + `grouped_mm` 仿真 |
+| fused QKV / gate+up / cache KV | 冻住：一次 fused `te.Linear`（copy-once 拼接 out 维）。可训练：顺序 native TE；`cache_k`/`cache_v` 一次 cat GEMM | 仿真 fused cat |
+| MoE routed experts | `te.GroupedLinear`；SM100 默认 RHT 把 expert token 数补到 **64**（`disable_rht` / sm_120 仍是 16）。冻住 gate+up 合成一次 GroupedLinear，且 `weight{i}.requires_grad=False`。禁止 stack TE master 进 bf16 `grouped_mm` | permute + `grouped_mm` 仿真 |
 | router / embed / RMSNorm / qk_norm / SDPA | 高精度，不变 | 同左 |
 | 注意力拓扑 | 因果 YOCO window + GQA 16/2/128；不实现 CSA | 同左 |
 
-leading dim 不是 16 的倍数时 **pad 零行再切回**，仍走 SM100 kernel，不掉回 STE。单次 TE 异常只记那一发 shape，**不会**把 SM100 整进程关掉。
+leading dim 不是 16 的倍数时 **pad 零行再切回**，仍走 SM100 kernel，不掉回 STE。单次 TE 异常只记那一发 shape，**不会**把 SM100 整进程关掉。B0/B1 `detach_cache` 时 encoder 整段 `torch.no_grad()`，冻住的 `TeNvfp4Linear` 也不再给 TE 建 WGRAD 图。
 
 Master 仍是 bf16 Parameter。`state_dict` 键仍是 `q_proj.weight`。Adam 打 TE Parameter（与 `nn.Linear` 别名）。
+
+实测（torch 2.11.0+cu128，源码编 TE 2.19 `@stable` SM100）：**FPROP** 16×128 / 冻权重 dX 可用。**WGRAD** 在 cuBLAS 12.8.4.1 上 `CUBLAS_STATUS_NOT_SUPPORTED`。B0 冻 encoder 只需要 FPROP。Probe 把 `te_nvfp4_linear` 记成 FPROP，WGRAD 单独落 `te_nvfp4_linear_wgrad`。
+
+PyPI `transformer-engine-torch` 预编译 `.so` 在 torch 2.11 上会 `undefined symbol: CUDAErrorLogCapture`。必须 `scripts/build_te_from_source.sh`（`--no-build-isolation --no-deps`，`NVTE_CUDA_ARCHS=100`），只留一份 SM100 `libtransformer_engine.so`，并把源码 metapackage 的 `Version` 钉成与 `transformer-engine-cu12` 一致。
 
 ## 从 Hub overlay 接 B0
 

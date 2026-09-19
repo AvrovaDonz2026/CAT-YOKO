@@ -121,6 +121,15 @@ class TinyTrainTests(unittest.TestCase):
         for p in model.encoder.parameters():
             self.assertIsNone(p.grad)
         self.assertIsNotNone(model.cache_k.weight.grad)
+        self.assertIsNotNone(model.cache_v.weight.grad)
+
+    def test_detach_encoder_is_no_grad_and_cache_is_fused(self) -> None:
+        import inspect
+
+        src = inspect.getsource(CATYokoForCausalLM.forward)
+        self.assertIn("torch.no_grad()", src)
+        self.assertIn("fused_cat_linear", src)
+        self.assertIn("detach_cache", src)
 
     def test_fp8_policy_cpu_stays_off(self) -> None:
         self.assertFalse(should_autocast("B1", cuda=False, enabled=True))

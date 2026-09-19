@@ -66,6 +66,9 @@ class B0FullLauncherTests(unittest.TestCase):
         self.assertNotIn("torch.randn(8, 128", probe_src)
         self.assertIn("copy_once", probe_src)
         self.assertIn("64, 2048", probe_src)
+        self.assertIn("te_nvfp4_linear_fprop", probe_src)
+        self.assertIn("te_nvfp4_linear_wgrad", probe_src)
+        self.assertIn("te_nvfp4_linear_dx", probe_src)
 
 
 class B200LauncherTests(unittest.TestCase):
@@ -109,6 +112,9 @@ class B200LauncherTests(unittest.TestCase):
         self.assertIn("NVTE_CUDA_ARCHS", src)
         self.assertIn("NVIDIA/TransformerEngine", src)
         self.assertIn("--no-build-isolation", src)
+        self.assertIn("wheel_lib", src)
+        self.assertIn("libtransformer_engine.so", src)
+        self.assertIn("Root-Is-Purelib", src)
         b1 = (ROOT / "scripts" / "run_b1_try_b200.sh").read_text()
         self.assertIn("cat_yoko.b1", b1)
         self.assertIn("--try", b1)

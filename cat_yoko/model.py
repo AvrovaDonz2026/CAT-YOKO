@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -84,15 +86,21 @@ class CATYokoForCausalLM(nn.Module):
         if doc_ids is None:
             doc_ids = torch.zeros_like(input_ids)
         aux = x.new_zeros(())
-        for blk in self.encoder:
-            x, a = self._run_block(blk, x, input_ids, doc_ids)
-            if not self.detach_cache:
-                aux = aux + a
+        # B0/B1: cache is detached, so encoder FPROP does not need an autograd
+        # graph (TE otherwise saves activations / looks up NVFP4 WGRAD).
+        enc_ctx = torch.no_grad() if self.detach_cache else nullcontext()
+        with enc_ctx:
+            for blk in self.encoder:
+                x, a = self._run_block(blk, x, input_ids, doc_ids)
+                if not self.detach_cache:
+                    aux = aux + a
         if self.offload_encoder and self.detach_cache and not self.offload_blocks:
             move_module(self.encoder, "cpu")
         hidden = x.detach() if self.detach_cache else x
-        k = self.cache_k(hidden)
-        v = self.cache_v(hidden)
+        from cat_yoko.nvfp4_linear import fused_cat_linear
+
+        kv = fused_cat_linear([self.cache_k, self.cache_v], hidden)
+        k, v = kv.split((self.cfg.kv_dim, self.cfg.kv_dim), dim=-1)
         y = hidden
         for blk in self.decoder:
             y, a = self._run_block(blk, y, k, v, input_ids, doc_ids)

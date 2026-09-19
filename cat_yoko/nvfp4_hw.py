@@ -11,6 +11,7 @@ sm_120 keeps the reduced recipe and ``Nvfp4Linear`` emulation.
 from __future__ import annotations
 
 import os
+from contextlib import nullcontext
 from typing import Any
 
 import torch
@@ -157,6 +158,22 @@ def te_grouped_linear_cls():
 def nvfp4_leading_ok(n: int, k: int, n_out: int) -> bool:
     """TE NVFP4 wants each GEMM dim divisible by the 16-element block."""
     return n % 16 == 0 and k % 16 == 0 and n_out % 16 == 0
+
+
+def nvfp4_grouped_token_align(family: str | None = None) -> int:
+    """Token-count multiple for ``te.GroupedLinear`` splits.
+
+    NVFP4 microblock is 16. Default SM100/103 ``NVFP4BlockScaling()`` keeps
+    RHT on WGRAD, and TE requires ``split_sections[i] % 64 == 0``. Pad frozen
+    FPROP to 64 as well so the same GroupedLinear stays on the kernel path
+    instead of falling back to serial ``te.Linear``.
+    """
+    fam = compute_family() if family is None else family
+    if fam in {"sm100", "sm103"}:
+        kwargs = te_nvfp4_recipe_kwargs(fam)
+        if not kwargs.get("disable_rht", False):
+            return 64
+    return 16
 
 
 def nvfp4_pad_tokens(n: int, block: int = 16) -> int:
@@ -316,12 +333,14 @@ def te_grouped_ready() -> bool:
         te = te_module()
         recipe = te_nvfp4_recipe()
         device = torch.device("cuda")
+        align = nvfp4_grouped_token_align()
+        n = align * 2
         layer = cls(2, 128, 128, bias=False, params_dtype=torch.bfloat16, device=device)
-        x = torch.randn(32, 128, device=device, dtype=torch.bfloat16)
-        splits = torch.tensor([16, 16], dtype=torch.int64)
+        x = torch.randn(n, 128, device=device, dtype=torch.bfloat16)
+        splits = torch.tensor([align, align], dtype=torch.int64)
         with te.autocast(enabled=True, recipe=recipe):
             y = layer(x, splits)
-        _PROBE_GROUPED = tuple(y.shape) == (32, 128) and bool(torch.isfinite(y.float()).all())
+        _PROBE_GROUPED = tuple(y.shape) == (n, 128) and bool(torch.isfinite(y.float()).all())
         return _PROBE_GROUPED
     except Exception:
         _PROBE_GROUPED = False
@@ -364,7 +383,10 @@ def te_grouped_swiglu(
     dtype = experts[0].gate_proj.weight.dtype
     device = x_sorted.device
     trainable = any(bool(e.gate_proj.weight.requires_grad) for e in experts)
-    x_use, counts_use, keeps = pad_packed_counts(x_sorted, counts.to(dtype=torch.int64))
+    align = nvfp4_grouped_token_align()
+    x_use, counts_use, keeps = pad_packed_counts(
+        x_sorted, counts.to(dtype=torch.int64), block=align
+    )
     pack = None if owner is None else getattr(owner, "_te_grouped", None)
     if pack is None:
 
@@ -419,24 +441,30 @@ def te_grouped_swiglu(
                         )
                     )
                     getattr(down_g, f"weight{i}").copy_(exp.down_proj.weight.detach())
+            for i in range(n_exp):
+                getattr(gu_g, f"weight{i}").requires_grad_(False)
+                getattr(down_g, f"weight{i}").requires_grad_(False)
             pack = ("fused_gu", gu_g, down_g)
         if owner is not None:
             owner._te_grouped = pack
     splits = counts_use.to(dtype=torch.int64)
+    fprop_only = (not trainable) and (not bool(x_sorted.requires_grad))
+    inner = torch.no_grad() if fprop_only else nullcontext()
     try:
-        with te.autocast(enabled=True, recipe=recipe):
-            if pack[0] == "fused_gu":
-                _, gu_g, down_g = pack
-                gu = gu_g(x_use, splits)
-                g, u = gu.chunk(2, dim=-1)
-                hidden = F.silu(g) * u
-                y = down_g(hidden, splits)
-            else:
-                _, gate_g, up_g, down_g = pack
-                g = gate_g(x_use, splits)
-                u = up_g(x_use, splits)
-                hidden = F.silu(g) * u
-                y = down_g(hidden, splits)
+        with inner:
+            with te.autocast(enabled=True, recipe=recipe):
+                if pack[0] == "fused_gu":
+                    _, gu_g, down_g = pack
+                    gu = gu_g(x_use, splits)
+                    g, u = gu.chunk(2, dim=-1)
+                    hidden = F.silu(g) * u
+                    y = down_g(hidden, splits)
+                else:
+                    _, gate_g, up_g, down_g = pack
+                    g = gate_g(x_use, splits)
+                    u = up_g(x_use, splits)
+                    hidden = F.silu(g) * u
+                    y = down_g(hidden, splits)
         return unpad_packed(y, keeps, n_tok)
     except Exception:
         return None

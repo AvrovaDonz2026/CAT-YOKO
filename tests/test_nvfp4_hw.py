@@ -136,17 +136,25 @@ class FamilyTests(unittest.TestCase):
         self.assertTrue(nvfp4_leading_ok(16, 128, 128))
         self.assertTrue(nvfp4_leading_ok(4096, 2048, 2048))
         self.assertFalse(nvfp4_leading_ok(8, 128, 128))
-        from cat_yoko.nvfp4_hw import nvfp4_pad_tokens, pad_packed_counts
+        from cat_yoko.nvfp4_hw import nvfp4_grouped_token_align, nvfp4_pad_tokens, pad_packed_counts
 
         self.assertEqual(nvfp4_pad_tokens(0), 0)
         self.assertEqual(nvfp4_pad_tokens(16), 16)
         self.assertEqual(nvfp4_pad_tokens(17), 32)
+        self.assertEqual(nvfp4_grouped_token_align("sm100"), 64)
+        self.assertEqual(nvfp4_grouped_token_align("sm103"), 64)
+        self.assertEqual(nvfp4_grouped_token_align("sm120"), 16)
+        self.assertEqual(nvfp4_grouped_token_align("cpu"), 16)
         x = torch.randn(12, 16)
         counts = torch.tensor([5, 7], dtype=torch.int64)
         xp, cp, keeps = pad_packed_counts(x, counts)
         self.assertEqual(cp.tolist(), [16, 16])
         self.assertEqual(int(xp.size(0)), 32)
         self.assertEqual(keeps, [(0, 5), (16, 7)])
+        xp64, cp64, keeps64 = pad_packed_counts(x, counts, block=64)
+        self.assertEqual(cp64.tolist(), [64, 64])
+        self.assertEqual(int(xp64.size(0)), 128)
+        self.assertEqual(keeps64, [(0, 5), (64, 7)])
 
 
 class TeWrapTests(unittest.TestCase):
@@ -297,6 +305,10 @@ class TeWrapTests(unittest.TestCase):
         self.assertEqual(getattr(moe, "_te_grouped")[0], "fused_gu")
         y_s = _swiglu_experts_serial(moe.experts, x, counts)
         self.assertTrue(torch.allclose(y_g, y_s, atol=1e-4, rtol=1e-4))
+        pack = moe._te_grouped
+        for i in range(2):
+            self.assertFalse(getattr(pack[1], f"weight{i}").requires_grad)
+            self.assertFalse(getattr(pack[2], f"weight{i}").requires_grad)
 
 
 class EnvOffTests(unittest.TestCase):
