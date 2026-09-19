@@ -201,6 +201,9 @@ fi
 if [[ -f "$ROOT/checkpoints/b0-full/README.md" ]]; then
   add_artifact "$ROOT/checkpoints/b0-full/README.md" "checkpoints/b0-full/README.md"
 fi
+if [[ -f "$ROOT/LICENSE" ]]; then
+  add_artifact "$ROOT/LICENSE" "LICENSE"
+fi
 
 for raw in "${EXTRA_FILES[@]+"${EXTRA_FILES[@]}"}"; do
   dest="$(resolve_extra "$raw")"

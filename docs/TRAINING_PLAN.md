@@ -4,7 +4,7 @@
 > **≈12.25B 总参数**（已按算力预算从 24B 下调）；非对称激活 **默认：Encoder 处理输入 ≈2.03B 激活/token、Decoder 生成输出 ≈4.33B 激活/token**
 > （更省算力档 ≈1.43B/3.02B、近-dense 档 ≈3.04B/6.29B 见 §3）；
 > 注意力用 **DeepSeek-V4-Flash 式 CSA + HCA 压缩注意力 + 8K 大滑动窗口**；原生长上下文（YOCO 单一全局 KV cache）。
-> 底座从 MiniCPM-2B-sft-bf16（GML）切到 MiniCPM5-2B，是为了 **Apache-2.0 许可证对齐**，不是换一套课程。
+> 底座从 MiniCPM-2B-sft-bf16（GML）切到 MiniCPM5-2B，是为了 **Apache-2.0 许可证对齐**，不是换一套课程。CAT-YOKO 代码与派生权重同样是 **Apache-2.0**。
 >
 > ⚠️ **关键**：总参数主要影响**显存/存储**；**训练算力 ∝ 激活参数 × tokens**。要真正降训练成本必须降**激活**（选更省算力档），而不是只降总参。
 >

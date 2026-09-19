@@ -13,6 +13,8 @@
 
 **底座许可**：`MiniCPM-2B-sft-bf16` 走 OpenBMB GML / 需商业授权；`MiniCPM5-2B` 是 **Apache-2.0**，所以发布底座是 MiniCPM5。上采样 / teacher 用 `openbmb/MiniCPM5-2B-Base`（`LlamaForCausalLM` GQA），tokenizer 用 `openbmb/MiniCPM5-2B`。
 
+**仓库许可**：CAT-YOKO 代码与派生权重 **Apache-2.0**（[`LICENSE`](../LICENSE)）。
+
 仓库训练代码是这份 12B 图的 **PyTorch 参考实现**；规模化并行预留 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 适配面（`cat_yoko.megatron`，双栈 TransformerConfig + model_provider 钩子）。**不要**把 YOCO 塞进现成 `GPTModel`。tiny 配置只给单测。
 
 ---

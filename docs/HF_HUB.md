@@ -2,7 +2,7 @@
 
 发布模型仓：[AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)
 
-GitHub **不用 LFS**。代码和文档在 GitHub；`trainable.pt` / 全图 / shard / 未来 NVFP4 checkpoint 只走 Hub。
+GitHub **不用 LFS**。代码和文档在 GitHub；`trainable.pt` / 全图 / shard / 未来 NVFP4 checkpoint 只走 Hub。代码与派生权重 **Apache-2.0**（[`LICENSE`](../LICENSE)）；`push_to_hf.sh` 会把 `LICENSE` 一并推到 Hub。
 
 推送：[`scripts/push_to_hf.sh`](../scripts/push_to_hf.sh)。**不要**把 GitHub 整仓推进 Hub。
 

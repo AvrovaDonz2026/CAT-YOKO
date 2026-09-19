@@ -1,7 +1,7 @@
 ---
 library_name: transformers
 pipeline_tag: text-generation
-license: bsd-3-clause
+license: apache-2.0
 language:
 - en
 - zh
@@ -101,7 +101,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 | 产物 | 许可 |
 | --- | --- |
-| 本仓库代码与派生权重 | BSD-3-Clause |
+| 本仓库代码与派生权重 | Apache-2.0 |
 | 底座 MiniCPM5-2B | Apache-2.0 |
 
 ---
@@ -134,4 +134,4 @@ This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envel
 
 **Current published B0 overlay** (in progress, DummyStream, not finished 8e9): [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt). Step **25460**, `tokens_in_phase=117,917,696` (≈1.47% of 8e9), sha256 `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c`. Vast B200, micro-batch=2, ~15.7k tok/s. Same path overwritten about every 10 minutes. Folder card: [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
 
-License: this repo BSD-3-Clause; MiniCPM5 base Apache-2.0. No eval scores.
+License: Apache-2.0 (this repo, derived weights, and MiniCPM5 base). No eval scores.

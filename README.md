@@ -1,6 +1,6 @@
 # CAT-YOKO
 
-Causal Encoder-Decoder (YOCO-style) hybrid-attention MoE, upcycled from MiniCPM5-2B (Apache-2.0).
+Causal Encoder-Decoder (YOCO-style) hybrid-attention MoE, upcycled from MiniCPM5-2B. License: **Apache-2.0**.
 
 Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active / input token, Decoder ≈4.33B active / output token. CSA/HCA + 8K sliding window; primary long-context target 128K–256K. Phase B wall-clock **C1+NVFP4 = 571 H100-h**.
 
@@ -93,3 +93,7 @@ python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 python3 scripts/arch_verify.py --verify      # architecture invariants
 python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear
 ```
+
+## License
+
+Apache-2.0. See [`LICENSE`](LICENSE). MiniCPM5-2B 底座同样是 Apache-2.0。
