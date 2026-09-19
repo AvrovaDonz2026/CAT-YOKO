@@ -1,6 +1,7 @@
 # AutoDL RTX 6000D（Blackwell sm_120）
 
-实例 `autodl-container-8x4c4zmh8d-e96e943a`，SSH `connect.weste.seetacloud.com:34864`（**weste**，不是已释放的 westc）。
+实例 `autodl-container-8x4c4zmh8d-e96e943a`，SSH 曾是 `connect.weste.seetacloud.com:34864`（**weste**，不是已释放的 westc）。**本机即将释放**；不要再连。下一台从 Hub [`checkpoints/b0-full/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full) 同阶段 resume B0。
+
 发布档 B0 **已切到** `/root/autodl-tmp/venv-nightly`：torch `2.15.0.dev20260918+cu130`，驱动 595.71.05，CUDA 13.2。miniconda 里仍留着 2.8.0+cu128。
 
 | 项 | 实测 |
@@ -79,7 +80,9 @@ Nightly 目标：`https://download.pytorch.org/whl/nightly/cu130` 上当天的 t
 
 **已切换（2026-09-18T18:06Z）：** B0 从 step 1400 overlay 同阶段 resume，进程是 nightly Python。`transformer_engine.pytorch` 2.19 可以 import；`float4_e2m1fn_x2` 的 `copy_` 仍失败，所以 GEMM 还是仿真。探活 JSON：[`nvfp4/NVFP4_PROBE_nightly.json`](nvfp4/NVFP4_PROBE_nightly.json)。吞吐约 1350 → 1670 tok/s。
 
-**已切换（2026-09-19T00:27Z）：** 从 step **10560** 同阶段 resume，新算子进内存图。`grouped_mm=True`，`te=True`，`te_nvfp4=False`（TE NVFP4 Linear 在 sm_120 上失败后整进程禁用），`return_logits=False`。吞吐约 **1670 → 2820 tok/s**，mem **42092 → 56090 MiB**。Hub 快照 step **10680**。不要为 B1/B2 `--try` 杀这份 B0。
+**已切换（2026-09-19T00:27Z）：** 从 step **10560** 同阶段 resume，新算子进内存图。`grouped_mm=True`，`te=True`，`te_nvfp4=False`（TE NVFP4 Linear 在 sm_120 上失败后整进程禁用），`return_logits=False`。吞吐约 **1670 → 2820 tok/s**，mem **42092 → 56090 MiB**。
+
+**释放前快照（2026-09-19T02:42Z）：** Hub overlay step **16020**，`tokens_in_phase=65,488,896`（≈0.82%），sha256 `b5763b98…`。B0 未跑完 8e9。下一台接训见 [`checkpoints/b0-full/README.md`](../../checkpoints/b0-full/README.md)。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 
