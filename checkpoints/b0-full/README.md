@@ -18,8 +18,8 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 | 可训练张量 | 132（无 Adam） |
 | 机器 | Vast NVIDIA B200 SM 10.0 |
 | 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |
-| 吞吐 / 显存 | ~11700 tok/s，96023 MiB |
-| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。 |
+| 吞吐 / 显存 | Hub 快照 ~12.4k tok/s，96023 MiB（micro-batch=1） |
+| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。Vast 线上已用 **micro-batch=2** 续训（~15.7k tok/s，Trainer 137967 MiB），`MICRO_BATCH=1` 可回退。Hub 文件仍是 step 21500。 |
 
 上一份 6000D 快照是 step **16020**（`b5763b98…`）。本文件覆盖 Hub 同路径。
 

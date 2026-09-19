@@ -90,6 +90,7 @@ class B200LauncherTests(unittest.TestCase):
         self.assertIn("cuda-12.9/lib64", text)
         self.assertIn("MICRO_BATCH", text)
         self.assertIn("--micro-batch", text)
+        self.assertIn('MICRO="${MICRO_BATCH:-2}"', text)
         self.assertNotRegex(text, r"cat_yoko\.b0.*--try")
         self.assertIn("Does not download Ultra-FineWeb", text)
         self.assertNotIn("git fetch", text)

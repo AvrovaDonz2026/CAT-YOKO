@@ -4,7 +4,8 @@
 # Hardware NVFP4 via te.Linear + default NVFP4BlockScaling (RHT+2D+SR).
 # Resume Hub overlay checkpoints/b0-full (step 21500) after MiniCPM5 upcycle.
 # Does not download Ultra-FineWeb. Does not write 23GiB latest.pt.
-# 192GiB HBM: encoder on GPU, no activation checkpoint.
+# 183GiB HBM: encoder on GPU, no activation checkpoint.
+# Default micro-batch=2 on this card (~15.7k tok/s, ~138GiB). MICRO_BATCH=1 to fall back.
 set -uo pipefail
 ROOT="${ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 WORK="${WORK:-/workspace}"
@@ -39,7 +40,7 @@ LOCAL="${LOCAL:-$WORK/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
 SAVE_EVERY="${SAVE_EVERY:-20}"
 KEEP_LAST="${KEEP_LAST:-2}"
-MICRO="${MICRO_BATCH:-1}"
+MICRO="${MICRO_BATCH:-2}"
 
 has_overlay() {
   local d="$1"

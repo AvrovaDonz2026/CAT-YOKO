@@ -13,7 +13,7 @@ Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum **C1** (MoE both stacks, freeze encoder in B0/B1)
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 Hopper/Ada fallback (729 H100-h)
 - [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — **C1+NVFP4** frozen Phase B wall-clock (571 H100-h)
-- [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子与开训（Hub overlay step 21500）
+- [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子与开训（Hub overlay step 21500；线上 micro-batch=2）
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例已释放）
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — RTX 6000D sm_120；Hub 走 `https://hf-mirror.com`
 - [`huggingface/README.md`](huggingface/README.md) — HuggingFace model card；大权重 https://huggingface.co/AvrovaDonz/CAT-YOKO
@@ -38,9 +38,10 @@ python3 -m cat_yoko.b2 --try --resume checkpoints/b1 --save-dir checkpoints/b2
 # python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base
 # 6000D 发布档 B0（8e9 tokens, seq=4096, encoder on GPU）：
 # bash scripts/run_b0_full_autodl.sh
-# B200 / SM100（Hub overlay step 21500 续训，硬件 NVFP4）：
+# B200 / SM100（Hub overlay step 21500 续训，硬件 NVFP4；默认 micro-batch=2）：
 # bash scripts/run_b200.sh
 # bash scripts/run_b0_full_b200.sh
+# MICRO_BATCH=1 bash scripts/run_b0_full_b200.sh   # 显存回退
 # 6000D B2 --try（resume B1 overlay；GPU 空闲时）：
 # bash scripts/run_b2_try_autodl.sh
 # GPU 空闲后 B1 --try（32 步 seq=64，resume b0-full 否则 b0）：

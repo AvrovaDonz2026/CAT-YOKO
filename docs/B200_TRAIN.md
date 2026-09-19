@@ -38,9 +38,9 @@ python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/
 bash scripts/run_b0_full_b200.sh
 ```
 
-启动参数：**seq=4096**，`--no-offload-encoder`，`--no-grad-ckpt`（约 179GiB HBM），`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
+启动参数：**seq=4096**，`--micro-batch 2`（`MICRO_BATCH=1` 回退），`--no-offload-encoder`，`--no-grad-ckpt`，`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
 
-当前 B0（nvcc 12.9 cubin，micro-batch=1）：约 **11.8k tok/s**（~350ms/step），HBM ~96/183GiB。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。Hub overlay step **21500**。热路径：`collapse_doc_ids`、向量化 `pad_packed_counts`（无每层 host list）、`repeat_interleave(..., output_size=)`、CE chunk 缓存、一步一次 D2H 的 nll/aux。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
+当前 B0（nvcc 12.9 cubin，**micro-batch=2**）：中位约 **15.7k tok/s**（~520ms/step，8192 tok/step），Trainer 记账 HBM **137967 MiB**，nvidia-smi ~141/183GiB（余量 ~42GiB）。相对 micro-batch=1 的 12.4k tok/s / 96GiB，吞吐 **+27%**（步时约 1.57×，不是 2×）。从 step **22100** overlay 重启时 `tokens_in_phase=90,392,576` 按 8192/step 接着加，同阶段 resume 正确。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。Hub overlay 仍钉 step **21500**（mb=1 快照，sha `756e9864…`）；线上已过该步。热路径：`collapse_doc_ids`、向量化 `pad_packed_counts`（无每层 host list）、`repeat_interleave(..., output_size=)`、CE chunk 缓存、一步一次 D2H 的 nll/aux。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
 
 环境变量 `CAT_YOKO_TE_NVFP4=0` 可强制仿真。`FORCE_SM120=1` 才允许把 B200 启动脚本跑在 sm_120 上。
 
