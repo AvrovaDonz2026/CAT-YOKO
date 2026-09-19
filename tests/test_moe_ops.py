@@ -210,6 +210,19 @@ class TrainableCacheTests(unittest.TestCase):
         self.assertFalse(module_has_trainable(model.decoder[0].mlp))
         self.assertTrue(module_has_trainable(model.decoder[0].cross_attn))
 
+    def test_frozen_moe_skips_z_loss_keeps_load(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B0")
+        moe = model.encoder[0].mlp
+        moe.train()
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        y = moe(x)
+        self.assertEqual(tuple(y.shape), tuple(x.shape))
+        self.assertIsNone(moe.last_aux)
+        self.assertIsNotNone(moe.last_load)
+        self.assertEqual(int(moe._load_n), 1)
+
     def test_repeat_by_counts_matches_repeat_interleave(self) -> None:
         from cat_yoko.moe import _repeat_by_counts
 

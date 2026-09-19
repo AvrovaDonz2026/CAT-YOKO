@@ -556,6 +556,15 @@ class LoopTests(unittest.TestCase):
         self.assertAlmostEqual(lo, 1.25)
         self.assertAlmostEqual(a, 0.0)
 
+    def test_configure_cuda_enables_flash_sdp(self) -> None:
+        import inspect
+
+        from cat_yoko.trainer import configure_cuda
+
+        src = inspect.getsource(configure_cuda)
+        self.assertIn("enable_flash_sdp", src)
+        self.assertIn("enable_cudnn_sdp", src)
+
     def test_runtime_flags_drop_logits_without_teacher(self) -> None:
         from cat_yoko.model import CATYokoForCausalLM
 

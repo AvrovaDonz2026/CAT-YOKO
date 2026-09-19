@@ -6,6 +6,8 @@ YOCO cache therefore use ``kv_dim = n_kv * head_dim``, not full MHA.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -31,6 +33,38 @@ def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
         return x
     b, n_kv, s, hd = x.shape
     return x[:, :, None, :, :].expand(b, n_kv, n_rep, s, hd).reshape(b, n_kv * n_rep, s, hd)
+
+
+_SDPA_KERNEL = None  # None=uninit, False=unavailable, else zero-arg context factory
+
+
+def _cuda_sdpa_kernel():
+    """Prefer Flash / cuDNN / mem-efficient SDPA on CUDA. Math SDPA stays fallback."""
+    global _SDPA_KERNEL
+    if _SDPA_KERNEL is False:
+        return nullcontext()
+    if _SDPA_KERNEL is not None:
+        return _SDPA_KERNEL()
+    try:
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+
+        backends = tuple(
+            backend
+            for name in ("FLASH_ATTENTION", "CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
+            if (backend := getattr(SDPBackend, name, None)) is not None
+        )
+        if not backends:
+            _SDPA_KERNEL = False
+            return nullcontext()
+
+        def _ctx():
+            return sdpa_kernel(backends)
+
+        _SDPA_KERNEL = _ctx
+        return _ctx()
+    except Exception:
+        _SDPA_KERNEL = False
+        return nullcontext()
 
 
 def _sdpa(
@@ -67,7 +101,8 @@ def _sdpa(
         and q.dtype in (torch.bfloat16, torch.float16)
     )
     if cuda_fast:
-        return _call(q, k, v, is_causal=causal)
+        with _cuda_sdpa_kernel():
+            return _call(q, k, v, is_causal=causal)
     qf, kf, vf = q.float(), k.float(), v.float()
     if bias is None:
         out = _call(qf, kf, vf, is_causal=causal)

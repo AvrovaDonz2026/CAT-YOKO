@@ -445,12 +445,17 @@ class MoE(nn.Module):
             owner=self,
         )
 
-        z_loss = logits.float().pow(2).mean()
         ones = torch.zeros(self.n_routed, device=x.device, dtype=x.dtype)
         ones.scatter_add_(0, topi.reshape(-1), _like(ones, gates.reshape(-1)))
         load = ones / n_tok
-        balance = self.n_routed * (load * load).sum()
-        self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
+        # Frozen MoE (B0 encoder+decoder backbone) does not enter the loss or
+        # aux-loss-free bias. Skip z-loss / balance; keep ``last_load`` for logs.
+        if module_has_trainable(self):
+            z_loss = logits.float().pow(2).mean()
+            balance = self.n_routed * (load * load).sum()
+            self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
+        else:
+            self.last_aux = None
         if self.training:
             ld = load.detach()
             if self.last_load is None:

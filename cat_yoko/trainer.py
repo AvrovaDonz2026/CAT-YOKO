@@ -121,6 +121,10 @@ def configure_cuda() -> None:
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
+    for _name in ("enable_flash_sdp", "enable_mem_efficient_sdp", "enable_cudnn_sdp"):
+        _fn = getattr(torch.backends.cuda, _name, None)
+        if callable(_fn):
+            _fn(True)
 
 
 def _as_dtype(dtype: str | torch.dtype | None) -> torch.dtype:

@@ -51,6 +51,10 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertIn("scaled_dot_product_attention", src)
         self.assertIn("enable_gqa", src)
         self.assertIn("is_causal", src)
+        self.assertIn("_cuda_sdpa_kernel", src)
+        kernel_src = inspect.getsource(attn_mod._cuda_sdpa_kernel)
+        self.assertIn("FLASH_ATTENTION", kernel_src)
+        self.assertIn("sdpa_kernel", kernel_src)
         # CPU / mask fallback still upcasts; CUDA bf16 keeps QKV and uses
         # flash/cuDNN (fp32 softmax accum inside the kernel).
         self.assertIn(".float()", src)
