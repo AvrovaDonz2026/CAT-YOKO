@@ -28,11 +28,24 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 
 12B B0 训练 `seq=4096`、`n_win=8192`：encoder 窗盖满，走 dense Flash，不是 masked 行。探针故意 `n_win<seq`，Theorem B 的压缩洞才露出来。
 
-## 实测（3090）
+## 实测（3090，2026-09-19T17:28Z）
 
-把 `scripts/run_ampere_mfu.sh` 的 ledger 拉回后填 [`artifacts/autodl-rtx3090/bf16-verify/mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/)。看 `achieved_mfu / theo_mfu`（`frac_of_roofline`），不是 Kaplan 40%。
+校准 GEMM **72.12 TFLOPS**。`grouped_mm=False`。
 
-先前同卡探针（调算子前）：大 GEMM **72.3 TFLOPS**；Flash s=4096 **62.9T ≈ 87% 峰值**；masked s=128 Efficient 优于 cuDNN；fused QKV 冻结缓存优于每步 cat；MoE 均匀 bmm ~61T。grouped_mm 在 sm_86 上是陷阱。
+| 算子 | 实测 | 相对 roofline |
+| --- | --- | --- |
+| fused QKV 12B 形 | 74.66 T | ~105%（boost；冻结 concat-once） |
+| Flash GQA seq=4096 | 60.45 T | **85%** |
+| MoE 均匀 bmm E=20 n=409 | 57.66 T | **81%** |
+| CSA union seq=512 | 36.73 T | 52%（mask 核，非 Flash） |
+| HCA concat seq=512 | 40.34 T | 57% |
+| masked window seq=512 | 17.99 T | 25% |
+| indexer fp32 12B 形 | 14.28 T | 50% of FP32 roofline（d_idx=64 瘦 K） |
+| 全部 bf16-probe seq=128 | &lt;1 T | launch 墙，理论 30–84% 也够不着 |
+
+Ledger：[`artifacts/autodl-rtx3090/bf16-verify/mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/)。
+
+先前同卡、调算子前：大 GEMM 72.3T；Flash s=4096 62.9T；fused QKV 每步 cat 更慢；MoE 若走 grouped_mm try/except 贵 2–3×。FlexAttention 滑窗 ~1.7 ms vs SDPA 0.02 ms，不用。
 
 ## 怎么跑
 

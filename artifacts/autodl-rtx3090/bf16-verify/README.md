@@ -13,7 +13,8 @@
 | ledger | **ok=True，142 claims，0 fail，2 deferred**（PDSA Tier 1/3） |
 | 墙钟 | 3.1 s（2026-09-19T17:05:23Z exit 0） |
 | 峰值 | ~38 MiB |
-| 算子 | dense GQA **Flash**；masked / HCA concat **cuDNN bf16**；训练中 `math_fp32=0`；TF32 `high`；`grouped_mm=True`；fused QKV |
+| 算子 | dense GQA **Flash**；masked / HCA concat **cuDNN bf16**；训练中 `math_fp32=0`；TF32 `high`；`grouped_mm=False`（SM90 门，走 bmm）；fused QKV |
+| MFU 对拍 | [`mfu/`](mfu/)：12B 形 Flash **85%** roofline，MoE bmm **81%**，fused QKV 冻结缓存顶满 tensor core |
 
 不到 F/G。不拉 Ultra-FineWeb。不写完整图 checkpoint。
 
