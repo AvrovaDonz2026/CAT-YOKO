@@ -9,7 +9,7 @@
 # builds a core whose 16×128 FPROP works but B0-sized NVFP4 quantize
 # prints CUTE_ARCH_STORE256_SM100A_ENABLED and then launch-fails.
 # Does not download 50B tokens.
-set -uo pipefail
+set -euo pipefail
 ROOT="${ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 PY="${PY:-python3}"
 if [ -x /venv/main/bin/python ]; then
@@ -23,8 +23,9 @@ mkdir -p "$(dirname "$LOG")"
 exec > >(tee -a "$LOG") 2>&1
 echo "=== TE source build $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 # nvcc 12.9+ is required for CUTE_ARCH_STORE256_SM100A_ENABLED. The 12.9
-# apt package is compiler-only (no cuBLAS). Keep CUDA_HOME on a full
-# toolkit (12.8 on Vast) and put 12.9 nvcc first on PATH.
+# apt nvcc package is compiler-only; also install libcublas-dev-12-9 so
+# CMake can find CUDA::cublas. If 12.9 still lacks cublas, keep CUDA_HOME
+# on the 12.8 toolkit and point CMake at it via CUDAToolkit_ROOT.
 NVCC_BIN=""
 for cand in /usr/local/cuda-12.9/bin/nvcc /usr/local/cuda-13.0/bin/nvcc \
             /usr/local/cuda-13.1/bin/nvcc /usr/local/cuda-13.2/bin/nvcc; do
@@ -34,7 +35,9 @@ for cand in /usr/local/cuda-12.9/bin/nvcc /usr/local/cuda-13.0/bin/nvcc \
   fi
 done
 if [ -z "${CUDA_HOME:-}" ]; then
-  if [ -f /usr/local/cuda-12.8/include/cublas_v2.h ]; then
+  if [ -x /usr/local/cuda-12.9/bin/nvcc ] && [ -f /usr/local/cuda-12.9/include/cublas_v2.h ]; then
+    CUDA_HOME=/usr/local/cuda-12.9
+  elif [ -f /usr/local/cuda-12.8/include/cublas_v2.h ]; then
     CUDA_HOME=/usr/local/cuda-12.8
   elif [ -f /usr/local/cuda/include/cublas_v2.h ]; then
     CUDA_HOME=/usr/local/cuda
@@ -45,6 +48,7 @@ if [ -z "${CUDA_HOME:-}" ]; then
   fi
 fi
 export CUDA_HOME
+export CUDAToolkit_ROOT="$CUDA_HOME"
 if [ -z "$NVCC_BIN" ] && [ -x "$CUDA_HOME/bin/nvcc" ]; then
   NVCC_BIN="$CUDA_HOME/bin/nvcc"
 fi

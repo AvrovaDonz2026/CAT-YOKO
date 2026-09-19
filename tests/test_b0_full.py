@@ -118,6 +118,8 @@ class B200LauncherTests(unittest.TestCase):
         self.assertIn("12.9", src)
         self.assertIn("STORE256", src)
         self.assertIn("CUDACXX", src)
+        self.assertIn("CUDAToolkit_ROOT", src)
+        self.assertIn("cublas_v2.h", src)
         b1 = (ROOT / "scripts" / "run_b1_try_b200.sh").read_text()
         self.assertIn("cat_yoko.b1", b1)
         self.assertIn("--try", b1)
