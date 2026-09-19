@@ -36,16 +36,29 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 
 ## 下一台怎么接
 
-权重不在 GitHub。先 Hub overlay，再 MiniCPM5 上采样：
+下一张卡未知时，**不要**接 Megatron EP/TP，也**不要**默认走 B200-only 启动脚本（非 SM100 会 exit 4）。先按 SM / 显存 / TE 出 B0 recipe，再同阶段 resume Hub overlay：
 
 ```bash
+python3 -m cat_yoko.hw_recipe --json          # 无卡时也可 --family sm100 --gib 183
+python3 scripts/probe_nvfp4_hw.py             # 可选：TE FPROP / dX / WGRAD
 python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
 python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
-bash scripts/run_b0_full_b200.sh          # SM100；默认 micro-batch=2
-# MICRO_BATCH=1 bash scripts/run_b0_full_b200.sh
+bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自动 --try
+# TRY=1 bash scripts/run_b0_next.sh           # 强制 32 步烟测
+# MICRO_BATCH=1 bash scripts/run_b0_next.sh
 ```
 
-细节：[`B200_TRAIN.md`](B200_TRAIN.md)、[`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md)、[`HF_HUB.md`](HF_HUB.md)。
+已知 SKU 的快捷方式仍在：`bash scripts/run_b0_full_b200.sh`（SM100，默认 micro-batch=2）、`bash scripts/run_b0_full_autodl.sh`（sm_120）。
+
+| 卡 | B0 配方 |
+| --- | --- |
+| SM100/103 且 ≥160GiB（B200 类） | 发布信封 seq=4096，mb=2，encoder 在 GPU，无 grad-ckpt，TE NVFP4 FPROP |
+| sm_120 且 ≥90GiB（6000D 类） | 发布信封 seq=4096，mb=1，encoder 在 GPU，grad-ckpt，`Nvfp4Linear` 仿真 |
+| Hopper SM90 且 ≥40GiB | 发布信封；<90GiB 卸 encoder；仿真 NVFP4（文档上的 FP8 回退，不新写 wrap） |
+| `<40GiB` | **拒绝** 8e9 信封 → `--try` seq=64 / 32 步 |
+| CPU | 只打 JSON，不建 12B 图 |
+
+细节：[`B200_TRAIN.md`](B200_TRAIN.md)、[`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md)、[`HF_HUB.md`](HF_HUB.md)。`cat_yoko.hw_recipe` 是纯函数，单测不需要 GPU。
 
 **不要**
 

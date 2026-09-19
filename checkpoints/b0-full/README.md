@@ -30,6 +30,8 @@ Vast B200 **已回收**（2026-09-19）。下表是释放前快照。进度：[`
 同阶段 B0，**不要** resume `checkpoints/b0/` 那份 32 步 `--try`。
 
 ```bash
+bash scripts/run_b0_next.sh
+# 已知 B200 / SM100：
 bash scripts/run_b200.sh
 # 或
 bash scripts/upgrade_torch_te_b200.sh

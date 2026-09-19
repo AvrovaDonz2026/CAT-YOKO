@@ -6,6 +6,19 @@ sm_120（RTX PRO 6000D）走 `Nvfp4Linear` E2M1/16 仿真，没有 SM100 TMEM/UM
 
 **上次 Vast B200 已回收**（2026-09-19，SSH 拒绝）。进度见 [`STATUS.md`](STATUS.md)。下一台从 Hub overlay 接，不要假设旧 SSH Host 还在。
 
+## 未知下一张卡
+
+卡还没定的时候，适配的是 **SM / 显存 / TE FPROP**，不是 Megatron EP/TP。`run_b0_full_b200.sh` 在非 10.0/10.3 上会 exit 4。下一台入口：
+
+```bash
+python3 -m cat_yoko.hw_recipe --json
+bash scripts/run_b0_next.sh
+```
+
+`cat_yoko.hw_recipe` 按 family+GiB 选出 profile（`sm100_b200` / `sm120_6000d` / `hopper_h100` / `ada_tight` / `cpu`），再生成 `cat_yoko.b0` 的 seq / micro-batch / offload / grad-ckpt / `--try`。CPU 只打 JSON，不建 12B。`<40GiB` 拒绝 8e9 信封。Megatron 适配面（`ParallelPlan`、`--dump-megatron`）继续留着，等真有多卡节点再填。
+
+下面仍是 **已知 B200 / SM100** 的算子与快捷脚本。
+
 ## 从 Hub overlay 接 B0
 
 6000D 停在 step **16020**。B200 释放前钉：
@@ -22,6 +35,8 @@ sm_120（RTX PRO 6000D）走 `Nvfp4Linear` E2M1/16 仿真，没有 SM100 TMEM/UM
 文件夹说明与 GitHub [`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md) 同步。
 
 ```bash
+bash scripts/run_b0_next.sh
+# 已知 B200：
 bash scripts/run_b200.sh
 # 或分步：
 bash scripts/upgrade_torch_te_b200.sh

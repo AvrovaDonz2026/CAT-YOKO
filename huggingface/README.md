@@ -79,7 +79,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | 机器 | Vast NVIDIA B200 SM 10.0（已回收） |
 | 运行时 | torch 2.11+cu128 + TE nvcc 12.9 SM100 |
 | 吞吐 / 显存 | **micro-batch=2**，~15.7k tok/s，Trainer ~138GiB |
-| 续训 | MiniCPM5 上采样后 overlay 本文件；同阶段 resume 保留 `tokens_in_phase` |
+| 续训 | MiniCPM5 上采样后 overlay 本文件；同阶段 resume 保留 `tokens_in_phase`。未知下一张卡：GitHub `python3 -m cat_yoko.hw_recipe` + `scripts/run_b0_next.sh` |
 
 代码与指针：[GitHub AvrovaDonz2026/CAT-YOKO](https://github.com/AvrovaDonz2026/CAT-YOKO)（不用 LFS）。
 

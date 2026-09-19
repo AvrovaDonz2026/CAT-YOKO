@@ -31,7 +31,7 @@ Vast B200 **已回收**。下表是 2026-09-19T06:44Z 释放前快照，不是�
 | step | **26940** |
 | tokens_in_phase | 130,041,856（≈1.63% of 8e9） |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| 下一台 | [`B200_TRAIN.md`](B200_TRAIN.md)；`download_hub_overlay.py --name b0-full` |
+| 下一台 | 未知卡：`python3 -m cat_yoko.hw_recipe` + `bash scripts/run_b0_next.sh`。已知 SM100：[`B200_TRAIN.md`](B200_TRAIN.md)。`download_hub_overlay.py --name b0-full` |
 
 [`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh) 走 SSH Host `vast-b200`。那台已经回收，不要假设还能连。
 

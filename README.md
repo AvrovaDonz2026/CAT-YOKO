@@ -19,15 +19,16 @@ Causal Encoder-Decoder（YOCO 式）MoE，从 MiniCPM5-2B 上采样。许可 **A
 
 完整口径、机器沿革、禁止项：[`docs/STATUS.md`](docs/STATUS.md)。
 
-下一台 B200 / SM100：
+下一张卡未知时，先探测再 dispatch（不要默认 `run_b0_full_b200.sh`，非 SM100 会 exit 4；也不要为此去接 Megatron）：
 
 ```bash
+python3 -m cat_yoko.hw_recipe --json
 python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
 python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
-bash scripts/run_b0_full_b200.sh
+bash scripts/run_b0_next.sh
 ```
 
-开训说明：[`docs/B200_TRAIN.md`](docs/B200_TRAIN.md)。`MICRO_BATCH=1` 可回退。同阶段 resume 会接上 `tokens_in_phase`。**不要** resume `checkpoints/b0/` 那份 32 步 `--try`，不要 `--save-full`。
+已知 B200 / SM100 仍可用 [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) 里的 `run_b0_full_b200.sh`。`MICRO_BATCH=1` 可回退。同阶段 resume 会接上 `tokens_in_phase`。**不要** resume `checkpoints/b0/` 那份 32 步 `--try`，不要 `--save-full`。
 
 ## 规格
 
@@ -66,7 +67,7 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 **训练与产物**
 
 - [`docs/STATUS.md`](docs/STATUS.md) — **当前进度**
-- [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子与接训
+- [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子；未知卡走 `hw_recipe` / `run_b0_next.sh`
 - [`docs/HF_HUB.md`](docs/HF_HUB.md) — 权重只走 Hub；`scripts/push_to_hf.sh`
 - [`huggingface/README.md`](huggingface/README.md) — Hub 模型卡源
 - [`checkpoints/b0-full/README.md`](checkpoints/b0-full/README.md) — 发布档 B0 overlay 指针
@@ -82,7 +83,8 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
 python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint \
   tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 \
-  tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full tests.test_phase_cg
+  tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full tests.test_phase_cg \
+  tests.test_hw_recipe
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
 ```
