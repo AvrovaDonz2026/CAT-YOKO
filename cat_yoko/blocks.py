@@ -14,7 +14,7 @@ from cat_yoko.rope import RMSNorm
 class EncoderBlock(nn.Module):
     def __init__(self, cfg: CATYokoConfig, *, kind: str = "sliding", dense: bool = False) -> None:
         super().__init__()
-        self.kind = kind  # sliding | csa | hca; Phase B compute is still window GQA
+        self.kind = kind  # sliding | csa | hca | kda; Phase B compute is still window GQA
         ns, nr, tk = cfg.expert_count("encoder")
         del ns
         self.ln1 = RMSNorm(cfg.hidden_size, cfg.rms_eps)
@@ -30,6 +30,12 @@ class EncoderBlock(nn.Module):
         self.compress_m_hca = cfg.compress_m_hca
         self.sparse_mode = "window"
         self.align_indexer = False
+        if kind == "kda":
+            from cat_yoko.kda import KDAGates
+
+            self.kda = KDAGates(cfg)
+        else:
+            self.kda = None
 
     def forward(
         self,
@@ -42,7 +48,11 @@ class EncoderBlock(nn.Module):
         indexer = getattr(self, "indexer", None)
         self.last_indexer_kl = None
         self.last_indexer_recall = None
-        if mode == "hca":
+        if mode == "kda" and getattr(self, "kda", None) is not None:
+            from cat_yoko.kda import kda_attend
+
+            attn_out = kda_attend(self.attn, self.kda, h, doc_ids)
+        elif mode == "hca":
             from cat_yoko.sparse import hca_attend
 
             attn_out = hca_attend(self.attn, h, doc_ids, self.compress_m_hca)
@@ -80,8 +90,16 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, cfg: CATYokoConfig, *, hash_route: bool, dense: bool = False) -> None:
+    def __init__(
+        self,
+        cfg: CATYokoConfig,
+        *,
+        hash_route: bool,
+        dense: bool = False,
+        kind: str = "sliding",
+    ) -> None:
         super().__init__()
+        self.kind = kind  # sliding | kda
         ns, nr, tk = cfg.expert_count("decoder")
         del ns
         self.ln1 = RMSNorm(cfg.hidden_size, cfg.rms_eps)
@@ -97,6 +115,12 @@ class DecoderBlock(nn.Module):
         self.register_buffer("gate", torch.zeros(()))
         self.sparse_mode = "window"
         self.align_indexer = False
+        if kind == "kda":
+            from cat_yoko.kda import KDAGates
+
+            self.kda = KDAGates(cfg)
+        else:
+            self.kda = None
 
     def forward(
         self,
@@ -106,7 +130,12 @@ class DecoderBlock(nn.Module):
         token_ids: torch.Tensor | None = None,
         doc_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        x = x + self.res * self.self_attn(self.ln1(x), doc_ids)
+        if getattr(self, "sparse_mode", "window") == "kda" and getattr(self, "kda", None) is not None:
+            from cat_yoko.kda import kda_attend
+
+            x = x + self.res * kda_attend(self.self_attn, self.kda, self.ln1(x), doc_ids)
+        else:
+            x = x + self.res * self.self_attn(self.ln1(x), doc_ids)
         h = self.ln_cross(x)
         self.last_indexer_kl = None
         c = self.cross_attn(h, k, v, doc_ids)

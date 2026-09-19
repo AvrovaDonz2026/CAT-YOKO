@@ -27,7 +27,7 @@ from cat_yoko.indexer import (
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.optim import wsd_lr
 from cat_yoko.phase_train import build_phase_argv, main_c, main_d, main_e, main_f, main_g
-from cat_yoko.phases import C_STAGES, D_STAGES, PHASES, TRY_STEPS
+from cat_yoko.phases import C_STAGES, D_STAGES, PHASES, TRY_STEPS, c_chain, resolve_phase_spec
 from cat_yoko.trainer import Trainer
 
 
@@ -37,6 +37,7 @@ class PhaseEnvelopeTests(unittest.TestCase):
             "B0",
             "B1",
             "B2",
+            "C-kda",
             "C-index",
             "C-topk",
             "C-hca",
@@ -63,8 +64,27 @@ class PhaseEnvelopeTests(unittest.TestCase):
         self.assertEqual(PHASES["G"].loss, "grpo")
         self.assertEqual(PHASES["G-dpo"].loss, "dpo")
         self.assertEqual(PHASES["C-index"].tokens, 10e9)
+        self.assertEqual(PHASES["C-kda"].sparse, "kda")
+        self.assertEqual(PHASES["C-kda"].tokens, 5e9)
+        self.assertEqual(PHASES["C-kda"].freeze, "none")
+        self.assertEqual(PHASES["C-kda"].student, "nvfp4")
+        self.assertFalse(PHASES["C-kda"].align_indexer)
+        self.assertEqual(c_chain(), ("C-index", "C-topk", "C-hca", "C-win"))
+        self.assertEqual(
+            c_chain(use_kda=True),
+            ("C-kda", "C-index", "C-topk", "C-hca", "C-win"),
+        )
+        kda_c = sum(resolve_phase_spec(n, use_kda=True).tokens for n in c_chain(use_kda=True))
+        plain_c = sum(PHASES[n].tokens for n in c_chain())
+        self.assertEqual(kda_c, 25e9)
+        self.assertEqual(plain_c, 25e9)
+        self.assertEqual(resolve_phase_spec("C-index", use_kda=True).tokens, 5e9)
+        self.assertEqual(resolve_phase_spec("C-index", use_kda=True).sparse, "kda")
+        self.assertEqual(resolve_phase_spec("D-8k", use_kda=True).sparse, "hca")
+        self.assertEqual(resolve_phase_spec("D-8k", use_kda=False).sparse, "window")
         self.assertLessEqual(PHASES["C-index"].tokens + PHASES["C-topk"].tokens, 50e9)
         self.assertIn("indexer", KEEP_HIGH_PREC)
+        self.assertIn("kda_gate", KEEP_HIGH_PREC)
 
     def test_c_try_argv(self) -> None:
         argv = build_phase_argv("C-index", ["--try", "--save-dir", "/tmp/c"])
@@ -100,11 +120,15 @@ class PhaseEnvelopeTests(unittest.TestCase):
 
     def test_stage_wrappers(self) -> None:
         self.assertEqual(C_STAGES["indexer"], "C-index")
+        self.assertEqual(C_STAGES["kda"], "C-kda")
         self.assertEqual(D_STAGES["128k"], "D-128k")
         with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
             self.assertEqual(main_c(["--stage", "topk", "--try"]), 0)
             run.assert_called_once()
             self.assertEqual(run.call_args[0][0], "C-topk")
+        with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+            self.assertEqual(main_c(["--stage", "kda", "--try"]), 0)
+            self.assertEqual(run.call_args[0][0], "C-kda")
         with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
             main_d(["--stage", "32k", "--try"])
             self.assertEqual(run.call_args[0][0], "D-32k")
@@ -127,6 +151,24 @@ class PhaseEnvelopeTests(unittest.TestCase):
         second = run.call_args_list[1].args[1]
         self.assertIn("--resume", second)
 
+    def test_c_chain_use_kda_lights_kda_first(self) -> None:
+        with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+            self.assertEqual(
+                main_c(["--chain", "--use-kda", "--try", "--save-dir", "/tmp/c"]),
+                0,
+            )
+        names = [c.args[0] for c in run.call_args_list]
+        self.assertEqual(names, ["C-kda", "C-index", "C-topk", "C-hca", "C-win"])
+        self.assertIn("--use-kda", run.call_args_list[0].args[1])
+        self.assertLess(names.index("C-kda"), names.index("C-index"))
+        self.assertLess(names.index("C-topk"), names.index("C-hca"))
+
+    def test_c_index_use_kda_carves_tokens(self) -> None:
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv("C-index", ["--use-kda", "--save-dir", "/tmp/c"])
+        self.assertEqual(argv[argv.index("--tokens") + 1], str(5e9))
+        self.assertIn("--use-kda", argv)
+
     def test_c_chain_rejects_stage(self) -> None:
         with self.assertRaises(SystemExit):
             main_c(["--chain", "--stage", "topk"])
@@ -146,6 +188,8 @@ class IndexerFreezeTests(unittest.TestCase):
         self.assertFalse(any("indexer" in n for n, _ in model.named_modules()))
         self.assertFalse(phase_needs_indexer("B0"))
         self.assertTrue(phase_needs_indexer("C-index"))
+        self.assertFalse(phase_needs_indexer("C-kda"))
+        self.assertTrue(phase_needs_indexer("C-topk"))
         self.assertEqual(model.encoder[0].kind, "sliding")
         self.assertEqual(model.encoder[1].kind, "csa")
 

@@ -40,7 +40,7 @@ bash scripts/run_b0_next.sh
 | FFN / MoE | SwiGLU 6144；1 shared + 20 routed；top-\(k\) 7/10（enc/dec） |
 | Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
 
-发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G**（`python3 -m cat_yoko.c|d|e|f|g`，C/D 可 `--chain`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 Phase B 是滑窗 GQA；Phase C 按定理 B 做滑窗∪压缩，**不是 CSA kernel**。
+发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G**（`python3 -m cat_yoko.c|d|e|f|g`，C/D 可 `--chain`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 Phase B 是滑窗 GQA；Phase C 按定理 B 做滑窗∪压缩，**不是 CSA kernel**。KDA（省每层 self KV）默认关；`--use-kda` 时 Phase C 先点亮 KDA、再 CSA、最后 HCA，见 `cat_yoko.kda`。
 
 ## 课程 C1
 
@@ -84,7 +84,7 @@ python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
 python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint \
   tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 \
   tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full tests.test_phase_cg \
-  tests.test_hw_recipe
+  tests.test_hw_recipe tests.test_kda
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
 ```

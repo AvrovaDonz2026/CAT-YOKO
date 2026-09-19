@@ -62,6 +62,9 @@ class CATYokoConfig:
     use_nvfp4: bool = True  # published compute dtype; Nvfp4Linear wrap
     use_fp8: bool = True  # Hopper/Ada fallback placeholder
     attention_backend: str = "window"  # Phase B; "csa" is Phase C
+    use_kda: bool = False  # opt-in 3:1 KDA mix; Phase B compute stays window
+    kda_decoder: bool = True  # when use_kda, mix decoder self-attn (decode KV)
+    kda_group: int = 4  # 3 KDA : 1 sparse/sliding anchor
     kd_temperature: float = 2.0
     kd_weight_start: float = 0.5
 
@@ -136,6 +139,7 @@ class CATYokoConfig:
             lr=3e-4,
             use_nvfp4=False,
             use_fp8=False,
+            use_kda=False,
             global_batch_tokens=128,
             # Tiny is test-only. Match MiniCPM5 RMS; keep short-rope for seq_len=16.
             rope_theta=10_000.0,
@@ -143,22 +147,60 @@ class CATYokoConfig:
         )
 
 
-def encoder_layer_kind(index: int, n_layers: int = 16) -> str:
+def encoder_layer_kind(
+    index: int,
+    n_layers: int = 16,
+    *,
+    use_kda: bool = False,
+    kda_group: int = 4,
+) -> str:
     """Phase C labels. Phase B still runs sliding-window GQA on every encoder layer.
 
-    12B (16 layers) is 2 sliding + 7 CSA + 7 HCA. Tiny graphs that cannot
-    hold that schedule keep a sliding bootstrap then CSA/HCA as they fit,
-    so C-index has an encoder CSA indexer to train.
+    12B (16 layers) default is 2 sliding + 7 CSA + 7 HCA. With ``use_kda``,
+    non-bootstrap layers are 3:1 KDA:(CSA/HCA) (group of 4): 2 sliding +
+    11 KDA + 2 CSA + 1 HCA. Tiny graphs keep a sliding bootstrap and a
+    CSA indexer anchor so C-index still has something to train. Phase C
+    lights KDA first (``C-kda``), then CSA, then HCA.
     """
     n = int(n_layers)
     i = int(index)
+    g = max(int(kda_group), 2)
+    if not use_kda:
+        if n >= 16:
+            if i < 2:
+                return "sliding"
+            return "csa" if (i - 2) % 2 == 0 else "hca"
+        if i == 0:
+            return "sliding"
+        return "csa" if (i - 1) % 2 == 0 else "hca"
     if n >= 16:
         if i < 2:
             return "sliding"
-        return "csa" if (i - 2) % 2 == 0 else "hca"
+        pos = (i - 2) % g
+        if pos < g - 1:
+            return "kda"
+        sparse_i = (i - 2) // g
+        return "csa" if sparse_i % 2 == 0 else "hca"
     if i == 0:
         return "sliding"
-    return "csa" if (i - 1) % 2 == 0 else "hca"
+    if i == n - 1:
+        return "csa"
+    return "kda"
+
+
+def decoder_layer_kind(
+    index: int,
+    n_layers: int = 26,
+    *,
+    use_kda: bool = False,
+    kda_group: int = 4,
+) -> str:
+    """Decoder self-attn labels. Default all sliding. ``use_kda`` → 3:1 KDA:sliding."""
+    del n_layers
+    if not use_kda:
+        return "sliding"
+    g = max(int(kda_group), 2)
+    return "sliding" if int(index) % g == (g - 1) else "kda"
 
 
 # Phase B C1 split (tokens).
@@ -172,6 +214,7 @@ KEEP_HIGH_PREC = (
     "router",
     "gate",
     "indexer",
+    "kda_gate",
     "attn_softmax",
 )
 FP8_KEEP_HIGH_PREC = KEEP_HIGH_PREC

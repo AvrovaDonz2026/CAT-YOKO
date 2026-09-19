@@ -46,8 +46,8 @@ def encoder_csa_compress_ratios(cfg: CATYokoConfig) -> list[int]:
     """Megatron CSA ratios must be 0 (sliding), 4 (CSA), or 128 (HCA). Matches m / m'."""
     out: list[int] = []
     for i in range(cfg.encoder_layers):
-        kind = encoder_layer_kind(i, cfg.encoder_layers)
-        if kind == "sliding":
+        kind = encoder_layer_kind(i, cfg.encoder_layers, use_kda=cfg.use_kda, kda_group=cfg.kda_group)
+        if kind == "sliding" or kind == "kda":
             out.append(0)
         elif kind == "csa":
             out.append(cfg.compress_m)  # 4

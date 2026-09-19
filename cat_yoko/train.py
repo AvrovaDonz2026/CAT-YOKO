@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -13,7 +14,7 @@ from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos
 from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.parallel import ParallelPlan, validate_parallel
-from cat_yoko.phases import PHASES
+from cat_yoko.phases import PHASES, resolve_phase_spec
 from cat_yoko.recipe import MINICPM5_HF, assert_minicpm5_id
 from cat_yoko.teacher import DummyTeacher, load_teacher
 from cat_yoko.trainer import Trainer, build_model, print_meta, run_c1_chain, train_loop
@@ -53,10 +54,10 @@ def twelve_b_cli_errors(
     return errs
 
 
-def _tokens_offset(phase: str, explicit: float | None) -> float:
+def _tokens_offset(phase: str, explicit: float | None, *, use_kda: bool = False) -> float:
     if explicit is not None:
         return explicit
-    ph = PHASES.get(phase)
+    ph = resolve_phase_spec(phase, use_kda=use_kda)
     if ph is not None:
         return float(ph.tokens_offset)
     if phase == "B0":
@@ -105,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="CAT-YOKO-12B C1 trainer")
     p.add_argument("--config", choices=["12b", "tiny"], default="tiny")
     p.add_argument("--phase", choices=sorted(PHASES), default="B0")
+    p.add_argument(
+        "--use-kda",
+        action="store_true",
+        help="opt-in 3:1 KDA mix; Phase C lights C-kda before CSA/HCA",
+    )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
@@ -224,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.backend == "megatron" and args.fsdp:
         p.error("--fsdp is the torch path; Megatron uses its own DDP/FSDP")
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
+    if args.use_kda:
+        cfg = replace(cfg, use_kda=True)
     plan = ParallelPlan(
         tensor_parallel=args.tp,
         pipeline_parallel=args.pp,
@@ -394,7 +402,9 @@ def main(argv: list[str] | None = None) -> int:
         tokens=args.tokens,
         upcycle_src=src,
         resume=args.resume,
-        global_tokens_offset=_tokens_offset(args.phase, args.tokens_offset),
+        global_tokens_offset=_tokens_offset(
+            args.phase, args.tokens_offset, use_kda=args.use_kda
+        ),
         **shared,
     )
     tr.run()

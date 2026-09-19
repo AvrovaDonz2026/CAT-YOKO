@@ -6,7 +6,7 @@ window GQA (no CSA CUDA kernel), overlay checkpoints, ``--try`` 32 steps.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from cat_yoko.config import C1_SPLIT
 
@@ -27,7 +27,7 @@ class PhaseSpec:
     freeze: str = "b2"  # b0 | b1 | b2 | indexer | none
     loss: str = "ce"  # ce | indexer_kl | sft | grpo | dpo
     lr_mode: str = "stable"  # stable | b2 | decay
-    sparse: str = "window"  # window | topk | hca
+    sparse: str = "window"  # window | kda | topk | hca
     align_indexer: bool = False
     tokens_offset: float = 0.0
     default_steps: int | None = None
@@ -80,6 +80,29 @@ PHASES: dict[str, PhaseSpec] = {
         tokens_offset=C1_SPLIT["B0"] + C1_SPLIT["B1"],
     ),
     # Phase C: 25e9 inside the published 20–50B band. No CSA CUDA kernel.
+    # Default chain (use_kda=False): indexer → topk → hca → win (2+7+7).
+    # Opt-in 3:1 KDA: C-kda first (majority path), CSA/HCA later (anchors).
+    "C-kda": PhaseSpec(
+        name="C-kda",
+        tokens=5e9,
+        student="nvfp4",
+        detach=False,
+        gate_start=1.0,
+        gate_end=1.0,
+        offload_encoder=False,
+        offload_blocks=True,
+        optim_cpu=True,
+        notes=(
+            "light KDA-kind layers only; CSA/HCA-kind stay window. "
+            "hybrid-linear: majority linear path before strong retrieval. "
+            "Opt-in use_kda; not a DPLR CUDA kernel"
+        ),
+        freeze="none",
+        loss="ce",
+        lr_mode="b2",
+        sparse="kda",
+        tokens_offset=50e9,
+    ),
     "C-index": PhaseSpec(
         name="C-index",
         tokens=10e9,
@@ -267,6 +290,7 @@ PHASES: dict[str, PhaseSpec] = {
 }
 
 C_STAGES = {
+    "kda": "C-kda",
     "indexer": "C-index",
     "topk": "C-topk",
     "hca": "C-hca",
@@ -282,7 +306,9 @@ G_ALGOS = {
     "dpo": "G-dpo",
 }
 C_CHAIN = ("C-index", "C-topk", "C-hca", "C-win")
+C_CHAIN_KDA = ("C-kda", "C-index", "C-topk", "C-hca", "C-win")
 D_CHAIN = ("D-8k", "D-32k", "D-128k")
+_POST_C = frozenset({"D-8k", "D-32k", "D-128k", "E", "F", "G", "G-dpo"})
 
 # Hub shard cap. 4GiB keeps autodl-tmp / copy tools comfortable.
 HUB_SHARD_MAX_BYTES = 4 * (1 << 30)
@@ -298,6 +324,41 @@ def spec(phase: str) -> PhaseSpec:
     if phase not in PHASES:
         raise KeyError(f"unknown phase {phase}; choose from {sorted(PHASES)}")
     return PHASES[phase]
+
+
+def c_chain(*, use_kda: bool = False) -> tuple[str, ...]:
+    """Published C lighting. KDA-majority graphs light the linear path first."""
+    return C_CHAIN_KDA if use_kda else C_CHAIN
+
+
+def resolve_phase_spec(name: str, *, use_kda: bool = False) -> PhaseSpec | None:
+    """PhaseSpec with KDA-aware sparse flags and the carved C-index envelope.
+
+    Without ``use_kda`` this is ``PHASES[name]``. With it: C-index keeps KDA
+    lit (CSA stays window for indexer KL) and carves 5e9 from the 10e9
+    indexer budget so C still sums to 25e9; D–G keep the last C lighting
+    (``hca`` = KDA + CSA top-k + HCA) instead of resetting to window.
+    """
+    ph = PHASES.get(name)
+    if ph is None:
+        return None
+    if not use_kda:
+        return ph
+    if name == "C-index":
+        return replace(
+            ph,
+            tokens=5e9,
+            tokens_offset=55e9,
+            sparse="kda",
+            notes=(
+                "keep KDA-kind layers on gated-delta; freeze backbone; "
+                "bf16 Lightning Indexer KL vs dense window on remaining CSA "
+                "anchors (2 on 12B). Not top-k yet"
+            ),
+        )
+    if name in _POST_C and ph.sparse == "window":
+        return replace(ph, sparse="hca")
+    return ph
 
 
 def family(phase: str) -> str:

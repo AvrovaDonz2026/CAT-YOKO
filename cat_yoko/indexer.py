@@ -166,17 +166,38 @@ def set_align_indexer(model: nn.Module, flag: bool) -> None:
 
 
 def set_sparse_mode(model: nn.Module, mode: str) -> None:
-    """``window`` | ``topk`` | ``hca``. ``hca`` keeps top-k on CSA layers."""
+    """``window`` | ``kda`` | ``topk`` | ``hca``. Phase B stays ``window``.
+
+    Lighting is monotonic except a full ``window`` reset (Phase B):
+
+    - ``window``: every layer sliding GQA
+    - ``kda``: KDA-kind → gated-delta; CSA/HCA/sliding stay window
+    - ``topk``: KDA-kind stay kda; CSA → indexer top-k; HCA stay window
+    - ``hca``: KDA-kind stay kda; CSA stay top-k; HCA → mean-pool concat
+
+    ``kda`` must **not** light CSA. Hybrid-linear models ignore the
+    majority linear path if strong retrieval is trained first.
+    """
+    if mode not in {"window", "kda", "topk", "hca"}:
+        raise ValueError(f"unknown sparse mode {mode}")
     for blk in getattr(model, "encoder", []):
         kind = getattr(blk, "kind", "sliding")
-        if mode == "hca" and kind == "hca":
+        if mode == "window":
+            blk.sparse_mode = "window"
+        elif kind == "kda":
+            blk.sparse_mode = "kda"
+        elif mode == "hca" and kind == "hca":
             blk.sparse_mode = "hca"
         elif mode in {"topk", "hca"} and kind == "csa":
             blk.sparse_mode = "topk"
         else:
             blk.sparse_mode = "window"
     for blk in getattr(model, "decoder", []):
-        blk.sparse_mode = "window"
+        kind = getattr(blk, "kind", "sliding")
+        if mode != "window" and kind == "kda":
+            blk.sparse_mode = "kda"
+        else:
+            blk.sparse_mode = "window"
 
 
 def phase_needs_indexer(phase: str) -> bool:

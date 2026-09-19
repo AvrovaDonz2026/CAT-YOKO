@@ -33,7 +33,8 @@ def init_new_modules(model: CATYokoForCausalLM, std: float = NEW_MODULE_INIT_STD
     _small_linear(model.cache_k, std)
     _small_linear(model.cache_v, std)
     for n, mod in model.named_modules():
-        if n.endswith("indexer") or n.endswith("cross_indexer"):
+        parts = n.split(".")
+        if "indexer" in parts or "cross_indexer" in parts or "kda" in parts:
             for lin in mod.modules():
                 if isinstance(lin, nn.Linear):
                     _small_linear(lin, std)

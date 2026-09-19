@@ -7,7 +7,7 @@ from cat_yoko.megatron.provider import MegatronBackendNotReady, import_megatron_
 
 
 def encoder_layer_kinds(cfg: CATYokoConfig) -> list[str]:
-    return [encoder_layer_kind(i, cfg.encoder_layers) for i in range(cfg.encoder_layers)]
+    return [encoder_layer_kind(i, cfg.encoder_layers, use_kda=cfg.use_kda, kda_group=cfg.kda_group) for i in range(cfg.encoder_layers)]
 
 
 def encoder_module_spec(cfg: CATYokoConfig, *, phase: str = "B0") -> list:

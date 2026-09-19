@@ -10,7 +10,7 @@ from torch import nn
 
 from cat_yoko.attention import collapse_doc_ids
 from cat_yoko.blocks import DecoderBlock, EncoderBlock
-from cat_yoko.config import CATYokoConfig, encoder_layer_kind
+from cat_yoko.config import CATYokoConfig, decoder_layer_kind, encoder_layer_kind
 from cat_yoko.moe import module_has_trainable
 from cat_yoko.offload import move_module, offload_checkpoint_block
 from cat_yoko.rope import RMSNorm
@@ -25,7 +25,9 @@ class CATYokoForCausalLM(nn.Module):
         self.encoder = nn.ModuleList(
             EncoderBlock(
                 cfg,
-                kind=encoder_layer_kind(i, cfg.encoder_layers),
+                kind=encoder_layer_kind(
+                    i, cfg.encoder_layers, use_kda=cfg.use_kda, kda_group=cfg.kda_group
+                ),
                 dense=cfg.first_dense and i == 0,
             )
             for i in range(cfg.encoder_layers)
@@ -36,6 +38,12 @@ class CATYokoForCausalLM(nn.Module):
             DecoderBlock(
                 cfg,
                 hash_route=(i < cfg.hash_moe_decoder_layers),
+                kind=decoder_layer_kind(
+                    i,
+                    cfg.decoder_layers,
+                    use_kda=cfg.use_kda and cfg.kda_decoder,
+                    kda_group=cfg.kda_group,
+                ),
                 dense=cfg.first_dense and i == 0,
             )
             for i in range(cfg.decoder_layers)

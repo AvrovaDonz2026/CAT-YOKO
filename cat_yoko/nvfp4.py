@@ -7,7 +7,7 @@ E2M1/16 emulation. Outer ``torch.autocast(bf16)`` still covers unwrapped
 ops. Attn softmax / SDPA stay fp32 in ``attention._sdpa``.
 
 Must-high-prec (not NVFP4): embed lookup, RMSNorm / QK-Norm, router,
-scalar gate, indexer, attn softmax / SDPA scores. B0 student stays
+scalar gate, indexer, kda_gate, attn softmax / SDPA scores. B0 student stays
 bf16 (Theorem A). lm_head and attn QKV/O projections are NVFP4 GEMMs.
 """
 
@@ -34,6 +34,7 @@ POLICY = {
     "B2": Nvfp4Policy("B2", "nvfp4", "n/a"),
     "C": Nvfp4Policy("C", "bf16", "nvfp4"),
     "C-index": Nvfp4Policy("C-index", "bf16", "nvfp4"),
+    "C-kda": Nvfp4Policy("C-kda", "nvfp4", "n/a"),
     "C-topk": Nvfp4Policy("C-topk", "nvfp4", "n/a"),
     "C-hca": Nvfp4Policy("C-hca", "nvfp4", "n/a"),
     "C-win": Nvfp4Policy("C-win", "nvfp4", "n/a"),

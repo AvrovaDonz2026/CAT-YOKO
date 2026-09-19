@@ -27,7 +27,6 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from cat_yoko.phases import (
-    C_CHAIN,
     C_STAGES,
     D_CHAIN,
     D_STAGES,
@@ -36,6 +35,8 @@ from cat_yoko.phases import (
     PUBLISHED_SAVE_EVERY,
     TIGHT_GPU_SEQ,
     TRY_STEPS,
+    c_chain,
+    resolve_phase_spec,
     spec as phase_spec,
 )
 from cat_yoko.recipe import MINICPM5_HF
@@ -75,6 +76,11 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--upcycle", type=Path, default=None)
     p.add_argument("--dummy-upcycle", action="store_true")
     p.add_argument("--device", default="cuda")
+    p.add_argument(
+        "--use-kda",
+        action="store_true",
+        help="opt-in 3:1 KDA mix; --chain lights C-kda before indexer/CSA/HCA",
+    )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--keep-last", type=int, default=2)
     p.add_argument(
@@ -112,6 +118,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         help="keep activations; B200 192GiB default in run_b0_full_b200.sh",
     )
     args, rest = p.parse_known_args(argv)
+    ph = resolve_phase_spec(phase, use_kda=bool(args.use_kda)) or ph
     if args.offload_encoder and args.no_offload_encoder:
         p.error("pick one of --offload-encoder / --no-offload-encoder")
     if args.offload_blocks and args.no_offload_blocks:
@@ -144,6 +151,8 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         "--accum",
         "1",
     ]
+    if args.use_kda:
+        out.append("--use-kda")
     if args.no_grad_ckpt:
         out.append("--no-grad-ckpt")
     else:
@@ -286,10 +295,16 @@ def _cli_chain(phases: tuple[str, ...], argv: list[str] | None) -> int:
 
 def main_c(argv: list[str] | None = None) -> int:
     chain, rest = _strip_bool(argv, "--chain")
+    use_kda, rest = _strip_bool(rest, "--use-kda")
+    if use_kda:
+        rest = ["--use-kda", *rest]
     if chain:
         if "--stage" in rest:
-            raise SystemExit("--chain runs indexer→topk→hca→win; do not pass --stage")
-        return _cli_chain(C_CHAIN, rest)
+            raise SystemExit(
+                "--chain runs indexer→topk→hca→win "
+                "(or kda→index→topk→hca→win with --use-kda); do not pass --stage"
+            )
+        return _cli_chain(c_chain(use_kda=use_kda), rest)
     stage, rest = _peel_flag(rest, "--stage", "indexer")
     if stage not in C_STAGES:
         raise SystemExit(f"unknown C --stage {stage}; choose {sorted(C_STAGES)}")

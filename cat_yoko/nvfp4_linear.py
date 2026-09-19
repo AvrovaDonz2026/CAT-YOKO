@@ -570,6 +570,8 @@ def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
     parts = name.split(".")
     if "indexer" in parts or "cross_indexer" in parts:
         return False
+    if "kda" in parts:
+        return False
     leaf = name.rsplit(".", 1)[-1]
     if leaf == "router":
         return False

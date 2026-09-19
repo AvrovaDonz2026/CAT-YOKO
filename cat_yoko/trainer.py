@@ -59,7 +59,7 @@ from cat_yoko.offload import (
     set_after_block_backward,
 )
 from cat_yoko.optim import CPUOffloadAdamW, build_optimizer, plan_cpu_adam, trim_host_allocator, unwrap, wsd_lr
-from cat_yoko.phases import PHASES
+from cat_yoko.phases import c_chain, resolve_phase_spec
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
@@ -280,7 +280,7 @@ class Trainer:
             else max(accum, 1)
         )
         self.nvfp4_n = 0
-        ph = PHASES.get(phase)
+        ph = resolve_phase_spec(phase, use_kda=bool(getattr(cfg, "use_kda", False)))
         self.loss_mode = ph.loss if ph is not None else "ce"
         self.phase_sparse = ph.sparse if ph is not None else "window"
         self.phase_align = bool(ph.align_indexer) if ph is not None else False
@@ -341,7 +341,7 @@ class Trainer:
     def _attach_phase_modules(self, model: nn.Module) -> None:
         """Indexers + sparse flags. Phase B no-ops (no indexer modules)."""
         raw = unwrap(model)
-        if phase_needs_indexer(self.phase):
+        if phase_needs_indexer(self.phase) or self.phase_sparse in {"topk", "hca"}:
             ensure_indexers(raw, self.cfg)
         set_align_indexer(raw, self.phase_align)
         set_sparse_mode(raw, self.phase_sparse)
@@ -1083,10 +1083,13 @@ def run_c_chain(
     reuse_model: nn.Module | None = None,
     **kwargs,
 ) -> dict[str, TrainResult]:
-    from cat_yoko.phases import C_CHAIN
-
     return run_phase_chain(
-        cfg, device, C_CHAIN, steps=steps, reuse_model=reuse_model, **kwargs
+        cfg,
+        device,
+        c_chain(use_kda=bool(getattr(cfg, "use_kda", False))),
+        steps=steps,
+        reuse_model=reuse_model,
+        **kwargs,
     )
 
 

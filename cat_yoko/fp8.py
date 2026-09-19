@@ -30,6 +30,7 @@ POLICY = {
     "B2": Fp8Policy("B2", "fp8", "n/a"),
     "C": Fp8Policy("C", "bf16", "fp8"),
     "C-index": Fp8Policy("C-index", "bf16", "fp8"),
+    "C-kda": Fp8Policy("C-kda", "fp8", "n/a"),
     "C-topk": Fp8Policy("C-topk", "fp8", "n/a"),
     "C-hca": Fp8Policy("C-hca", "fp8", "n/a"),
     "C-win": Fp8Policy("C-win", "fp8", "n/a"),

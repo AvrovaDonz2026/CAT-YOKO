@@ -22,7 +22,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 精度 | student / 冻 decoder **bf16**；冻 encoder GEMM **NVFP4 FPROP** |
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
-| C–G | **训练循环已细化**（`python3 -m cat_yoko.c --chain` / `d --chain` / `e|f|g`）。定理 B 滑窗∪压缩；无 CSA CUDA kernel；未开 GPU 跑 |
+| C–G | **训练循环已细化**（`python3 -m cat_yoko.c --chain` / `d --chain` / `e|f|g`）。定理 B 滑窗∪压缩；无 CSA CUDA kernel；KDA 参考实现默认关（`use_kda`）；开了则 `--chain --use-kda` 先 `C-kda` 再 CSA/HCA；未开 GPU 跑 |
 
 ## 机器沿革
 
