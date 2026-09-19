@@ -74,6 +74,23 @@ class TinyTrainTests(unittest.TestCase):
         nll = train_loop(self.cfg, "B0", steps=2, device="cpu")
         self.assertTrue(nll > 0)
 
+    def test_grad_checkpoint_with_collapsed_doc_ids(self) -> None:
+        """DummyStream collapses doc_ids to None; 12b default grad_ckpt must not crash."""
+        from cat_yoko.freeze import apply_freeze
+        from cat_yoko.attention import collapse_doc_ids
+
+        model = CATYokoForCausalLM(self.cfg)
+        apply_freeze(model, "B1")
+        model.grad_checkpoint = True
+        model.train()
+        ids = torch.randint(0, self.cfg.vocab_size, (2, self.cfg.seq_len))
+        docs = torch.zeros(2, self.cfg.seq_len, dtype=torch.long)
+        self.assertIsNone(collapse_doc_ids(docs))
+        out = model(input_ids=ids, labels=ids, doc_ids=docs)
+        out["loss"].backward()
+        self.assertTrue(torch.isfinite(out["loss"]).item())
+        self.assertIsNotNone(model.decoder[0].self_attn.q_proj.weight.grad)
+
     def test_b0_encoder_has_no_grad(self) -> None:
         model = CATYokoForCausalLM(self.cfg)
         apply_freeze(model, "B0")

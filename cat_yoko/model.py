@@ -73,7 +73,7 @@ class CATYokoForCausalLM(nn.Module):
         if self.offload_blocks:
             return offload_checkpoint_block(blk, *tensors)
         ckpt = self.grad_checkpoint and self.training
-        if ckpt and any(t.requires_grad for t in tensors):
+        if ckpt and any(t is not None and t.requires_grad for t in tensors):
             y = torch.utils.checkpoint.checkpoint(blk, *tensors, use_reentrant=False)
         else:
             y = blk(*tensors)
