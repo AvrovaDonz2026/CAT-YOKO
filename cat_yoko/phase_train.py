@@ -82,6 +82,12 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--no-optim-cpu", action="store_true")
     p.add_argument("--log-every", type=int, default=None)
     p.add_argument(
+        "--micro-batch",
+        type=int,
+        default=1,
+        help="12b published default is 1. B200 can try 2 (~90GiB free at seq=4096).",
+    )
+    p.add_argument(
         "--grad-ckpt",
         action="store_true",
         dest="grad_ckpt",
@@ -123,7 +129,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         "--save-trainable",
         "--no-save-optim",
         "--micro-batch",
-        "1",
+        str(max(int(args.micro_batch), 1)),
         "--accum",
         "1",
     ]

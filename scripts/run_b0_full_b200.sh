@@ -39,6 +39,7 @@ LOCAL="${LOCAL:-$WORK/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
 SAVE_EVERY="${SAVE_EVERY:-20}"
 KEEP_LAST="${KEEP_LAST:-2}"
+MICRO="${MICRO_BATCH:-1}"
 
 has_overlay() {
   local d="$1"
@@ -111,11 +112,12 @@ else
   echo "fresh MiniCPM5 upcycle, no overlay"
 fi
 
-echo "B0 argv seq=$SEQ tokens=8e9 no-offload-encoder no-grad-ckpt"
+echo "B0 argv seq=$SEQ micro-batch=$MICRO tokens=8e9 no-offload-encoder no-grad-ckpt"
 cd "$ROOT"
 "$PY" -m cat_yoko.b0 \
   --save-dir "$SAVE" \
   --seq-len "$SEQ" \
+  --micro-batch "$MICRO" \
   --save-every "$SAVE_EVERY" \
   --keep-last "$KEEP_LAST" \
   --no-offload-encoder \

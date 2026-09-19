@@ -69,6 +69,25 @@ class PhaseSpecTests(unittest.TestCase):
             )
         self.assertIn("--no-grad-ckpt", argv)
         self.assertNotIn("--grad-ckpt", argv)
+        self.assertEqual(argv[argv.index("--micro-batch") + 1], "1")
+
+    def test_b0_micro_batch_override(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv(
+                "B0",
+                [
+                    "--save-dir",
+                    "/tmp/b0-full",
+                    "--no-offload-encoder",
+                    "--no-grad-ckpt",
+                    "--micro-batch",
+                    "2",
+                ],
+            )
+        self.assertEqual(argv[argv.index("--micro-batch") + 1], "2")
+        self.assertEqual(argv.count("--micro-batch"), 1)
 
     def test_b0_try_keeps_explicit_upcycle(self) -> None:
         argv = build_phase_argv(
