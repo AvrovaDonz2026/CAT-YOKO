@@ -67,6 +67,9 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--tokens", type=float, default=None)
     p.add_argument("--data", type=Path, default=None)
+    p.add_argument("--eval-data", type=Path, default=None)
+    p.add_argument("--eval-every", type=int, default=None)
+    p.add_argument("--eval-batches", type=int, default=None)
     p.add_argument("--save-dir", type=Path, default=Path("checkpoints") / phase.lower())
     p.add_argument("--save-every", type=int, default=None)
     p.add_argument("--log", type=Path, default=None)
@@ -204,6 +207,12 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.extend(["--log-every", str(args.log_every)])
     if args.data is not None:
         out.extend(["--data", str(args.data)])
+    if args.eval_data is not None:
+        out.extend(["--eval-data", str(args.eval_data)])
+    if args.eval_every is not None:
+        out.extend(["--eval-every", str(args.eval_every)])
+    if args.eval_batches is not None:
+        out.extend(["--eval-batches", str(args.eval_batches)])
     log = args.log if args.log is not None else args.save_dir / "metrics.jsonl"
     out.extend(["--log", str(log)])
     if args.resume is not None:
@@ -305,15 +314,20 @@ def _argv_implemented_kda(cli: bool, argv: list[str]) -> bool:
     return resolve_implemented_kda(cli=cli, extra=extra)
 
 
-def main_c(argv: list[str] | None = None) -> int:
-    chain, rest = _strip_bool(argv, "--chain")
-    use_kda, rest = _strip_bool(rest, "--use-kda")
+def _inherit_kda_argv(argv: list[str] | None) -> tuple[bool, list[str]]:
+    use_kda, rest = _strip_bool(argv, "--use-kda")
     try:
         use_kda = _argv_implemented_kda(use_kda, rest)
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
     if use_kda:
         rest = ["--use-kda", *rest]
+    return use_kda, rest
+
+
+def main_c(argv: list[str] | None = None) -> int:
+    chain, rest = _strip_bool(argv, "--chain")
+    use_kda, rest = _inherit_kda_argv(rest)
     if chain:
         if "--stage" in rest:
             raise SystemExit(
@@ -330,6 +344,7 @@ def main_c(argv: list[str] | None = None) -> int:
 
 def main_d(argv: list[str] | None = None) -> int:
     chain, rest = _strip_bool(argv, "--chain")
+    _, rest = _inherit_kda_argv(rest)
     if chain:
         if "--stage" in rest:
             raise SystemExit("--chain runs 8k→32k→128k; do not pass --stage")
@@ -341,11 +356,13 @@ def main_d(argv: list[str] | None = None) -> int:
 
 
 def main_e(argv: list[str] | None = None) -> int:
-    return run_phase("E", argv)
+    _, rest = _inherit_kda_argv(argv)
+    return run_phase("E", rest)
 
 
 def main_f(argv: list[str] | None = None) -> int:
-    return run_phase("F", argv)
+    _, rest = _inherit_kda_argv(argv)
+    return run_phase("F", rest)
 
 
 def main_g(argv: list[str] | None = None) -> int:

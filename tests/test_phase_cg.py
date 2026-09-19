@@ -59,9 +59,15 @@ class PhaseEnvelopeTests(unittest.TestCase):
         self.assertEqual(PHASES["C-win"].seq_len, 8192)
         self.assertEqual(PHASES["C-win"].sparse, "hca")
         self.assertEqual(PHASES["D-128k"].seq_len, 131072)
+        self.assertEqual(PHASES["D-8k"].sparse, "hca")
+        self.assertEqual(PHASES["D-32k"].sparse, "hca")
         self.assertEqual(PHASES["E"].lr_mode, "decay")
+        self.assertEqual(PHASES["E"].sparse, "hca")
         self.assertEqual(PHASES["F"].loss, "sft")
+        self.assertEqual(PHASES["F"].sparse, "hca")
+        self.assertEqual(PHASES["F"].seq_len, 8192)
         self.assertEqual(PHASES["G"].loss, "grpo")
+        self.assertEqual(PHASES["G"].sparse, "hca")
         self.assertEqual(PHASES["G-dpo"].loss, "dpo")
         self.assertEqual(PHASES["C-index"].tokens, 10e9)
         self.assertEqual(PHASES["C-kda"].sparse, "kda")
@@ -81,7 +87,9 @@ class PhaseEnvelopeTests(unittest.TestCase):
         self.assertEqual(resolve_phase_spec("C-index", use_kda=True).tokens, 5e9)
         self.assertEqual(resolve_phase_spec("C-index", use_kda=True).sparse, "kda")
         self.assertEqual(resolve_phase_spec("D-8k", use_kda=True).sparse, "hca")
-        self.assertEqual(resolve_phase_spec("D-8k", use_kda=False).sparse, "window")
+        self.assertEqual(resolve_phase_spec("D-8k", use_kda=False).sparse, "hca")
+        self.assertEqual(resolve_phase_spec("E", use_kda=False).sparse, "hca")
+        self.assertEqual(resolve_phase_spec("F", use_kda=False).sparse, "hca")
         self.assertLessEqual(PHASES["C-index"].tokens + PHASES["C-topk"].tokens, 50e9)
         self.assertIn("indexer", KEEP_HIGH_PREC)
         self.assertIn("kda_gate", KEEP_HIGH_PREC)
@@ -111,6 +119,15 @@ class PhaseEnvelopeTests(unittest.TestCase):
         self.assertEqual(a8[a8.index("--seq-len") + 1], "8192")
         self.assertEqual(a32[a32.index("--seq-len") + 1], "32768")
         self.assertEqual(a128[a128.index("--seq-len") + 1], "131072")
+
+    def test_e_f_published_seq_and_hca(self) -> None:
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            e = build_phase_argv("E", ["--save-dir", "/tmp/e"])
+            f = build_phase_argv("F", ["--save-dir", "/tmp/f"])
+        self.assertEqual(e[e.index("--seq-len") + 1], "8192")
+        self.assertEqual(f[f.index("--seq-len") + 1], "8192")
+        self.assertEqual(e[e.index("--tokens") + 1], str(20e9))
+        self.assertEqual(f[f.index("--tokens") + 1], str(1e9))
 
     def test_g_steps_not_tokens(self) -> None:
         with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
@@ -213,6 +230,9 @@ class IndexerFreezeTests(unittest.TestCase):
         self.assertTrue(phase_needs_indexer("C-index"))
         self.assertFalse(phase_needs_indexer("C-kda"))
         self.assertTrue(phase_needs_indexer("C-topk"))
+        self.assertTrue(phase_needs_indexer("D-8k"))
+        self.assertTrue(phase_needs_indexer("E"))
+        self.assertTrue(phase_needs_indexer("F"))
         self.assertEqual(model.encoder[0].kind, "sliding")
         self.assertEqual(model.encoder[1].kind, "csa")
 
@@ -290,6 +310,69 @@ class LaterPhaseTests(unittest.TestCase):
             self.assertTrue(math.isfinite(out.nll), msg=phase)
             if phase == "F":
                 self.assertEqual(tr.loss_mode, "sft")
+            self.assertEqual(tr.phase_sparse, "hca", msg=phase)
+
+    def test_d_rewindows_packed_bin(self) -> None:
+        import struct
+
+        cfg = CATYokoConfig.tiny()
+        toks = list(range(64))
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "t.bin"
+            path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
+            (Path(str(path) + ".meta.json")).write_text(json.dumps({"seq_len": 8}))
+            tr = Trainer(
+                cfg,
+                "D-8k",
+                "cpu",
+                steps=1,
+                accum=1,
+                micro_batch=1,
+                seq_len=16,
+                data=path,
+            )
+            self.assertEqual(tr.seq_len, 16)
+            nll = tr.run().nll
+            self.assertTrue(math.isfinite(nll))
+            self.assertEqual(tr.phase_sparse, "hca")
+            from cat_yoko.data import open_stream
+
+            stream = open_stream(path, cfg.vocab_size, 16)
+            batch = stream.batch(1, "cpu")
+            self.assertEqual(batch["input_ids"][0].tolist(), list(range(16)))
+
+    def test_d_dummy_plants_mid_needle(self) -> None:
+        from cat_yoko.data import DummyStream
+
+        stream = DummyStream(32, 8, seed=0, needle=True)
+        batch = stream.batch(1, "cpu")
+        self.assertEqual(int(batch["input_ids"][0, 4].item()), 31)
+
+    def test_d_chain_inherits_kda_from_resume(self) -> None:
+        with patch(
+            "cat_yoko.checkpoint.peek_checkpoint_extra",
+            return_value={"use_kda": True},
+        ):
+            with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+                self.assertEqual(
+                    main_d(["--chain", "--try", "--resume", "/tmp/c", "--save-dir", "/tmp/d"]),
+                    0,
+                )
+        names = [c.args[0] for c in run.call_args_list]
+        self.assertEqual(names, ["D-8k", "D-32k", "D-128k"])
+        self.assertIn("--use-kda", run.call_args_list[0].args[1])
+
+    def test_e_f_inherit_kda_flag(self) -> None:
+        with patch(
+            "cat_yoko.checkpoint.peek_checkpoint_extra",
+            return_value={"use_kda": True},
+        ):
+            with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+                main_e(["--try", "--resume", "/tmp/d"])
+            self.assertIn("--use-kda", run.call_args[0][1])
+            with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+                main_f(["--try", "--resume", "/tmp/e"])
+            self.assertIn("--use-kda", run.call_args[0][1])
 
     def test_wsd_decay_drops(self) -> None:
         cfg = CATYokoConfig.tiny()
@@ -324,6 +407,41 @@ class LaterPhaseTests(unittest.TestCase):
             batch = FileStream(path, 8).batch(1, "cpu")
             self.assertTrue((batch["labels"][0, :4] == -100).all())
             self.assertEqual(batch["labels"][0, 4:].tolist(), [5, 6, 7, 8])
+
+    def test_sft_messages_ids_jsonl(self) -> None:
+        from cat_yoko.data import FileStream
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "sft.jsonl"
+            path.write_text(
+                json.dumps(
+                    {
+                        "messages": [
+                            {"role": "user", "ids": [1, 2, 3]},
+                            {"role": "assistant", "ids": [4, 5]},
+                        ]
+                    }
+                )
+                + "\n"
+            )
+            batch = FileStream(path, 8).batch(1, "cpu")
+            self.assertEqual(batch["labels"][0, :3].tolist(), [-100, -100, -100])
+            self.assertEqual(batch["labels"][0, 3:5].tolist(), [4, 5])
+
+    def test_sft_file_stream_packs_two_chats(self) -> None:
+        from cat_yoko.data import FileStream
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "sft.jsonl"
+            path.write_text(
+                json.dumps({"prompt_ids": [1, 2], "response_ids": [3]})
+                + "\n"
+                + json.dumps({"prompt_ids": [4, 5], "response_ids": [6]})
+                + "\n"
+            )
+            batch = FileStream(path, 8).batch(1, "cpu")
+            self.assertEqual(batch["input_ids"][0, :6].tolist(), [1, 2, 3, 4, 5, 6])
+            self.assertEqual(batch["labels"][0, :6].tolist(), [-100, -100, 3, -100, -100, 6])
 
 
 class TheoremBMaskTests(unittest.TestCase):

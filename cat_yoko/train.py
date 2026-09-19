@@ -155,7 +155,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--log-every", type=int, default=1)
     p.add_argument("--eval-every", type=int, default=0)
     p.add_argument("--eval-batches", type=int, default=2, help="micro-batches per eval tick")
-    p.add_argument("--seq-len", type=int, default=None, help="override cfg seq_len; must match packed .bin")
+    p.add_argument(
+        "--seq-len",
+        type=int,
+        default=None,
+        help="override cfg seq_len; packed .bin is re-windowed when sidecar width differs",
+    )
     p.add_argument("--grad-ckpt", action="store_true", help="activation checkpoint encoder/decoder blocks")
     p.add_argument(
         "--no-grad-ckpt",

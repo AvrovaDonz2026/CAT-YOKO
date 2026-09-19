@@ -71,16 +71,51 @@ PHASE_F = (
     ),
 )
 
-PHASE_E = (
-    Source("ultrafineweb-en", "openbmb/Ultra-FineWeb", 0.40, config="en"),
+# Long-context D: same OpenBMB web + extra code for repo-length concat.
+# Not downloaded in CI. Sidecar 4K bins are re-windowed at train time.
+PHASE_D = (
+    Source("ultrafineweb-en", "openbmb/Ultra-FineWeb", 0.45, config="en"),
     Source("ultrafineweb-zh", "openbmb/Ultra-FineWeb", 0.20, config="zh"),
     Source(
         "ultradata-math",
         "openbmb/UltraData-Math",
-        0.40,
+        0.10,
         config="l2",
         text_fields=("content", "text"),
-        notes="WSD decay mix: more math; not downloaded in CI / this VM",
+    ),
+    Source(
+        "starcoder",
+        "bigcode/starcoderdata",
+        0.25,
+        text_fields=("content", "text"),
+        notes="long-context code concat; not OpenBMB; not downloaded in CI / this VM",
+    ),
+)
+
+PHASE_E = (
+    Source("ultrafineweb-en", "openbmb/Ultra-FineWeb", 0.30, config="en"),
+    Source("ultrafineweb-zh", "openbmb/Ultra-FineWeb", 0.15, config="zh"),
+    Source(
+        "ultradata-math",
+        "openbmb/UltraData-Math",
+        0.25,
+        config="l2",
+        text_fields=("content", "text"),
+        notes="WSD decay: math; not downloaded in CI / this VM",
+    ),
+    Source(
+        "starcoder",
+        "bigcode/starcoderdata",
+        0.15,
+        text_fields=("content", "text"),
+        notes="WSD decay code; not OpenBMB; not downloaded in CI / this VM",
+    ),
+    Source(
+        "ultrachat",
+        "openbmb/UltraChat",
+        0.15,
+        text_fields=("data", "content", "text"),
+        notes="instruction precursor packed as text; Phase F tokenizes as SFT",
     ),
 )
 
@@ -88,7 +123,7 @@ MIXES = {
     "phase-b": PHASE_B,
     "phase-b-code": PHASE_B_WITH_CODE,
     "phase-c": PHASE_B,
-    "phase-d": PHASE_B,
+    "phase-d": PHASE_D,
     "phase-e": PHASE_E,
     "phase-f": PHASE_F,
     "phase-g": PHASE_F,
@@ -99,6 +134,29 @@ def mix_named(name: str) -> tuple[Source, ...]:
     if name not in MIXES:
         raise KeyError(f"unknown mix {name}; choose from {sorted(MIXES)}")
     return MIXES[name]
+
+
+SFT_MIXES = frozenset({"phase-f", "phase-g"})
+
+
+def default_mix(phase: str) -> str:
+    """Prepare mix for a training phase. Does not download."""
+    p = str(phase)
+    if p.startswith("C"):
+        return "phase-c"
+    if p.startswith("D"):
+        return "phase-d"
+    if p == "E":
+        return "phase-e"
+    if p == "F":
+        return "phase-f"
+    if p.startswith("G"):
+        return "phase-g"
+    return "phase-b"
+
+
+def is_sft_mix(name: str) -> bool:
+    return str(name) in SFT_MIXES
 
 
 _LEGACY_MINICPM = ("minicpm2b", "minicpm3", "minicpm4")

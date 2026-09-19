@@ -8,12 +8,21 @@ import random
 import struct
 import sys
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, TypeVar
 
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import sidecar_path
-from cat_yoko.recipe import MINICPM5_TOKENIZER, MIXES, Source, mix_named
+from cat_yoko.recipe import (
+    MINICPM5_TOKENIZER,
+    MIXES,
+    Source,
+    is_sft_mix,
+    mix_named,
+)
+from cat_yoko.sft import encode_sft, iter_sft_pairs, pack_sft_pairs, sft_turns, turns_to_text
 from cat_yoko.tokenizer import HashTokenizer, Tokenizer, load_tokenizer
+
+T = TypeVar("T")
 
 
 def row_text(row: dict, fields: tuple[str, ...]) -> str | None:
@@ -21,21 +30,30 @@ def row_text(row: dict, fields: tuple[str, ...]) -> str | None:
         v = row.get(k)
         if isinstance(v, str) and v.strip():
             return v
+    turns = sft_turns(row)
+    if turns:
+        return turns_to_text(turns)
     return None
 
 
-def iter_local_jsonl(path: Path, fields: tuple[str, ...] = ("text", "content")) -> Iterator[str]:
+def iter_local_rows(path: Path) -> Iterator[dict]:
     with path.open() as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             obj = json.loads(line)
-            if "tokens" in obj or "input_ids" in obj:
-                continue
-            t = row_text(obj, fields)
-            if t:
-                yield t
+            if isinstance(obj, dict):
+                yield obj
+
+
+def iter_local_jsonl(path: Path, fields: tuple[str, ...] = ("text", "content")) -> Iterator[str]:
+    for obj in iter_local_rows(path):
+        if "tokens" in obj or "input_ids" in obj or "prompt_ids" in obj:
+            continue
+        t = row_text(obj, fields)
+        if t:
+            yield t
 
 
 def iter_hf_texts(src: Source) -> Iterator[str]:
@@ -52,9 +70,29 @@ def iter_hf_texts(src: Source) -> Iterator[str]:
     else:
         ds = load_dataset(src.repo, **kwargs)
     for row in ds:
-        t = row_text(dict(row), src.text_fields)
+        obj = dict(row)
+        t = row_text(obj, src.text_fields)
         if t:
             yield t
+
+
+def iter_hf_rows(src: Source) -> Iterator[dict]:
+    try:
+        from datasets import load_dataset
+    except ImportError as exc:
+        raise ImportError("pip install 'cat-yoko[data]' to stream HuggingFace datasets") from exc
+    kwargs: dict = {"split": src.split, "streaming": True}
+    if src.config:
+        try:
+            ds = load_dataset(src.repo, src.config, **kwargs)
+        except Exception:
+            ds = load_dataset(src.repo, **kwargs)
+    else:
+        ds = load_dataset(src.repo, **kwargs)
+    for row in ds:
+        obj = dict(row)
+        if isinstance(obj, dict):
+            yield obj
 
 
 def _pick(keys: list[str], weights: list[float], rng: random.Random) -> str:
@@ -69,10 +107,10 @@ def _pick(keys: list[str], weights: list[float], rng: random.Random) -> str:
 
 
 def mix_documents(
-    iters: dict[str, Iterator[str]],
+    iters: dict[str, Iterator[T]],
     weights: dict[str, float],
     rng: random.Random,
-) -> Iterator[tuple[str, str]]:
+) -> Iterator[tuple[str, T]]:
     keys = list(iters)
     w = [weights[k] for k in keys]
     while True:
@@ -112,6 +150,59 @@ def write_packed_bin(
     return written, nseq
 
 
+def write_sft_jsonl(
+    pairs: Iterator[tuple[list[int], list[int]]],
+    out: Path,
+    max_tokens: int,
+) -> tuple[int, int]:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
+    nseq = 0
+    with out.open("w") as f:
+        for ids, labels in pairs:
+            if not ids:
+                continue
+            f.write(json.dumps({"tokens": ids, "labels": labels}, separators=(",", ":")) + "\n")
+            written += len(ids)
+            nseq += 1
+            if written >= max_tokens:
+                return written, nseq
+    return written, nseq
+
+
+def _sft_pairs(
+    *,
+    mix: str,
+    tokenizer: Tokenizer,
+    seq_len: int,
+    local_jsonl: Path | None,
+    rng: random.Random,
+) -> Iterator[tuple[list[int], list[int]]]:
+    if mix == "local":
+        if local_jsonl is None:
+            raise ValueError("--local jsonl required for mix=local")
+        yield from iter_sft_pairs(iter_local_rows(local_jsonl), tokenizer, seq_len)
+        return
+    recipe = mix_named(mix)
+    iters = {s.key: iter_hf_rows(s) for s in recipe}
+    weights = {s.key: s.weight for s in recipe}
+    for _key, row in mix_documents(iters, weights, rng):
+        if not isinstance(row, dict):
+            continue
+        turns = sft_turns(row)
+        if not turns:
+            continue
+        packed = encode_sft(tokenizer, turns, seq_len)
+        if packed is not None:
+            yield packed
+
+
+def _sft_out_path(out: Path) -> Path:
+    if out.suffix.lower() in {".jsonl", ".json"}:
+        return out
+    return out.with_suffix(".jsonl")
+
+
 def prepare(
     *,
     mix: str,
@@ -121,33 +212,62 @@ def prepare(
     tokenizer: Tokenizer,
     local_jsonl: Path | None = None,
     seed: int = 0,
+    sft: bool = False,
 ) -> dict:
     rng = random.Random(seed)
+    sft_mode = bool(sft) or is_sft_mix(mix)
     if mix == "local":
         if local_jsonl is None:
             raise ValueError("--local jsonl required for mix=local")
-
-        def docs() -> Iterator[list[int]]:
-            for text in iter_local_jsonl(local_jsonl):
-                yield tokenizer.encode(text)
-
         sources = ["local"]
         weights_used = {"local": 1.0}
     else:
         recipe = mix_named(mix)
-        iters = {s.key: iter_hf_texts(s) for s in recipe}
+        sources = [s.repo for s in recipe]
         weights_used = {s.key: s.weight for s in recipe}
 
-        def docs() -> Iterator[list[int]]:
-            for _key, text in mix_documents(iters, weights_used, rng):
-                yield tokenizer.encode(text)
+    out = Path(out)
+    if sft_mode:
+        dest = _sft_out_path(out)
+        written, nseq = write_sft_jsonl(
+            pack_sft_pairs(
+                _sft_pairs(
+                    mix=mix,
+                    tokenizer=tokenizer,
+                    seq_len=seq_len,
+                    local_jsonl=local_jsonl,
+                    rng=rng,
+                ),
+                seq_len,
+            ),
+            dest,
+            int(max_tokens),
+        )
+        fmt = "sft_jsonl"
+        out = dest
+    else:
+        if mix == "local":
 
-        sources = [s.repo for s in recipe]
+            def docs() -> Iterator[list[int]]:
+                for text in iter_local_jsonl(local_jsonl):
+                    yield tokenizer.encode(text)
 
-    written, nseq = write_packed_bin(docs(), out, seq_len, int(max_tokens))
+        else:
+            recipe = mix_named(mix)
+            iters = {s.key: iter_hf_texts(s) for s in recipe}
+
+            def docs() -> Iterator[list[int]]:
+                for _key, text in mix_documents(iters, weights_used, rng):
+                    yield tokenizer.encode(text)
+
+        written, nseq = write_packed_bin(docs(), out, seq_len, int(max_tokens))
+        fmt = "packed_bin"
+        dest = out
+
     meta = {
-        "out": str(out),
+        "out": str(dest),
         "mix": mix,
+        "format": fmt,
         "sources": sources,
         "weights": weights_used,
         "seq_len": seq_len,
@@ -157,7 +277,7 @@ def prepare(
         "vocab_size": tokenizer.vocab_size,
         "tokenizer": getattr(tokenizer, "name", type(tokenizer).__name__),
     }
-    meta_path = sidecar_path(out)
+    meta_path = sidecar_path(dest)
     meta_path.write_text(json.dumps(meta, indent=2) + "\n")
     return meta
 
@@ -176,6 +296,11 @@ def main(argv: list[str] | None = None) -> int:
         help="HF id, or 'dummy' for tests",
     )
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument(
+        "--sft",
+        action="store_true",
+        help="write response-only jsonl (default for --mix phase-f / phase-g)",
+    )
     args = p.parse_args(argv)
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
     seq_len = args.seq_len or cfg.seq_len
@@ -188,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
         tokenizer=tok,
         local_jsonl=args.local,
         seed=args.seed,
+        sft=bool(args.sft),
     )
     print(json.dumps(meta, indent=2))
     if args.config == "12b" and not isinstance(tok, HashTokenizer) and tok.vocab_size not in {cfg.vocab_size, 130560}:

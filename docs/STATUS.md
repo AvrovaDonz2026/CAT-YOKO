@@ -22,7 +22,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 精度 | student / 冻 decoder **bf16**；冻 encoder GEMM **NVFP4 FPROP** |
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
-| C–G | **训练循环已细化**。流程 **先实现、后点亮**：B `--use-kda` 建 3:1 图（仍滑窗）；C `--chain` 从 overlay 继承，先 `C-kda` 再 CSA/HCA。禁止 C 才补 KDA 模块。默认 `use_kda=False`。无 CSA CUDA kernel；未开 GPU 跑 |
+| C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel；未开 GPU 跑 |
 
 ## 机器沿革
 
