@@ -29,11 +29,24 @@ POLICY = {
     "B1": Fp8Policy("B1", "fp8", "fp8"),
     "B2": Fp8Policy("B2", "fp8", "n/a"),
     "C": Fp8Policy("C", "bf16", "fp8"),
+    "C-index": Fp8Policy("C-index", "bf16", "fp8"),
+    "C-topk": Fp8Policy("C-topk", "fp8", "n/a"),
+    "C-hca": Fp8Policy("C-hca", "fp8", "n/a"),
+    "C-win": Fp8Policy("C-win", "fp8", "n/a"),
+    "D-8k": Fp8Policy("D-8k", "fp8", "n/a"),
+    "D-32k": Fp8Policy("D-32k", "fp8", "n/a"),
+    "D-128k": Fp8Policy("D-128k", "fp8", "n/a"),
+    "E": Fp8Policy("E", "fp8", "n/a"),
+    "F": Fp8Policy("F", "fp8", "n/a"),
+    "G": Fp8Policy("G", "fp8", "n/a"),
+    "G-dpo": Fp8Policy("G-dpo", "fp8", "n/a"),
 }
 
 
 def policy_for(phase: str) -> Fp8Policy:
-    return POLICY[phase]
+    from cat_yoko.nvfp4 import policy_key
+
+    return POLICY[policy_key(phase) if phase not in POLICY else phase]
 
 
 def should_fp8_autocast(phase: str, *, cuda: bool, enabled: bool) -> bool:

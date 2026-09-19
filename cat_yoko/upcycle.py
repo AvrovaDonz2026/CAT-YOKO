@@ -32,6 +32,11 @@ def init_new_modules(model: CATYokoForCausalLM, std: float = NEW_MODULE_INIT_STD
         return
     _small_linear(model.cache_k, std)
     _small_linear(model.cache_v, std)
+    for n, mod in model.named_modules():
+        if n.endswith("indexer") or n.endswith("cross_indexer"):
+            for lin in mod.modules():
+                if isinstance(lin, nn.Linear):
+                    _small_linear(lin, std)
     for blk in model.decoder:
         cross = getattr(blk, "cross_attn", None)
         if cross is None:

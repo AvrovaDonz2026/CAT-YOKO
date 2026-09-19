@@ -42,6 +42,11 @@ class CATYokoConfig:
     qk_norm: bool = True
     rope_theta: float = 5_000_000.0
     seq_len: int = 4096
+    indexer_dim: int = 64
+    grpo_group: int = 4
+    grpo_max_new: int = 32
+    dpo_beta: float = 0.1
+    wsd_decay_min_ratio: float = 0.01
     lr: float = 1e-4
     lr_b2: float = 3e-5
     adam_beta1: float = 0.9
@@ -123,6 +128,9 @@ class CATYokoConfig:
             hash_moe_decoder_layers=1,
             dim_model_base=64,
             seq_len=16,
+            indexer_dim=16,
+            grpo_group=2,
+            grpo_max_new=4,
             lr=3e-4,
             use_nvfp4=False,
             use_fp8=False,

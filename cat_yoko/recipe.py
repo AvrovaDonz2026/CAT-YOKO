@@ -61,7 +61,24 @@ PHASE_B_WITH_CODE = (
     ),
 )
 
-MIXES = {"phase-b": PHASE_B, "phase-b-code": PHASE_B_WITH_CODE}
+PHASE_F = (
+    Source(
+        "ultrachat",
+        "openbmb/UltraChat",
+        1.0,
+        text_fields=("data", "content", "text"),
+        notes="Phase F SFT; not downloaded in CI / this VM",
+    ),
+)
+
+MIXES = {
+    "phase-b": PHASE_B,
+    "phase-b-code": PHASE_B_WITH_CODE,
+    "phase-c": PHASE_B,
+    "phase-d": PHASE_B,
+    "phase-e": PHASE_B,
+    "phase-f": PHASE_F,
+}
 
 
 def mix_named(name: str) -> tuple[Source, ...]:

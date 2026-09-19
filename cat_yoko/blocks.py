@@ -25,6 +25,10 @@ class EncoderBlock(nn.Module):
         else:
             self.mlp = MoE(cfg, nr, tk, hash_route=False)
         self.res = cfg.residual_scale
+        self.index_topk = cfg.index_topk
+        self.compress_m_hca = cfg.compress_m_hca
+        self.sparse_mode = "window"
+        self.align_indexer = False
 
     def forward(
         self,
@@ -32,7 +36,33 @@ class EncoderBlock(nn.Module):
         token_ids: torch.Tensor | None = None,
         doc_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        x = x + self.res * self.attn(self.ln1(x), doc_ids)
+        h = self.ln1(x)
+        mode = getattr(self, "sparse_mode", "window")
+        indexer = getattr(self, "indexer", None)
+        extra_bias = None
+        self.last_indexer_kl = None
+        if mode == "topk" and indexer is not None:
+            from cat_yoko.indexer import indexer_topk_bias
+
+            extra_bias = indexer_topk_bias(
+                indexer, h, self.attn.n_win, doc_ids, self.index_topk
+            )
+        if mode == "hca":
+            from cat_yoko.sparse import hca_attend
+
+            attn_out = hca_attend(self.attn, h, doc_ids, self.compress_m_hca)
+        elif bool(getattr(self, "align_indexer", False)) and indexer is not None:
+            attn_out, probs = self.attn(
+                h, doc_ids, extra_bias=extra_bias, return_probs=True
+            )
+            from cat_yoko.indexer import indexer_align_kl
+
+            self.last_indexer_kl = indexer_align_kl(
+                indexer, h.detach(), probs.detach(), self.attn.n_win, doc_ids
+            )
+        else:
+            attn_out = self.attn(h, doc_ids, extra_bias=extra_bias)
+        x = x + self.res * attn_out
         kwargs = {"token_ids": token_ids} if isinstance(self.mlp, MoE) else {}
         x = x + self.res * self.mlp(self.ln2(x), **kwargs)
         return x
@@ -54,6 +84,8 @@ class DecoderBlock(nn.Module):
             self.mlp = MoE(cfg, nr, tk, hash_route=hash_route)
         self.res = cfg.residual_scale
         self.register_buffer("gate", torch.zeros(()))
+        self.sparse_mode = "window"
+        self.align_indexer = False
 
     def forward(
         self,
@@ -64,7 +96,19 @@ class DecoderBlock(nn.Module):
         doc_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
         x = x + self.res * self.self_attn(self.ln1(x), doc_ids)
-        x = x + self.res * (self.gate * self.cross_attn(self.ln_cross(x), k, v, doc_ids))
+        h = self.ln_cross(x)
+        indexer = getattr(self, "cross_indexer", None)
+        self.last_indexer_kl = None
+        if bool(getattr(self, "align_indexer", False)) and indexer is not None:
+            c, probs = self.cross_attn(h, k, v, doc_ids, return_probs=True)
+            from cat_yoko.indexer import indexer_align_kl
+
+            self.last_indexer_kl = indexer_align_kl(
+                indexer, h.detach(), probs.detach(), h.size(1), doc_ids
+            )
+        else:
+            c = self.cross_attn(h, k, v, doc_ids)
+        x = x + self.res * (self.gate * c)
         kwargs = {"token_ids": token_ids} if isinstance(self.mlp, MoE) else {}
         x = x + self.res * self.mlp(self.ln2(x), **kwargs)
         return x

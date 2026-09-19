@@ -22,6 +22,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 精度 | student / 冻 decoder **bf16**；冻 encoder GEMM **NVFP4 FPROP** |
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
+| C–G | **训练入口已写**（`python3 -m cat_yoko.c|d|e|f|g --try`）。未开 GPU 跑；无 CSA CUDA kernel |
 
 ## 机器沿革
 
@@ -51,7 +52,7 @@ bash scripts/run_b0_full_b200.sh          # SM100；默认 micro-batch=2
 - resume Hub `checkpoints/b0/` 那份 32 步 `--try`
 - `--save-full` / 23GiB `latest.pt`（尤其 32GiB 容器盘）
 - 为 B1/B2 `--try` 在 B0 还占 GPU 时抢卡
-- 实现 Megatron EP/TP 循环、CSA、Phase C indexer
+- 实现 Megatron EP/TP 循环、CSA CUDA kernel
 - 把 50B Ultra-FineWeb 拉进仓库或小盘
 - 再连已释放的 AutoDL `westc` / `weste`
 - 把 SSH 密码、deploy key 写进 git

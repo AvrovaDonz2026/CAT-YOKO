@@ -1,0 +1,14 @@
+"""Phase C: indexer KL → top-k mask → HCA pool → 8K window.
+
+``python3 -m cat_yoko.c --try --stage indexer``
+``--stage topk|hca|win``. No CSA CUDA kernel; SDPA + PyTorch masks only.
+"""
+
+from __future__ import annotations
+
+import sys
+
+from cat_yoko.phase_train import main_c
+
+if __name__ == "__main__":
+    raise SystemExit(main_c(sys.argv[1:]))

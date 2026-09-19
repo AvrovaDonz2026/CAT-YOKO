@@ -133,3 +133,42 @@ def safe_ppl(nll: float) -> float | None:
     if not math.isfinite(nll) or nll < 0 or nll > 20:
         return None
     return math.exp(nll)
+
+
+def response_only_labels(ids: torch.Tensor, prompt_len: int) -> torch.Tensor:
+    """Ignore CE on the prompt prefix. ``prompt_len`` is along the last dim."""
+    labels = ids.clone()
+    cut = max(int(prompt_len), 0)
+    if cut <= 0:
+        return labels
+    labels[..., :cut] = -100
+    return labels
+
+
+def token_logprobs(logits: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
+    """Per-token log p(id_t | ctx_<t) from ``logits[:, :-1]`` vs ``ids[:, 1:]``."""
+    logp = F.log_softmax(logits[:, :-1].float(), dim=-1)
+    tgt = ids[:, 1:].unsqueeze(-1)
+    return logp.gather(-1, tgt).squeeze(-1)
+
+
+def masked_seq_logprob(token_lp: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """Sum logprobs where ``mask`` is True. ``token_lp`` is ``[B, S-1]``."""
+    m = mask.to(dtype=token_lp.dtype)
+    return (token_lp * m).sum(dim=-1)
+
+
+def grpo_loss(seq_logprob: torch.Tensor, advantages: torch.Tensor) -> torch.Tensor:
+    """Token-sum GRPO: ``-E[A * log π]``. ``advantages`` are stop-grad."""
+    return -(seq_logprob * advantages.detach()).mean()
+
+
+def dpo_loss(
+    pi_chosen: torch.Tensor,
+    pi_rejected: torch.Tensor,
+    ref_chosen: torch.Tensor,
+    ref_rejected: torch.Tensor,
+    beta: float = 0.1,
+) -> torch.Tensor:
+    logits = beta * ((pi_chosen - ref_chosen) - (pi_rejected - ref_rejected))
+    return -F.logsigmoid(logits).mean()

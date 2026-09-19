@@ -1,13 +1,18 @@
-"""Published C1 B0 / B1 / B2 CLIs.
+"""Published C1 B0 / B1 / B2 plus Phase C–G CLIs.
 
 Usage::
 
     python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
     python3 -m cat_yoko.b1 --resume checkpoints/b0 --save-dir checkpoints/b1
     python3 -m cat_yoko.b2 --resume checkpoints/b1 --save-dir checkpoints/b2
+    python3 -m cat_yoko.c --try --stage indexer --resume checkpoints/b2
+    python3 -m cat_yoko.d --try --stage 8k
+    python3 -m cat_yoko.e --try
+    python3 -m cat_yoko.f --try
+    python3 -m cat_yoko.g --try --algo grpo
 
 ``--try`` is the 32GB path: seq=64, 32 optimizer steps, trainable.pt overlay (Hub, not GitHub).
-Without ``--try`` the envelope is the published 8 / 27 / 15B tokens (H100-scale).
+Without ``--try`` the envelope is the published token / step budget.
 """
 
 from __future__ import annotations
@@ -20,9 +25,11 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from cat_yoko.phases import (
+    C_STAGES,
+    D_STAGES,
+    G_ALGOS,
     PHASES,
     PUBLISHED_SAVE_EVERY,
-    PUBLISHED_SEQ,
     TIGHT_GPU_SEQ,
     TRY_STEPS,
     spec as phase_spec,
@@ -161,7 +168,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     if seq is None and (args.try_run or tight):
         seq = TIGHT_GPU_SEQ
     elif seq is None and not args.try_run:
-        seq = PUBLISHED_SEQ
+        seq = ph.seq_len
     if seq is not None:
         out.extend(["--seq-len", str(seq)])
     if args.try_run:
@@ -174,8 +181,10 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
             out.extend(["--steps", str(args.steps)])
         elif args.tokens is not None:
             out.extend(["--tokens", str(args.tokens)])
-        else:
+        elif ph.tokens and ph.tokens > 0:
             out.extend(["--tokens", str(ph.tokens)])
+        else:
+            out.extend(["--steps", str(int(ph.default_steps or TRY_STEPS))])
         every = PUBLISHED_SAVE_EVERY if args.save_every is None else args.save_every
         out.extend(["--save-every", str(every)])
     if args.log_every is not None:
@@ -201,11 +210,11 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.extend(["--upcycle", str(args.upcycle)])
     elif args.upcycle_hf is not None:
         out.extend(["--upcycle-hf", str(args.upcycle_hf)])
-    elif args.try_run and (args.resume is None or phase in {"B1", "B2"}):
-        # --try without --upcycle* uses dummy MiniCPM5 weights. B1/B2 overlay
+    elif args.try_run and (args.resume is None or phase != "B0"):
+        # --try without --upcycle* uses dummy MiniCPM5 weights. Overlay
         # resume is MiniCPM5 (or dummy) upcycle + load_trainable_state: the
-        # previous overlay has no encoder/embed, so skipping upcycle leaves
-        # them random. AutoDL scripts pass --upcycle-hf when MiniCPM5 is local.
+        # previous overlay may have no encoder/embed, so skipping upcycle
+        # leaves them random. AutoDL scripts pass --upcycle-hf when MiniCPM5 is local.
         out.append("--dummy-upcycle")
     out.extend(rest)
     return out
@@ -229,3 +238,44 @@ def main_b1(argv: list[str] | None = None) -> int:
 
 def main_b2(argv: list[str] | None = None) -> int:
     return run_phase("B2", argv)
+
+
+def _peel_flag(argv: list[str] | None, flag: str, default: str) -> tuple[str, list[str]]:
+    rest = list(argv or [])
+    if flag in rest:
+        i = rest.index(flag)
+        if i + 1 >= len(rest):
+            raise SystemExit(f"{flag} needs a value")
+        val = rest[i + 1]
+        del rest[i : i + 2]
+        return val, rest
+    return default, rest
+
+
+def main_c(argv: list[str] | None = None) -> int:
+    stage, rest = _peel_flag(argv, "--stage", "indexer")
+    if stage not in C_STAGES:
+        raise SystemExit(f"unknown C --stage {stage}; choose {sorted(C_STAGES)}")
+    return run_phase(C_STAGES[stage], rest)
+
+
+def main_d(argv: list[str] | None = None) -> int:
+    stage, rest = _peel_flag(argv, "--stage", "8k")
+    if stage not in D_STAGES:
+        raise SystemExit(f"unknown D --stage {stage}; choose {sorted(D_STAGES)}")
+    return run_phase(D_STAGES[stage], rest)
+
+
+def main_e(argv: list[str] | None = None) -> int:
+    return run_phase("E", argv)
+
+
+def main_f(argv: list[str] | None = None) -> int:
+    return run_phase("F", argv)
+
+
+def main_g(argv: list[str] | None = None) -> int:
+    algo, rest = _peel_flag(argv, "--algo", "grpo")
+    if algo not in G_ALGOS:
+        raise SystemExit(f"unknown G --algo {algo}; choose {sorted(G_ALGOS)}")
+    return run_phase(G_ALGOS[algo], rest)

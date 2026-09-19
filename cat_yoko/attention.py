@@ -125,6 +125,24 @@ def collapse_doc_ids(doc_ids: torch.Tensor | None) -> torch.Tensor | None:
     return doc_ids
 
 
+def _mean_head_probs(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    window: int,
+    doc_ids: torch.Tensor | None,
+) -> torch.Tensor:
+    """Mean-over-heads softmax weights ``[B, S, S]``. Used only for indexer KL."""
+    h = q.size(-3)
+    n_kv = k.size(-3)
+    kk = k if n_kv == h else _repeat_kv(k, h // n_kv)
+    scale = q.size(-1) ** -0.5
+    logits = torch.matmul(q.float(), kk.float().transpose(-1, -2)) * scale
+    s = q.size(-2)
+    bias = _window_causal_bias(s, kk.size(-2), window, q.device, torch.float32, doc_ids)
+    logits = logits + bias
+    return torch.softmax(logits, dim=-1).mean(dim=1)
+
+
 def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) -> bool:
     """Dense causal SDPA is enough when the window covers the row and docs do not mix.
 
@@ -183,7 +201,14 @@ class WindowAttention(nn.Module):
         self.k_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.rope = RotaryEmbedding(self.head_dim, cfg.rope_theta)
 
-    def forward(self, x: torch.Tensor, doc_ids: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        doc_ids: torch.Tensor | None = None,
+        *,
+        extra_bias: torch.Tensor | None = None,
+        return_probs: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q, k, v = _fused_qkv(self.q_proj, self.k_proj, self.v_proj, x)
@@ -195,15 +220,21 @@ class WindowAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        if _needs_explicit_mask(s, self.n_win, doc_ids):
+        need_mask = extra_bias is not None or _needs_explicit_mask(s, self.n_win, doc_ids)
+        if need_mask:
             k = _repeat_kv(k, h // n_kv)
             v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
+            if extra_bias is not None:
+                bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
             out = _sdpa(q, k, v, bias)
         else:
             # GQA: 16 Q / 2 KV. Do not repeat KV; SDPA enable_gqa on CUDA.
             out = _sdpa(q, k, v, causal=True)
-        return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        if return_probs:
+            return y, _mean_head_probs(q, k, self.n_win, doc_ids)
+        return y
 
 
 class CrossAttention(nn.Module):
@@ -227,7 +258,10 @@ class CrossAttention(nn.Module):
         k: torch.Tensor,
         v: torch.Tensor,
         doc_ids: torch.Tensor | None = None,
-    ) -> torch.Tensor:
+        *,
+        extra_bias: torch.Tensor | None = None,
+        return_probs: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
@@ -238,11 +272,17 @@ class CrossAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        if _needs_explicit_mask(s, s, doc_ids):
+        need_mask = extra_bias is not None or _needs_explicit_mask(s, s, doc_ids)
+        if need_mask:
             k = _repeat_kv(k, h // n_kv)
             v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
+            if extra_bias is not None:
+                bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
             out = _sdpa(q, k, v, bias)
         else:
             out = _sdpa(q, k, v, causal=True)
-        return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        if return_probs:
+            return y, _mean_head_probs(q, k, s, doc_ids)
+        return y

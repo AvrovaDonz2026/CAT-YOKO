@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from cat_yoko.nvfp4 import POLICY
+from cat_yoko.nvfp4 import POLICY, policy_key
 
 _BLOCK = 16
 # E2M1 magnitudes (sign applied separately). Max abs is 6.
@@ -567,17 +567,21 @@ def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
     """
     if isinstance(lin, Nvfp4Linear):
         return False
+    parts = name.split(".")
+    if "indexer" in parts or "cross_indexer" in parts:
+        return False
     leaf = name.rsplit(".", 1)[-1]
     if leaf == "router":
         return False
-    pol = POLICY.get(phase)
+    key = policy_key(phase)
+    pol = POLICY.get(key)
     if pol is None:
         return False
-    if phase in {"L0", "C"}:
+    if key in {"L0", "C"}:
         return False
-    if phase == "B0":
-        # Published: frozen encoder forward NVFP4. Student cache/cross, frozen
-        # decoder self-attn/MoE, and frozen lm_head stay bf16 until B1.
+    if key in {"B0", "C-index"}:
+        # Published: frozen encoder forward NVFP4. C-index student is the
+        # bf16 indexer; backbone GEMMs may still be NVFP4 FPROP.
         if not name.startswith("encoder."):
             return False
         return not any(p.requires_grad for p in lin.parameters())
@@ -630,6 +634,6 @@ def nvfp4_module_names(model: nn.Module) -> list[str]:
 def apply_nvfp4(model: nn.Module, phase: str, *, enabled: bool) -> int:
     if not enabled:
         return 0
-    if phase not in POLICY:
+    if policy_key(phase) not in POLICY:
         return 0
     return wrap_nvfp4_linears(model, phase)

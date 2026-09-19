@@ -329,7 +329,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
    - 每栈**默认全 MoE**（C1：token 0 两栈都是 MoE）。DeepSeek 式「首层 dense」**关**，不进发布配方；需要时用 `--first-dense` 敏感性。
    - **无 μP**：不要按 16/26 发明残差乘子，也不要把 MiniCPM-2B 的 `scale_depth/√40` 套过来。
    - **Hash-MoE bootstrap**：Decoder 最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。Encoder 在 B0/B1 已冻，Encoder 上的哈希路由多余，放到 B2 解冻时再用。
-2. **注意力改造**：继承 GQA 的 `q/k/v/o`（K/V 形状 `(256, 2048)`）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。**本仓库不实现 CSA / Phase C 训练循环。**
+2. **注意力改造**：继承 GQA 的 `q/k/v/o`（K/V 形状 `(256, 2048)`）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。**本仓库实现 Phase C indexer 层内 KL 与 C/D/E/F/G 训练入口；不实现 CSA CUDA kernel。**
 3. **不要引入 MiniCPM-2B μP 缩放常量**（emb 乘子、`scale_depth`、logits 缩放）。MiniCPM5 残差恒等。
 4. **可选 mHC**：先用普通残差跑通 Phase B/C，稳定后再切 mHC（把残差映射约束到 Birkhoff 多胞形/双随机矩阵，谱范数 ≤1）。
 

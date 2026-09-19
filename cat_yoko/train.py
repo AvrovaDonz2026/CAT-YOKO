@@ -13,6 +13,7 @@ from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos
 from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.parallel import ParallelPlan, validate_parallel
+from cat_yoko.phases import PHASES
 from cat_yoko.recipe import MINICPM5_HF, assert_minicpm5_id
 from cat_yoko.teacher import DummyTeacher, load_teacher
 from cat_yoko.trainer import Trainer, build_model, print_meta, run_c1_chain, train_loop
@@ -55,6 +56,9 @@ def twelve_b_cli_errors(
 def _tokens_offset(phase: str, explicit: float | None) -> float:
     if explicit is not None:
         return explicit
+    ph = PHASES.get(phase)
+    if ph is not None:
+        return float(ph.tokens_offset)
     if phase == "B0":
         return 0.0
     if phase == "B1":
@@ -78,7 +82,12 @@ def resolve_12b_accum(
     accum>1, which B2 per-layer Adam cannot do.
     """
     offload_will = offload_blocks is True or (
-        offload_blocks is None and (phase == "B2" or c1)
+        offload_blocks is None
+        and (
+            c1
+            or phase == "B2"
+            or bool(PHASES.get(phase) and PHASES[phase].offload_blocks)
+        )
     )
     if offload_will:
         if accum > 1:
@@ -95,7 +104,7 @@ def resolve_12b_accum(
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="CAT-YOKO-12B C1 trainer")
     p.add_argument("--config", choices=["12b", "tiny"], default="tiny")
-    p.add_argument("--phase", choices=["B0", "B1", "B2"], default="B0")
+    p.add_argument("--phase", choices=sorted(PHASES), default="B0")
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")

@@ -92,7 +92,12 @@ class CATYokoForCausalLM(nn.Module):
         aux = x.new_zeros(())
         # B0/B1: cache is detached, so encoder FPROP does not need an autograd
         # graph (TE otherwise saves activations / looks up NVFP4 WGRAD).
-        enc_ctx = torch.no_grad() if self.detach_cache else nullcontext()
+        # C-index keeps LightningIndexer on encoder CSA layers — those params
+        # require grad, so the encoder loop cannot sit under no_grad.
+        enc_needs_grad = (not self.detach_cache) or any(
+            p.requires_grad for p in self.encoder.parameters()
+        )
+        enc_ctx = torch.no_grad() if not enc_needs_grad else nullcontext()
         with enc_ctx:
             for blk in self.encoder:
                 x, a = self._run_block(blk, x, input_ids, doc_ids)
@@ -109,10 +114,13 @@ class CATYokoForCausalLM(nn.Module):
         for blk in self.decoder:
             y, a = self._run_block(blk, y, k, v, input_ids, doc_ids)
             aux = aux + a
+        idx_kl = self._indexer_kl()
         logits = None
         if labels is None or self.return_logits:
             logits = self.lm_head(self.norm(y)) / self.logit_scale
         out: dict[str, torch.Tensor] = {}
+        if idx_kl is not None:
+            out["indexer_kl"] = idx_kl
         if logits is not None:
             out["logits"] = logits
         if labels is not None:
@@ -138,7 +146,23 @@ class CATYokoForCausalLM(nn.Module):
             out["loss"] = nll + aux
             out["nll"] = nll
             out["n_valid"] = n_valid
+        elif idx_kl is not None:
+            out["loss"] = idx_kl
+            out["nll"] = idx_kl
+            out["n_valid"] = idx_kl.new_ones(())
+            out["aux"] = aux
         return out
+
+    def _indexer_kl(self) -> torch.Tensor | None:
+        kl_terms: list[torch.Tensor] = []
+        for blk in list(self.encoder) + list(self.decoder):
+            kl = getattr(blk, "last_indexer_kl", None)
+            if kl is None:
+                continue
+            kl_terms.append(kl.reshape(()))
+        if not kl_terms:
+            return None
+        return torch.stack(kl_terms).mean()
 
     def step_router_bias(self) -> None:
         for blk in list(self.encoder) + list(self.decoder):

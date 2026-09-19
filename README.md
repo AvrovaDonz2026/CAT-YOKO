@@ -39,7 +39,7 @@ bash scripts/run_b0_full_b200.sh
 | FFN / MoE | SwiGLU 6144；1 shared + 20 routed；top-\(k\) 7/10（enc/dec） |
 | Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
 
-发布入口是 **B0 / B1 / B2**，不是裸 `--phase`。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。
+发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G 骨架**（`python3 -m cat_yoko.c|d|e|f|g`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 Phase B 是滑窗 GQA；Phase C indexer 是层内 KL，**不是 CSA kernel**。
 
 ## 课程 C1
 
@@ -82,7 +82,7 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
 python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint \
   tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 \
-  tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full
+  tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full tests.test_phase_cg
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
 ```

@@ -48,6 +48,7 @@ from cat_yoko.nvfp4_linear import (
 )
 from cat_yoko.nvfp4_hw import compute_family, prefer_te_linear
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
+from cat_yoko.indexer import ensure_indexers, phase_needs_indexer, set_align_indexer, set_sparse_mode
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.moe import grouped_mm_available, moe_utilization
@@ -58,6 +59,7 @@ from cat_yoko.offload import (
     set_after_block_backward,
 )
 from cat_yoko.optim import CPUOffloadAdamW, build_optimizer, plan_cpu_adam, trim_host_allocator, unwrap, wsd_lr
+from cat_yoko.phases import PHASES
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
@@ -278,6 +280,10 @@ class Trainer:
             else max(accum, 1)
         )
         self.nvfp4_n = 0
+        ph = PHASES.get(phase)
+        self.loss_mode = ph.loss if ph is not None else "ce"
+        self.phase_sparse = ph.sparse if ph is not None else "window"
+        self.phase_align = bool(ph.align_indexer) if ph is not None else False
 
     def _apply_nvfp4(self, model: nn.Module) -> int:
         """After freeze, before DDP. QKV/O Linears only; SDPA stays fp32."""
@@ -325,6 +331,14 @@ class Trainer:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             with self.log_path.open("a") as f:
                 f.write(json.dumps(_json_safe(row), default=str, allow_nan=False) + "\n")
+
+    def _attach_phase_modules(self, model: nn.Module) -> None:
+        """Indexers + sparse flags. Phase B no-ops (no indexer modules)."""
+        raw = unwrap(model)
+        if phase_needs_indexer(self.phase):
+            ensure_indexers(raw, self.cfg)
+        set_align_indexer(raw, self.phase_align)
+        set_sparse_mode(raw, self.phase_sparse)
 
     def _maybe_save(self, model: nn.Module, opt, extra: dict, tag: str) -> None:
         if self.save_dir is None or not is_rank0(self.rank):
@@ -388,6 +402,7 @@ class Trainer:
             eos_id=resolve_eos(path, self.eos_id),
             rank=self.rank,
             world=self.world,
+            response_only=self.loss_mode == "sft",
         )
 
     @torch.no_grad()
@@ -496,6 +511,7 @@ class Trainer:
             tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
         apply_freeze(unwrap(model), self.phase)
+        self._attach_phase_modules(model)
         self._apply_nvfp4(model)
         self._resolve_offload()
         self._apply_runtime_flags(model)
@@ -527,13 +543,79 @@ class Trainer:
             "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
         }
 
+    def _forward_loss(self, model: nn.Module, batch: dict) -> dict[str, torch.Tensor]:
+        """CE / indexer KL / SFT / GRPO / DPO. Always returns loss, nll, n_valid, aux."""
+        mode = self.loss_mode
+        if mode == "indexer_kl":
+            out = model(
+                input_ids=batch["input_ids"],
+                doc_ids=batch.get("doc_ids"),
+                labels=None,
+            )
+            if "indexer_kl" not in out:
+                raise RuntimeError(
+                    f"{self.phase} indexer_kl missing; ensure_indexers + align_indexer"
+                )
+            kl = out["indexer_kl"]
+            out["loss"] = kl
+            out["nll"] = kl
+            out["n_valid"] = kl.new_ones(())
+            out.setdefault("aux", kl.new_zeros(()))
+            return out
+        if mode == "grpo":
+            from cat_yoko.rl import grpo_step_loss, sample_completions
+
+            prompt_len = max(self.seq_len // 2, 1)
+            max_new = min(int(self.cfg.grpo_max_new), max(self.seq_len - prompt_len, 1))
+            group = max(int(self.cfg.grpo_group), 1)
+            prompt = batch["input_ids"][:, :prompt_len]
+            prompts = prompt.repeat_interleave(group, dim=0)
+            with torch.no_grad():
+                full = sample_completions(unwrap(model), prompts, max_new)
+            completions = full[:, prompt_len:]
+            loss, reward = grpo_step_loss(
+                unwrap(model),
+                prompts,
+                completions,
+                group=group,
+                prompt_len=prompt_len,
+            )
+            z = loss.reshape(())
+            return {
+                "loss": z,
+                "nll": z,
+                "n_valid": z.new_ones(()) * prompts.size(0),
+                "aux": z.new_zeros(()),
+                "rl_reward": reward.reshape(()),
+            }
+        if mode == "dpo":
+            from cat_yoko.rl import dpo_step_loss
+
+            ids = batch["input_ids"]
+            plen = max(self.seq_len // 2, 1)
+            loss = dpo_step_loss(
+                unwrap(model),
+                ids,
+                ids.roll(1, dims=0),
+                prompt_len=plen,
+                beta=float(self.cfg.dpo_beta),
+            )
+            z = loss.reshape(())
+            return {
+                "loss": z,
+                "nll": z,
+                "n_valid": z.new_ones(()) * ids.size(0),
+                "aux": z.new_zeros(()),
+            }
+        return model(**batch)
+
     def _apply_runtime_flags(self, model: nn.Module) -> None:
         raw = unwrap(model)
         raw.grad_checkpoint = self.grad_ckpt
         raw.offload_encoder = self.offload_encoder
         raw.offload_blocks = self.offload_blocks
         # Chunked lm_head+CE unless KD needs the full student logit tensor.
-        raw.return_logits = self.teacher is not None
+        raw.return_logits = self.teacher is not None or self.loss_mode in {"grpo", "dpo"}
         if self.offload_blocks:
             for blk in list(raw.encoder) + list(raw.decoder):
                 move_module(blk, "cpu")
@@ -582,6 +664,10 @@ class Trainer:
             raise RuntimeError("CAT-YOKO-12B weights need --device cuda --dtype bf16 (CPU is --meta only)")
         seed_all(self.seed + self.rank)
         configure_cuda()
+        if self.phase_align:
+            # Indexer KL is a side tensor on the block; activation checkpoint
+            # would drop it from the autograd graph.
+            self.grad_ckpt = False
         self._resolve_offload()
         if self.save_optim_arg is None:
             self.save_optim = self.cfg.name != "CAT-YOKO-12B"
@@ -619,7 +705,9 @@ class Trainer:
             if self.upcycle_src is not None:
                 upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
                 del self.upcycle_src
+        self._attach_phase_modules(model)
         apply_freeze(unwrap(model), self.phase)
+        self._attach_phase_modules(model)
         self._apply_nvfp4(model)
         self._apply_runtime_flags(model)
         model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
@@ -710,7 +798,13 @@ class Trainer:
                 elif phase_budget:
                     progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
                 set_gate(unwrap(model), gate_schedule(self.phase, progress))
-                lr = wsd_lr(tokens_seen, self.cfg, self.phase)
+                lr = wsd_lr(
+                    tokens_seen,
+                    self.cfg,
+                    self.phase,
+                    tokens_in_phase=tokens_in_phase,
+                    phase_budget=phase_budget,
+                )
                 for g in opt.param_groups:
                     g["lr"] = lr
                 opt.zero_grad(set_to_none=True)
@@ -736,9 +830,14 @@ class Trainer:
                     last_micro = micro_i == self.accum - 1
                     with backward_sync_ctx(model, last_micro=last_micro, world=self.world):
                         with self._amp():
-                            out = model(**batch)
+                            out = self._forward_loss(model, batch)
                             loss = out["loss"] / self.accum
-                        if self.teacher is not None and kd_w > 0:
+                        if (
+                            self.teacher is not None
+                            and kd_w > 0
+                            and self.loss_mode in {"ce", "sft"}
+                            and "logits" in out
+                        ):
                             with torch.no_grad():
                                 t_logits = self.teacher(batch["input_ids"])["logits"]
                             shift_labels = batch["labels"][:, 1:]

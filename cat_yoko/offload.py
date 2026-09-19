@@ -86,9 +86,12 @@ def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[to
     class _Fn(torch.autograd.Function):
         @staticmethod
         def forward(ctx, *ts):
-            ctx.save_for_backward(*ts)
-            ctx.ac_enabled, ctx.ac_dtype = _read_autocast(ts[0].device)
-            move_module(blk, ts[0].device)
+            ctx.none_mask = tuple(t is None for t in ts)
+            saved = tuple(t for t in ts if t is not None)
+            ctx.save_for_backward(*saved)
+            first = next(t for t in ts if t is not None)
+            ctx.ac_enabled, ctx.ac_dtype = _read_autocast(first.device)
+            move_module(blk, first.device)
             with torch.no_grad():
                 y = blk(*ts)
                 aux = _aux_of(blk, y)
@@ -97,11 +100,17 @@ def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[to
 
         @staticmethod
         def backward(ctx, gy, gaux):
-            ts = ctx.saved_tensors
-            device = ts[0].device
+            saved = list(ctx.saved_tensors)
+            device = saved[0].device
             move_module(blk, device)
             inputs = []
-            for t in ts:
+            si = 0
+            for is_none in ctx.none_mask:
+                if is_none:
+                    inputs.append(None)
+                    continue
+                t = saved[si]
+                si += 1
                 x = t.detach()
                 if t.requires_grad:
                     x.requires_grad_(True)
@@ -120,7 +129,13 @@ def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[to
             if cb is not None:
                 with torch.no_grad():
                     cb(blk)
-            return tuple(x.grad for x in inputs)
+            grads_out = []
+            for is_none, x in zip(ctx.none_mask, inputs, strict=True):
+                if is_none:
+                    grads_out.append(None)
+                else:
+                    grads_out.append(x.grad)
+            return tuple(grads_out)
 
     return _Fn.apply(*tensors)
 
@@ -165,12 +180,18 @@ def auto_offload_flags(
         raise ValueError(
             "DDP/FSDP cannot mix CPU offload on 12B; use ZeRO or single GPU"
         )
+    from cat_yoko.phases import PHASES
+
+    ph = PHASES.get(phase)
     if offload_blocks is None:
-        offload_blocks = bool(big and cuda and phase == "B2" and not dist)
+        default_blocks = bool(ph.offload_blocks) if ph is not None else phase == "B2"
+        offload_blocks = bool(big and cuda and default_blocks and not dist)
     if offload_encoder is None:
+        default_enc = bool(ph.offload_encoder) if ph is not None else phase in {"B0", "B1"}
         offload_encoder = bool(
-            big and cuda and phase in {"B0", "B1"} and not offload_blocks and not dist
+            big and cuda and default_enc and not offload_blocks and not dist
         )
     if optim_cpu is None:
-        optim_cpu = bool(big and cuda and phase in {"B1", "B2"})
+        default_cpu = bool(ph.optim_cpu) if ph is not None else phase in {"B1", "B2"}
+        optim_cpu = bool(big and cuda and default_cpu)
     return bool(offload_encoder), bool(offload_blocks), bool(optim_cpu)

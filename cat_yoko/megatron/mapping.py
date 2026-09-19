@@ -15,6 +15,7 @@ from cat_yoko.config import (
 )
 from cat_yoko.nvfp4 import policy_for
 from cat_yoko.parallel import ParallelPlan, validate_parallel
+from cat_yoko.phases import PHASES
 
 MEGATRON_LM = "https://github.com/NVIDIA/Megatron-LM"
 
@@ -152,8 +153,12 @@ def transformer_config_dict(
 def yoco_extras(cfg: CATYokoConfig, phase: str) -> dict:
     return {
         "architecture": "yoco_causal_encoder_decoder",
-        "detach_cache": phase != "B2",
-        "gate_schedule": {"B0": [0.0, 0.3], "B1": [0.3, 1.0], "B2": [1.0, 1.0]}[phase],
+        "detach_cache": bool(PHASES[phase].detach) if phase in PHASES else phase != "B2",
+        "gate_schedule": (
+            {"B0": [0.0, 0.3], "B1": [0.3, 1.0], "B2": [1.0, 1.0]}.get(
+                phase, [1.0, 1.0]
+            )
+        ),
         "scale_emb": cfg.embed_scale,
         "residual_scale": cfg.residual_scale,
         "logit_scale": cfg.logit_scale,
