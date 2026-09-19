@@ -1,0 +1,158 @@
+=== B200 upgrade 2026-09-19T03:43:32Z ===
+NVIDIA B200, 10.0, 183359 MiB, 595.91.07
+python /venv/main/bin/python 3.12.14
+install torch cu128
+Using Python 3.12.14 environment at: /venv/main
+Checked 1 package in 38ms
+install transformer_engine matching torch CUDA
+TE extra transformer_engine[pytorch,core-cu12] (torch CUDA major 12)
+Using Python 3.12.14 environment at: /venv/main
+Resolved 58 packages in 258ms
+   Building transformer-engine-torch==2.19.0
+Downloading transformer-engine-cu13 (233.3MiB)
+Downloading transformer-engine-cu12 (644.6MiB)
+Downloading transformer-engine (1.1MiB)
+ Downloaded transformer-engine
+ Downloaded transformer-engine-cu13
+ Downloaded transformer-engine-cu12
+      Built transformer-engine-torch==2.19.0
+Prepared 4 packages in 1m 11s
+Installed 4 packages in 34ms
+ + transformer-engine==2.19.0
+ + transformer-engine-cu12==2.19.0
+ + transformer-engine-cu13==2.19.0
+ + transformer-engine-torch==2.19.0
+install transformers / hub
+Using Python 3.12.14 environment at: /venv/main
+Resolved 55 packages in 193ms
+Downloading tokenizers (3.2MiB)
+Downloading transformers (11.7MiB)
+ Downloaded tokenizers
+ Downloaded transformers
+Prepared 11 packages in 183ms
+Installed 11 packages in 654ms
+ + accelerate==1.15.0
+ + annotated-doc==0.0.5
+ + markdown-it-py==4.2.0
+ + mdurl==0.1.2
+ + regex==2026.9.10
+ + rich==15.0.0
+ + safetensors==0.8.0
+ + shellingham==1.5.4
+ + tokenizers==0.23.2
+ + transformers==5.17.0
+ + typer==0.27.2
+torch 2.11.0+cu128 cuda 12.8 cap (10, 0)
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/__init__.py", line 18, in <module>
+    load_framework_extension("torch")
+  File "/venv/main/lib/python3.12/site-packages/transformer_engine/common/__init__.py", line 192, in load_framework_extension
+    solib = importlib.util.module_from_spec(spec)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ImportError: /venv/main/lib/python3.12/site-packages/transformer_engine/wheel_lib/transformer_engine_torch.cpython-312-x86_64-linux-gnu.so: undefined symbol: _ZN3c104cuda19CUDAErrorLogCaptureC1Ev
+TE pytorch import failed
+{
+  "python": "3.12.14",
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "cap": [
+    10,
+    0
+  ],
+  "compute_family": "sm100",
+  "nvfp4_training_capable": true,
+  "te_recipe_kwargs": {},
+  "float4_dtype": true,
+  "float4_cast": false,
+  "scaled_mm": true,
+  "functional_scaled_mm": true,
+  "grouped_mm": true,
+  "te": "2.19.0",
+  "te_pytorch": false,
+  "te_nvfp4_recipe": true,
+  "te_nvfp4_linear": false,
+  "te_nvfp4_linear_copy_once": false,
+  "te_nvfp4_linear_64x2048": false,
+  "te_grouped_linear": false,
+  "hw_nvfp4_gemm": false,
+  "errors": {
+    "float4_cast": "RuntimeError: copy_() does not support casting Float4_e2m1fn_x2 to different types. Source dtype is BFloat16target dtype is Float4_e2m1fn_x2",
+    "te_pytorch": "ImportError: /venv/main/lib/python3.12/site-packages/transformer_engine/wheel_lib/transformer_engine_torch.cpython-312-x86_64-linux-gnu.so: undefined symbol: _ZN3c104cuda19CUDAErrorLogCaptureC1Ev"
+  },
+  "te_recipe_used": []
+}
+=== B200 upgrade exit 0 2026-09-19T03:44:55Z ===
+overlay          32G   14G   19G  41% /
+=== B200 upgrade 2026-09-19T03:47:48Z ===
+NVIDIA B200, 10.0, 183359 MiB, 595.91.07
+python /venv/main/bin/python 3.12.14
+CUDNN_PATH=/venv/main/lib/python3.12/site-packages/nvidia/cudnn
+install torch cu128
+Using Python 3.12.14 environment at: /venv/main
+Checked 1 package in 35ms
+install TE build deps
+Using Python 3.12.14 environment at: /venv/main
+Resolved 46 packages in 126ms
+Prepared 2 packages in 10ms
+Installed 2 packages in 13ms
+ + ninja==1.13.2
+ + pybind11==3.1.0
+install transformer_engine matching torch CUDA
+TE extra transformer_engine[pytorch,core-cu12] (torch CUDA major 12) no-build-isolation NVTE_CUDA_ARCHS=100
+Using Python 3.12.14 environment at: /venv/main
+Resolved 58 packages in 246ms
+   Building transformer-engine-torch==2.19.0
+Downloading transformer-engine-cu13 (233.3MiB)
+Downloading transformer-engine (1.1MiB)
+Downloading transformer-engine-cu12 (644.6MiB)
+ Downloaded transformer-engine
+ Downloaded transformer-engine-cu13
+ Downloaded transformer-engine-cu12
+      Built transformer-engine-torch==2.19.0
+Prepared 4 packages in 53.51s
+Installed 4 packages in 317ms
+ + transformer-engine==2.19.0
+ + transformer-engine-cu12==2.19.0
+ + transformer-engine-cu13==2.19.0
+ + transformer-engine-torch==2.19.0
+install transformers / hub
+Using Python 3.12.14 environment at: /venv/main
+Checked 4 packages in 40ms
+torch 2.11.0+cu128 cuda 12.8 cap (10, 0)
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'transformer_engine.pytorch'
+TE pytorch import failed
+{
+  "python": "3.12.14",
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "cap": [
+    10,
+    0
+  ],
+  "compute_family": "sm100",
+  "nvfp4_training_capable": true,
+  "te_recipe_kwargs": {},
+  "float4_dtype": true,
+  "float4_cast": false,
+  "scaled_mm": true,
+  "functional_scaled_mm": true,
+  "grouped_mm": true,
+  "te": "unknown",
+  "te_pytorch": false,
+  "te_nvfp4_recipe": false,
+  "te_nvfp4_linear": false,
+  "te_nvfp4_linear_copy_once": false,
+  "te_nvfp4_linear_64x2048": false,
+  "te_grouped_linear": false,
+  "hw_nvfp4_gemm": false,
+  "errors": {
+    "float4_cast": "RuntimeError: copy_() does not support casting Float4_e2m1fn_x2 to different types. Source dtype is BFloat16target dtype is Float4_e2m1fn_x2",
+    "te_pytorch": "ModuleNotFoundError: No module named 'transformer_engine.pytorch'",
+    "te_nvfp4_recipe": "ModuleNotFoundError: No module named 'transformer_engine.common'"
+  }
+}
+=== B200 upgrade exit 0 2026-09-19T03:48:49Z ===
+overlay          32G   13G   20G  40% /

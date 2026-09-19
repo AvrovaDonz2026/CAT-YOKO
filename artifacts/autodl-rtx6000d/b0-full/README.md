@@ -7,7 +7,7 @@ overlay 只写 `trainable.pt`（Hub `checkpoints/b0-full/`），不写 23GiB `la
 远端目录曾是 `/root/autodl-tmp/runs/b0-full`。tmux session：`b0-full`。
 32 步 `--try` 在 `/root/autodl-tmp/runs/b0`，不要再 resume 那份。
 
-**本机即将释放。** 权重在 Hub [`checkpoints/b0-full/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full)；日志在本目录。B200 已接训；当前钉见 [`checkpoints/b0-full/README.md`](../../../checkpoints/b0-full/README.md)（step **26760**）。
+**本机即将释放。** 权重在 Hub [`checkpoints/b0-full/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full)；日志在本目录。B200 已接训；当前钉见 [`checkpoints/b0-full/README.md`](../../../checkpoints/b0-full/README.md)（step **26940**）。
 
 2026-09-18T18:06Z 从 `trainable_step_1400.pt` 同阶段重启：
 

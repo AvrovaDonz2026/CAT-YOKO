@@ -1,0 +1,251 @@
+ tok/s=15700 mem=137952MiB
+CAT-YOKO-12B B0 step 26883/- nll=11.9871 ppl=160674.5 aux=0.0000 gate=0.005 gn=0
+.22 moe_cv=0.53 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129574912
+ tok/s=15660 mem=137952MiB
+CAT-YOKO-12B B0 step 26884/- nll=12.0273 ppl=167256.1 aux=0.0000 gate=0.005 gn=0
+.39 moe_cv=0.52 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129583104
+ tok/s=15568 mem=137952MiB
+CAT-YOKO-12B B0 step 26885/- nll=11.9775 ppl=159132.7 aux=0.0000 gate=0.005 gn=0
+.16 moe_cv=0.53 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129591296
+ tok/s=15601 mem=137952MiB
+CAT-YOKO-12B B0 step 26886/- nll=11.9772 ppl=159086.8 aux=0.0000 gate=0.005 gn=0
+.26 moe_cv=0.50 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129599488
+ tok/s=15673 mem=137952MiB
+CAT-YOKO-12B B0 step 26887/- nll=11.9858 ppl=160460.9 aux=0.0000 gate=0.005 gn=0
+.28 moe_cv=0.57 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129607680
+ tok/s=15691 mem=137952MiB
+CAT-YOKO-12B B0 step 26888/- nll=12.0819 ppl=176648.3 aux=0.0000 gate=0.005 gn=0
+.57 moe_cv=0.54 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129615872
+ tok/s=15676 mem=137952MiB
+CAT-YOKO-12B B0 step 26889/- nll=11.9899 ppl=161122.8 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.54 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129624064
+ tok/s=15598 mem=137952MiB
+CAT-YOKO-12B B0 step 26890/- nll=11.9843 ppl=160216.4 aux=0.0000 gate=0.005 gn=0
+.18 moe_cv=0.57 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129632256
+ tok/s=15633 mem=137952MiB
+CAT-YOKO-12B B0 step 26891/- nll=11.9992 ppl=162631.6 aux=0.0000 gate=0.005 gn=0
+.35 moe_cv=0.49 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129640448
+ tok/s=15580 mem=137952MiB
+CAT-YOKO-12B B0 step 26892/- nll=11.9785 ppl=159297.3 aux=0.0000 gate=0.005 gn=0
+.15 moe_cv=0.54 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129648640
+ tok/s=15679 mem=137952MiB
+CAT-YOKO-12B B0 step 26893/- nll=12.0143 ppl=165104.4 aux=0.0000 gate=0.005 gn=0
+.26 moe_cv=0.55 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129656832
+ tok/s=15673 mem=137952MiB
+CAT-YOKO-12B B0 step 26894/- nll=11.9949 ppl=161919.2 aux=0.0000 gate=0.005 gn=0
+.14 moe_cv=0.53 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129665024
+ tok/s=15658 mem=137952MiB
+CAT-YOKO-12B B0 step 26895/- nll=11.9661 ppl=157329.3 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.53 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129673216
+ tok/s=15500 mem=137952MiB
+CAT-YOKO-12B B0 step 26896/- nll=11.9657 ppl=157265.4 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.54 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129681408
+ tok/s=15594 mem=137952MiB
+CAT-YOKO-12B B0 step 26897/- nll=12.0252 ppl=166901.7 aux=0.0000 gate=0.005 gn=0
+.43 moe_cv=0.51 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129689600
+ tok/s=15628 mem=137952MiB
+CAT-YOKO-12B B0 step 26898/- nll=11.9693 ppl=157836.2 aux=0.0000 gate=0.005 gn=0
+.12 moe_cv=0.58 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129697792
+ tok/s=15689 mem=137952MiB
+CAT-YOKO-12B B0 step 26899/- nll=11.9937 ppl=161734.3 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.51 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129705984
+ tok/s=15637 mem=137952MiB
+CAT-YOKO-12B B0 step 26900/- nll=11.9945 ppl=161861.1 aux=0.0000 gate=0.005 gn=0
+.22 moe_cv=0.51 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129714176
+ tok/s=15563 mem=137952MiB
+CAT-YOKO-12B B0 step 26901/- nll=11.9924 ppl=161527.5 aux=0.0000 gate=0.005 gn=0
+.18 moe_cv=0.50 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129722368
+ tok/s=15538 mem=137952MiB
+CAT-YOKO-12B B0 step 26902/- nll=12.0127 ppl=164833.1 aux=0.0000 gate=0.005 gn=0
+.32 moe_cv=0.51 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129730560
+ tok/s=15658 mem=137952MiB
+CAT-YOKO-12B B0 step 26903/- nll=12.0181 ppl=165729.4 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.51 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129738752
+ tok/s=15649 mem=137952MiB
+CAT-YOKO-12B B0 step 26904/- nll=11.9812 ppl=159721.8 aux=0.0000 gate=0.005 gn=0
+.14 moe_cv=0.51 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129746944
+ tok/s=15659 mem=137952MiB
+CAT-YOKO-12B B0 step 26905/- nll=12.0146 ppl=165148.8 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.49 trainable=219.21M lr=2.59e-05 fp8=False nvfp4=True tok=129755136
+ tok/s=15595 mem=137952MiB
+CAT-YOKO-12B B0 step 26906/- nll=12.0691 ppl=174394.8 aux=0.0000 gate=0.005 gn=0
+.29 moe_cv=0.48 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129763328
+ tok/s=15619 mem=137952MiB
+CAT-YOKO-12B B0 step 26907/- nll=12.0580 ppl=172469.8 aux=0.0000 gate=0.005 gn=0
+.30 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129771520
+ tok/s=15682 mem=137952MiB
+CAT-YOKO-12B B0 step 26908/- nll=11.9855 ppl=160406.5 aux=0.0000 gate=0.005 gn=0
+.20 moe_cv=0.55 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129779712
+ tok/s=15603 mem=137952MiB
+CAT-YOKO-12B B0 step 26909/- nll=12.0158 ppl=165343.7 aux=0.0000 gate=0.005 gn=0
+.38 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129787904
+ tok/s=15703 mem=137952MiB
+CAT-YOKO-12B B0 step 26910/- nll=12.0048 ppl=163543.8 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129796096
+ tok/s=15649 mem=137952MiB
+CAT-YOKO-12B B0 step 26911/- nll=12.0091 ppl=164238.6 aux=0.0000 gate=0.005 gn=0
+.19 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129804288
+ tok/s=15598 mem=137952MiB
+CAT-YOKO-12B B0 step 26912/- nll=11.9790 ppl=159370.9 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129812480
+ tok/s=15664 mem=137952MiB
+CAT-YOKO-12B B0 step 26913/- nll=11.9628 ppl=156809.4 aux=0.0000 gate=0.005 gn=0
+.08 moe_cv=0.50 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129820672
+ tok/s=15702 mem=137952MiB
+CAT-YOKO-12B B0 step 26914/- nll=11.9717 ppl=158208.8 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.58 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129828864
+ tok/s=15709 mem=137952MiB
+CAT-YOKO-12B B0 step 26915/- nll=12.0043 ppl=163448.9 aux=0.0000 gate=0.005 gn=0
+.27 moe_cv=0.52 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129837056
+ tok/s=15576 mem=137952MiB
+CAT-YOKO-12B B0 step 26916/- nll=11.9837 ppl=160131.0 aux=0.0000 gate=0.005 gn=0
+.20 moe_cv=0.58 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129845248
+ tok/s=15641 mem=137952MiB
+CAT-YOKO-12B B0 step 26917/- nll=12.2498 ppl=208932.7 aux=0.0000 gate=0.005 gn=3
+.00 moe_cv=0.52 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129853440
+ tok/s=15712 mem=137952MiB
+CAT-YOKO-12B B0 step 26918/- nll=12.0077 ppl=164012.0 aux=0.0000 gate=0.005 gn=0
+.23 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129861632
+ tok/s=15702 mem=137952MiB
+CAT-YOKO-12B B0 step 26919/- nll=11.9702 ppl=157982.6 aux=0.0000 gate=0.005 gn=0
+.26 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129869824
+ tok/s=15695 mem=137952MiB
+CAT-YOKO-12B B0 step 26920/- nll=11.9889 ppl=160955.6 aux=0.0000 gate=0.005 gn=0
+.18 moe_cv=0.52 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129878016
+ tok/s=15739 mem=137952MiB
+CAT-YOKO-12B B0 step 26921/- nll=11.9658 ppl=157286.4 aux=0.0000 gate=0.005 gn=0
+.22 moe_cv=0.57 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129886208
+ tok/s=15406 mem=137952MiB
+CAT-YOKO-12B B0 step 26922/- nll=11.9660 ppl=157319.7 aux=0.0000 gate=0.005 gn=0
+.19 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129894400
+ tok/s=15650 mem=137952MiB
+CAT-YOKO-12B B0 step 26923/- nll=12.0749 ppl=175411.9 aux=0.0000 gate=0.005 gn=0
+.81 moe_cv=0.57 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129902592
+ tok/s=15724 mem=137952MiB
+CAT-YOKO-12B B0 step 26924/- nll=12.0603 ppl=172871.9 aux=0.0000 gate=0.005 gn=0
+.35 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129910784
+ tok/s=15709 mem=137952MiB
+CAT-YOKO-12B B0 step 26925/- nll=11.9884 ppl=160872.9 aux=0.0000 gate=0.005 gn=0
+.18 moe_cv=0.55 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129918976
+ tok/s=15739 mem=137952MiB
+CAT-YOKO-12B B0 step 26926/- nll=11.9776 ppl=159152.4 aux=0.0000 gate=0.005 gn=0
+.12 moe_cv=0.55 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129927168
+ tok/s=15670 mem=137952MiB
+CAT-YOKO-12B B0 step 26927/- nll=11.9995 ppl=162673.5 aux=0.0000 gate=0.005 gn=0
+.09 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129935360
+ tok/s=15638 mem=137952MiB
+CAT-YOKO-12B B0 step 26928/- nll=12.0386 ppl=169163.2 aux=0.0000 gate=0.005 gn=0
+.42 moe_cv=0.48 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129943552
+ tok/s=15681 mem=137952MiB
+CAT-YOKO-12B B0 step 26929/- nll=11.9828 ppl=159986.5 aux=0.0000 gate=0.005 gn=0
+.26 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129951744
+ tok/s=15671 mem=137952MiB
+CAT-YOKO-12B B0 step 26930/- nll=12.0427 ppl=169850.8 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129959936
+ tok/s=15673 mem=137952MiB
+CAT-YOKO-12B B0 step 26931/- nll=12.0958 ppl=179123.4 aux=0.0000 gate=0.005 gn=0
+.47 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129968128
+ tok/s=15741 mem=137952MiB
+CAT-YOKO-12B B0 step 26932/- nll=12.0136 ppl=164984.5 aux=0.0000 gate=0.005 gn=0
+.20 moe_cv=0.55 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129976320
+ tok/s=15731 mem=137952MiB
+CAT-YOKO-12B B0 step 26933/- nll=11.9824 ppl=159920.6 aux=0.0000 gate=0.005 gn=0
+.13 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129984512
+ tok/s=15547 mem=137952MiB
+CAT-YOKO-12B B0 step 26934/- nll=11.9665 ppl=157392.3 aux=0.0000 gate=0.005 gn=0
+.08 moe_cv=0.56 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=129992704
+ tok/s=15482 mem=137952MiB
+CAT-YOKO-12B B0 step 26935/- nll=12.0442 ppl=170104.6 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130000896
+ tok/s=15654 mem=137952MiB
+CAT-YOKO-12B B0 step 26936/- nll=11.9623 ppl=156728.0 aux=0.0000 gate=0.005 gn=0
+.16 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130009088
+ tok/s=15706 mem=137952MiB
+CAT-YOKO-12B B0 step 26937/- nll=11.9735 ppl=158495.2 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.52 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130017280
+ tok/s=15670 mem=137952MiB
+CAT-YOKO-12B B0 step 26938/- nll=11.9869 ppl=160636.5 aux=0.0000 gate=0.005 gn=0
+.09 moe_cv=0.55 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130025472
+ tok/s=15669 mem=137952MiB
+CAT-YOKO-12B B0 step 26939/- nll=11.9739 ppl=158556.4 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.57 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130033664
+ tok/s=15580 mem=137952MiB
+CAT-YOKO-12B B0 step 26940/- nll=11.9889 ppl=160960.4 aux=0.0000 gate=0.005 gn=0
+.25 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130041856
+ tok/s=15621 mem=137952MiB
+CAT-YOKO-12B B0 step 26941/- nll=12.0375 ppl=168979.3 aux=0.0000 gate=0.005 gn=0
+.37 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130050048
+ tok/s=15484 mem=137952MiB
+CAT-YOKO-12B B0 step 26942/- nll=11.9674 ppl=157530.5 aux=0.0000 gate=0.005 gn=0
+.28 moe_cv=0.47 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130058240
+ tok/s=15691 mem=137952MiB
+CAT-YOKO-12B B0 step 26943/- nll=11.9672 ppl=157507.4 aux=0.0000 gate=0.005 gn=0
+.22 moe_cv=0.52 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130066432
+ tok/s=15686 mem=137952MiB
+CAT-YOKO-12B B0 step 26944/- nll=12.0131 ppl=164900.6 aux=0.0000 gate=0.005 gn=0
+.50 moe_cv=0.48 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130074624
+ tok/s=15630 mem=137952MiB
+CAT-YOKO-12B B0 step 26945/- nll=11.9767 ppl=159007.6 aux=0.0000 gate=0.005 gn=0
+.21 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130082816
+ tok/s=15649 mem=137952MiB
+CAT-YOKO-12B B0 step 26946/- nll=12.0464 ppl=170485.7 aux=0.0000 gate=0.005 gn=0
+.34 moe_cv=0.47 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130091008
+ tok/s=15700 mem=137952MiB
+CAT-YOKO-12B B0 step 26947/- nll=12.0592 ppl=172678.4 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.51 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130099200
+ tok/s=15654 mem=137952MiB
+CAT-YOKO-12B B0 step 26948/- nll=12.1196 ppl=183429.5 aux=0.0000 gate=0.005 gn=0
+.49 moe_cv=0.46 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130107392
+ tok/s=15721 mem=137952MiB
+CAT-YOKO-12B B0 step 26949/- nll=12.0212 ppl=166240.7 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.53 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130115584
+ tok/s=15651 mem=137952MiB
+CAT-YOKO-12B B0 step 26950/- nll=12.0561 ppl=172147.8 aux=0.0000 gate=0.005 gn=0
+.34 moe_cv=0.47 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130123776
+ tok/s=15584 mem=137952MiB
+CAT-YOKO-12B B0 step 26951/- nll=11.9862 ppl=160526.8 aux=0.0000 gate=0.005 gn=0
+.27 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130131968
+ tok/s=15611 mem=137952MiB
+CAT-YOKO-12B B0 step 26952/- nll=12.0988 ppl=179649.1 aux=0.0000 gate=0.005 gn=0
+.69 moe_cv=0.49 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130140160
+ tok/s=15714 mem=137952MiB
+CAT-YOKO-12B B0 step 26953/- nll=11.9892 ppl=161012.3 aux=0.0000 gate=0.005 gn=0
+.22 moe_cv=0.56 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130148352
+ tok/s=15719 mem=137952MiB
+CAT-YOKO-12B B0 step 26954/- nll=12.0024 ppl=163138.7 aux=0.0000 gate=0.005 gn=0
+.24 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130156544
+ tok/s=15709 mem=137952MiB
+CAT-YOKO-12B B0 step 26955/- nll=11.9874 ppl=160714.3 aux=0.0000 gate=0.005 gn=0
+.19 moe_cv=0.56 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130164736
+ tok/s=15575 mem=137952MiB
+CAT-YOKO-12B B0 step 26956/- nll=12.0434 ppl=169967.7 aux=0.0000 gate=0.005 gn=0
+.46 moe_cv=0.54 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=True tok=130172928
+ tok/s=15630 mem=137952MiB
+
+--- nvidia-smi ---
+Sat Sep 19 06:44:19 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.91.07              Driver Version: 595.91.07      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA B200                    On  |   00000000:62:00.0 Off |                    0 |
+| N/A   64C    P0            764W / 1000W |  141288MiB / 183359MiB |    100%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A           31930      C   python3                               14127... |
++-----------------------------------------------------------------------------------------+
+--- df ---
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          32G   19G   14G  58% /
+overlay          32G   19G   14G  58% /
+--- ps ---
+31930 python3 -m cat_yoko.b0 --save-dir /workspace/runs/b0-full --seq-len 4096 --micro-batch 2 --save-every 20 --keep-last 2 --no-offload-encoder --no-grad-ckpt --upcycle-hf /workspace/hf/MiniCPM5-2B-Base --log-every 1 --resume /workspace/runs/b0-full

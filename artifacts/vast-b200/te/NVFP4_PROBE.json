@@ -1,0 +1,34 @@
+{
+  "python": "3.12.14",
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "cap": [
+    10,
+    0
+  ],
+  "compute_family": "sm100",
+  "nvfp4_training_capable": true,
+  "te_recipe_kwargs": {},
+  "float4_dtype": true,
+  "float4_cast": false,
+  "scaled_mm": true,
+  "functional_scaled_mm": true,
+  "grouped_mm": true,
+  "te": "2.19.0",
+  "te_pytorch": true,
+  "te_nvfp4_recipe": true,
+  "te_nvfp4_linear": false,
+  "te_nvfp4_linear_copy_once": false,
+  "te_nvfp4_linear_64x2048": false,
+  "te_grouped_linear": false,
+  "hw_nvfp4_gemm": false,
+  "errors": {
+    "float4_cast": "RuntimeError: copy_() does not support casting Float4_e2m1fn_x2 to different types. Source dtype is BFloat16target dtype is Float4_e2m1fn_x2",
+    "te_nvfp4_linear": "RuntimeError: /dev/shm/TransformerEngine/transformer_engine/common/gemm/cublaslt_gemm.cu:769 in function cublas_gemm: Assertion failed: status != CUBLAS_STATUS_NOT_SUPPORTED. Unable to find suitable cuBLAS GEMM algorithm",
+    "te_nvfp4_linear_tb": "rd pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/torch/autograd/function.py\", line 317, in apply\n    return user_fn(self, *args)\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/linear.py\", line 1461, in backward\n    result = _linear_backward(bwd_args) + (None,)  # fwd_args grad slot\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/linear.py\", line 1305, in _linear_backward\n    wgrad, grad_bias_ = wgrad_gemm(inputmat_total, grad_output)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/linear.py\", line 1285, in wgrad_gemm\n    dw, db, *_ = general_gemm(x, dy, **wgrad_gemm_kwargs)\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/cpp_extensions/gemm.py\", line 300, in general_gemm\n    out, bias_grad, gelu_input, extra_output = tex.generic_gemm(*args, **kwargs)\n                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: /dev/shm/TransformerEngine/transformer_engine/common/gemm/cublaslt_gemm.cu:769 in function cublas_gemm: Assertion failed: status != CUBLAS_STATUS_NOT_SUPPORTED. Unable to find suitable cuBLAS GEMM algorithm\n",
+    "te_grouped_linear": "RuntimeError: /dev/shm/TransformerEngine/transformer_engine/common/hadamard_transform/group_hadamard_transform.cu:430 in function group_hadamard_transform_amax: Assertion failed: split_sections[i] % 64 == 0. component 0 of split_sections should be 64 multiple",
+    "te_grouped_linear_tb": "\n    return disabled_f(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1263, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/grouped_linear.py\", line 2667, in forward\n    out, new_workspaces = linear_fn(\n                          ^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/torch/autograd/function.py\", line 596, in apply\n    return super().apply(*args, **kwargs)  # type: ignore[misc]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/grouped_linear.py\", line 1185, in forward\n    inputmats = _split_quantize(\n                ^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/grouped_linear.py\", line 383, in _split_quantize\n    return _split_quantize_non_hybrid(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/venv/main/lib/python3.12/site-packages/transformer_engine/pytorch/module/grouped_linear.py\", line 263, in _split_quantize_non_hybrid\n    return tex.split_quantize(\n           ^^^^^^^^^^^^^^^^^^^\nRuntimeError: /dev/shm/TransformerEngine/transformer_engine/common/hadamard_transform/group_hadamard_transform.cu:430 in function group_hadamard_transform_amax: Assertion failed: split_sections[i] % 64 == 0. component 0 of split_sections should be 64 multiple\n"
+  },
+  "te_recipe_used": [],
+  "te_grouped_linear_cls": true
+}
