@@ -9,12 +9,25 @@ GitHub **不用 LFS**。代码和文档在 GitHub；`trainable.pt` / 全图 / sh
 ```bash
 ssh -T git@hf.co
 ./scripts/push_to_hf.sh --dry-run
-./scripts/push_to_hf.sh /root/autodl-tmp/runs/b0/trainable.pt
+./scripts/push_to_hf.sh checkpoints/b0-full/trainable.pt
 ```
+
+`push_to_hf.sh` 每次都会带上 Hub 根卡片 `huggingface/README.md` 和文件夹说明 `checkpoints/b0-full/README.md`。
 
 Clone：`git clone git@hf.co:AvrovaDonz/CAT-YOKO`
 
-NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。发布档 B0（8e9，seq=4096）overlay 走 `checkpoints/b0-full/`（B200 快照 step **25460**，约每 10 分钟覆盖同路径）。B200 续训（默认 micro-batch=2）见 [`docs/B200_TRAIN.md`](../docs/B200_TRAIN.md)。从 Vast 拉 overlay：[`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh)（SSH Host `vast-b200`，不杀训练）。B1 `--try` overlay 走 `checkpoints/b1/`（decoder + `lm_head` + 最终 RMSNorm；权重不进 GitHub）。B2 `--try` 指针：GitHub [`checkpoints/b2/README.md`](../checkpoints/b2/README.md) → Hub `checkpoints/b2/`（全模型 overlay；resume B1 + MiniCPM5 encoder/embed）。日志进 GitHub `artifacts/autodl-rtx6000d/`。
+## 当前 B0 overlay
+
+| 项 | 值 |
+| --- | --- |
+| Hub 文件 | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
+| Hub 说明 | [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md) |
+| step | **25460** |
+| tokens_in_phase | 117,917,696（≈1.47% of 8e9） |
+| sha256 | `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c` |
+| 刷新 | 训练进行中约每 10 分钟覆盖同路径；从 Vast 拉 overlay：[`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh)（SSH Host `vast-b200`，不杀训练） |
+
+NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。B200 续训（默认 micro-batch=2）见 [`docs/B200_TRAIN.md`](../docs/B200_TRAIN.md)。B1 `--try` overlay 走 `checkpoints/b1/`（decoder + `lm_head` + 最终 RMSNorm；权重不进 GitHub）。B2 `--try` 指针：GitHub [`checkpoints/b2/README.md`](../checkpoints/b2/README.md) → Hub `checkpoints/b2/`（全模型 overlay；resume B1 + MiniCPM5 encoder/embed）。日志进 GitHub `artifacts/autodl-rtx6000d/`。
 
 Deploy SSH key 只放本机 `~/.ssh`（`HF_SSH_KEY` 可覆盖路径），在 https://huggingface.co/settings/keys 加公钥。**不要进 git**。
 

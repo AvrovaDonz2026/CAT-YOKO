@@ -7,6 +7,8 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 这是 C1 B0 **发布信封**（`--tokens 8e9`，`seq=4096`）**进行中**的 trainable overlay，不是 `--try`，也还没跑完 8e9。
 不要覆盖 `checkpoints/b0/` 里那份 32 步 MiniCPM5 overlay。
 
+同一份说明会推到 Hub 文件夹：https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md
+
 | 项 | 值 |
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |

@@ -26,7 +26,14 @@ CUTLASS 把 SM100A `stg.256` 编进 kernel 的条件是 **nvcc ≥ 12.9**。CUDA
 
 ## 从 Hub overlay 接 B0
 
-上一台 6000D 停在 step **16020**。B200 已续到 step **25460**，`tokens_in_phase=117,917,696`（8e9 的 ≈1.47%）。权重在 https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full （训练进行中约每 10 分钟覆盖同路径）。
+上一台 6000D 停在 step **16020**。B200 已续到下表这份 Hub 钉。权重在 https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full （训练进行中约每 10 分钟覆盖同路径；文件夹说明与 GitHub [`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md) 同步）。
+
+| 项 | 值 |
+| --- | --- |
+| step | **25460** |
+| tokens_in_phase | 117,917,696（8e9 的 ≈1.47%） |
+| sha256 | `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c` |
+| micro-batch | 2（`MICRO_BATCH=1` 回退） |
 
 ```bash
 # 仓库根目录。Vast 默认 /venv/main + /workspace

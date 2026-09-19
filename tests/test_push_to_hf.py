@@ -18,6 +18,7 @@ class PushToHfTests(unittest.TestCase):
         text = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("git@hf.co:AvrovaDonz/CAT-YOKO", text)
         self.assertIn("GIT_LFS_SKIP_SMUDGE", text)
+        self.assertIn("checkpoints/b0-full/README.md", text)
         self.assertNotIn("BEGIN OPENSSH PRIVATE KEY", text)
         self.assertNotIn("huggingface/SSH.md", text)
 

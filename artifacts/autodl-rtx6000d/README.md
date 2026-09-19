@@ -82,7 +82,7 @@ Nightly 目标：`https://download.pytorch.org/whl/nightly/cu130` 上当天的 t
 
 **已切换（2026-09-19T00:27Z）：** 从 step **10560** 同阶段 resume，新算子进内存图。`grouped_mm=True`，`te=True`，`te_nvfp4=False`（TE NVFP4 Linear 在 sm_120 上失败后整进程禁用），`return_logits=False`。吞吐约 **1670 → 2820 tok/s**，mem **42092 → 56090 MiB**。
 
-**释放前快照（2026-09-19T02:42Z）：** Hub overlay step **16020**，`tokens_in_phase=65,488,896`（≈0.82%），sha256 `b5763b98…`。B0 未跑完 8e9。下一台接训见 [`checkpoints/b0-full/README.md`](../../checkpoints/b0-full/README.md)。
+**释放前快照（2026-09-19T02:42Z）：** Hub overlay step **16020**，`tokens_in_phase=65,488,896`（≈0.82%），sha256 `b5763b98…`。B0 未跑完 8e9。B200 已从该 overlay 续训；当前 Hub 钉见 [`checkpoints/b0-full/README.md`](../../checkpoints/b0-full/README.md)（step **25460**）。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 

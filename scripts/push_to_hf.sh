@@ -195,6 +195,12 @@ fi
 if [[ -f "$ROOT/huggingface/.gitattributes" ]]; then
   add_artifact "$ROOT/huggingface/.gitattributes" ".gitattributes"
 fi
+# Hub folder card for the live B0 overlay. Weights are extra args; this
+# README must still ship or https://huggingface.co/.../checkpoints/b0-full
+# stays on a stale 6000D pin.
+if [[ -f "$ROOT/checkpoints/b0-full/README.md" ]]; then
+  add_artifact "$ROOT/checkpoints/b0-full/README.md" "checkpoints/b0-full/README.md"
+fi
 
 for raw in "${EXTRA_FILES[@]+"${EXTRA_FILES[@]}"}"; do
   dest="$(resolve_extra "$raw")"

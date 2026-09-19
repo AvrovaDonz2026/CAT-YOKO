@@ -45,6 +45,7 @@ class B0FullLauncherTests(unittest.TestCase):
         self.assertIn("huggingface.co/AvrovaDonz/CAT-YOKO", body)
         self.assertIn("8e9", body)
         self.assertIn("checkpoints/b0/", body)
+        self.assertIn("blob/main/checkpoints/b0-full/README.md", body)
 
     def test_nightly_upgrade_script(self) -> None:
         up = ROOT / "scripts" / "upgrade_torch_te_nightly_autodl.sh"

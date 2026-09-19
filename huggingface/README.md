@@ -64,13 +64,32 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | 语料 | Ultra-FineWeb（en / zh）+ UltraData-Math |
 | Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
 
+## 当前 B0 快照
+
+发布信封 **进行中**（DummyStream，尚未跑完 8e9）。训练还在跑时约每 10 分钟覆盖同路径。不是终局。
+
+| 项 | 值 |
+| --- | --- |
+| 文件 | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
+| 文件夹说明 | [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md) |
+| step | **25460** |
+| tokens_in_phase | 117,917,696（信封 8e9 的 ≈1.47%） |
+| sha256 | `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c` |
+| 张量 | 132，无 Adam |
+| 机器 | Vast NVIDIA B200 SM 10.0 |
+| 运行时 | torch 2.11+cu128 + TE nvcc 12.9 SM100 |
+| 吞吐 / 显存 | **micro-batch=2**，~15.7k tok/s，Trainer ~138GiB |
+| 续训 | MiniCPM5 上采样后 overlay 本文件；同阶段 resume 保留 `tokens_in_phase` |
+
+代码与指针：[GitHub AvrovaDonz2026/CAT-YOKO](https://github.com/AvrovaDonz2026/CAT-YOKO)（不用 LFS）。
+
 ## 当前权重
 
 | 路径 | 来源 | 说明 |
 | --- | --- | --- |
 | `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 | `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
-| `checkpoints/b0-full/trainable.pt` | Vast B200 发布档 B0 进行中（8e9 信封，seq=4096） | Hub 钉 step **25460**；`tokens_in_phase=117,917,696`（≈1.47%）；sha256 `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c`。132 张量、无 Adam。torch 2.11+cu128 + TE nvcc 12.9 SM100。**micro-batch=2**（~15.7k tok/s，HBM ~138GiB）。训练还在跑时约每 10 分钟覆盖本文件。MiniCPM5 上采样后 overlay 本文件，同阶段 resume。不是终局。 |
+| `checkpoints/b0-full/trainable.pt` | Vast B200 发布档 B0 进行中（8e9 信封，seq=4096） | 见上一节「当前 B0 快照」。step **25460**，sha256 `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c`。 |
 | `checkpoints/b1/trainable.pt` | 6000D B1 `--try`（等 GPU） | decoder + `lm_head` + 最终 RMSNorm；resume B0 overlay + MiniCPM5。尚未上传 |
 | `checkpoints/b2/` | 6000D B2 `--try`（待 GPU） | 全模型 overlay；resume B1 + MiniCPM5 encoder/embed。指针 [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
 
@@ -111,6 +130,8 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 Data: Ultra-FineWeb en/zh + UltraData-Math. Tokenizer: [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B).
 
-This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envelopes): `checkpoints/b0/trainable.pt` (32 steps), `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap), `checkpoints/b0-full/` (published B0 in progress; same path overwritten about every 10 minutes), `checkpoints/b1/` (B1 `--try`, pending GPU), and `checkpoints/b2/` (B2 `--try`, pending GPU). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
+This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envelopes): `checkpoints/b0/trainable.pt` (32 steps), `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap), `checkpoints/b1/` (B1 `--try`, pending GPU), and `checkpoints/b2/` (B2 `--try`, pending GPU).
+
+**Current published B0 overlay** (in progress, DummyStream, not finished 8e9): [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt). Step **25460**, `tokens_in_phase=117,917,696` (≈1.47% of 8e9), sha256 `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c`. Vast B200, micro-batch=2, ~15.7k tok/s. Same path overwritten about every 10 minutes. Folder card: [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
 
 License: this repo BSD-3-Clause; MiniCPM5 base Apache-2.0. No eval scores.
