@@ -85,6 +85,25 @@ def token_mean_nll(weighted: float, n_valid: float) -> float:
     return weighted / n_valid
 
 
+def _host_step_stats(
+    nll_w: torch.Tensor,
+    n_valid: torch.Tensor,
+    loss: torch.Tensor,
+    aux: torch.Tensor,
+) -> tuple[float, float, float, float]:
+    """One D2H for nll/n_valid/loss/aux instead of four ``.item()`` syncs."""
+    packed = torch.stack(
+        (
+            nll_w.detach().float().reshape(()),
+            n_valid.detach().float().reshape(()),
+            loss.detach().float().reshape(()),
+            aux.detach().float().reshape(()),
+        )
+    )
+    vals = packed.cpu().tolist()
+    return float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3])
+
+
 enable_expandable_segments()
 
 
@@ -706,6 +725,7 @@ class Trainer:
                         phase_budget=phase_budget,
                     )
                 t0 = time.perf_counter()
+                stats_nll_w = stats_n_valid = stats_loss = stats_aux = None
                 for micro_i in range(self.accum):
                     batch = stream.batch(self.micro_batch, self.device)
                     step_tokens += int(batch["input_ids"].numel())
@@ -725,16 +745,39 @@ class Trainer:
                                 ignore=shift_labels,
                             )
                         loss.backward()
+                    z = out["loss"].detach().reshape(()).float()
+                    if stats_nll_w is None:
+                        stats_nll_w = z.new_zeros(())
+                        stats_n_valid = z.new_zeros(())
+                        stats_loss = z.new_zeros(())
+                        stats_aux = z.new_zeros(())
                     n_valid = out.get("n_valid")
-                    n_valid_f = float(n_valid.detach()) if n_valid is not None else 0.0
-                    if n_valid_f > 0:
-                        step_nll_w += float(out["nll"].detach()) * n_valid_f
-                        step_n_valid += n_valid_f
-                    step_loss += float(out["loss"].detach()) / self.accum
-                    step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
+                    n_valid_t = (
+                        n_valid.detach().reshape(()).float()
+                        if torch.is_tensor(n_valid)
+                        else z.new_zeros(())
+                    )
+                    nll_t = out["nll"].detach().reshape(()).float()
+                    stats_nll_w = stats_nll_w + torch.where(n_valid_t > 0, nll_t * n_valid_t, z.new_zeros(()))
+                    stats_n_valid = stats_n_valid + n_valid_t
+                    stats_loss = stats_loss + z / self.accum
+                    aux = out.get("aux")
+                    aux_t = aux.detach().reshape(()).float() if torch.is_tensor(aux) else z.new_zeros(())
+                    stats_aux = stats_aux + aux_t / self.accum
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
-                moe_stats = moe_utilization(unwrap(model))
+                next_step = step + 1
+                will_log = next_step == 1 or next_step % self.log_every == 0 or (
+                    max_steps is not None and next_step == max_steps
+                )
+                if will_log:
+                    moe_stats = moe_utilization(unwrap(model))
                 unwrap(model).step_router_bias()
+                if stats_nll_w is None:
+                    step_nll_w = step_n_valid = step_loss = step_aux = 0.0
+                else:
+                    step_nll_w, step_n_valid, step_loss, step_aux = _host_step_stats(
+                        stats_nll_w, stats_n_valid, stats_loss, stats_aux
+                    )
                 step_nll_w = reduce_sum(step_nll_w, device=str(self.device), world=self.world)
                 step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
                 step_nll = token_mean_nll(step_nll_w, step_n_valid)

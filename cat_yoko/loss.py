@@ -7,6 +7,8 @@ import math
 import torch
 import torch.nn.functional as F
 
+_CE_CHUNK_CACHE: dict[tuple[str, int, int], int] = {}
+
 
 def _ce_chunk_tokens(
     n_tok: int,
@@ -21,13 +23,20 @@ def _ce_chunk_tokens(
         return max(n_tok, 1)
     if device.type != "cuda" or not torch.cuda.is_available():
         return 512
+    key = (str(device), int(vocab), int(n_tok))
+    hit = _CE_CHUNK_CACHE.get(key)
+    if hit is not None:
+        return hit
     try:
         free, _total = torch.cuda.mem_get_info(device)
     except Exception:
+        _CE_CHUNK_CACHE[key] = 512
         return 512
     # fp32 logits are ``chunk * V * 4`` bytes; 8× slack leaves room for dlogits.
     max_chunk = int(free // (32 * max(int(vocab), 1)))
-    return min(n_tok, max(512, max_chunk))
+    step = min(n_tok, max(512, max_chunk))
+    _CE_CHUNK_CACHE[key] = step
+    return step
 
 
 def linear_cross_entropy(

@@ -18,6 +18,28 @@ from torch import nn
 from cat_yoko.config import CATYokoConfig
 
 
+def module_has_trainable(mod: nn.Module | None) -> bool:
+    """Cached ``any(p.requires_grad)``. Freeze/wrap run before the train loop."""
+    if mod is None:
+        return False
+    flag = getattr(mod, "_has_trainable_params", None)
+    if not isinstance(flag, bool):
+        flag = any(p.requires_grad for p in mod.parameters())
+        try:
+            mod._has_trainable_params = flag
+        except Exception:
+            return flag
+    return flag
+
+
+def _repeat_by_counts(values: torch.Tensor, counts: torch.Tensor, output_size: int) -> torch.Tensor:
+    """``repeat_interleave`` with known length so CUDA skips ``repeats.sum()`` sync."""
+    try:
+        return torch.repeat_interleave(values, counts, output_size=int(output_size))
+    except TypeError:
+        return torch.repeat_interleave(values, counts)
+
+
 def grouped_mm_available() -> bool:
     """True when this PyTorch build exposes grouped GEMM (``F.grouped_mm`` / ``_grouped_mm``)."""
     return callable(getattr(F, "grouped_mm", None)) or callable(getattr(torch, "_grouped_mm", None))
@@ -35,25 +57,28 @@ def _grouped_wgrad(x: torch.Tensor, dy: torch.Tensor, weight: torch.Tensor, offs
     """``dW[e] = dy_e.T @ x_e``. Prefer one padded bmm; serial slices if hugely imbalanced."""
     e, n_out, k = weight.shape
     n_tok = int(x.size(0))
+    if e <= 0 or n_tok == 0:
+        return torch.zeros_like(weight)
     offs64 = offs.to(dtype=torch.int64, device=x.device)
     counts = torch.diff(offs64, prepend=offs64.new_zeros(1))
-    max_n = int(counts.max().item()) if e else 0
-    if max_n <= 0 or n_tok == 0:
+    max_n = int(counts.max().item())
+    if max_n <= 0:
         return torch.zeros_like(weight)
     if max_n * e > 8 * n_tok:
         dw = torch.zeros_like(weight)
         prev = 0
-        for ei, end in enumerate(offs64.tolist()):
-            end_i = int(end)
-            if end_i > prev:
-                dw[ei] = dy[prev:end_i].T @ x[prev:end_i]
-            prev = end_i
+        for ei, n in enumerate(counts.detach().cpu().tolist()):
+            n_i = int(n)
+            if n_i:
+                dw[ei] = dy[prev : prev + n_i].T @ x[prev : prev + n_i]
+            prev += n_i
         return dw
     starts = torch.zeros(e, dtype=torch.int64, device=x.device)
     if e > 1:
         starts[1:] = offs64[:-1]
-    expert_sorted = torch.repeat_interleave(torch.arange(e, device=x.device), counts)
-    local = torch.arange(n_tok, device=x.device) - torch.repeat_interleave(starts, counts)
+    ids = torch.arange(e, device=x.device)
+    expert_sorted = _repeat_by_counts(ids, counts, n_tok)
+    local = torch.arange(n_tok, device=x.device) - _repeat_by_counts(starts, counts, n_tok)
     x_pad = x.new_zeros(e, max_n, k)
     dy_pad = dy.new_zeros(e, max_n, n_out)
     x_pad[expert_sorted, local] = x

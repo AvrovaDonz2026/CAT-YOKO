@@ -40,7 +40,7 @@ bash scripts/run_b0_full_b200.sh
 
 启动参数：**seq=4096**，`--no-offload-encoder`，`--no-grad-ckpt`（约 179GiB HBM），`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
 
-当前 B0（nvcc 12.9 cubin，micro-batch=1）：约 **11.7k tok/s**（~350ms/step），HBM ~96/183GiB。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。Hub overlay step **18340**。热路径已走 `collapse_doc_ids` / 一次 D2H 的 MoE 统计 / 按 HBM 自动加大的 CE chunk。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
+当前 B0（nvcc 12.9 cubin，micro-batch=1）：约 **11.7k tok/s**（~350ms/step），HBM ~96/183GiB。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。Hub overlay step **18340**。热路径：`collapse_doc_ids`、向量化 `pad_packed_counts`（无每层 `.tolist()`）、`repeat_interleave(..., output_size=)`、CE chunk 缓存、一步一次 D2H 的 nll/aux。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
 
 环境变量 `CAT_YOKO_TE_NVFP4=0` 可强制仿真。`FORCE_SM120=1` 才允许把 B200 启动脚本跑在 sm_120 上。
 

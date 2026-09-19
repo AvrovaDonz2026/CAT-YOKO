@@ -39,6 +39,12 @@ def _b0_new_module_params(model: CATYokoForCausalLM):
         yield from blk.ln_cross.parameters()
 
 
+def _clear_trainable_cache(model: CATYokoForCausalLM) -> None:
+    for m in model.modules():
+        if hasattr(m, "_has_trainable_params"):
+            delattr(m, "_has_trainable_params")
+
+
 def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
     if phase not in {"B0", "B1", "B2"}:
         raise ValueError(phase)
@@ -47,6 +53,7 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
         p.requires_grad = True
     model.set_detach(phase != "B2")
     if phase == "B2":
+        _clear_trainable_cache(model)
         return
     # Freeze encoder + input embedding (Theorem E). Untied lm_head is frozen
     # in B0 (new-modules only) and trained in B1 (does not drift X^0).
@@ -74,6 +81,7 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
             if id(p) not in keep:
                 p.requires_grad = False
     # B1: decoder stack (self-attn, mlp, ln1/ln2, final norm) stays trainable.
+    _clear_trainable_cache(model)
 
 
 def trainable_names(model: CATYokoForCausalLM) -> list[str]:

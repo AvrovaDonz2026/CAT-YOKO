@@ -199,56 +199,51 @@ def pad_leading_to_block(x: torch.Tensor, block: int = 16) -> tuple[torch.Tensor
     return x2, n
 
 
-def pad_packed_counts(x_sorted: torch.Tensor, counts: torch.Tensor, block: int = 16) -> tuple[torch.Tensor, torch.Tensor, list[tuple[int, int]]]:
+def pad_packed_counts(
+    x_sorted: torch.Tensor, counts: torch.Tensor, block: int = 16
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Insert zero rows so each expert's token count is 0 or a multiple of ``block``.
 
     ``x_sorted`` is packed by expert id. Returns padded packed tensor, new
-    counts (length ``E``), and ``[(padded_start, n_real), ...]`` for experts
-    with ``n_real > 0`` so the caller can drop pad rows.
+    counts (length ``E``, same device as ``x_sorted``), and ``dest`` (int64
+    ``[n_tok]``) mapping original rows into the padded tensor.
+
+    Vectorized: one optional scalar D2H for the pad amount, no per-expert
+    host list and no per-expert ``narrow`` / ``cat``.
     """
-    counts_list = [int(v) for v in counts.tolist()]
-    if not counts_list:
-        return x_sorted, counts, []
-    if all(c == 0 or c % block == 0 for c in counts_list):
-        keeps = []
-        off = 0
-        for c in counts_list:
-            if c:
-                keeps.append((off, c))
-            off += c
-        return x_sorted, counts.to(dtype=torch.int64), keeps
-    parts: list[torch.Tensor] = []
-    new_counts: list[int] = []
-    keeps: list[tuple[int, int]] = []
-    offset = 0
-    padded_off = 0
+    block = max(int(block), 1)
+    counts = counts.to(device=x_sorted.device, dtype=torch.int64).reshape(-1)
+    n_tok = int(x_sorted.size(0))
+    e = int(counts.numel())
+    dest0 = x_sorted.new_empty(0, dtype=torch.int64)
+    if e == 0 or n_tok == 0:
+        return x_sorted, counts, dest0
+    new_counts = ((counts + (block - 1)) // block) * block
+    pad_amt = int((new_counts - counts).sum().item())
+    if pad_amt <= 0:
+        dest = torch.arange(n_tok, device=x_sorted.device, dtype=torch.int64)
+        return x_sorted, new_counts, dest
+    old_ends = torch.cumsum(counts, dim=0)
+    old_starts = old_ends - counts
+    new_starts = torch.cumsum(new_counts, dim=0) - new_counts
+    token = torch.arange(n_tok, device=x_sorted.device, dtype=torch.int64)
+    expert = torch.searchsorted(old_ends, token, right=True).clamp(0, e - 1)
+    dest = new_starts[expert] + (token - old_starts[expert])
     k = int(x_sorted.shape[-1])
-    for n in counts_list:
-        if n <= 0:
-            new_counts.append(0)
-            continue
-        sl = x_sorted.narrow(0, offset, n)
-        pad = nvfp4_pad_tokens(n, block) - n
-        if pad:
-            sl = F.pad(sl, (0, 0, 0, pad))
-        parts.append(sl)
-        new_counts.append(n + pad)
-        keeps.append((padded_off, n))
-        padded_off += n + pad
-        offset += n
-    if not parts:
-        return x_sorted, x_sorted.new_zeros(len(counts_list), dtype=torch.int64), []
-    return torch.cat(parts, dim=0), x_sorted.new_tensor(new_counts, dtype=torch.int64), keeps
+    x_pad = x_sorted.new_zeros(n_tok + pad_amt, k)
+    x_pad[dest] = x_sorted
+    return x_pad, new_counts, dest
 
 
-def unpad_packed(y_padded: torch.Tensor, keeps: list[tuple[int, int]], n_tok: int) -> torch.Tensor:
-    """Gather real rows after ``pad_packed_counts``."""
-    if not keeps:
-        return y_padded.new_zeros(n_tok, y_padded.size(-1))
-    if int(y_padded.size(0)) == n_tok:
+def unpad_packed(y_padded: torch.Tensor, dest: torch.Tensor, n_tok: int) -> torch.Tensor:
+    """Gather real rows after ``pad_packed_counts`` via ``dest`` indices."""
+    if n_tok <= 0:
+        return y_padded.new_zeros(0, y_padded.size(-1) if y_padded.ndim > 1 else 0)
+    if int(y_padded.size(0)) == int(n_tok):
         return y_padded
-    parts = [y_padded.narrow(0, start, n) for start, n in keeps]
-    return torch.cat(parts, dim=0)
+    if dest.numel() == 0:
+        return y_padded.new_zeros(n_tok, y_padded.size(-1))
+    return y_padded.index_select(0, dest.to(device=y_padded.device, dtype=torch.int64))
 
 
 def _env_te_flag() -> str | None:
@@ -392,7 +387,7 @@ def te_grouped_swiglu(
     device = x_sorted.device
     trainable = any(bool(e.gate_proj.weight.requires_grad) for e in experts)
     align = nvfp4_grouped_token_align()
-    x_use, counts_use, keeps = pad_packed_counts(
+    x_use, counts_use, dest = pad_packed_counts(
         x_sorted, counts.to(dtype=torch.int64), block=align
     )
     pack = None if owner is None else getattr(owner, "_te_grouped", None)
@@ -473,6 +468,6 @@ def te_grouped_swiglu(
                     u = up_g(x_use, splits)
                     hidden = F.silu(g) * u
                     y = down_g(hidden, splits)
-        return unpad_packed(y, keeps, n_tok)
+        return unpad_packed(y, dest, n_tok)
     except Exception:
         return None

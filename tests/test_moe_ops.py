@@ -198,5 +198,28 @@ class MoeUtilizationTests(unittest.TestCase):
         self.assertGreater(out["moe_cv"], 0.0)
 
 
+class TrainableCacheTests(unittest.TestCase):
+    def test_freeze_invalidates_and_encoder_is_frozen(self) -> None:
+        from cat_yoko.moe import module_has_trainable
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        self.assertTrue(module_has_trainable(model.encoder[0].mlp))
+        apply_freeze(model, "B0")
+        self.assertFalse(module_has_trainable(model.encoder[0].mlp))
+        self.assertFalse(module_has_trainable(model.decoder[0].mlp))
+        self.assertTrue(module_has_trainable(model.decoder[0].cross_attn))
+
+    def test_repeat_by_counts_matches_repeat_interleave(self) -> None:
+        from cat_yoko.moe import _repeat_by_counts
+
+        counts = torch.tensor([2, 0, 3], dtype=torch.int64)
+        ids = torch.arange(3)
+        got = _repeat_by_counts(ids, counts, 5)
+        ref = torch.repeat_interleave(ids, counts)
+        self.assertTrue(torch.equal(got, ref))
+        self.assertEqual(got.tolist(), [0, 0, 2, 2, 2])
+
+
 if __name__ == "__main__":
     unittest.main()

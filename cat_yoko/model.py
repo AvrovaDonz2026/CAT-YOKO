@@ -11,6 +11,7 @@ from torch import nn
 from cat_yoko.attention import collapse_doc_ids
 from cat_yoko.blocks import DecoderBlock, EncoderBlock
 from cat_yoko.config import CATYokoConfig, encoder_layer_kind
+from cat_yoko.moe import module_has_trainable
 from cat_yoko.offload import move_module, offload_checkpoint_block
 from cat_yoko.rope import RMSNorm
 
@@ -71,7 +72,7 @@ class CATYokoForCausalLM(nn.Module):
         aux = getattr(getattr(blk, "mlp", None), "last_aux", None)
         if aux is None:
             aux = y.new_zeros(())
-        elif not any(p.requires_grad for p in blk.mlp.parameters()):
+        elif not module_has_trainable(blk.mlp):
             aux = y.new_zeros(())
         return y, aux
 
@@ -145,7 +146,7 @@ class CATYokoForCausalLM(nn.Module):
             fn = getattr(mlp, "step_router_bias", None)
             if not callable(fn):
                 continue
-            if not any(p.requires_grad for p in mlp.parameters()):
+            if not module_has_trainable(mlp):
                 mlp.last_load = None
                 mlp._load_n = 0
                 continue

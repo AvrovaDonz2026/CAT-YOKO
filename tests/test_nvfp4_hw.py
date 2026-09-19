@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
 import unittest
 from pathlib import Path
@@ -136,7 +137,7 @@ class FamilyTests(unittest.TestCase):
         self.assertTrue(nvfp4_leading_ok(16, 128, 128))
         self.assertTrue(nvfp4_leading_ok(4096, 2048, 2048))
         self.assertFalse(nvfp4_leading_ok(8, 128, 128))
-        from cat_yoko.nvfp4_hw import nvfp4_grouped_token_align, nvfp4_pad_tokens, pad_packed_counts
+        from cat_yoko.nvfp4_hw import nvfp4_grouped_token_align, nvfp4_pad_tokens, pad_packed_counts, unpad_packed
 
         self.assertEqual(nvfp4_pad_tokens(0), 0)
         self.assertEqual(nvfp4_pad_tokens(16), 16)
@@ -147,14 +148,30 @@ class FamilyTests(unittest.TestCase):
         self.assertEqual(nvfp4_grouped_token_align("cpu"), 16)
         x = torch.randn(12, 16)
         counts = torch.tensor([5, 7], dtype=torch.int64)
-        xp, cp, keeps = pad_packed_counts(x, counts)
+        xp, cp, dest = pad_packed_counts(x, counts)
         self.assertEqual(cp.tolist(), [16, 16])
         self.assertEqual(int(xp.size(0)), 32)
-        self.assertEqual(keeps, [(0, 5), (16, 7)])
-        xp64, cp64, keeps64 = pad_packed_counts(x, counts, block=64)
+        self.assertEqual(dest.tolist(), list(range(5)) + list(range(16, 23)))
+        self.assertTrue(torch.equal(xp[dest], x))
+        self.assertTrue(torch.equal(unpad_packed(xp, dest, 12), x))
+        xp64, cp64, dest64 = pad_packed_counts(x, counts, block=64)
         self.assertEqual(cp64.tolist(), [64, 64])
         self.assertEqual(int(xp64.size(0)), 128)
-        self.assertEqual(keeps64, [(0, 5), (64, 7)])
+        self.assertEqual(dest64.tolist(), list(range(5)) + list(range(64, 71)))
+        self.assertTrue(torch.equal(unpad_packed(xp64, dest64, 12), x))
+        aligned = torch.randn(32, 8)
+        xa, ca, da = pad_packed_counts(aligned, torch.tensor([16, 16], dtype=torch.int64), block=16)
+        self.assertIs(xa, aligned)
+        self.assertEqual(ca.tolist(), [16, 16])
+        self.assertEqual(da.tolist(), list(range(32)))
+        mixed = torch.randn(6, 4)
+        xm, cm, dm = pad_packed_counts(mixed, torch.tensor([2, 0, 4], dtype=torch.int64), block=16)
+        self.assertEqual(cm.tolist(), [16, 0, 16])
+        self.assertEqual(int(xm.size(0)), 32)
+        self.assertTrue(torch.equal(unpad_packed(xm, dm, 6), mixed))
+        src = inspect.getsource(pad_packed_counts)
+        self.assertIn("searchsorted", src)
+        self.assertNotIn(".tolist()", src)
 
 
 class TeWrapTests(unittest.TestCase):

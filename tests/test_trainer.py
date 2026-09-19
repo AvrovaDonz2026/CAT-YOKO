@@ -543,6 +543,19 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(_ce_chunk_tokens(4096, 130560, None, torch.device("cpu")), 512)
         self.assertEqual(_ce_chunk_tokens(4096, 130560, 3, torch.device("cpu")), 3)
 
+    def test_host_step_stats_match_python_floats(self) -> None:
+        from cat_yoko.trainer import _host_step_stats
+
+        nll = torch.tensor(1.5)
+        n_valid = torch.tensor(8.0)
+        loss = torch.tensor(1.25)
+        aux = torch.tensor(0.0)
+        w, n, lo, a = _host_step_stats(nll, n_valid, loss, aux)
+        self.assertAlmostEqual(w, 1.5)
+        self.assertAlmostEqual(n, 8.0)
+        self.assertAlmostEqual(lo, 1.25)
+        self.assertAlmostEqual(a, 0.0)
+
     def test_runtime_flags_drop_logits_without_teacher(self) -> None:
         from cat_yoko.model import CATYokoForCausalLM
 
