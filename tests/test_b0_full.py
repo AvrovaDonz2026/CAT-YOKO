@@ -86,6 +86,7 @@ class B200LauncherTests(unittest.TestCase):
         self.assertIn("b0-full", text)
         self.assertIn("HF_HOME", text)
         self.assertIn("huggingface.co", text)
+        self.assertIn("nvidia/cublas/lib", text)
         self.assertNotRegex(text, r"cat_yoko\.b0.*--try")
         self.assertIn("Does not download Ultra-FineWeb", text)
         self.assertNotIn("git fetch", text)

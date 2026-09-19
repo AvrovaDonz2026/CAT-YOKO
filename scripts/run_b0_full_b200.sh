@@ -16,6 +16,18 @@ export HF_ENDPOINT="${HF_ENDPOINT:-https://huggingface.co}"
 export HF_HOME="${HF_HOME:-$WORK/.hf_home}"
 export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$HF_HOME/hub}"
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
+# TE / nvcc 12.9 prefix does not always put libcublas on the default loader path.
+for _d in \
+  /usr/local/cuda-12.9/lib64 \
+  /usr/local/cuda-12.8/lib64 \
+  /venv/main/lib/python3.12/site-packages/nvidia/cublas/lib \
+  /venv/main/lib/python3.12/site-packages/nvidia/cuda_runtime/lib \
+  /venv/main/lib/python3.12/site-packages/nvidia/cudnn/lib; do
+  if [ -d "$_d" ]; then
+    export LD_LIBRARY_PATH="$_d${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  fi
+done
+unset _d
 if [ -x /venv/main/bin/python ]; then
   # shellcheck disable=SC1091
   source /venv/main/bin/activate
