@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from cat_yoko.attention import collapse_doc_ids
 from cat_yoko.blocks import DecoderBlock, EncoderBlock
 from cat_yoko.config import CATYokoConfig, encoder_layer_kind
 from cat_yoko.offload import move_module, offload_checkpoint_block
@@ -83,8 +84,10 @@ class CATYokoForCausalLM(nn.Module):
         if self.offload_encoder and not self.offload_blocks:
             move_module(self.encoder, input_ids.device)
         x = self.embed(input_ids) * self.scale_emb
-        if doc_ids is None:
-            doc_ids = torch.zeros_like(input_ids)
+        # DummyStream / single-doc batches must not become zero tensors: that
+        # forced a host sync in every attention layer. Packed multi-doc rows
+        # still pass the real ids.
+        doc_ids = collapse_doc_ids(doc_ids)
         aux = x.new_zeros(())
         # B0/B1: cache is detached, so encoder FPROP does not need an autograd
         # graph (TE otherwise saves activations / looks up NVFP4 WGRAD).

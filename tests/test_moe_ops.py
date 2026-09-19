@@ -171,5 +171,32 @@ class GroupedMoETests(unittest.TestCase):
         self.assertTrue(torch.allclose(w.grad, dw_ref, atol=1e-5, rtol=1e-5))
 
 
+class MoeUtilizationTests(unittest.TestCase):
+    def test_stacked_stats_match_per_layer_mean(self) -> None:
+        from cat_yoko.moe import moe_utilization
+
+        class Mlp:
+            def __init__(self, load: torch.Tensor) -> None:
+                self.last_load = load
+
+            def mean_pending_load(self):
+                return self.last_load
+
+        class Blk:
+            def __init__(self, load: torch.Tensor) -> None:
+                self.mlp = Mlp(load)
+
+        class Model:
+            def __init__(self) -> None:
+                self.encoder = [Blk(torch.tensor([0.2, 0.8])), Blk(torch.tensor([0.5, 0.5]))]
+                self.decoder = []
+
+        out = moe_utilization(Model())
+        self.assertEqual(out["moe_layers"], 2)
+        self.assertAlmostEqual(out["moe_max"], 0.8, places=5)
+        self.assertAlmostEqual(out["moe_min"], 0.2, places=5)
+        self.assertGreater(out["moe_cv"], 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()

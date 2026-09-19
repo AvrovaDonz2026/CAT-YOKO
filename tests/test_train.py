@@ -274,7 +274,7 @@ class TinyTrainTests(unittest.TestCase):
         self.assertEqual(bias[2, 2].item(), 0.0)
 
     def test_causal_fastpath_matches_mask(self) -> None:
-        from cat_yoko.attention import _needs_explicit_mask, _sdpa, _window_causal_bias
+        from cat_yoko.attention import collapse_doc_ids, _needs_explicit_mask, _sdpa, _window_causal_bias
 
         torch.manual_seed(0)
         q = torch.randn(1, 2, 8, 8)
@@ -285,9 +285,13 @@ class TinyTrainTests(unittest.TestCase):
         fast = _sdpa(q, k, v, causal=True)
         self.assertTrue(torch.allclose(fast, masked, atol=1e-4, rtol=1e-4))
         doc = torch.zeros(2, 8, dtype=torch.long)
-        self.assertFalse(_needs_explicit_mask(8, 8, doc))
+        self.assertIsNone(collapse_doc_ids(doc))
+        self.assertFalse(_needs_explicit_mask(8, 8, collapse_doc_ids(doc)))
         mixed = torch.tensor([[0, 0, 1, 1, 1, 1, 1, 1], [0] * 8])
-        self.assertTrue(_needs_explicit_mask(8, 8, mixed))
+        self.assertIsNotNone(collapse_doc_ids(mixed))
+        self.assertTrue(_needs_explicit_mask(8, 8, collapse_doc_ids(mixed)))
+        self.assertFalse(_needs_explicit_mask(8, 8, None))
+        self.assertTrue(_needs_explicit_mask(8, 4, None))
 
     def test_b0_frozen_moe_aux_is_zero(self) -> None:
         model = CATYokoForCausalLM(self.cfg)

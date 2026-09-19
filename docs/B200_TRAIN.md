@@ -40,6 +40,8 @@ bash scripts/run_b0_full_b200.sh
 
 启动参数：**seq=4096**，`--no-offload-encoder`，`--no-grad-ckpt`（约 179GiB HBM），`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
 
+当前 B0（nvcc 12.9 cubin，micro-batch=1）：约 **11.2k tok/s**（~365ms/step），HBM ~92/183GiB，功耗 ~630/1000W，SM 占用随逐步 host sync 在 5%–97% 之间抖。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。下一趟 resume 会吃到：单次 `collapse_doc_ids`、MoE 统计一次 D2H、CE 按剩余 HBM 自动加大 chunk。不要为了试 micro-batch 杀掉正在跑的 B0。
+
 环境变量 `CAT_YOKO_TE_NVFP4=0` 可强制仿真。`FORCE_SM120=1` 才允许把 B200 启动脚本跑在 sm_120 上。
 
 ## B1 / B2

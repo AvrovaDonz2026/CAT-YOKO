@@ -76,13 +76,29 @@ def _sdpa(
     return out.to(q.dtype)
 
 
+def collapse_doc_ids(doc_ids: torch.Tensor | None) -> torch.Tensor | None:
+    """Keep packed document ids only when a row actually crosses a boundary.
+
+    DummyStream / single-doc rows are constant along the sequence. Passing
+    those tensors into every attention layer used to ``.item()`` 60+ times
+    per step and stall the CUDA pipeline. One check here, then ``None``.
+    """
+    if doc_ids is None or doc_ids.size(-1) <= 1:
+        return None
+    if not bool((doc_ids[..., 1:] != doc_ids[..., :-1]).any().item()):
+        return None
+    return doc_ids
+
+
 def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) -> bool:
-    """Dense causal SDPA is enough when the window covers the row and docs do not mix."""
+    """Dense causal SDPA is enough when the window covers the row and docs do not mix.
+
+    Callers that went through ``collapse_doc_ids`` pass ``None`` for single-doc
+    rows, so this is a Python branch with no GPU sync.
+    """
     if window < q_len:
         return True
-    if doc_ids is None or q_len <= 1:
-        return False
-    return bool((doc_ids[:, 1:] != doc_ids[:, :-1]).any().item())
+    return doc_ids is not None
 
 
 def _window_causal_bias(

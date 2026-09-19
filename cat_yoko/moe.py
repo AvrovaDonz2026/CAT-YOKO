@@ -246,8 +246,6 @@ def _swiglu_experts_grouped(
     n_tok = x_sorted.size(0)
     if n_tok == 0:
         return x_sorted
-    if int(counts.max().item()) <= 0:
-        return x_sorted.new_zeros(x_sorted.shape)
     offs = torch.cumsum(counts, dim=0).to(dtype=torch.int32)
     gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
     gu_w = torch.cat((gate_w, up_w), dim=1)
@@ -444,10 +442,7 @@ class MoE(nn.Module):
 
 def moe_utilization(model: nn.Module) -> dict[str, float]:
     """Layer-mean coefficient of variation of routed expert load (before bias step)."""
-    cvs: list[float] = []
-    maxs: list[float] = []
-    mins: list[float] = []
-    n_layers = 0
+    loads: list[torch.Tensor] = []
     encoder = getattr(model, "encoder", None)
     decoder = getattr(model, "decoder", None)
     blocks = list(encoder or []) + list(decoder or [])
@@ -463,16 +458,17 @@ def moe_utilization(model: nn.Module) -> dict[str, float]:
         p = load.detach().float().reshape(-1)
         if p.numel() == 0:
             continue
-        n_layers += 1
-        mean = float(p.mean().clamp_min(1e-12))
-        cvs.append(float(p.std(unbiased=False) / mean))
-        maxs.append(float(p.max()))
-        mins.append(float(p.min()))
-    if not cvs:
+        loads.append(p)
+    if not loads:
         return {"moe_cv": 0.0, "moe_max": 0.0, "moe_min": 0.0, "moe_layers": 0}
+    stacked = torch.stack(loads, dim=0)
+    mean = stacked.mean(dim=-1).clamp_min(1e-12)
+    cv = (stacked.std(dim=-1, unbiased=False) / mean).mean()
+    # One host transfer instead of 4×N_layers ``.item()`` syncs each log step.
+    stats = torch.stack((cv, stacked.max(), stacked.min())).detach().cpu().tolist()
     return {
-        "moe_cv": sum(cvs) / len(cvs),
-        "moe_max": max(maxs),
-        "moe_min": min(mins),
-        "moe_layers": n_layers,
+        "moe_cv": float(stats[0]),
+        "moe_max": float(stats[1]),
+        "moe_min": float(stats[2]),
+        "moe_layers": int(stacked.size(0)),
     }

@@ -536,6 +536,13 @@ class LoopTests(unittest.TestCase):
         self.assertTrue(torch.allclose(h1.grad, h2.grad, atol=1e-5, rtol=1e-5))
         self.assertTrue(torch.allclose(lm1.weight.grad, lm2.weight.grad, atol=1e-5, rtol=1e-5))
 
+    def test_ce_chunk_auto_cpu_stays_small(self) -> None:
+        from cat_yoko.loss import _ce_chunk_tokens
+
+        self.assertEqual(_ce_chunk_tokens(100, 130560, None, torch.device("cpu")), 100)
+        self.assertEqual(_ce_chunk_tokens(4096, 130560, None, torch.device("cpu")), 512)
+        self.assertEqual(_ce_chunk_tokens(4096, 130560, 3, torch.device("cpu")), 3)
+
     def test_runtime_flags_drop_logits_without_teacher(self) -> None:
         from cat_yoko.model import CATYokoForCausalLM
 
