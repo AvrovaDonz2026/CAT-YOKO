@@ -142,7 +142,7 @@ class B200LauncherTests(unittest.TestCase):
         overlay = ROOT / "scripts" / "download_hub_overlay.py"
         self.assertTrue(overlay.is_file())
         src = overlay.read_text()
-        self.assertIn("f3f0d8f9454a0c373ea74f528705d13c7fad1e1de55084f5fee50ca8300f29c8", src)
+        self.assertIn("756e986489d30b27cd7c12280ec7c207a4008d28549f84f8f243f663a90165fc", src)
         self.assertIn("AvrovaDonz/CAT-YOKO", src)
 
 

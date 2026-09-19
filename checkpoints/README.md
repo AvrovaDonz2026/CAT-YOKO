@@ -10,7 +10,7 @@
 
 12B 全图 `latest.pt` ≈ 23GiB，只写大盘（如 `/root/autodl-tmp`），不要写进 git。
 
-Hub 上 `checkpoints/b0/` 是 32 步 `--try`（gate 0.301），**不是** 8B 包络。发布信封进行中的 overlay 在 [`b0-full/`](b0-full/README.md)（B200 step 18340，≈0.94% of 8e9）。
+Hub 上 `checkpoints/b0/` 是 32 步 `--try`（gate 0.301），**不是** 8B 包络。发布信封进行中的 overlay 在 [`b0-full/`](b0-full/README.md)（B200 step 21500，≈1.10% of 8e9）。
 
 恢复 B0：
 
