@@ -1,0 +1,1757 @@
+{
+  "ok": true,
+  "n_claims": 142,
+  "n_fail": 0,
+  "n_deferred": 2,
+  "elapsed_s": 3.1,
+  "device": "cuda",
+  "graph": "bf16",
+  "name": "bf16-probe",
+  "dtype": "bf16",
+  "head_dim": 32,
+  "seq_len": 128,
+  "n_win": 32,
+  "encoder_layers": 3,
+  "use_kda": false,
+  "use_nvfp4": false,
+  "use_fp8": false,
+  "ops": {
+    "probe": {
+      "device": "cuda",
+      "dtype": "bfloat16",
+      "dense_gqa": "flash",
+      "dense_equal": "flash",
+      "masked_equal": "cudnn",
+      "hca_concat": "cudnn",
+      "head_dim": 32,
+      "seq": 128,
+      "flash_rejects_mask": true
+    },
+    "phases": {
+      "A": {
+        "phase": "A",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 12,
+          "masked_bf16": 30,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "B0": {
+        "phase": "B0",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "B1": {
+        "phase": "B1",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "B2": {
+        "phase": "B2",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "dense_cross",
+          "masked_window",
+          "fused_qkv",
+          "tf32",
+          "grouped_mm"
+        ]
+      },
+      "C-index": {
+        "phase": "C-index",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "indexer_fp32",
+          "masked_window",
+          "fused_qkv"
+        ]
+      },
+      "C-topk": {
+        "phase": "C-topk",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_csa_union",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "C-hca": {
+        "phase": "C-hca",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "masked_csa_union",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "C-win": {
+        "phase": "C-win",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "masked_csa_union",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "D-8k": {
+        "phase": "D-8k",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "dummy_needle",
+          "fused_qkv",
+          "tf32"
+        ]
+      },
+      "E": {
+        "phase": "E",
+        "tf32": true,
+        "matmul_precision": "high",
+        "grouped_mm": true,
+        "fused_qkv": true,
+        "sdpa": {
+          "kind": "dense",
+          "dtype": "bfloat16"
+        },
+        "sdpa_counts": {
+          "dense": 4,
+          "masked_bf16": 10,
+          "math_fp32": 0
+        },
+        "head_dim": 32,
+        "seq_len": 128,
+        "n_win": 32,
+        "use_fp8": false,
+        "use_nvfp4": false,
+        "intended": [
+          "masked_hca_concat",
+          "wsd",
+          "fused_qkv",
+          "tf32"
+        ]
+      }
+    }
+  },
+  "phases": {
+    "A": {
+      "nll": 4.84375,
+      "step": 0,
+      "ok": true,
+      "peak_mib": 0.0,
+      "tokens": 0,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 12,
+        "masked_bf16": 30,
+        "math_fp32": 0
+      }
+    },
+    "B0": {
+      "nll": 4.897709403451033,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 24.2880859375,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "B1": {
+      "nll": 4.897374430979331,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 28.1669921875,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "B2": {
+      "nll": 4.897286482683317,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.02294921875,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-index": {
+      "nll": 0.12389485538005829,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 23.35693359375,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-topk": {
+      "nll": 4.898465374323327,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.11669921875,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-hca": {
+      "nll": 4.896816944512795,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.13134765625,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "C-win": {
+      "nll": 4.89680252675935,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.12744140625,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "D-8k": {
+      "nll": 4.89634644515871,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.09033203125,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    },
+    "E": {
+      "nll": 4.896816944512795,
+      "step": 2,
+      "ok": true,
+      "peak_mib": 38.11474609375,
+      "sdpa": {
+        "kind": "dense",
+        "dtype": "bfloat16"
+      },
+      "sdpa_counts": {
+        "dense": 4,
+        "masked_bf16": 10,
+        "math_fp32": 0
+      }
+    }
+  },
+  "failed": [],
+  "deferred": [
+    {
+      "name": "pdsa.tier1_calibrated_fallback",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "not in published graph",
+      "expected": "FROZEN_SPEC PDSA off; inference-side, not this mini-train",
+      "note": "Tier 1 confidence-gated expand/fallback is planned, not C1 B0",
+      "deferred": true
+    },
+    {
+      "name": "pdsa.tier3_editable_memory",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "YOCO cache is append-only",
+      "expected": "bounded lifecycle is a later milestone",
+      "note": "",
+      "deferred": true
+    }
+  ],
+  "claims": [
+    {
+      "name": "arch.MiniCPM5 depth splits 16+26=42",
+      "group": "arch",
+      "ok": true,
+      "observed": "16+26",
+      "expected": "42",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.n_win covers CSA own-block (n_win\u2265m)",
+      "group": "arch",
+      "ok": true,
+      "observed": "8192",
+      "expected": ">=4",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.n_win covers HCA own-block (n_win\u2265m')",
+      "group": "arch",
+      "ok": true,
+      "observed": "8192",
+      "expected": ">=128",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.encoder schedule is 2 sliding + 7 CSA + 7 HCA",
+      "group": "arch",
+      "ok": true,
+      "observed": "slide=2 csa=7 hca=7",
+      "expected": "2/7/7",
+      "note": "16 layers cannot do 3 bootstrap and keep 1:1 CSA:HCA",
+      "deferred": false
+    },
+    {
+      "name": "arch.window-only encoder RF = 131072 < 256K",
+      "group": "arch",
+      "ok": true,
+      "observed": "131072",
+      "expected": "131072",
+      "note": "YOCO global read does not need encoder RF to cover N",
+      "deferred": false
+    },
+    {
+      "name": "arch.window-only encoder RF \u2265 128K primary target",
+      "group": "arch",
+      "ok": true,
+      "observed": "131072",
+      "expected": "\u2265128K via stacked 8K\u00d716 (still not required)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.shared global cache is 1 writer, Ld readers",
+      "group": "arch",
+      "ok": true,
+      "observed": "1\u00d7K,V read by 26 layers",
+      "expected": "YOCO once",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.early-exit is inference-only",
+      "group": "arch",
+      "ok": true,
+      "observed": "train: both stacks on all tokens",
+      "expected": "prefill: encoder all + decoder last pos",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.CSA/HCA masks are causal (n=64)",
+      "group": "arch",
+      "ok": true,
+      "observed": "0",
+      "expected": "0 leaks",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.CSA compressed path excludes own block",
+      "group": "arch",
+      "ok": true,
+      "observed": "0",
+      "expected": "0 own-block tokens via compress",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.window covers own-block hole (n_win\u2265m)",
+      "group": "arch",
+      "ok": true,
+      "observed": "0",
+      "expected": "0 uncovered own-block past tokens",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.YOCO cross-attn is causal",
+      "group": "arch",
+      "ok": true,
+      "observed": "0",
+      "expected": "0 leaks",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.indexer top-k \u2286 causal compressed set",
+      "group": "arch",
+      "ok": true,
+      "observed": "0",
+      "expected": "subset, never extends",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "arch.three mechanisms are distinct",
+      "group": "arch",
+      "ok": true,
+      "observed": "enc-CSA \u2260 cache-pool \u2260 dec-index",
+      "expected": "must not conflate",
+      "note": "see ARCHITECTURE_THEORY.md \u00a73",
+      "deferred": false
+    },
+    {
+      "name": "attention.no_csa_cuda_kernel",
+      "group": "attention",
+      "ok": true,
+      "observed": "no class CSA; LightningIndexer present",
+      "expected": "PyTorch SDPA / union mask, not a CSA kernel",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "theorem_b.union_causal",
+      "group": "attention",
+      "ok": true,
+      "observed": "future_hits=0 seq=128",
+      "expected": "W\u222aS_comp never sees p>t",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "theorem_b.window_covers_own_block",
+      "group": "attention",
+      "ok": true,
+      "observed": "n_win=32 m=8 m'=8",
+      "expected": "n_win>=m so own-block hole is in the window",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "theorem_b.compression_reaches_beyond_window",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "t=127 p=0 win=False comp=True",
+      "expected": "probe: a past token outside the window stays in S_comp",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "theorem_b.indexer_deletes_only",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "selected \u2286 S_comp",
+      "expected": "PDSA/DSA: top-k may delete compressed keys, never add",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "theorem_b.indexer_actually_deletes",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "index_topk=4 < n_blocks=16",
+      "expected": "topk is a real subset of S_comp on the probe graph",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "theorem_b.hca_excludes_own_slot",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "own compressed slot masked",
+      "expected": "write-first HCA own-block out; window is the fallback",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "pdsa.hca_concat_is_query_time_fallback",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "hca_attend concatenates window KV with pooled slots",
+      "expected": "PDSA \u00a75: write-first compression keeps a path to raw KV",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "pdsa.window_lt_seq_so_compression_matters",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "n_win=32 seq=128",
+      "expected": "probe graph must not hide compression behind a full-seq window",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "attention.window_gqa_causal",
+      "group": "attention",
+      "ok": true,
+      "observed": "WindowAttention prefix ignores last token",
+      "expected": "sliding GQA is causal",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "attention.csa_union_runs_causal",
+      "group": "attention",
+      "ok": true,
+      "observed": "csa_attend finite + prefix-stable",
+      "expected": "union mask, not a CSA kernel",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "pdsa.hca_runtime_concat_slots",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "sdpa_k=[144] want 128+16",
+      "expected": "HCA SDPA key length = window tokens + pooled slots",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "attention.hca_concat_runs_causal",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "hca_attend finite + prefix-stable",
+      "expected": "own-block out + window fallback",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.cross_attn_q_o_only",
+      "group": "yoco",
+      "ok": true,
+      "observed": "['q_proj.weight', 'o_proj.weight', 'q_norm.weight', 'k_norm.weight']",
+      "expected": "CrossAttention has W_Q/W_O, no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.cross_attn_cache_causal",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder query t ignores cache p>t",
+      "expected": "YOCO global cache is prefix-causal",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.theorem_a_gate_multiplies_cross",
+      "group": "yoco",
+      "ok": true,
+      "observed": "DecoderBlock: x += gate * cross",
+      "expected": "gate=0 \u2261 MiniCPM5 residual cut",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.split_16_26_published",
+      "group": "yoco",
+      "ok": true,
+      "observed": "16+26",
+      "expected": "16 encoder + 26 decoder",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.published_2_7_7",
+      "group": "yoco",
+      "ok": true,
+      "observed": "sliding=2 csa=7 hca=7",
+      "expected": "2+7+7",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.published_n_win_covers_hca",
+      "group": "attention",
+      "ok": true,
+      "observed": "n_win=8192 m=4 m'=128",
+      "expected": "8192 \u2265 128 and 8192 \u2265 4",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.probe_has_sliding_csa_hca",
+      "group": "yoco",
+      "ok": true,
+      "observed": "['sliding', 'csa', 'hca']",
+      "expected": "['sliding', 'csa', 'hca']",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "yoco.m2_off_flag",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "use_kda=False",
+      "expected": "M2/KDA default off",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "pdsa.query_aware_before_write_first",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "C-index\u2192C-topk\u2192C-hca\u2192C-win",
+      "expected": "CSA indexer/topk before HCA (PDSA \u00a714.2 Tier 2)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.kda_lights_first_when_implemented",
+      "group": "plan",
+      "ok": true,
+      "observed": "C-kda\u2192C-index\u2192C-topk\u2192C-hca\u2192C-win",
+      "expected": "hybrid-linear: do not train CSA/HCA then swap in KDA",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.attn_softmax_high_prec",
+      "group": "attention",
+      "ok": true,
+      "observed": "embed,rms_norm,qk_norm,router,gate,indexer,kda_gate,attn_softmax",
+      "expected": "softmax stays fp32",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.e_wsd_decay",
+      "group": "plan",
+      "ok": true,
+      "observed": "3.00e-04\u21923.00e-06",
+      "expected": "Phase E WSD to ~1/100 peak",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.mini_train_is_a_through_e",
+      "group": "plan",
+      "ok": true,
+      "observed": "A\u2192B0\u2192B1\u2192B2\u2192C-index\u2192C-topk\u2192C-hca\u2192C-win\u2192D-8k\u2192E",
+      "expected": "Phase A surgery through Phase E WSD; F/G are post-train",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.fg_registered_after_e",
+      "group": "plan",
+      "ok": true,
+      "observed": "G=grpo G-dpo=dpo F=sft",
+      "expected": "F/G exist; this mini-train stops at E",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.d8k_published_keeps_hca",
+      "group": "plan",
+      "ok": true,
+      "observed": "D-8k sparse=hca C-win seq=8192",
+      "expected": "long-context keeps C lighting; published C-win is 8K",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "pdsa.tier1_calibrated_fallback",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "not in published graph",
+      "expected": "FROZEN_SPEC PDSA off; inference-side, not this mini-train",
+      "note": "Tier 1 confidence-gated expand/fallback is planned, not C1 B0",
+      "deferred": true
+    },
+    {
+      "name": "pdsa.tier3_editable_memory",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "YOCO cache is append-only",
+      "expected": "bounded lifecycle is a later milestone",
+      "note": "",
+      "deferred": true
+    },
+    {
+      "name": "plan.c1_token_split",
+      "group": "plan",
+      "ok": true,
+      "observed": "8+27+15e9",
+      "expected": "C1",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.b0_gate_0_to_0.3",
+      "group": "yoco",
+      "ok": true,
+      "observed": "0.0\u21920.3",
+      "expected": "0\u21920.3",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "plan.b1_gate_to_1",
+      "group": "yoco",
+      "ok": true,
+      "observed": "1.0",
+      "expected": "1.0",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.dense_sdpa_prefers_flash",
+      "group": "attention",
+      "ok": true,
+      "observed": "Flash \u2192 cuDNN \u2192 efficient",
+      "expected": "dense causal fused kernels",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.masked_sdpa_skips_flash",
+      "group": "attention",
+      "ok": true,
+      "observed": "cuDNN + efficient, no Flash",
+      "expected": "Flash rejects attn_mask",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.masked_tries_bf16_before_fp32",
+      "group": "attention",
+      "ok": true,
+      "observed": "bf16 mask then fp32 math",
+      "expected": "Ampere CSA/HCA stay bf16 when the fused kernel runs",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.dense_kernel_list_not_tuple",
+      "group": "attention",
+      "ok": true,
+      "observed": "sdpa_kernel(list)",
+      "expected": "PyTorch sdpa_kernel wants a list",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.compute_is_bf16",
+      "group": "plan",
+      "ok": true,
+      "observed": "nvfp4=False fp8=False",
+      "expected": "mini-verify is BF16; NVFP4/FP8 stay off",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.kda_off",
+      "group": "plan",
+      "ok": true,
+      "observed": "False",
+      "expected": "False",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.grouped_mm_recorded",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "prefer grouped_mm when the build exposes it",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.flash_shaped",
+      "group": "attention",
+      "ok": true,
+      "observed": "hd=32 seq=128",
+      "expected": "hd>=32 seq>=64 so Ampere fused SDPA is in-distribution",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.theorem_b_hole_kept",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "n_win=32 seq=128 m=8",
+      "expected": "grow the graph without swallowing compression",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.dense_gqa_fused",
+      "group": "attention",
+      "ok": true,
+      "observed": "flash",
+      "expected": "YOCO cross / covering window: Flash or cuDNN GQA",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.masked_equal_bf16",
+      "group": "attention",
+      "ok": true,
+      "observed": "cudnn",
+      "expected": "CSA/window mask: cuDNN or mem-efficient bf16",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.hca_concat_bf16",
+      "group": "attention",
+      "ok": true,
+      "observed": "cudnn",
+      "expected": "HCA concat mask stays fused bf16",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.fused_qkv_smoke",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "one GEMM for QKV",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "ops.tf32",
+      "group": "attention",
+      "ok": true,
+      "observed": "tf32=True prec=high",
+      "expected": "TF32 tensor cores",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.zero_tokens",
+      "group": "plan",
+      "ok": true,
+      "observed": "offline dummy upcycle",
+      "expected": "Phase A is 0-token surgery",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.both_stacks_moe",
+      "group": "plan",
+      "ok": true,
+      "observed": "enc=True dec=True",
+      "expected": "C1: both stacks MoE at token 0",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.no_first_dense",
+      "group": "plan",
+      "ok": true,
+      "observed": "False",
+      "expected": "False",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.gate_zero",
+      "group": "yoco",
+      "ok": true,
+      "observed": "0.0",
+      "expected": "0.0",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.sparse_still_window",
+      "group": "attention",
+      "ok": true,
+      "observed": "['window', 'window', 'window']",
+      "expected": "implement then light; A/B stay window",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.hash_moe_decoder_bootstrap",
+      "group": "plan",
+      "ok": true,
+      "observed": "True",
+      "expected": "decoder first layers hash-route",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.theorem_a_cache_irrelevant",
+      "group": "yoco",
+      "ok": true,
+      "observed": "True",
+      "expected": "gate=0 \u21d2 cache W_K does not change logits",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.no_mup",
+      "group": "plan",
+      "ok": true,
+      "observed": "1.0",
+      "expected": "1.0",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.84375",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.A.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=[] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.897709403451033",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=[] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.encoder_frozen",
+      "group": "plan",
+      "ok": true,
+      "observed": "True",
+      "expected": "C1 B0 new modules only",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.cross_and_cache_trainable",
+      "group": "yoco",
+      "ok": true,
+      "observed": "['cache_k.weight', 'cache_v.weight', 'decoder.0.ln_cross.weight', 'decoder.0.cross_attn.q_proj.weight', 'decoder.0.cross_attn.o_proj.weight', 'decoder.0.cross_attn.q_norm.weight', 'decoder.0.cross_attn.k_norm.weight', 'decoder.1.ln_cross.weight']",
+      "expected": "cache + cross-attn",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B0.gate_in_unit_interval",
+      "group": "yoco",
+      "ok": true,
+      "observed": "0.30078125",
+      "expected": "gate \u2264 0.3",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.897374430979331",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=[] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.encoder_still_frozen",
+      "group": "plan",
+      "ok": true,
+      "observed": "True",
+      "expected": "Theorem E",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.decoder_trainable",
+      "group": "plan",
+      "ok": true,
+      "observed": "True",
+      "expected": "decoder + lm_head",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B1.gate_opened",
+      "group": "yoco",
+      "ok": true,
+      "observed": "1.0",
+      "expected": "\u21921",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.897286482683317",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=[] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.detach_off",
+      "group": "plan",
+      "ok": true,
+      "observed": "False",
+      "expected": "False",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.B2.encoder_unfrozen",
+      "group": "plan",
+      "ok": true,
+      "observed": "True",
+      "expected": "joint write/read (PDSA: B2 cannot be 0)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "0.12389485538005829",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=['csa'] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.indexer_on_csa_only",
+      "group": "attention",
+      "ok": true,
+      "observed": "['csa']",
+      "expected": "['csa']",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.only_indexer_trainable",
+      "group": "plan",
+      "ok": true,
+      "observed": "['encoder.1.indexer.q_proj.weight', 'encoder.1.indexer.k_proj.weight']",
+      "expected": "freeze backbone",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.kl_finite",
+      "group": "attention",
+      "ok": true,
+      "observed": "0.11371585726737976",
+      "expected": "layer-internal KL vs dense window",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-index.recall_in_unit",
+      "group": "attention",
+      "ok": true,
+      "observed": "0.6562001705169678",
+      "expected": "[0,1]",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.898465374323327",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=['csa'] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.csa_lights_topk",
+      "group": "attention",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'window')]",
+      "expected": "CSA \u2192 union mask",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-topk.hca_not_yet",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'window')]",
+      "expected": "write-first HCA stays dark",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.896816944512795",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=['csa'] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.hca_concat_lit",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "window \u2225 mean-pool slots",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-hca.csa_keeps_topk",
+      "group": "attention",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "monotonic lighting",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.89680252675935",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=['csa'] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.hca_concat_lit",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "window \u2225 mean-pool slots",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.C-win.csa_keeps_topk",
+      "group": "attention",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "monotonic lighting",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.89634644515871",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=['csa'] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.hca_concat_lit",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "window \u2225 mean-pool slots",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D-8k.csa_keeps_topk",
+      "group": "attention",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "monotonic lighting",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.D.needle_in_dummy",
+      "group": "plan",
+      "ok": true,
+      "observed": "True",
+      "expected": "mid-seq needle; later queries see it via YOCO cache (causal prefix)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.finite_nll",
+      "group": "plan",
+      "ok": true,
+      "observed": "4.896816944512795",
+      "expected": ">0 finite",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.no_future_leak",
+      "group": "attention",
+      "ok": true,
+      "observed": "True",
+      "expected": "logits[:, :-1] ignore last token",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.m2_off_cache_slots",
+      "group": "yoco",
+      "ok": true,
+      "observed": "cache_k seq=128",
+      "expected": "M2 off \u21d2 slots == seq (128)",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.yoco_cache_once",
+      "group": "yoco",
+      "ok": true,
+      "observed": "decoder_cross_k_proj=False",
+      "expected": "one encoder-top cache; decoder CrossAttention has no W_K/W_V",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.m1_indexer_not_on_decoder",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "encoder_indexer_kinds=['csa'] decoder=False",
+      "expected": "M3 is decoder query; do not reuse M1 LightningIndexer",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.hca_concat_lit",
+      "group": "pdsa",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "window \u2225 mean-pool slots",
+      "note": "",
+      "deferred": false
+    },
+    {
+      "name": "train.E.csa_keeps_topk",
+      "group": "attention",
+      "ok": true,
+      "observed": "[('sliding', 'window'), ('csa', 'topk'), ('hca', 'hca')]",
+      "expected": "monotonic lighting",
+      "note": "",
+      "deferred": false
+    }
+  ],
+  "out": "/root/autodl-tmp/bf16-verify/runs"
+}

@@ -969,8 +969,14 @@ def main(argv: list[str] | None = None) -> int:
         for phase, st in blob["phases"].items():
             extra = ""
             sdpa = st.get("sdpa") or {}
-            if sdpa:
-                extra = f" sdpa={sdpa.get('kind')}"
+            counts = st.get("sdpa_counts") or {}
+            if sdpa or counts:
+                extra = (
+                    f" sdpa={sdpa.get('kind')} "
+                    f"dense={counts.get('dense', 0)} "
+                    f"masked_bf16={counts.get('masked_bf16', 0)} "
+                    f"math={counts.get('math_fp32', 0)}"
+                )
             print(f"  {phase} nll={st['nll']:.4f} ok={st['ok']}{extra}", flush=True)
         for c in blob["failed"]:
             print(f"FAIL {c['name']}: {c['observed']} (want {c['expected']})", flush=True)
