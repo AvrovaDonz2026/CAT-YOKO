@@ -55,6 +55,10 @@ class ScheduleTests(unittest.TestCase):
     def test_tiny_keeps_csa_anchor(self) -> None:
         kinds = [encoder_layer_kind(i, 2, use_kda=True) for i in range(2)]
         self.assertEqual(kinds, ["sliding", "csa"])
+        self.assertEqual(
+            [decoder_layer_kind(i, 2, use_kda=True) for i in range(2)],
+            ["sliding", "sliding"],
+        )
         cfg = replace(CATYokoConfig.tiny(), use_kda=True)
         model = CATYokoForCausalLM(cfg)
         self.assertFalse(any(getattr(b, "kind", None) == "kda" for b in model.encoder))

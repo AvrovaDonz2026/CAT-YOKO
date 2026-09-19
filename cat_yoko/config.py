@@ -195,11 +195,16 @@ def decoder_layer_kind(
     use_kda: bool = False,
     kda_group: int = 4,
 ) -> str:
-    """Decoder self-attn labels. Default all sliding. ``use_kda`` → 3:1 KDA:sliding."""
-    del n_layers
+    """Decoder self-attn labels. Default all sliding. ``use_kda`` → 3:1 KDA:sliding.
+
+    Tiny graphs with fewer than ``kda_group`` decoder layers stay sliding so a
+    2+2 C-index graph does not grow KDAGates.
+    """
     if not use_kda:
         return "sliding"
     g = max(int(kda_group), 2)
+    if int(n_layers) < g:
+        return "sliding"
     return "sliding" if int(index) % g == (g - 1) else "kda"
 
 
