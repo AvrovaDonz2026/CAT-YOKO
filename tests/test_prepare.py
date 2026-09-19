@@ -87,6 +87,9 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(len(ids), len(labels))
         self.assertIn(-100, labels)
         self.assertTrue(any(x != -100 for x in labels))
+        short = encode_sft(tok, chat, seq_len=8)
+        self.assertIsNotNone(short)
+        self.assertTrue(any(x != -100 for x in short[1]))
 
     def test_pack_sft_pairs_fills_seq_len(self) -> None:
         from cat_yoko.sft import pack_sft_pairs
@@ -231,7 +234,7 @@ class PrepareTrainTests(unittest.TestCase):
                 mix="local",
                 out=out,
                 max_tokens=256,
-                seq_len=cfg.seq_len,
+                seq_len=64,
                 tokenizer=tok,
                 local_jsonl=src,
                 sft=True,
@@ -245,7 +248,7 @@ class PrepareTrainTests(unittest.TestCase):
             self.assertIn(-100, row["labels"])
             self.assertTrue(any(x != -100 for x in row["labels"]))
             nll = Trainer(
-                cfg, "F", "cpu", steps=1, accum=1, micro_batch=1, data=dest
+                cfg, "F", "cpu", steps=1, accum=1, micro_batch=1, data=dest, seq_len=16
             ).run().nll
             self.assertTrue(math.isfinite(nll))
 

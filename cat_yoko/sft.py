@@ -88,8 +88,10 @@ def encode_sft(
     if not ids:
         return None
     cut = max(int(seq_len), 1)
-    ids = ids[:cut]
-    labels = labels[:cut]
+    if len(ids) > cut:
+        # Keep the response tail so a short seq_len still has trainable labels.
+        ids = ids[-cut:]
+        labels = labels[-cut:]
     if all(x == -100 for x in labels):
         return None
     return ids, labels
@@ -130,8 +132,8 @@ def pack_sft_pairs(
         if len(labels) != len(ids):
             raise ValueError("SFT labels must match token length")
         if len(ids) > cut:
-            ids = ids[:cut]
-            labels = labels[:cut]
+            ids = ids[-cut:]
+            labels = labels[-cut:]
         if all(x == -100 for x in labels):
             continue
         if buf_ids and len(buf_ids) + len(ids) > cut:
