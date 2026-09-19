@@ -105,6 +105,7 @@ KEEP_HIGH_PREC = (
     "router",
     "gate",
     "indexer",
+    "kda_gate",
     "attn_softmax",
 )
 FP8_KEEP_HIGH_PREC = KEEP_HIGH_PREC
@@ -1624,6 +1625,21 @@ def print_kv(lengths: Sequence[int] = (8_192, 32_768, 131_072, 262_144, 1_000_00
             recipes_by_name.setdefault(r.name, []).append(r)
     for name, recs in recipes_by_name.items():
         print(f"{name:<36s}" + "".join(f"{gb(r.bytes):>12s}" for r in recs))
+    print("  KDA opt-in (decoder 3:1 mix; YOCO global cache unchanged):")
+    try:
+        from cat_yoko.config import CATYokoConfig
+        from cat_yoko.kda import kv_ledger
+
+        cfg = CATYokoConfig.middle_12b()
+        for n in lengths:
+            led = kv_ledger(cfg, n, use_kda=True)
+            print(
+                f"    n={n:<10d} decode {gb(led.decode_bytes):>8s}  "
+                f"all-window {gb(led.decode_all_window_bytes):>8s}  "
+                f"yoco {gb(led.yoco_cache_bytes):>8s}"
+            )
+    except Exception as err:
+        print(f"    (kv_ledger unavailable: {err})")
 
 
 def print_attn_complexity(

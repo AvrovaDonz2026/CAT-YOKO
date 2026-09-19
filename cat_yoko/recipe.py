@@ -61,7 +61,38 @@ PHASE_B_WITH_CODE = (
     ),
 )
 
-MIXES = {"phase-b": PHASE_B, "phase-b-code": PHASE_B_WITH_CODE}
+PHASE_F = (
+    Source(
+        "ultrachat",
+        "openbmb/UltraChat",
+        1.0,
+        text_fields=("data", "content", "text"),
+        notes="Phase F SFT; not downloaded in CI / this VM",
+    ),
+)
+
+PHASE_E = (
+    Source("ultrafineweb-en", "openbmb/Ultra-FineWeb", 0.40, config="en"),
+    Source("ultrafineweb-zh", "openbmb/Ultra-FineWeb", 0.20, config="zh"),
+    Source(
+        "ultradata-math",
+        "openbmb/UltraData-Math",
+        0.40,
+        config="l2",
+        text_fields=("content", "text"),
+        notes="WSD decay mix: more math; not downloaded in CI / this VM",
+    ),
+)
+
+MIXES = {
+    "phase-b": PHASE_B,
+    "phase-b-code": PHASE_B_WITH_CODE,
+    "phase-c": PHASE_B,
+    "phase-d": PHASE_B,
+    "phase-e": PHASE_E,
+    "phase-f": PHASE_F,
+    "phase-g": PHASE_F,
+}
 
 
 def mix_named(name: str) -> tuple[Source, ...]:

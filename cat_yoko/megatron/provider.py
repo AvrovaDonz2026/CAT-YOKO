@@ -59,7 +59,7 @@ def filter_transformer_kwargs(config_cls: type, payload: dict) -> dict:
 def add_cat_yoko_args(parser: Any) -> Any:
     """``extra_args_provider`` for megatron.training.pretrain."""
     group = parser.add_argument_group("CAT-YOKO")
-    group.add_argument("--cat-yoko-phase", choices=["B0", "B1", "B2"], default="B0")
+    group.add_argument("--cat-yoko-phase", default="B0")
     group.add_argument("--cat-yoko-config", choices=["12b", "tiny"], default="12b")
     return parser
 

@@ -1,4 +1,4 @@
-# B0 发布档（6000D，8e9 tokens）
+# B0 发布档（B200，8e9 tokens）
 
 权重不进 GitHub。最新 overlay 在 HuggingFace：
 
@@ -7,39 +7,37 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 这是 C1 B0 **发布信封**（`--tokens 8e9`，`seq=4096`）**进行中**的 trainable overlay，不是 `--try`，也还没跑完 8e9。
 不要覆盖 `checkpoints/b0/` 里那份 32 步 MiniCPM5 overlay。
 
-AutoDL RTX 6000D（`connect.weste.seetacloud.com`）**即将释放**。下一台从本文件接，不要假定那台盘还在。
+同一份说明会推到 Hub 文件夹：https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md
+
+Vast B200 **已回收**（2026-09-19）。下表是释放前快照。进度：[`docs/STATUS.md`](../../docs/STATUS.md)。
 
 | 项 | 值 |
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
 | 阶段 | B0 |
-| step | 16020 |
-| tokens_in_phase | 65,488,896（信封 8e9 的 ≈0.82%） |
+| step | 26940 |
+| tokens_in_phase | 130,041,856（信封 8e9 的 ≈1.63%） |
 | seq | 4096 |
-| sha256 | `b5763b98aafa2990d753934b181fdf5731d54ec1c25099be95cedc0dc28fb52b` |
+| sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
 | 可训练张量 | 132（无 Adam） |
-| 机器 | AutoDL RTX 6000D sm_120（快照时） |
-| 运行时 | torch `2.15.0.dev20260918+cu130` + grouped MoE / fused QKV / chunked CE |
-| 吞吐 / 显存 | ~2820 tok/s，56090 MiB |
-| 说明 | DummyStream；student bf16；冻结 encoder GEMM NVFP4 仿真；同阶段 resume 可接。不是终局。 |
+| 机器 | Vast NVIDIA B200 SM 10.0（已回收） |
+| 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |
+| 吞吐 / 显存 | ~15.7k tok/s，Trainer ~138GiB（micro-batch=2） |
+| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。`MICRO_BATCH=1` 可回退。 |
 
-## 下一台接训
+上一份 6000D 快照是 step **16020**（`b5763b98…`）。本文件覆盖 Hub 同路径。
 
 同阶段 B0，**不要** resume `checkpoints/b0/` 那份 32 步 `--try`。
 
 ```bash
-# 1) 代码：GitHub cursor/nvfp4-train-6000d-02c6（git fetch 若挂则 tar/scp overlay）
-# 2) MiniCPM5-2B-Base → /root/autodl-tmp/hf/MiniCPM5-2B-Base（HF_ENDPOINT=https://hf-mirror.com 或 ModelScope）
-# 3) Hub overlay：
-#    git clone git@hf.co:AvrovaDonz/CAT-YOKO /tmp/cat-yoko-hf
-#    mkdir -p /root/autodl-tmp/runs/b0-full
-#    cp /tmp/cat-yoko-hf/checkpoints/b0-full/trainable.pt /root/autodl-tmp/runs/b0-full/
-# 4) nightly venv：bash scripts/upgrade_torch_te_nightly_autodl.sh
-# 5) 启动（脚本会 --resume /root/autodl-tmp/runs/b0-full）：
-cd /root/autodl-tmp/CAT-YOKO
-bash scripts/run_b0_full_autodl.sh
+bash scripts/run_b0_next.sh
+# 已知 B200 / SM100：
+bash scripts/run_b200.sh
+# 或
+bash scripts/upgrade_torch_te_b200.sh
+python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
+python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
+bash scripts/run_b0_full_b200.sh
 ```
 
-Trainer：MiniCPM5 上采样 → overlay `trainable.pt` → 恢复 `step` / `tokens_in_phase` / stream / RNG。不要连已释放的 `connect.westc.seetacloud.com`。
-
-启动：`scripts/run_b0_full_autodl.sh`。日志：[`artifacts/autodl-rtx6000d/b0-full/`](../../artifacts/autodl-rtx6000d/b0-full/)。
+Trainer：MiniCPM5 上采样 → overlay `trainable.pt` → 恢复 `step` / `tokens_in_phase` / stream / RNG。

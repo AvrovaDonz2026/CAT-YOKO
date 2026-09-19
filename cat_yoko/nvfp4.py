@@ -1,14 +1,13 @@
 """Published C1+NVFP4 compute policy. Master weights stay bf16.
 
 Anything that is not a must-bf16/fp32 op is an NVFP4 linear GEMM on
-Blackwell (RTX PRO 6000 / 6000D). ``cat_yoko.nvfp4_linear`` wraps allowed
-``nn.Linear`` modules (E2M1/16 emulation; Transformer Engine
-``NVFP4BlockScaling`` when importable). Outer ``torch.autocast(bf16)``
-still covers unwrapped ops. Attn softmax / SDPA stay fp32 in
-``attention._sdpa``; do not NVFP4 the score path.
+Blackwell. B200 / SM 10.0 / 10.3 wrap ``TeNvfp4Linear`` (Transformer Engine
+``NVFP4BlockScaling`` default recipe). sm_120 / CPU use ``Nvfp4Linear``
+E2M1/16 emulation. Outer ``torch.autocast(bf16)`` still covers unwrapped
+ops. Attn softmax / SDPA stay fp32 in ``attention._sdpa``.
 
 Must-high-prec (not NVFP4): embed lookup, RMSNorm / QK-Norm, router,
-scalar gate, indexer, attn softmax / SDPA scores. B0 student stays
+scalar gate, indexer, kda_gate, attn softmax / SDPA scores. B0 student stays
 bf16 (Theorem A). lm_head and attn QKV/O projections are NVFP4 GEMMs.
 """
 
@@ -34,11 +33,36 @@ POLICY = {
     "B1": Nvfp4Policy("B1", "nvfp4", "nvfp4"),
     "B2": Nvfp4Policy("B2", "nvfp4", "n/a"),
     "C": Nvfp4Policy("C", "bf16", "nvfp4"),
+    "C-index": Nvfp4Policy("C-index", "bf16", "nvfp4"),
+    "C-kda": Nvfp4Policy("C-kda", "nvfp4", "n/a"),
+    "C-topk": Nvfp4Policy("C-topk", "nvfp4", "n/a"),
+    "C-hca": Nvfp4Policy("C-hca", "nvfp4", "n/a"),
+    "C-win": Nvfp4Policy("C-win", "nvfp4", "n/a"),
+    "D-8k": Nvfp4Policy("D-8k", "nvfp4", "n/a"),
+    "D-32k": Nvfp4Policy("D-32k", "nvfp4", "n/a"),
+    "D-128k": Nvfp4Policy("D-128k", "nvfp4", "n/a"),
+    "E": Nvfp4Policy("E", "nvfp4", "n/a"),
+    "F": Nvfp4Policy("F", "nvfp4", "n/a"),
+    "G": Nvfp4Policy("G", "nvfp4", "n/a"),
+    "G-dpo": Nvfp4Policy("G-dpo", "nvfp4", "n/a"),
 }
 
 
+def policy_key(phase: str) -> str:
+    if phase in POLICY:
+        return phase
+    if phase.startswith("C") and "index" in phase:
+        return "C"
+    if phase.startswith(("C", "D", "E", "F", "G")):
+        return "B2"
+    return phase
+
+
 def policy_for(phase: str) -> Nvfp4Policy:
-    return POLICY[phase]
+    key = policy_key(phase)
+    if key not in POLICY:
+        raise KeyError(phase)
+    return POLICY[key]
 
 
 def should_autocast(phase: str, *, cuda: bool, enabled: bool) -> bool:

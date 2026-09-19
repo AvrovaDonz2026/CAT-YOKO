@@ -42,6 +42,12 @@ class CATYokoConfig:
     qk_norm: bool = True
     rope_theta: float = 5_000_000.0
     seq_len: int = 4096
+    indexer_dim: int = 64
+    grpo_group: int = 4
+    grpo_max_new: int = 32
+    dpo_beta: float = 0.1
+    wsd_decay_min_ratio: float = 0.01
+    nll_spike_factor: float = 8.0
     lr: float = 1e-4
     lr_b2: float = 3e-5
     adam_beta1: float = 0.9
@@ -56,6 +62,9 @@ class CATYokoConfig:
     use_nvfp4: bool = True  # published compute dtype; Nvfp4Linear wrap
     use_fp8: bool = True  # Hopper/Ada fallback placeholder
     attention_backend: str = "window"  # Phase B; "csa" is Phase C
+    use_kda: bool = False  # implement 3:1 graph; Phase B stays window; C lights
+    kda_decoder: bool = True  # when use_kda, mix decoder self-attn (decode KV)
+    kda_group: int = 4  # 3 KDA : 1 sparse/sliding anchor
     kd_temperature: float = 2.0
     kd_weight_start: float = 0.5
 
@@ -120,12 +129,17 @@ class CATYokoConfig:
             top_k_enc=2,
             top_k_dec=2,
             n_win=8,
+            compress_m_hca=4,
             hash_moe_decoder_layers=1,
             dim_model_base=64,
             seq_len=16,
+            indexer_dim=16,
+            grpo_group=2,
+            grpo_max_new=4,
             lr=3e-4,
             use_nvfp4=False,
             use_fp8=False,
+            use_kda=False,
             global_batch_tokens=128,
             # Tiny is test-only. Match MiniCPM5 RMS; keep short-rope for seq_len=16.
             rope_theta=10_000.0,
@@ -133,11 +147,66 @@ class CATYokoConfig:
         )
 
 
-def encoder_layer_kind(index: int) -> str:
-    """Phase C labels. Phase B still runs sliding-window GQA on every encoder layer."""
-    if index < 2:
+def encoder_layer_kind(
+    index: int,
+    n_layers: int = 16,
+    *,
+    use_kda: bool = False,
+    kda_group: int = 4,
+) -> str:
+    """Phase C labels. Phase B still runs sliding-window GQA on every encoder layer.
+
+    12B (16 layers) default is 2 sliding + 7 CSA + 7 HCA. With ``use_kda``,
+    non-bootstrap layers are 3:1 KDA:(CSA/HCA) (group of 4): 2 sliding +
+    11 KDA + 2 CSA + 1 HCA. Tiny graphs keep a sliding bootstrap and a
+    CSA indexer anchor so C-index still has something to train. Phase B
+    **implements** the labels (and KDAGates when ``use_kda``) but compute
+    stays window. Phase C **lights** KDA first (``C-kda``), then CSA, then HCA.
+    """
+    n = int(n_layers)
+    i = int(index)
+    g = max(int(kda_group), 2)
+    if not use_kda:
+        if n >= 16:
+            if i < 2:
+                return "sliding"
+            return "csa" if (i - 2) % 2 == 0 else "hca"
+        if i == 0:
+            return "sliding"
+        return "csa" if (i - 1) % 2 == 0 else "hca"
+    if n >= 16:
+        if i < 2:
+            return "sliding"
+        pos = (i - 2) % g
+        if pos < g - 1:
+            return "kda"
+        sparse_i = (i - 2) // g
+        return "csa" if sparse_i % 2 == 0 else "hca"
+    if i == 0:
         return "sliding"
-    return "csa" if (index - 2) % 2 == 0 else "hca"
+    if i == n - 1:
+        return "csa"
+    return "kda"
+
+
+def decoder_layer_kind(
+    index: int,
+    n_layers: int = 26,
+    *,
+    use_kda: bool = False,
+    kda_group: int = 4,
+) -> str:
+    """Decoder self-attn labels. Default all sliding. ``use_kda`` → 3:1 KDA:sliding.
+
+    Tiny graphs with fewer than ``kda_group`` decoder layers stay sliding so a
+    2+2 C-index graph does not grow KDAGates.
+    """
+    if not use_kda:
+        return "sliding"
+    g = max(int(kda_group), 2)
+    if int(n_layers) < g:
+        return "sliding"
+    return "sliding" if int(index) % g == (g - 1) else "kda"
 
 
 # Phase B C1 split (tokens).
@@ -151,6 +220,7 @@ KEEP_HIGH_PREC = (
     "router",
     "gate",
     "indexer",
+    "kda_gate",
     "attn_softmax",
 )
 FP8_KEEP_HIGH_PREC = KEEP_HIGH_PREC

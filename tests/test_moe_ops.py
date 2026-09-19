@@ -171,5 +171,68 @@ class GroupedMoETests(unittest.TestCase):
         self.assertTrue(torch.allclose(w.grad, dw_ref, atol=1e-5, rtol=1e-5))
 
 
+class MoeUtilizationTests(unittest.TestCase):
+    def test_stacked_stats_match_per_layer_mean(self) -> None:
+        from cat_yoko.moe import moe_utilization
+
+        class Mlp:
+            def __init__(self, load: torch.Tensor) -> None:
+                self.last_load = load
+
+            def mean_pending_load(self):
+                return self.last_load
+
+        class Blk:
+            def __init__(self, load: torch.Tensor) -> None:
+                self.mlp = Mlp(load)
+
+        class Model:
+            def __init__(self) -> None:
+                self.encoder = [Blk(torch.tensor([0.2, 0.8])), Blk(torch.tensor([0.5, 0.5]))]
+                self.decoder = []
+
+        out = moe_utilization(Model())
+        self.assertEqual(out["moe_layers"], 2)
+        self.assertAlmostEqual(out["moe_max"], 0.8, places=5)
+        self.assertAlmostEqual(out["moe_min"], 0.2, places=5)
+        self.assertGreater(out["moe_cv"], 0.0)
+
+
+class TrainableCacheTests(unittest.TestCase):
+    def test_freeze_invalidates_and_encoder_is_frozen(self) -> None:
+        from cat_yoko.moe import module_has_trainable
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        self.assertTrue(module_has_trainable(model.encoder[0].mlp))
+        apply_freeze(model, "B0")
+        self.assertFalse(module_has_trainable(model.encoder[0].mlp))
+        self.assertFalse(module_has_trainable(model.decoder[0].mlp))
+        self.assertTrue(module_has_trainable(model.decoder[0].cross_attn))
+
+    def test_frozen_moe_skips_z_loss_keeps_load(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B0")
+        moe = model.encoder[0].mlp
+        moe.train()
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        y = moe(x)
+        self.assertEqual(tuple(y.shape), tuple(x.shape))
+        self.assertIsNone(moe.last_aux)
+        self.assertIsNotNone(moe.last_load)
+        self.assertEqual(int(moe._load_n), 1)
+
+    def test_repeat_by_counts_matches_repeat_interleave(self) -> None:
+        from cat_yoko.moe import _repeat_by_counts
+
+        counts = torch.tensor([2, 0, 3], dtype=torch.int64)
+        ids = torch.arange(3)
+        got = _repeat_by_counts(ids, counts, 5)
+        ref = torch.repeat_interleave(ids, counts)
+        self.assertTrue(torch.equal(got, ref))
+        self.assertEqual(got.tolist(), [0, 0, 2, 2, 2])
+
+
 if __name__ == "__main__":
     unittest.main()

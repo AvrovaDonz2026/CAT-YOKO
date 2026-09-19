@@ -214,7 +214,7 @@ H_{\mathrm{NVFP4}}
 
 1. **Phase B 墙钟按 C1+NVFP4 定稿：571 H100-h。** 联合 bf16 1,325 只作对照；C1 bf16 1,046 只作操作数账；C1+FP8 729 降为 Hopper/Ada 回退。
 2. 精度策略：不必须 bf16 的线性 GEMM 全部 NVFP4。白名单不再包含 lm_head。
-3. 目标硬件：RTX PRO 6000 / 6000D。fused TE / sm_120 kernel 仍不是硬依赖；trainer 用 ``Nvfp4Linear`` 仿真允许的 GEMM。注意力拓扑不变。
+3. 目标硬件：发布墙钟按 RTX PRO 6000 量级记账；**真正吃 NVFP4 训练 kernel 的是 B200 / SM 10.0 / 10.3**（``TeNvfp4Linear`` + 默认 ``NVFP4BlockScaling``）。sm_120 用 ``Nvfp4Linear`` 仿真。注意力拓扑不变。见 [`B200_TRAIN.md`](B200_TRAIN.md)。
 4. 不改 16/26、C1、因果 Encoder、M2 默认。
 
 复算：

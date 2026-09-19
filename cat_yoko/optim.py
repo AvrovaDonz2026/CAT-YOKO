@@ -266,8 +266,29 @@ def build_optimizer(
     return AdamW(groups, **_adamw_kwargs(cfg))
 
 
-def wsd_lr(tokens_seen: float, cfg: CATYokoConfig, phase: str) -> float:
-    base = cfg.lr_b2 if phase == "B2" else cfg.lr
+def wsd_lr(
+    tokens_seen: float,
+    cfg: CATYokoConfig,
+    phase: str,
+    *,
+    tokens_in_phase: float = 0.0,
+    phase_budget: float | None = None,
+) -> float:
+    from cat_yoko.phases import PHASES
+
+    ph = PHASES.get(phase)
+    mode = ph.lr_mode if ph is not None else ("b2" if phase == "B2" else "stable")
+    if mode == "b2":
+        base = cfg.lr_b2
+    else:
+        base = cfg.lr
+    if mode == "decay":
+        floor = base * float(getattr(cfg, "wsd_decay_min_ratio", 0.01))
+        if phase_budget is not None and phase_budget > 0:
+            p = min(max(tokens_in_phase / phase_budget, 0.0), 1.0)
+            # 1-sqrt decay to ~1/100 of the peak used in this phase.
+            return base * (1.0 - math.sqrt(p) * (1.0 - floor / base))
+        return floor
     if tokens_seen < cfg.warmup_tokens:
         return base * max(tokens_seen / cfg.warmup_tokens, 1e-3)
     return base

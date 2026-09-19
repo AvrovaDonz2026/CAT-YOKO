@@ -1,13 +1,20 @@
-"""Published C1 B0 / B1 / B2 CLIs.
+"""Published C1 B0 / B1 / B2 plus Phase C–G CLIs.
 
 Usage::
 
     python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
     python3 -m cat_yoko.b1 --resume checkpoints/b0 --save-dir checkpoints/b1
     python3 -m cat_yoko.b2 --resume checkpoints/b1 --save-dir checkpoints/b2
+    python3 -m cat_yoko.c --try --stage indexer --resume checkpoints/b2
+    python3 -m cat_yoko.c --try --chain
+    python3 -m cat_yoko.d --try --stage 8k
+    python3 -m cat_yoko.d --try --chain
+    python3 -m cat_yoko.e --try
+    python3 -m cat_yoko.f --try
+    python3 -m cat_yoko.g --try --algo grpo
 
 ``--try`` is the 32GB path: seq=64, 32 optimizer steps, trainable.pt overlay (Hub, not GitHub).
-Without ``--try`` the envelope is the published 8 / 27 / 15B tokens (H100-scale).
+Without ``--try`` the envelope is the published token / step budget.
 """
 
 from __future__ import annotations
@@ -20,11 +27,16 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from cat_yoko.phases import (
+    C_STAGES,
+    D_CHAIN,
+    D_STAGES,
+    G_ALGOS,
     PHASES,
     PUBLISHED_SAVE_EVERY,
-    PUBLISHED_SEQ,
     TIGHT_GPU_SEQ,
     TRY_STEPS,
+    c_chain,
+    resolve_phase_spec,
     spec as phase_spec,
 )
 from cat_yoko.recipe import MINICPM5_HF
@@ -64,6 +76,11 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--upcycle", type=Path, default=None)
     p.add_argument("--dummy-upcycle", action="store_true")
     p.add_argument("--device", default="cuda")
+    p.add_argument(
+        "--use-kda",
+        action="store_true",
+        help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
+    )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--keep-last", type=int, default=2)
     p.add_argument(
@@ -81,13 +98,35 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--optim-cpu", action="store_true")
     p.add_argument("--no-optim-cpu", action="store_true")
     p.add_argument("--log-every", type=int, default=None)
+    p.add_argument(
+        "--micro-batch",
+        type=int,
+        default=1,
+        help="12b published default is 1. B200 can try 2 (~90GiB free at seq=4096).",
+    )
+    p.add_argument(
+        "--grad-ckpt",
+        action="store_true",
+        dest="grad_ckpt",
+        default=None,
+        help="activation checkpoint (12b default on)",
+    )
+    p.add_argument(
+        "--no-grad-ckpt",
+        action="store_true",
+        dest="no_grad_ckpt",
+        help="keep activations; B200 192GiB default in run_b0_full_b200.sh",
+    )
     args, rest = p.parse_known_args(argv)
+    ph = resolve_phase_spec(phase, use_kda=bool(args.use_kda)) or ph
     if args.offload_encoder and args.no_offload_encoder:
         p.error("pick one of --offload-encoder / --no-offload-encoder")
     if args.offload_blocks and args.no_offload_blocks:
         p.error("pick one of --offload-blocks / --no-offload-blocks")
     if args.optim_cpu and args.no_optim_cpu:
         p.error("pick one of --optim-cpu / --no-optim-cpu")
+    if args.grad_ckpt and args.no_grad_ckpt:
+        p.error("pick one of --grad-ckpt / --no-grad-ckpt")
 
     out: list[str] = [
         "--config",
@@ -98,7 +137,6 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         args.device,
         "--dtype",
         "bf16",
-        "--grad-ckpt",
         "--seed",
         str(args.seed),
         "--save-dir",
@@ -109,10 +147,16 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         "--save-trainable",
         "--no-save-optim",
         "--micro-batch",
-        "1",
+        str(max(int(args.micro_batch), 1)),
         "--accum",
         "1",
     ]
+    if args.use_kda:
+        out.append("--use-kda")
+    if args.no_grad_ckpt:
+        out.append("--no-grad-ckpt")
+    else:
+        out.append("--grad-ckpt")
     if args.no_offload_encoder:
         out.append("--no-offload-encoder")
     elif args.offload_encoder or ph.offload_encoder:
@@ -137,7 +181,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     if seq is None and (args.try_run or tight):
         seq = TIGHT_GPU_SEQ
     elif seq is None and not args.try_run:
-        seq = PUBLISHED_SEQ
+        seq = ph.seq_len
     if seq is not None:
         out.extend(["--seq-len", str(seq)])
     if args.try_run:
@@ -150,8 +194,10 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
             out.extend(["--steps", str(args.steps)])
         elif args.tokens is not None:
             out.extend(["--tokens", str(args.tokens)])
-        else:
+        elif ph.tokens and ph.tokens > 0:
             out.extend(["--tokens", str(ph.tokens)])
+        else:
+            out.extend(["--steps", str(int(ph.default_steps or TRY_STEPS))])
         every = PUBLISHED_SAVE_EVERY if args.save_every is None else args.save_every
         out.extend(["--save-every", str(every)])
     if args.log_every is not None:
@@ -177,11 +223,11 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.extend(["--upcycle", str(args.upcycle)])
     elif args.upcycle_hf is not None:
         out.extend(["--upcycle-hf", str(args.upcycle_hf)])
-    elif args.try_run and (args.resume is None or phase in {"B1", "B2"}):
-        # --try without --upcycle* uses dummy MiniCPM5 weights. B1/B2 overlay
+    elif args.try_run and (args.resume is None or phase != "B0"):
+        # --try without --upcycle* uses dummy MiniCPM5 weights. Overlay
         # resume is MiniCPM5 (or dummy) upcycle + load_trainable_state: the
-        # previous overlay has no encoder/embed, so skipping upcycle leaves
-        # them random. AutoDL scripts pass --upcycle-hf when MiniCPM5 is local.
+        # previous overlay may have no encoder/embed, so skipping upcycle
+        # leaves them random. AutoDL scripts pass --upcycle-hf when MiniCPM5 is local.
         out.append("--dummy-upcycle")
     out.extend(rest)
     return out
@@ -205,3 +251,105 @@ def main_b1(argv: list[str] | None = None) -> int:
 
 def main_b2(argv: list[str] | None = None) -> int:
     return run_phase("B2", argv)
+
+
+def _peel_flag(argv: list[str] | None, flag: str, default: str) -> tuple[str, list[str]]:
+    rest = list(argv or [])
+    if flag in rest:
+        i = rest.index(flag)
+        if i + 1 >= len(rest):
+            raise SystemExit(f"{flag} needs a value")
+        val = rest[i + 1]
+        del rest[i : i + 2]
+        return val, rest
+    return default, rest
+
+
+def _strip_bool(argv: list[str] | None, flag: str) -> tuple[bool, list[str]]:
+    rest = list(argv or [])
+    if flag in rest:
+        rest.remove(flag)
+        return True, rest
+    return False, rest
+
+
+def _cli_chain(phases: tuple[str, ...], argv: list[str] | None) -> int:
+    """Sequential CLI: each stage writes ``save_dir/{phase}`` and the next resumes it."""
+    rest = list(argv or [])
+    save, rest = _peel_flag(rest, "--save-dir", str(Path("checkpoints") / phases[0].split("-")[0].lower()))
+    resume, rest = _peel_flag(rest, "--resume", "")
+    prev = resume or None
+    root = Path(save)
+    rc = 0
+    for phase in phases:
+        extra = list(rest)
+        extra.extend(["--save-dir", str(root / phase)])
+        if prev:
+            extra.extend(["--resume", prev])
+        rc = run_phase(phase, extra)
+        if rc:
+            return rc
+        prev = str(root / phase)
+    return rc
+
+
+def _argv_implemented_kda(cli: bool, argv: list[str]) -> bool:
+    from cat_yoko.checkpoint import peek_checkpoint_extra
+    from cat_yoko.kda import resolve_implemented_kda
+
+    extra = None
+    if "--resume" in argv:
+        i = argv.index("--resume")
+        if i + 1 < len(argv):
+            extra = peek_checkpoint_extra(argv[i + 1])
+    return resolve_implemented_kda(cli=cli, extra=extra)
+
+
+def main_c(argv: list[str] | None = None) -> int:
+    chain, rest = _strip_bool(argv, "--chain")
+    use_kda, rest = _strip_bool(rest, "--use-kda")
+    try:
+        use_kda = _argv_implemented_kda(use_kda, rest)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
+    if use_kda:
+        rest = ["--use-kda", *rest]
+    if chain:
+        if "--stage" in rest:
+            raise SystemExit(
+                "--chain runs indexer→topk→hca→win "
+                "(or kda→index→topk→hca→win after B implements --use-kda); "
+                "do not pass --stage"
+            )
+        return _cli_chain(c_chain(use_kda=use_kda), rest)
+    stage, rest = _peel_flag(rest, "--stage", "indexer")
+    if stage not in C_STAGES:
+        raise SystemExit(f"unknown C --stage {stage}; choose {sorted(C_STAGES)}")
+    return run_phase(C_STAGES[stage], rest)
+
+
+def main_d(argv: list[str] | None = None) -> int:
+    chain, rest = _strip_bool(argv, "--chain")
+    if chain:
+        if "--stage" in rest:
+            raise SystemExit("--chain runs 8k→32k→128k; do not pass --stage")
+        return _cli_chain(D_CHAIN, rest)
+    stage, rest = _peel_flag(rest, "--stage", "8k")
+    if stage not in D_STAGES:
+        raise SystemExit(f"unknown D --stage {stage}; choose {sorted(D_STAGES)}")
+    return run_phase(D_STAGES[stage], rest)
+
+
+def main_e(argv: list[str] | None = None) -> int:
+    return run_phase("E", argv)
+
+
+def main_f(argv: list[str] | None = None) -> int:
+    return run_phase("F", argv)
+
+
+def main_g(argv: list[str] | None = None) -> int:
+    algo, rest = _peel_flag(argv, "--algo", "grpo")
+    if algo not in G_ALGOS:
+        raise SystemExit(f"unknown G --algo {algo}; choose {sorted(G_ALGOS)}")
+    return run_phase(G_ALGOS[algo], rest)

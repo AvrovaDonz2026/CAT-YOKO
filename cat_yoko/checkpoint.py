@@ -425,6 +425,21 @@ def load_checkpoint(path: Path, map_location: str = "cpu") -> dict[str, Any]:
     return torch.load(path, map_location=map_location, weights_only=False)
 
 
+def peek_checkpoint_extra(path: Path | str | None) -> dict[str, Any] | None:
+    """Overlay ``extra`` only. Missing / unreadable resume → ``None``."""
+    if path is None or str(path) == "":
+        return None
+    try:
+        resolved = resolve_resume_path(path)
+    except FileNotFoundError:
+        return None
+    if not resolved.is_file():
+        return None
+    ckpt = load_checkpoint(resolved, map_location="cpu")
+    extra = ckpt.get("extra")
+    return dict(extra) if isinstance(extra, dict) else {}
+
+
 def load_optimizer_state(optimizer: Optimizer | None, state: dict | None) -> None:
     """Load Adam state. Checkpoints are read on CPU so 12B does not double VRAM.
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
@@ -13,6 +14,7 @@ from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos
 from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.parallel import ParallelPlan, validate_parallel
+from cat_yoko.phases import PHASES, resolve_phase_spec
 from cat_yoko.recipe import MINICPM5_HF, assert_minicpm5_id
 from cat_yoko.teacher import DummyTeacher, load_teacher
 from cat_yoko.trainer import Trainer, build_model, print_meta, run_c1_chain, train_loop
@@ -52,9 +54,12 @@ def twelve_b_cli_errors(
     return errs
 
 
-def _tokens_offset(phase: str, explicit: float | None) -> float:
+def _tokens_offset(phase: str, explicit: float | None, *, use_kda: bool = False) -> float:
     if explicit is not None:
         return explicit
+    ph = resolve_phase_spec(phase, use_kda=use_kda)
+    if ph is not None:
+        return float(ph.tokens_offset)
     if phase == "B0":
         return 0.0
     if phase == "B1":
@@ -78,7 +83,12 @@ def resolve_12b_accum(
     accum>1, which B2 per-layer Adam cannot do.
     """
     offload_will = offload_blocks is True or (
-        offload_blocks is None and (phase == "B2" or c1)
+        offload_blocks is None
+        and (
+            c1
+            or phase == "B2"
+            or bool(PHASES.get(phase) and PHASES[phase].offload_blocks)
+        )
     )
     if offload_will:
         if accum > 1:
@@ -95,7 +105,12 @@ def resolve_12b_accum(
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="CAT-YOKO-12B C1 trainer")
     p.add_argument("--config", choices=["12b", "tiny"], default="tiny")
-    p.add_argument("--phase", choices=["B0", "B1", "B2"], default="B0")
+    p.add_argument("--phase", choices=sorted(PHASES), default="B0")
+    p.add_argument(
+        "--use-kda",
+        action="store_true",
+        help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
+    )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
@@ -142,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--eval-batches", type=int, default=2, help="micro-batches per eval tick")
     p.add_argument("--seq-len", type=int, default=None, help="override cfg seq_len; must match packed .bin")
     p.add_argument("--grad-ckpt", action="store_true", help="activation checkpoint encoder/decoder blocks")
+    p.add_argument(
+        "--no-grad-ckpt",
+        action="store_true",
+        help="disable activation checkpoint (B200 192GiB; 12b default is on)",
+    )
     p.add_argument(
         "--c1-smoke",
         action="store_true",
@@ -210,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.backend == "megatron" and args.fsdp:
         p.error("--fsdp is the torch path; Megatron uses its own DDP/FSDP")
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
+    if args.use_kda:
+        cfg = replace(cfg, use_kda=True)
     plan = ParallelPlan(
         tensor_parallel=args.tp,
         pipeline_parallel=args.pp,
@@ -240,16 +262,27 @@ def main(argv: list[str] | None = None) -> int:
         p.error("pick one of --save-full / --no-save-full")
     if args.save_trainable and args.no_save_trainable:
         p.error("pick one of --save-trainable / --no-save-trainable")
+    if args.grad_ckpt and args.no_grad_ckpt:
+        p.error("pick one of --grad-ckpt / --no-grad-ckpt")
     args.c1_smoke = bool(args.c1_smoke or args.c1)
     if args.c1_smoke and args.resume is not None:
         p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
     if args.resume is not None:
-        from cat_yoko.checkpoint import resolve_resume_path
+        from cat_yoko.checkpoint import peek_checkpoint_extra, resolve_resume_path
+        from cat_yoko.kda import resolve_implemented_kda
 
         try:
             args.resume = resolve_resume_path(args.resume)
         except FileNotFoundError as exc:
             p.error(str(exc))
+        try:
+            args.use_kda = resolve_implemented_kda(
+                cli=bool(args.use_kda), extra=peek_checkpoint_extra(args.resume)
+            )
+        except RuntimeError as exc:
+            p.error(str(exc))
+        if args.use_kda:
+            cfg = replace(cfg, use_kda=True)
     if args.c1_smoke and args.tokens is not None:
         p.error("--c1-smoke is step-limited; do not pass --tokens")
     if args.config == "12b" and not str(args.device).startswith("cuda"):
@@ -287,7 +320,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.config == "12b":
         if args.dtype != "bf16":
             args.dtype = "bf16"
-        if not args.grad_ckpt:
+        if args.no_grad_ckpt:
+            args.grad_ckpt = False
+        else:
             args.grad_ckpt = True
         try:
             args.accum = resolve_12b_accum(
@@ -376,7 +411,9 @@ def main(argv: list[str] | None = None) -> int:
         tokens=args.tokens,
         upcycle_src=src,
         resume=args.resume,
-        global_tokens_offset=_tokens_offset(args.phase, args.tokens_offset),
+        global_tokens_offset=_tokens_offset(
+            args.phase, args.tokens_offset, use_kda=args.use_kda
+        ),
         **shared,
     )
     tr.run()

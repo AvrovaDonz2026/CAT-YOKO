@@ -16,10 +16,19 @@ import download_minicpm5 as dl  # noqa: E402
 class DownloadMinicpm5Tests(unittest.TestCase):
     def test_env_defaults_hf_mirror(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
-            dl._env()
+            with patch.object(dl, "_autodl_root", return_value=Path("/root/autodl-tmp")):
+                dl._env()
             self.assertEqual(dl.os.environ["HF_ENDPOINT"], "https://hf-mirror.com")
             self.assertEqual(dl.os.environ["HF_HUB_DISABLE_XET"], "1")
             self.assertTrue(dl.os.environ["HF_HOME"].endswith("/hf"))
+
+    def test_env_defaults_huggingface_without_autodl(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            with patch.object(dl, "_autodl_root", return_value=None):
+                dl._env()
+            self.assertEqual(dl.os.environ["HF_ENDPOINT"], "https://huggingface.co")
+            self.assertEqual(dl.os.environ["HF_HUB_DISABLE_XET"], "1")
+            self.assertTrue(dl.os.environ["HF_HOME"].endswith(".hf_home"))
 
     def test_incomplete_size_rejected(self) -> None:
         with TemporaryDirectory() as tmp:

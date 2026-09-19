@@ -249,7 +249,9 @@ Muon 只在 2D 矩阵上存一份动量，B1/B2 的优化器差距会略小于 A
 
 ## 10. 与 Phase C / D 的复合
 
-Phase C 第 1 步：冻主干，只训 Lightning Indexer，目标是 **层内** indexer 分布对齐稠密注意力（KL/MSE），不是穿过 YOCO cache 的 CE。
+Phase C 第 1 步（发布默认、无 KDA）：冻主干，只训 Lightning Indexer，目标是 **层内** indexer 分布对齐稠密注意力（KL/MSE），不是穿过 YOCO cache 的 CE。
+
+若 `use_kda`：B 已实现 3:1 图（仍滑窗）；C 第 0 步是 `C-kda`（只点亮多数 KDA 层，CSA/HCA 仍滑窗），indexer/CSA/HCA 靠后；C 合计仍 25e9。不要在 C 才把 KDA 焊进 `use_kda=False` overlay。
 
 - Encoder indexer 的监督在 Encoder 层内，不需要 CE 反传到 Encoder，也**不必**为了训 indexer 而撤掉 B0/B1 的 detach；C 发生在 B2 **之后**，那时 detach 已经关掉过一轮。
 - Decoder indexer 同理，监督在 cross-attn / CSA 层内。

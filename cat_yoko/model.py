@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import nn
 
+from cat_yoko.attention import collapse_doc_ids
 from cat_yoko.blocks import DecoderBlock, EncoderBlock
-from cat_yoko.config import CATYokoConfig, encoder_layer_kind
+from cat_yoko.config import CATYokoConfig, decoder_layer_kind, encoder_layer_kind
+from cat_yoko.moe import module_has_trainable
 from cat_yoko.offload import move_module, offload_checkpoint_block
 from cat_yoko.rope import RMSNorm
 
@@ -21,7 +25,9 @@ class CATYokoForCausalLM(nn.Module):
         self.encoder = nn.ModuleList(
             EncoderBlock(
                 cfg,
-                kind=encoder_layer_kind(i),
+                kind=encoder_layer_kind(
+                    i, cfg.encoder_layers, use_kda=cfg.use_kda, kda_group=cfg.kda_group
+                ),
                 dense=cfg.first_dense and i == 0,
             )
             for i in range(cfg.encoder_layers)
@@ -32,6 +38,12 @@ class CATYokoForCausalLM(nn.Module):
             DecoderBlock(
                 cfg,
                 hash_route=(i < cfg.hash_moe_decoder_layers),
+                kind=decoder_layer_kind(
+                    i,
+                    cfg.decoder_layers,
+                    use_kda=cfg.use_kda and cfg.kda_decoder,
+                    kda_group=cfg.kda_group,
+                ),
                 dense=cfg.first_dense and i == 0,
             )
             for i in range(cfg.decoder_layers)
@@ -68,7 +80,7 @@ class CATYokoForCausalLM(nn.Module):
         aux = getattr(getattr(blk, "mlp", None), "last_aux", None)
         if aux is None:
             aux = y.new_zeros(())
-        elif not any(p.requires_grad for p in blk.mlp.parameters()):
+        elif not module_has_trainable(blk.mlp):
             aux = y.new_zeros(())
         return y, aux
 
@@ -81,26 +93,45 @@ class CATYokoForCausalLM(nn.Module):
         if self.offload_encoder and not self.offload_blocks:
             move_module(self.encoder, input_ids.device)
         x = self.embed(input_ids) * self.scale_emb
-        if doc_ids is None:
-            doc_ids = torch.zeros_like(input_ids)
+        # DummyStream / single-doc batches must not become zero tensors: that
+        # forced a host sync in every attention layer. Packed multi-doc rows
+        # still pass the real ids.
+        doc_ids = collapse_doc_ids(doc_ids)
         aux = x.new_zeros(())
-        for blk in self.encoder:
-            x, a = self._run_block(blk, x, input_ids, doc_ids)
-            if not self.detach_cache:
-                aux = aux + a
+        # B0/B1: cache is detached, so encoder FPROP does not need an autograd
+        # graph (TE otherwise saves activations / looks up NVFP4 WGRAD).
+        # C-index keeps LightningIndexer on encoder CSA layers — those params
+        # require grad, so the encoder loop cannot sit under no_grad.
+        enc_needs_grad = (not self.detach_cache) or any(
+            p.requires_grad for p in self.encoder.parameters()
+        )
+        enc_ctx = torch.no_grad() if not enc_needs_grad else nullcontext()
+        with enc_ctx:
+            for blk in self.encoder:
+                x, a = self._run_block(blk, x, input_ids, doc_ids)
+                if not self.detach_cache:
+                    aux = aux + a
         if self.offload_encoder and self.detach_cache and not self.offload_blocks:
             move_module(self.encoder, "cpu")
         hidden = x.detach() if self.detach_cache else x
-        k = self.cache_k(hidden)
-        v = self.cache_v(hidden)
+        from cat_yoko.nvfp4_linear import fused_cat_linear
+
+        kv = fused_cat_linear([self.cache_k, self.cache_v], hidden)
+        k, v = kv.split((self.cfg.kv_dim, self.cfg.kv_dim), dim=-1)
         y = hidden
         for blk in self.decoder:
             y, a = self._run_block(blk, y, k, v, input_ids, doc_ids)
             aux = aux + a
+        idx_kl = self._indexer_kl()
+        idx_rec = self._indexer_recall()
         logits = None
         if labels is None or self.return_logits:
             logits = self.lm_head(self.norm(y)) / self.logit_scale
         out: dict[str, torch.Tensor] = {}
+        if idx_kl is not None:
+            out["indexer_kl"] = idx_kl
+        if idx_rec is not None:
+            out["indexer_recall"] = idx_rec
         if logits is not None:
             out["logits"] = logits
         if labels is not None:
@@ -126,7 +157,28 @@ class CATYokoForCausalLM(nn.Module):
             out["loss"] = nll + aux
             out["nll"] = nll
             out["n_valid"] = n_valid
+        elif idx_kl is not None:
+            out["loss"] = idx_kl
+            out["nll"] = idx_kl
+            out["n_valid"] = idx_kl.new_ones(())
+            out["aux"] = aux
         return out
+
+    def _indexer_kl(self) -> torch.Tensor | None:
+        kl_terms: list[torch.Tensor] = []
+        for blk in list(self.encoder) + list(self.decoder):
+            kl = getattr(blk, "last_indexer_kl", None)
+            if kl is None:
+                continue
+            kl_terms.append(kl.reshape(()))
+        if not kl_terms:
+            return None
+        return torch.stack(kl_terms).mean()
+
+    def _indexer_recall(self) -> torch.Tensor | None:
+        from cat_yoko.indexer import mean_indexer_recall
+
+        return mean_indexer_recall(self)
 
     def step_router_bias(self) -> None:
         for blk in list(self.encoder) + list(self.decoder):
@@ -134,7 +186,7 @@ class CATYokoForCausalLM(nn.Module):
             fn = getattr(mlp, "step_router_bias", None)
             if not callable(fn):
                 continue
-            if not any(p.requires_grad for p in mlp.parameters()):
+            if not module_has_trainable(mlp):
                 mlp.last_load = None
                 mlp._load_n = 0
                 continue

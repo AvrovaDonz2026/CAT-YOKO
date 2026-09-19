@@ -12,7 +12,7 @@ from typing import Iterator
 
 from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import sidecar_path
-from cat_yoko.recipe import MINICPM5_TOKENIZER, Source, mix_named
+from cat_yoko.recipe import MINICPM5_TOKENIZER, MIXES, Source, mix_named
 from cat_yoko.tokenizer import HashTokenizer, Tokenizer, load_tokenizer
 
 
@@ -164,7 +164,7 @@ def prepare(
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Pack OpenBMB Ultra-FineWeb (+ Math) for CAT-YOKO")
-    p.add_argument("--mix", choices=["phase-b", "phase-b-code", "local"], default="phase-b")
+    p.add_argument("--mix", choices=sorted(set(MIXES) | {"local"}), default="phase-b")
     p.add_argument("--local", type=Path, default=None, help="jsonl with {text|content} for mix=local")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--max-tokens", type=float, default=1e8, help="stop after this many packed tokens")

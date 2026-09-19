@@ -8,7 +8,7 @@ import os
 import random
 import time
 from contextlib import nullcontext
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 import torch
@@ -21,6 +21,7 @@ from cat_yoko.checkpoint import (
     load_model_state,
     load_optimizer_state,
     load_trainable_state,
+    peek_checkpoint_extra,
     prune_step_checkpoints,
     publish_latest,
     resolve_resume_path,
@@ -46,7 +47,9 @@ from cat_yoko.nvfp4_linear import (
     te_available,
     te_nvfp4_linear_enabled,
 )
+from cat_yoko.nvfp4_hw import compute_family, prefer_te_linear
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
+from cat_yoko.indexer import ensure_indexers, phase_needs_indexer, set_align_indexer, set_sparse_mode
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.moe import grouped_mm_available, moe_utilization
@@ -57,6 +60,7 @@ from cat_yoko.offload import (
     set_after_block_backward,
 )
 from cat_yoko.optim import CPUOffloadAdamW, build_optimizer, plan_cpu_adam, trim_host_allocator, unwrap, wsd_lr
+from cat_yoko.phases import c_chain, resolve_phase_spec
 from cat_yoko.upcycle import upcycle_from_minicpm
 
 
@@ -84,6 +88,25 @@ def token_mean_nll(weighted: float, n_valid: float) -> float:
     return weighted / n_valid
 
 
+def _host_step_stats(
+    nll_w: torch.Tensor,
+    n_valid: torch.Tensor,
+    loss: torch.Tensor,
+    aux: torch.Tensor,
+) -> tuple[float, float, float, float]:
+    """One D2H for nll/n_valid/loss/aux instead of four ``.item()`` syncs."""
+    packed = torch.stack(
+        (
+            nll_w.detach().float().reshape(()),
+            n_valid.detach().float().reshape(()),
+            loss.detach().float().reshape(()),
+            aux.detach().float().reshape(()),
+        )
+    )
+    vals = packed.cpu().tolist()
+    return float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3])
+
+
 enable_expandable_segments()
 
 
@@ -101,6 +124,10 @@ def configure_cuda() -> None:
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
+    for _name in ("enable_flash_sdp", "enable_mem_efficient_sdp", "enable_cudnn_sdp"):
+        _fn = getattr(torch.backends.cuda, _name, None)
+        if callable(_fn):
+            _fn(True)
 
 
 def _as_dtype(dtype: str | torch.dtype | None) -> torch.dtype:
@@ -254,6 +281,10 @@ class Trainer:
             else max(accum, 1)
         )
         self.nvfp4_n = 0
+        ph = resolve_phase_spec(phase, use_kda=bool(getattr(cfg, "use_kda", False)))
+        self.loss_mode = ph.loss if ph is not None else "ce"
+        self.phase_sparse = ph.sparse if ph is not None else "window"
+        self.phase_align = bool(ph.align_indexer) if ph is not None else False
 
     def _apply_nvfp4(self, model: nn.Module) -> int:
         """After freeze, before DDP. QKV/O Linears only; SDPA stays fp32."""
@@ -296,11 +327,25 @@ class Trainer:
             f"tok={row['tokens_seen']:.0f} "
             f"tok/s={row['tok_s']:.0f} mem={row['mem_mib']:.0f}MiB"
         )
+        rec = row.get("indexer_recall")
+        if isinstance(rec, (int, float)) and math.isfinite(rec):
+            line += f" rec={rec:.3f}"
+        rew = row.get("rl_reward")
+        if isinstance(rew, (int, float)) and math.isfinite(rew):
+            line += f" rew={rew:.3f}"
         print(line)
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             with self.log_path.open("a") as f:
                 f.write(json.dumps(_json_safe(row), default=str, allow_nan=False) + "\n")
+
+    def _attach_phase_modules(self, model: nn.Module) -> None:
+        """Indexers + sparse flags. Phase B no-ops (no indexer modules)."""
+        raw = unwrap(model)
+        if phase_needs_indexer(self.phase) or self.phase_sparse in {"topk", "hca"}:
+            ensure_indexers(raw, self.cfg)
+        set_align_indexer(raw, self.phase_align)
+        set_sparse_mode(raw, self.phase_sparse)
 
     def _maybe_save(self, model: nn.Module, opt, extra: dict, tag: str) -> None:
         if self.save_dir is None or not is_rank0(self.rank):
@@ -364,6 +409,8 @@ class Trainer:
             eos_id=resolve_eos(path, self.eos_id),
             rank=self.rank,
             world=self.world,
+            response_only=self.loss_mode == "sft",
+            needle=self.phase.startswith(("D", "G")) or self.loss_mode in {"grpo", "dpo"},
         )
 
     @torch.no_grad()
@@ -472,6 +519,7 @@ class Trainer:
             tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
         apply_freeze(unwrap(model), self.phase)
+        self._attach_phase_modules(model)
         self._apply_nvfp4(model)
         self._resolve_offload()
         self._apply_runtime_flags(model)
@@ -486,6 +534,24 @@ class Trainer:
         del ckpt
         return step, tokens_in_phase, tokens_seen
 
+    def _inherit_implemented_kda(self) -> None:
+        """B overlay owns the 3:1 graph. C inherits; C cannot implement late."""
+        from cat_yoko.kda import resolve_implemented_kda
+
+        extra = peek_checkpoint_extra(self.resume) if self.resume is not None else None
+        want = resolve_implemented_kda(
+            cli=bool(getattr(self.cfg, "use_kda", False)), extra=extra
+        )
+        if want == bool(getattr(self.cfg, "use_kda", False)):
+            return
+        self.cfg = replace(self.cfg, use_kda=want)
+        ph = resolve_phase_spec(self.phase, use_kda=want)
+        if ph is None:
+            return
+        self.loss_mode = ph.loss
+        self.phase_sparse = ph.sparse
+        self.phase_align = bool(ph.align_indexer)
+
     def _extra(self, model: nn.Module, step: int, tokens_in_phase: float, tokens_seen: float, stream) -> dict:
         return {
             "phase": self.phase,
@@ -497,11 +563,79 @@ class Trainer:
             "seq_len": self.seq_len,
             "seed": self.seed,
             "cfg": asdict(self.cfg),
+            "use_kda": bool(getattr(self.cfg, "use_kda", False)),
+            "sparse": self.phase_sparse,
             "stream": stream.state_dict(),
             "rng_py": random.getstate(),
             "rng_torch": torch.get_rng_state(),
             "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
         }
+
+    def _forward_loss(self, model: nn.Module, batch: dict) -> dict[str, torch.Tensor]:
+        """CE / indexer KL / SFT / GRPO / DPO. Always returns loss, nll, n_valid, aux."""
+        mode = self.loss_mode
+        if mode == "indexer_kl":
+            out = model(
+                input_ids=batch["input_ids"],
+                doc_ids=batch.get("doc_ids"),
+                labels=None,
+            )
+            if "indexer_kl" not in out:
+                raise RuntimeError(
+                    f"{self.phase} indexer_kl missing; ensure_indexers + align_indexer"
+                )
+            kl = out["indexer_kl"]
+            out["loss"] = kl
+            out["nll"] = kl
+            out["n_valid"] = kl.new_ones(())
+            out.setdefault("aux", kl.new_zeros(()))
+            return out
+        if mode == "grpo":
+            from cat_yoko.rl import grpo_step_loss, sample_completions
+
+            prompt_len = max(self.seq_len // 2, 1)
+            max_new = min(int(self.cfg.grpo_max_new), max(self.seq_len - prompt_len, 1))
+            group = max(int(self.cfg.grpo_group), 1)
+            prompt = batch["input_ids"][:, :prompt_len]
+            prompts = prompt.repeat_interleave(group, dim=0)
+            with torch.no_grad():
+                full = sample_completions(unwrap(model), prompts, max_new)
+            completions = full[:, prompt_len:]
+            loss, reward = grpo_step_loss(
+                unwrap(model),
+                prompts,
+                completions,
+                group=group,
+                prompt_len=prompt_len,
+            )
+            z = loss.reshape(())
+            return {
+                "loss": z,
+                "nll": z,
+                "n_valid": z.new_ones(()) * prompts.size(0),
+                "aux": z.new_zeros(()),
+                "rl_reward": reward.reshape(()),
+            }
+        if mode == "dpo":
+            from cat_yoko.rl import dpo_step_loss
+
+            ids = batch["input_ids"]
+            plen = max(self.seq_len // 2, 1)
+            loss = dpo_step_loss(
+                unwrap(model),
+                ids,
+                ids.roll(1, dims=0),
+                prompt_len=plen,
+                beta=float(self.cfg.dpo_beta),
+            )
+            z = loss.reshape(())
+            return {
+                "loss": z,
+                "nll": z,
+                "n_valid": z.new_ones(()) * ids.size(0),
+                "aux": z.new_zeros(()),
+            }
+        return model(**batch)
 
     def _apply_runtime_flags(self, model: nn.Module) -> None:
         raw = unwrap(model)
@@ -509,7 +643,7 @@ class Trainer:
         raw.offload_encoder = self.offload_encoder
         raw.offload_blocks = self.offload_blocks
         # Chunked lm_head+CE unless KD needs the full student logit tensor.
-        raw.return_logits = self.teacher is not None
+        raw.return_logits = self.teacher is not None or self.loss_mode in {"grpo", "dpo"}
         if self.offload_blocks:
             for blk in list(raw.encoder) + list(raw.decoder):
                 move_module(blk, "cpu")
@@ -531,7 +665,8 @@ class Trainer:
             f"optim_cpu={self.optim_cpu} adam={adam_state} "
             f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
             f"nvfp4={bool(getattr(self.cfg, 'use_nvfp4', False))} "
-            f"nvfp4_n={self.nvfp4_n} grouped_mm={grouped_mm_available()} "
+            f"nvfp4_n={self.nvfp4_n} nvfp4_family={compute_family()} "
+            f"te_linear={prefer_te_linear()} grouped_mm={grouped_mm_available()} "
             f"te={te_available()} te_nvfp4={te_nvfp4_linear_enabled()} "
             f"return_logits={bool(getattr(raw, 'return_logits', True))} "
             f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
@@ -557,6 +692,10 @@ class Trainer:
             raise RuntimeError("CAT-YOKO-12B weights need --device cuda --dtype bf16 (CPU is --meta only)")
         seed_all(self.seed + self.rank)
         configure_cuda()
+        if self.phase_align:
+            # Indexer KL is a side tensor on the block; activation checkpoint
+            # would drop it from the autograd graph.
+            self.grad_ckpt = False
         self._resolve_offload()
         if self.save_optim_arg is None:
             self.save_optim = self.cfg.name != "CAT-YOKO-12B"
@@ -587,6 +726,7 @@ class Trainer:
                 "B2 --offload-blocks Adams each layer during backward and cannot "
                 "gradient-accumulate; use --accum 1, or ZeRO/multi-GPU for the 4M-token batch"
             )
+        self._inherit_implemented_kda()
         if self.reuse_model is not None:
             model = unwrap(self.reuse_model)
         else:
@@ -594,7 +734,9 @@ class Trainer:
             if self.upcycle_src is not None:
                 upcycle_from_minicpm(unwrap(model), self.upcycle_src, self.cfg)
                 del self.upcycle_src
+        self._attach_phase_modules(model)
         apply_freeze(unwrap(model), self.phase)
+        self._attach_phase_modules(model)
         self._apply_nvfp4(model)
         self._apply_runtime_flags(model)
         model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
@@ -643,6 +785,7 @@ class Trainer:
                 p.requires_grad = False
 
         unwrap(model).train()
+        self._nll_ema = None
         use_fp8 = should_autocast(
             self.phase,
             cuda=str(self.device).startswith("cuda"),
@@ -685,7 +828,13 @@ class Trainer:
                 elif phase_budget:
                     progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
                 set_gate(unwrap(model), gate_schedule(self.phase, progress))
-                lr = wsd_lr(tokens_seen, self.cfg, self.phase)
+                lr = wsd_lr(
+                    tokens_seen,
+                    self.cfg,
+                    self.phase,
+                    tokens_in_phase=tokens_in_phase,
+                    phase_budget=phase_budget,
+                )
                 for g in opt.param_groups:
                     g["lr"] = lr
                 opt.zero_grad(set_to_none=True)
@@ -695,6 +844,8 @@ class Trainer:
                 step_tokens = 0
                 step_n_valid = 0.0
                 kd_w = 0.0
+                step_recall = None
+                step_reward = None
                 if self.teacher is not None:
                     kd_w = kd_weight(
                         step,
@@ -704,15 +855,21 @@ class Trainer:
                         phase_budget=phase_budget,
                     )
                 t0 = time.perf_counter()
+                stats_nll_w = stats_n_valid = stats_loss = stats_aux = None
                 for micro_i in range(self.accum):
                     batch = stream.batch(self.micro_batch, self.device)
                     step_tokens += int(batch["input_ids"].numel())
                     last_micro = micro_i == self.accum - 1
                     with backward_sync_ctx(model, last_micro=last_micro, world=self.world):
                         with self._amp():
-                            out = model(**batch)
+                            out = self._forward_loss(model, batch)
                             loss = out["loss"] / self.accum
-                        if self.teacher is not None and kd_w > 0:
+                        if (
+                            self.teacher is not None
+                            and kd_w > 0
+                            and self.loss_mode in {"ce", "sft"}
+                            and "logits" in out
+                        ):
                             with torch.no_grad():
                                 t_logits = self.teacher(batch["input_ids"])["logits"]
                             shift_labels = batch["labels"][:, 1:]
@@ -723,16 +880,45 @@ class Trainer:
                                 ignore=shift_labels,
                             )
                         loss.backward()
+                    z = out["loss"].detach().reshape(()).float()
+                    if stats_nll_w is None:
+                        stats_nll_w = z.new_zeros(())
+                        stats_n_valid = z.new_zeros(())
+                        stats_loss = z.new_zeros(())
+                        stats_aux = z.new_zeros(())
                     n_valid = out.get("n_valid")
-                    n_valid_f = float(n_valid.detach()) if n_valid is not None else 0.0
-                    if n_valid_f > 0:
-                        step_nll_w += float(out["nll"].detach()) * n_valid_f
-                        step_n_valid += n_valid_f
-                    step_loss += float(out["loss"].detach()) / self.accum
-                    step_aux += float(out.get("aux", out["loss"].new_zeros(())).detach()) / self.accum
+                    n_valid_t = (
+                        n_valid.detach().reshape(()).float()
+                        if torch.is_tensor(n_valid)
+                        else z.new_zeros(())
+                    )
+                    nll_t = out["nll"].detach().reshape(()).float()
+                    stats_nll_w = stats_nll_w + torch.where(n_valid_t > 0, nll_t * n_valid_t, z.new_zeros(()))
+                    stats_n_valid = stats_n_valid + n_valid_t
+                    stats_loss = stats_loss + z / self.accum
+                    aux = out.get("aux")
+                    aux_t = aux.detach().reshape(()).float() if torch.is_tensor(aux) else z.new_zeros(())
+                    stats_aux = stats_aux + aux_t / self.accum
+                    rec = out.get("indexer_recall")
+                    if torch.is_tensor(rec):
+                        step_recall = rec.detach().float().reshape(())
+                    rew = out.get("rl_reward")
+                    if torch.is_tensor(rew):
+                        step_reward = rew.detach().float().reshape(())
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
-                moe_stats = moe_utilization(unwrap(model))
+                next_step = step + 1
+                will_log = next_step == 1 or next_step % self.log_every == 0 or (
+                    max_steps is not None and next_step == max_steps
+                )
+                if will_log:
+                    moe_stats = moe_utilization(unwrap(model))
                 unwrap(model).step_router_bias()
+                if stats_nll_w is None:
+                    step_nll_w = step_n_valid = step_loss = step_aux = 0.0
+                else:
+                    step_nll_w, step_n_valid, step_loss, step_aux = _host_step_stats(
+                        stats_nll_w, stats_n_valid, stats_loss, stats_aux
+                    )
                 step_nll_w = reduce_sum(step_nll_w, device=str(self.device), world=self.world)
                 step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
                 step_nll = token_mean_nll(step_nll_w, step_n_valid)
@@ -740,6 +926,18 @@ class Trainer:
                 step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
                 if not math.isfinite(step_nll):
                     raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
+                spike = float(getattr(self.cfg, "nll_spike_factor", 0.0) or 0.0)
+                if spike > 0 and step >= 7 and getattr(self, "_nll_ema", None) is not None:
+                    ema = float(self._nll_ema)
+                    if step_nll > spike * max(ema, 1e-3):
+                        raise RuntimeError(
+                            f"nll spike {step_nll:.4f} > {spike:g}× ema {ema:.4f} "
+                            f"at {self.phase} step {step + 1}"
+                        )
+                if getattr(self, "_nll_ema", None) is None:
+                    self._nll_ema = step_nll
+                else:
+                    self._nll_ema = 0.9 * float(self._nll_ema) + 0.1 * step_nll
                 if self.offload_blocks:
                     leftover = [p for p in trainable if p.grad is not None]
                     if leftover:
@@ -775,6 +973,7 @@ class Trainer:
                         "nvfp4_n": self.nvfp4_n,
                         "grouped_mm": grouped_mm_available(),
                         "te_nvfp4": te_nvfp4_linear_enabled(),
+                        "nvfp4_family": compute_family(),
                         "tokens_seen": tokens_seen,
                         "tokens_in_phase": tokens_in_phase,
                         "tok_s": (step_tokens * self.world) / dt,
@@ -789,8 +988,14 @@ class Trainer:
                         "world": self.world,
                         "accum": self.accum,
                         "n_valid": step_n_valid,
+                        "loss_mode": self.loss_mode,
+                        "sparse": self.phase_sparse,
                         **moe_stats,
                     }
+                    if step_recall is not None:
+                        row["indexer_recall"] = float(step_recall.cpu())
+                    if step_reward is not None:
+                        row["rl_reward"] = float(step_reward.cpu())
                     if self.eval_every and self.eval_data is not None and step % self.eval_every == 0:
                         ev = self._allreduce_token_nll(*self._eval_nll_stats(model))
                         row["eval_nll"] = ev
@@ -828,18 +1033,19 @@ class Trainer:
             set_after_block_backward(None)
 
 
-def run_c1_chain(
+def run_phase_chain(
     cfg: CATYokoConfig,
     device: str,
+    phases: tuple[str, ...] | list[str],
     *,
     steps: int = 1,
     reuse_model: nn.Module | None = None,
     **kwargs,
 ) -> dict[str, TrainResult]:
-    """B0 then B1 then B2 on the same weights. Packed cursor continues across phases.
+    """Run ``phases`` on the same weights. Packed cursor continues.
 
-    ``save_dir`` becomes ``save_dir/{B0,B1,B2}/latest.pt`` so a later
-    ``--phase B1 --resume save_dir/B0/latest.pt`` handoff still works.
+    ``save_dir`` becomes ``save_dir/{phase}/``. Cross-phase resume still works
+    as ``--phase NEXT --resume save_dir/PREV``.
     """
     dtype = kwargs.pop("dtype", "bf16" if str(device).startswith("cuda") else "fp32")
     save_root = kwargs.pop("save_dir", None)
@@ -854,7 +1060,7 @@ def run_c1_chain(
         kwargs.pop("upcycle_src", None)
     out: dict[str, TrainResult] = {}
     offset = float(kwargs.pop("global_tokens_offset", 0.0))
-    for phase in ("B0", "B1", "B2"):
+    for phase in phases:
         phase_dir = Path(save_root) / phase if save_root is not None else None
         tr = Trainer(
             cfg,
@@ -875,6 +1081,53 @@ def run_c1_chain(
             trim_host_allocator()
             torch.cuda.empty_cache()
     return out
+
+
+def run_c1_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    """B0 then B1 then B2 on the same weights."""
+    return run_phase_chain(
+        cfg, device, ("B0", "B1", "B2"), steps=steps, reuse_model=reuse_model, **kwargs
+    )
+
+
+def run_c_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    return run_phase_chain(
+        cfg,
+        device,
+        c_chain(use_kda=bool(getattr(cfg, "use_kda", False))),
+        steps=steps,
+        reuse_model=reuse_model,
+        **kwargs,
+    )
+
+
+def run_d_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    from cat_yoko.phases import D_CHAIN
+
+    return run_phase_chain(
+        cfg, device, D_CHAIN, steps=steps, reuse_model=reuse_model, **kwargs
+    )
 
 
 def train_loop(

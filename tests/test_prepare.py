@@ -50,7 +50,14 @@ class RecipeTests(unittest.TestCase):
     def test_code_mix_is_optional_extra(self) -> None:
         self.assertAlmostEqual(sum(s.weight for s in PHASE_B_WITH_CODE), 1.0)
         self.assertTrue(any(s.repo == "bigcode/starcoderdata" for s in PHASE_B_WITH_CODE))
-        self.assertEqual(set(MIXES), {"phase-b", "phase-b-code"})
+        self.assertIn("phase-b", MIXES)
+        self.assertIn("phase-b-code", MIXES)
+        self.assertIn("phase-c", MIXES)
+        self.assertIn("phase-f", MIXES)
+        self.assertEqual(MIXES["phase-c"], PHASE_B)
+        self.assertIn("phase-e", MIXES)
+        self.assertIn("phase-g", MIXES)
+        self.assertNotEqual(MIXES["phase-e"], PHASE_B)
 
     def test_mix_named_rejects_unknown(self) -> None:
         with self.assertRaises(KeyError):

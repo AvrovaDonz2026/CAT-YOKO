@@ -1,4 +1,4 @@
-"""C1 freeze boundaries (Theorems D/E).
+"""C1 freeze boundaries (Theorems D/E) plus C–G freeze modes.
 
 Duck-typed for the torch graph and a future MegatronModule: ``encoder``,
 ``decoder``, ``embed``, ``norm``, ``cache_k`` / ``cache_v``, ``set_detach``,
@@ -39,23 +39,75 @@ def _b0_new_module_params(model: CATYokoForCausalLM):
         yield from blk.ln_cross.parameters()
 
 
+def _clear_trainable_cache(model: CATYokoForCausalLM) -> None:
+    for m in model.modules():
+        if hasattr(m, "_has_trainable_params"):
+            delattr(m, "_has_trainable_params")
+
+
+def _indexer_params(model: CATYokoForCausalLM):
+    for n, p in model.named_parameters():
+        parts = n.split(".")
+        if "indexer" in parts or "cross_indexer" in parts:
+            yield p
+
+
+def freeze_mode(phase: str) -> str:
+    from cat_yoko.phases import PHASES
+
+    ph = PHASES.get(phase)
+    if ph is not None:
+        return ph.freeze
+    if phase in {"B0", "B1", "B2"}:
+        return {"B0": "b0", "B1": "b1", "B2": "b2"}[phase]
+    raise ValueError(phase)
+
+
+def _kda_params(model: CATYokoForCausalLM):
+    for n, p in model.named_parameters():
+        if "kda" in n.split("."):
+            yield p
+
+
+def _freeze_unlit_kda(model: CATYokoForCausalLM) -> None:
+    """Implemented in the graph, not in Adam, until Phase C lights C-kda."""
+    for p in _kda_params(model):
+        p.requires_grad = False
+
+
 def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
-    if phase not in {"B0", "B1", "B2"}:
-        raise ValueError(phase)
+    mode = freeze_mode(phase)
     model = unwrap(model)
     for p in model.parameters():
         p.requires_grad = True
-    model.set_detach(phase != "B2")
-    if phase == "B2":
+    model.set_detach(mode in {"b0", "b1", "indexer"})
+    if mode == "none" or mode == "b2":
+        if mode == "b2":
+            _freeze_unlit_kda(model)
+        _clear_trainable_cache(model)
+        return
+    if mode == "indexer":
+        for p in model.parameters():
+            p.requires_grad = False
+        n_idx = 0
+        for p in _indexer_params(model):
+            p.requires_grad = True
+            n_idx += 1
+        if n_idx == 0:
+            raise RuntimeError(
+                "phase C-index freeze found no indexer parameters; "
+                "call cat_yoko.indexer.ensure_indexers before apply_freeze"
+            )
+        _clear_trainable_cache(model)
         return
     # Freeze encoder + input embedding (Theorem E). Untied lm_head is frozen
     # in B0 (new-modules only) and trained in B1 (does not drift X^0).
     for p in model.encoder.parameters():
         p.requires_grad = False
     model.embed.weight.requires_grad = False
-    if model.cfg.tie_embeddings or phase == "B0":
+    if model.cfg.tie_embeddings or mode == "b0":
         model.lm_head.weight.requires_grad = False
-    if phase == "B0":
+    if mode == "b0":
         for blk in model.decoder:
             blk = unwrap(blk)
             for p in blk.self_attn.parameters():
@@ -74,6 +126,9 @@ def apply_freeze(model: CATYokoForCausalLM, phase: str) -> None:
             if id(p) not in keep:
                 p.requires_grad = False
     # B1: decoder stack (self-attn, mlp, ln1/ln2, final norm) stays trainable.
+    # KDAGates stay frozen until C-kda lights them (implement, then light).
+    _freeze_unlit_kda(model)
+    _clear_trainable_cache(model)
 
 
 def trainable_names(model: CATYokoForCausalLM) -> list[str]:
@@ -81,4 +136,8 @@ def trainable_names(model: CATYokoForCausalLM) -> list[str]:
 
 
 def tokens_for_phase(phase: str) -> float:
-    return C1_SPLIT[phase]
+    from cat_yoko.phases import PHASES
+
+    if phase in C1_SPLIT:
+        return C1_SPLIT[phase]
+    return float(PHASES[phase].tokens)

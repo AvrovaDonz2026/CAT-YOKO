@@ -15,6 +15,7 @@ from cat_yoko.config import (
 )
 from cat_yoko.nvfp4 import policy_for
 from cat_yoko.parallel import ParallelPlan, validate_parallel
+from cat_yoko.phases import PHASES
 
 MEGATRON_LM = "https://github.com/NVIDIA/Megatron-LM"
 
@@ -45,8 +46,8 @@ def encoder_csa_compress_ratios(cfg: CATYokoConfig) -> list[int]:
     """Megatron CSA ratios must be 0 (sliding), 4 (CSA), or 128 (HCA). Matches m / m'."""
     out: list[int] = []
     for i in range(cfg.encoder_layers):
-        kind = encoder_layer_kind(i)
-        if kind == "sliding":
+        kind = encoder_layer_kind(i, cfg.encoder_layers, use_kda=cfg.use_kda, kda_group=cfg.kda_group)
+        if kind == "sliding" or kind == "kda":
             out.append(0)
         elif kind == "csa":
             out.append(cfg.compress_m)  # 4
@@ -152,8 +153,12 @@ def transformer_config_dict(
 def yoco_extras(cfg: CATYokoConfig, phase: str) -> dict:
     return {
         "architecture": "yoco_causal_encoder_decoder",
-        "detach_cache": phase != "B2",
-        "gate_schedule": {"B0": [0.0, 0.3], "B1": [0.3, 1.0], "B2": [1.0, 1.0]}[phase],
+        "detach_cache": bool(PHASES[phase].detach) if phase in PHASES else phase != "B2",
+        "gate_schedule": (
+            {"B0": [0.0, 0.3], "B1": [0.3, 1.0], "B2": [1.0, 1.0]}.get(
+                phase, [1.0, 1.0]
+            )
+        ),
         "scale_emb": cfg.embed_scale,
         "residual_scale": cfg.residual_scale,
         "logit_scale": cfg.logit_scale,

@@ -18,6 +18,28 @@ from torch import nn
 from cat_yoko.config import CATYokoConfig
 
 
+def module_has_trainable(mod: nn.Module | None) -> bool:
+    """Cached ``any(p.requires_grad)``. Freeze/wrap run before the train loop."""
+    if mod is None:
+        return False
+    flag = getattr(mod, "_has_trainable_params", None)
+    if not isinstance(flag, bool):
+        flag = any(p.requires_grad for p in mod.parameters())
+        try:
+            mod._has_trainable_params = flag
+        except Exception:
+            return flag
+    return flag
+
+
+def _repeat_by_counts(values: torch.Tensor, counts: torch.Tensor, output_size: int) -> torch.Tensor:
+    """``repeat_interleave`` with known length so CUDA skips ``repeats.sum()`` sync."""
+    try:
+        return torch.repeat_interleave(values, counts, output_size=int(output_size))
+    except TypeError:
+        return torch.repeat_interleave(values, counts)
+
+
 def grouped_mm_available() -> bool:
     """True when this PyTorch build exposes grouped GEMM (``F.grouped_mm`` / ``_grouped_mm``)."""
     return callable(getattr(F, "grouped_mm", None)) or callable(getattr(torch, "_grouped_mm", None))
@@ -29,6 +51,39 @@ def _raw_grouped_mm(mat_a: torch.Tensor, mat_b: torch.Tensor, offs: torch.Tensor
     if callable(fn):
         return fn(mat_a, mat_b, offs=offs)
     return torch._grouped_mm(mat_a, mat_b, offs=offs)
+
+
+def _grouped_wgrad(x: torch.Tensor, dy: torch.Tensor, weight: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
+    """``dW[e] = dy_e.T @ x_e``. Prefer one padded bmm; serial slices if hugely imbalanced."""
+    e, n_out, k = weight.shape
+    n_tok = int(x.size(0))
+    if e <= 0 or n_tok == 0:
+        return torch.zeros_like(weight)
+    offs64 = offs.to(dtype=torch.int64, device=x.device)
+    counts = torch.diff(offs64, prepend=offs64.new_zeros(1))
+    max_n = int(counts.max().item())
+    if max_n <= 0:
+        return torch.zeros_like(weight)
+    if max_n * e > 8 * n_tok:
+        dw = torch.zeros_like(weight)
+        prev = 0
+        for ei, n in enumerate(counts.detach().cpu().tolist()):
+            n_i = int(n)
+            if n_i:
+                dw[ei] = dy[prev : prev + n_i].T @ x[prev : prev + n_i]
+            prev += n_i
+        return dw
+    starts = torch.zeros(e, dtype=torch.int64, device=x.device)
+    if e > 1:
+        starts[1:] = offs64[:-1]
+    ids = torch.arange(e, device=x.device)
+    expert_sorted = _repeat_by_counts(ids, counts, n_tok)
+    local = torch.arange(n_tok, device=x.device) - _repeat_by_counts(starts, counts, n_tok)
+    x_pad = x.new_zeros(e, max_n, k)
+    dy_pad = dy.new_zeros(e, max_n, n_out)
+    x_pad[expert_sorted, local] = x
+    dy_pad[expert_sorted, local] = dy
+    return torch.bmm(dy_pad.transpose(1, 2), x_pad)
 
 
 class _GroupedLinear(torch.autograd.Function):
@@ -46,16 +101,7 @@ class _GroupedLinear(torch.autograd.Function):
         x, weight, offs = ctx.saved_tensors
         dy = dy.contiguous()
         dx = _raw_grouped_mm(dy, weight.contiguous(), offs)
-        dw = None
-        if ctx.weight_requires_grad:
-            dw = torch.zeros_like(weight)
-            prev = 0
-            ends = offs.detach().cpu().tolist()
-            for e, end in enumerate(ends):
-                end_i = int(end)
-                if end_i > prev:
-                    dw[e] = dy[prev:end_i].T @ x[prev:end_i]
-                prev = end_i
+        dw = _grouped_wgrad(x, dy, weight, offs) if ctx.weight_requires_grad else None
         return dx, dw, None
 
 
@@ -93,8 +139,10 @@ class SwiGLU(nn.Module):
 
 
 def _stack_linear_weight(linears: list[nn.Linear]) -> torch.Tensor:
-    from cat_yoko.nvfp4_linear import Nvfp4Linear
+    from cat_yoko.nvfp4_linear import Nvfp4Linear, TeNvfp4Linear
 
+    if any(isinstance(lin, TeNvfp4Linear) for lin in linears):
+        raise RuntimeError("TE NVFP4 experts must not stack into bf16 grouped_mm")
     if all(isinstance(lin, Nvfp4Linear) for lin in linears):
         return torch.stack([lin.quantized_weight() for lin in linears])
     return torch.stack([lin.weight for lin in linears])
@@ -120,6 +168,19 @@ def _swiglu_expert_weights(
     if owner is not None and not trainable:
         owner._swiglu_w = pack
     return pack
+
+
+def _experts_are_te_nvfp4(experts: nn.ModuleList) -> bool:
+    from cat_yoko.nvfp4_linear import TeNvfp4Linear
+
+    if not experts:
+        return False
+    return all(
+        isinstance(e.gate_proj, TeNvfp4Linear)
+        and isinstance(e.up_proj, TeNvfp4Linear)
+        and isinstance(e.down_proj, TeNvfp4Linear)
+        for e in experts
+    )
 
 
 def _experts_are_swiglu(experts: nn.ModuleList) -> bool:
@@ -210,8 +271,6 @@ def _swiglu_experts_grouped(
     n_tok = x_sorted.size(0)
     if n_tok == 0:
         return x_sorted
-    if int(counts.max().item()) <= 0:
-        return x_sorted.new_zeros(x_sorted.shape)
     offs = torch.cumsum(counts, dim=0).to(dtype=torch.int32)
     gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
     gu_w = torch.cat((gate_w, up_w), dim=1)
@@ -257,7 +316,13 @@ def _dispatch_experts(
         and grouped_mm_available()
         and x_sorted.is_cuda
     )
-    if want_grouped:
+    if _experts_are_te_nvfp4(experts):
+        from cat_yoko.nvfp4_hw import te_grouped_swiglu
+
+        y = te_grouped_swiglu(experts, x_sorted, counts, owner)
+        if y is None:
+            y = _swiglu_experts_serial(experts, x_sorted, counts)
+    elif want_grouped:
         try:
             y = _swiglu_experts_grouped(experts, x_sorted, counts, owner=owner)
         except (RuntimeError, NotImplementedError):
@@ -380,12 +445,17 @@ class MoE(nn.Module):
             owner=self,
         )
 
-        z_loss = logits.float().pow(2).mean()
         ones = torch.zeros(self.n_routed, device=x.device, dtype=x.dtype)
         ones.scatter_add_(0, topi.reshape(-1), _like(ones, gates.reshape(-1)))
         load = ones / n_tok
-        balance = self.n_routed * (load * load).sum()
-        self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
+        # Frozen MoE (B0 encoder+decoder backbone) does not enter the loss or
+        # aux-loss-free bias. Skip z-loss / balance; keep ``last_load`` for logs.
+        if module_has_trainable(self):
+            z_loss = logits.float().pow(2).mean()
+            balance = self.n_routed * (load * load).sum()
+            self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
+        else:
+            self.last_aux = None
         if self.training:
             ld = load.detach()
             if self.last_load is None:
@@ -402,10 +472,7 @@ class MoE(nn.Module):
 
 def moe_utilization(model: nn.Module) -> dict[str, float]:
     """Layer-mean coefficient of variation of routed expert load (before bias step)."""
-    cvs: list[float] = []
-    maxs: list[float] = []
-    mins: list[float] = []
-    n_layers = 0
+    loads: list[torch.Tensor] = []
     encoder = getattr(model, "encoder", None)
     decoder = getattr(model, "decoder", None)
     blocks = list(encoder or []) + list(decoder or [])
@@ -421,16 +488,17 @@ def moe_utilization(model: nn.Module) -> dict[str, float]:
         p = load.detach().float().reshape(-1)
         if p.numel() == 0:
             continue
-        n_layers += 1
-        mean = float(p.mean().clamp_min(1e-12))
-        cvs.append(float(p.std(unbiased=False) / mean))
-        maxs.append(float(p.max()))
-        mins.append(float(p.min()))
-    if not cvs:
+        loads.append(p)
+    if not loads:
         return {"moe_cv": 0.0, "moe_max": 0.0, "moe_min": 0.0, "moe_layers": 0}
+    stacked = torch.stack(loads, dim=0)
+    mean = stacked.mean(dim=-1).clamp_min(1e-12)
+    cv = (stacked.std(dim=-1, unbiased=False) / mean).mean()
+    # One host transfer instead of 4×N_layers ``.item()`` syncs each log step.
+    stats = torch.stack((cv, stacked.max(), stacked.min())).detach().cpu().tolist()
     return {
-        "moe_cv": sum(cvs) / len(cvs),
-        "moe_max": max(maxs),
-        "moe_min": min(mins),
-        "moe_layers": n_layers,
+        "moe_cv": float(stats[0]),
+        "moe_max": float(stats[1]),
+        "moe_min": float(stats[2]),
+        "moe_layers": int(stacked.size(0)),
     }

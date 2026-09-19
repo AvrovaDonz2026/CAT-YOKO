@@ -4,13 +4,14 @@
 > **≈12.25B 总参数**（已按算力预算从 24B 下调）；非对称激活 **默认：Encoder 处理输入 ≈2.03B 激活/token、Decoder 生成输出 ≈4.33B 激活/token**
 > （更省算力档 ≈1.43B/3.02B、近-dense 档 ≈3.04B/6.29B 见 §3）；
 > 注意力用 **DeepSeek-V4-Flash 式 CSA + HCA 压缩注意力 + 8K 大滑动窗口**；原生长上下文（YOCO 单一全局 KV cache）。
-> 底座从 MiniCPM-2B-sft-bf16（GML）切到 MiniCPM5-2B，是为了 **Apache-2.0 许可证对齐**，不是换一套课程。
+> 底座从 MiniCPM-2B-sft-bf16（GML）切到 MiniCPM5-2B，是为了 **Apache-2.0 许可证对齐**，不是换一套课程。CAT-YOKO 代码与派生权重同样是 **Apache-2.0**。
 >
 > ⚠️ **关键**：总参数主要影响**显存/存储**；**训练算力 ∝ 激活参数 × tokens**。要真正降训练成本必须降**激活**（选更省算力档），而不是只降总参。
 >
 > 本文是可执行的工程训练计划。**实现默认已敲死**在 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)
 > / `cat_yoko.config.CATYokoConfig.middle_12b()`：因果 16/26、C1 全 MoE、C1+NVFP4、Phase B 滑窗 + 门控
 > cross-attn、AdamW；**KDA / mHC / MTP / Muon / 首层 dense / M2 不是发布默认**。本文其余档位与消融是敏感性，不是训练代码的开关默认。
+> **当前训练进度**（Hub overlay step、哪台卡已回收）见 [`docs/STATUS.md`](STATUS.md)，不要在本文里找 step 钉。
 
 ---
 
@@ -178,7 +179,7 @@ full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **l
 
 **代价 / 注意**：
 - KDA 需额外的 **DPLR chunked kernel** + **独立循环状态**管理（与 YOCO"只缓存一次"正交：YOCO 省 KV cache，KDA 状态是每层各自的小状态）。
-- 混合改造已知坑：**模型可能学会忽略线性路径**；上采样初始化时让 KDA 与被替换的注意力做行为对齐，训练中监控各路径贡献。
+- 混合改造已知坑：**模型可能学会忽略线性路径**（若先训 CSA/HCA 强检索、再把多数层换成 KDA）。所以 **先实现 3:1 图（B，仍滑窗），再按 KDA→CSA→HCA 点亮（C）**。不要在 C 才改层类型。HCA 层最少且 write-first，点亮放最后。发布默认仍 `use_kda=False`。
 - 参数上，KDA 层通常比 GQA/CSA 更省参（无大 KV 投影），把部分 CSA/HCA 层替换为 KDA 会略降每栈参数，需在 §3 脚本里按实际 KDA 维度重算并用 routed 专家数补回 12.25B。
 
 > 结论：**值得加，但定位是"效率 + 兜底覆盖"，不是"保中段精确检索"**。是否上、以及 KDA:CSA:HCA 的确切比例，用 §7 消融决定。
@@ -252,7 +253,7 @@ python3 scripts/param_budget.py --nvfp4
 ```
 Phase A  架构手术与初始化        —— 0 token（离线权重变换）
 Phase B  上采样恢复性继续预训练   —— 50–150B token @ seq 4K（dense/滑窗注意力，先不稀疏）
-Phase C  注意力稀疏化对齐         —— 20–50B token（Indexer 稠密对齐 → 开 top-k → 开 HCA 压缩）
+Phase C  注意力稀疏化对齐         —— 20–50B token（默认 Indexer→top-k→HCA；`use_kda` 时先 C-kda 再 CSA/HCA）
 Phase D  长上下文扩展            —— 20–60B token（8K→32K→128K，逐级 RoPE 缩放）
 Phase E  WSD 退火 / 高质量数据    —— 20–50B token（LR 衰减段，堆数学/代码/长文）
 Phase F  SFT                    —— 1–10B token（指令 + 长上下文 + 工具）
@@ -328,7 +329,7 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
    - 每栈**默认全 MoE**（C1：token 0 两栈都是 MoE）。DeepSeek 式「首层 dense」**关**，不进发布配方；需要时用 `--first-dense` 敏感性。
    - **无 μP**：不要按 16/26 发明残差乘子，也不要把 MiniCPM-2B 的 `scale_depth/√40` 套过来。
    - **Hash-MoE bootstrap**：Decoder 最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。Encoder 在 B0/B1 已冻，Encoder 上的哈希路由多余，放到 B2 解冻时再用。
-2. **注意力改造**：继承 GQA 的 `q/k/v/o`（K/V 形状 `(256, 2048)`）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。**本仓库不实现 CSA / Phase C 训练循环。**
+2. **注意力改造**：继承 GQA 的 `q/k/v/o`（K/V 形状 `(256, 2048)`）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。**本仓库实现 Phase C indexer 层内 KL 与 C/D/E/F/G 训练入口；不实现 CSA CUDA kernel。**
 3. **不要引入 MiniCPM-2B μP 缩放常量**（emb 乘子、`scale_depth`、logits 缩放）。MiniCPM5 残差恒等。
 4. **可选 mHC**：先用普通残差跑通 Phase B/C，稳定后再切 mHC（把残差映射约束到 Birkhoff 多胞形/双随机矩阵，谱范数 ≤1）。
 
@@ -347,13 +348,28 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 ### Phase C — 注意力稀疏化对齐（关键、易翻车）
 
-遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩：
+**流程：先实现，后点亮。** 代码与层标签在 B 就进图；C 只改 `sparse_mode`，不在 C 才把模块焊上去。
 
-1. **Indexer 稠密对齐**：冻结主干，仅训练 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（对 indexer 输出与真实注意力分布做 KL/MSE 对齐）。此步不改变主输出，只教 indexer "该选谁"。监督是**层内**的，叠在 B2 **之后**；不是穿过 YOCO cache 的 CE，也不要用这步永远冻住 Encoder。
-2. **打开 CSA top-k**：把 CSA 层从"全可见"切到"top-`index_topk`"，小步继续训练让主干适应稀疏。
-3. **打开 HCA 压缩**：启用 `m'=128` 强压缩 + 稠密压缩注意力。
-4. **打开 8K 滑窗**：确认滑窗分支与压缩分支 concat/mask 正确，端到端联训。
+| 步 | 何时 | 做什么 |
+| --- | --- | --- |
+| **实现** | Phase A 手术 + **B 建图** | 默认层标签 2 sliding+7 CSA+7 HCA；`--use-kda` 则 2+11 KDA+2 CSA+1 HCA，`KDAGates` 进图。**计算仍是滑窗 GQA**（`sparse_mode=window`）。KDA 参数在 B 冻结，不进 Adam。发布 B0 默认 `use_kda=False`（132 张量 overlay）。 |
+| **点亮** | Phase C | 无 KDA：indexer→topk→hca→win。有 KDA（B 已实现）：**C-kda → indexer → topk → hca（最后）→ win**。禁止把 KDA 模块补到 `use_kda=False` 的 B overlay 上。 |
+
+遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩。**发布默认**（2 sliding + 7 CSA + 7 HCA，`use_kda=False`）：
+
+1. **Indexer 稠密对齐**：冻结主干，仅训练 Encoder CSA 上的 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（层内 KL）。此步不改变主输出，只教 indexer "该选谁"。监督叠在 B2 **之后**。Indexer top-k 只从压缩块集合 \(S_{\mathrm{comp}}\) 里删，不许加（定理 B）。
+2. **打开 CSA top-k**：CSA 层从稠密滑窗切到 **滑窗 ∪ indexer 选中的压缩块**（自身块排除，窗补洞），小步继续训练让主干适应稀疏。不是替换成「只留 top-k token」。
+3. **打开 HCA 压缩**：HCA 层 **滑窗 KV concat 均值池化槽**（\(m'=128\)，自身块排除）。
+4. **打开 8K 滑窗联训**：`C-win` 在 seq=8192 上同时开 CSA top-k + HCA concat，确认窗支路与压缩支路 mask 正确。
 - 每一步都监控 loss 尖峰；出现不稳定就回退该步、延长对齐或降低 LR。
+
+**若打开 3:1 KDA**（12B：2 sliding + 11 KDA + 2 CSA + 1 HCA），点亮顺序改成：
+
+0. **`C-kda`**：只把 KDA-kind 层切到 gated-delta；CSA/HCA-kind **仍走滑窗**。多数路径先学会被用，避免 hybrid-linear「先强检索、后换线性层被忽略」。
+1. **Indexer**：KDA 保持点亮；只在剩下的 CSA 锚点上做层内 KL（12B 仅 2 层，token 从 10e9 砍到 5e9，C 合计仍 25e9）。
+2. **CSA top-k**，然后 **HCA 最后**（1 层、write-first），再 `C-win`。
+
+CSA/HCA **实现不后移、不删除**；后移的是**点亮**。KDA 也一样：B `--use-kda` 实现，C 点亮。B0 默认仍 `use_kda=False`。
 
 ### Phase D — 长上下文扩展
 
@@ -537,7 +553,7 @@ BBH（推理），IFEval（指令遵循）。
 - **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。**精度 bf16，不开 NVFP4。**
 - **L1（半规模去风险原型，≈3–6B）**：用**完整新颖架构栈**但**专家数减半**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。廉价的架构验证台。
 - **L2（扩到 12B 目标）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，半规模→12B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
-- **每个新组件单独一步**：稀疏化 → KDA → mHC → Muon；**NVFP4 不进 L0**（tiny 保持 bf16），从 B1 开允许的线性 GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
+- **每个新组件单独一步**：先把模块**实现进图**（B 仍滑窗），再**点亮**。默认点亮 indexer→CSA→HCA；**3:1 KDA 图则 C-kda → 稀疏化**。**NVFP4 不进 L0**（tiny 保持 bf16），从 B1 开允许的线性 GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
 
 **难度—收益取舍速查：**
 

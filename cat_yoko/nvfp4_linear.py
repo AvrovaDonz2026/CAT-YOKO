@@ -7,11 +7,10 @@ B0 wraps frozen encoder GEMMs only; B1/B2 wrap **all** allowed GEMMs
 (including the unfrozen encoder in B2). Decoder self-attn stays
 ``WindowAttention`` either way.
 
-On Blackwell, Transformer Engine ``NVFP4BlockScaling`` is preferred when
-importable. Otherwise this module emulates E2M1 with 16-wide blocks
-(fp32 block scale; E4M3 block scale on CUDA if ``float8_e4m3fn`` works).
-Backward uses STE through the dequantized GEMM so Adam still sees bf16
-master grads. True fused WGRAD/RHT needs TE.
+On B200 / SM 10.0 / 10.3, wrap prefers ``TeNvfp4Linear`` (copy-once
+``te.Linear`` under default ``NVFP4BlockScaling()``: 2D + RHT + SR).
+sm_120 stays on this module's E2M1/16 emulation. Backward on the
+emulation path uses STE so Adam still sees bf16 master grads.
 
 Attention math is unchanged: wrap Q/K/V/O (and cross Q/O, cache KV in
 B1/B2) only. Causal YOCO window / GQA / qk_norm / fp32 SDPA stay in
@@ -26,7 +25,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from cat_yoko.nvfp4 import POLICY
+from cat_yoko.nvfp4 import POLICY, policy_key
 
 _BLOCK = 16
 # E2M1 magnitudes (sign applied separately). Max abs is 6.
@@ -59,20 +58,15 @@ def hardware_nvfp4() -> bool:
 
 
 def te_nvfp4_recipe():
-    try:
-        from transformer_engine.common.recipe import NVFP4BlockScaling
-    except Exception:
-        return None
-    return NVFP4BlockScaling()
+    from cat_yoko.nvfp4_hw import te_nvfp4_recipe as _recipe
+
+    return _recipe()
 
 
 def te_available() -> bool:
-    try:
-        import transformer_engine.pytorch as te  # noqa: F401
-        from transformer_engine.common.recipe import NVFP4BlockScaling  # noqa: F401
-    except Exception:
-        return False
-    return True
+    from cat_yoko.nvfp4_hw import te_pytorch_available
+
+    return te_pytorch_available()
 
 
 def hw_nvfp4_gemm_available() -> bool:
@@ -144,7 +138,11 @@ def quantize_nvfp4(t: torch.Tensor, *, block: int = _BLOCK) -> torch.Tensor:
 
 
 def te_nvfp4_linear_enabled() -> bool:
-    """True after a successful TE NVFP4 Linear probe/GEMM this process."""
+    """True after a successful TE NVFP4 Linear wrap or sm_120 share probe."""
+    from cat_yoko.nvfp4_hw import te_nvfp4_wrap_enabled
+
+    if te_nvfp4_wrap_enabled():
+        return True
     return getattr(_try_te_nvfp4_linear, "_state", None) is True
 
 
@@ -152,9 +150,18 @@ def fused_cat_linear(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
     """One GEMM with weights concatenated on the out axis. Same math as sequential Linears.
 
     Used for SwiGLU gate+up and WindowAttention QKV. No bias (recipe Linears are bias-free).
+    Frozen ``TeNvfp4Linear`` on SM100: one copy-once fused ``te.Linear``.
+    Trainable TE keeps sequential native GEMM so Adam still sees each leaf.
+    Concatenating TE masters into an emulated GEMM would silently drop NVFP4.
     """
     if len(linears) == 1:
         return linears[0](x)
+    if any(isinstance(lin, TeNvfp4Linear) for lin in linears):
+        fused = _fused_frozen_te_cat(linears, x)
+        if fused is not None:
+            return fused
+        parts = [lin(x) for lin in linears]
+        return torch.cat(parts, dim=-1)
     if all(isinstance(lin, Nvfp4Linear) for lin in linears):
         ctx = torch.autocast(device_type="cuda", enabled=False) if x.is_cuda else nullcontext()
         with ctx:
@@ -168,32 +175,102 @@ def fused_cat_linear(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
     return torch.cat(parts, dim=-1)
 
 
-def _probe_te_nvfp4_once() -> bool:
-    """Throwaway 16×128 Linear. Never touches 12B masters.
+def _fused_frozen_te_cat(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor | None:
+    """One ``te.Linear`` for frozen QKV / gate+up. None → sequential TE."""
+    from cat_yoko.nvfp4_hw import (
+        nvfp4_leading_ok,
+        pad_leading_to_block,
+        shape_fail_note,
+        shape_failed,
+    )
 
-    Share must keep the dummy Parameter identity and dtype. ``copy_`` into TE
-    is not a fallback (bandwidth + sm_120 float4 ``copy_`` is NotImplemented).
+    if not linears or not all(isinstance(lin, TeNvfp4Linear) for lin in linears):
+        return None
+    if any(lin.bias is not None for lin in linears):
+        return None
+    if any(bool(lin.weight.requires_grad) for lin in linears):
+        return None
+    in_f = int(linears[0].in_features)
+    if any(int(lin.in_features) != in_f for lin in linears):
+        return None
+    packs = [getattr(lin, "_te_pack", None) for lin in linears]
+    if any(p is None for p in packs):
+        return None
+    out_f = sum(int(lin.out_features) for lin in linears)
+    k = int(x.shape[-1])
+    if k % 16 != 0 or out_f % 16 != 0:
+        return None
+    lead = x.shape[:-1]
+    owner = linears[0]
+    key = tuple(id(lin) for lin in linears)
+    cache = getattr(owner, "_te_fused_cat", None)
+    layer = recipe = te = None
+    if isinstance(cache, list) and cache and cache[0] == key:
+        _, layer, recipe, te = cache
+    else:
+        te = packs[0][2]
+        recipe = packs[0][1]
+        try:
+            fused = te.Linear(in_f, out_f, bias=False, params_dtype=linears[0].weight.dtype)
+        except TypeError:
+            fused = te.Linear(in_f, out_f, bias=False)
+        try:
+            fused = fused.to(device=x.device, dtype=linears[0].weight.dtype)
+        except Exception:
+            fused = fused.to(device=x.device)
+        with torch.no_grad():
+            fused.weight.copy_(torch.cat([lin.weight.detach() for lin in linears], dim=0))
+        layer = fused
+        owner._te_fused_cat = [key, layer, recipe, te]
+    x2, n = pad_leading_to_block(x)
+    n_pad = int(x2.size(0))
+    if shape_failed(n_pad, k, out_f):
+        return None
+    if not nvfp4_leading_ok(n_pad, k, out_f) and n_pad > 0:
+        return None
+    fprop_only = not bool(x.requires_grad)
+    inner = torch.no_grad() if fprop_only else nullcontext()
+    try:
+        with inner:
+            with te.autocast(enabled=True, recipe=recipe):
+                y = layer(x2)
+        if n_pad != n:
+            y = y[:n]
+        return y.reshape(*lead, out_f)
+    except Exception:
+        shape_fail_note(n_pad, k, out_f)
+        return None
+
+
+def _probe_te_nvfp4_once() -> bool:
+    """sm_120-only share probe. SM100 uses ``TeNvfp4Linear`` copy-once wrap.
+
+    Throwaway 16×128 Linear. Never touches 12B masters. Share must keep the
+    dummy Parameter identity. ``copy_`` into TE is not a fallback on sm_120
+    (float4 ``copy_`` is NotImplemented).
     """
+    from cat_yoko.nvfp4_hw import compute_family, te_nvfp4_recipe as family_recipe
+
     state = getattr(_try_te_nvfp4_linear, "_state", None)
     if state is not None:
         return bool(state)
+    fam = compute_family()
+    if fam in {"sm100", "sm103"}:
+        # Datacenter Blackwell goes through TeNvfp4Linear, not Parameter share.
+        _try_te_nvfp4_linear._state = False
+        return False
     if not torch.cuda.is_available():
         _try_te_nvfp4_linear._state = False
         return False
     try:
         import transformer_engine.pytorch as te
-        from transformer_engine.common.recipe import NVFP4BlockScaling
     except Exception:
         _try_te_nvfp4_linear._state = False
         return False
-    try:
-        recipe = NVFP4BlockScaling(disable_rht=True, disable_2d_quantization=True)
-    except TypeError:
-        try:
-            recipe = NVFP4BlockScaling()
-        except Exception:
-            _try_te_nvfp4_linear._state = False
-            return False
+    recipe = family_recipe(fam)
+    if recipe is None:
+        _try_te_nvfp4_linear._state = False
+        return False
     try:
         device = torch.device("cuda")
         w = torch.randn(128, 128, device=device, dtype=torch.bfloat16)
@@ -230,12 +307,15 @@ def _probe_te_nvfp4_once() -> bool:
 
 
 def _try_te_nvfp4_linear(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor | None) -> torch.Tensor | None:
-    """Best-effort Transformer Engine NVFP4 GEMM sharing ``weight``. None = use emulation.
+    """sm_120 frozen share path. SM100 returns None (``TeNvfp4Linear`` owns GEMM).
 
-    Does not clone the 12B master. Probe uses a dummy 16×128 Linear first.
     If TE refuses to share a Parameter or the sm_120 kernel faults, disable
-    for the rest of the process. Never ``copy_`` into TE.
+    this share path for the rest of the process. Never ``copy_`` every call.
     """
+    from cat_yoko.nvfp4_hw import compute_family, nvfp4_leading_ok
+
+    if compute_family() in {"sm100", "sm103"}:
+        return None
     if getattr(_try_te_nvfp4_linear, "_state", None) is False:
         return None
     if not x.is_cuda or not weight.is_cuda:
@@ -246,7 +326,7 @@ def _try_te_nvfp4_linear(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tens
     n = x.reshape(-1, x.shape[-1]).size(0)
     k = int(x.shape[-1])
     n_out = int(weight.shape[0])
-    if n % 16 != 0 or k % 16 != 0 or n_out % 16 != 0:
+    if not nvfp4_leading_ok(n, k, n_out):
         return None
     if not _probe_te_nvfp4_once():
         return None
@@ -373,6 +453,111 @@ class Nvfp4Linear(nn.Linear):
         return _go()
 
 
+class TeNvfp4Linear(Nvfp4Linear):
+    """Copy-once ``te.Linear`` under the family NVFP4 recipe.
+
+    ``self.weight`` is the TE Parameter (state_dict / Adam unchanged). The TE
+    module sits in a plain list so it is not a registered submodule. One
+    illegal shape falls back to STE emulation for that call; SM100 is not
+    process-wide disabled.
+    """
+
+    _te_pack: list | None = None
+
+    @classmethod
+    def from_linear(cls, lin: nn.Linear) -> "TeNvfp4Linear":
+        from cat_yoko.nvfp4_hw import note_te_wrap, te_module, te_nvfp4_recipe
+
+        te = te_module()
+        recipe = te_nvfp4_recipe()
+        if recipe is None:
+            raise RuntimeError("NVFP4BlockScaling missing")
+        device = lin.weight.device
+        dtype = lin.weight.dtype
+        try:
+            layer = te.Linear(
+                lin.in_features,
+                lin.out_features,
+                bias=lin.bias is not None,
+                params_dtype=dtype,
+            )
+        except TypeError:
+            layer = te.Linear(lin.in_features, lin.out_features, bias=lin.bias is not None)
+        try:
+            layer = layer.to(device=device, dtype=dtype)
+        except Exception:
+            layer = layer.to(device=device)
+        with torch.no_grad():
+            if tuple(layer.weight.shape) != tuple(lin.weight.shape):
+                raise RuntimeError(
+                    f"te.Linear weight {tuple(layer.weight.shape)} "
+                    f"!= nn.Linear {tuple(lin.weight.shape)}"
+                )
+            layer.weight.copy_(lin.weight.detach())
+            layer.weight.requires_grad_(bool(lin.weight.requires_grad))
+            if lin.bias is not None:
+                bias = getattr(layer, "bias", None)
+                if bias is None:
+                    raise RuntimeError("te.Linear dropped bias")
+                bias.copy_(lin.bias.detach())
+                bias.requires_grad_(bool(lin.bias.requires_grad))
+        obj = cls.__new__(cls)
+        nn.Module.__init__(obj)
+        obj.in_features = lin.in_features
+        obj.out_features = lin.out_features
+        obj.weight = layer.weight
+        obj.bias = lin.bias if lin.bias is None else layer.bias
+        obj._wq_cache = None
+        obj._wq_ver = None
+        obj._te_pack = [layer, recipe, te]
+        note_te_wrap()
+        return obj
+
+    def extra_repr(self) -> str:
+        return f"in_features={self.in_features}, out_features={self.out_features}, te_nvfp4=True"
+
+    def quantized_weight(self) -> torch.Tensor:
+        """Master TE Parameter. Do not stack this into bf16 ``grouped_mm``."""
+        return self.weight
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        from cat_yoko.nvfp4_hw import (
+            nvfp4_leading_ok,
+            pad_leading_to_block,
+            shape_fail_note,
+            shape_failed,
+        )
+
+        pack = self._te_pack
+        if pack is None:
+            return nvfp4_linear(x, self.weight, self.bias)
+        k = int(x.shape[-1])
+        n_out = int(self.weight.shape[0])
+        if k % 16 != 0 or n_out % 16 != 0:
+            return nvfp4_linear(x, self.weight, self.bias)
+        lead = x.shape[:-1]
+        x2, n = pad_leading_to_block(x)
+        n_pad = int(x2.size(0))
+        if n == 0:
+            return F.linear(x, self.weight, self.bias)
+        if shape_failed(n_pad, k, n_out) or not nvfp4_leading_ok(n_pad, k, n_out):
+            return nvfp4_linear(x, self.weight, self.bias)
+        layer, recipe, te = pack
+        # Frozen + no dX: keep grad disabled so TE does not look up WGRAD.
+        fprop_only = not bool(self.weight.requires_grad) and not bool(x.requires_grad)
+        inner = torch.no_grad() if fprop_only else nullcontext()
+        try:
+            with inner:
+                with te.autocast(enabled=True, recipe=recipe):
+                    y = layer(x2)
+            if n_pad != n:
+                y = y[:n]
+            return y.reshape(*lead, n_out)
+        except Exception:
+            shape_fail_note(n_pad, k, n_out)
+            return nvfp4_linear(x, self.weight, self.bias)
+
+
 def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
     """Router stays high-prec. B0 wraps frozen encoder GEMMs only.
 
@@ -382,17 +567,23 @@ def should_wrap_linear(name: str, lin: nn.Linear, phase: str) -> bool:
     """
     if isinstance(lin, Nvfp4Linear):
         return False
+    parts = name.split(".")
+    if "indexer" in parts or "cross_indexer" in parts:
+        return False
+    if "kda" in parts:
+        return False
     leaf = name.rsplit(".", 1)[-1]
     if leaf == "router":
         return False
-    pol = POLICY.get(phase)
+    key = policy_key(phase)
+    pol = POLICY.get(key)
     if pol is None:
         return False
-    if phase in {"L0", "C"}:
+    if key in {"L0", "C"}:
         return False
-    if phase == "B0":
-        # Published: frozen encoder forward NVFP4. Student cache/cross, frozen
-        # decoder self-attn/MoE, and frozen lm_head stay bf16 until B1.
+    if key in {"B0", "C-index"}:
+        # Published: frozen encoder forward NVFP4. C-index student is the
+        # bf16 indexer; backbone GEMMs may still be NVFP4 FPROP.
         if not name.startswith("encoder."):
             return False
         return not any(p.requires_grad for p in lin.parameters())
@@ -409,15 +600,31 @@ def _parent_and_leaf(model: nn.Module, name: str) -> tuple[nn.Module, str]:
 
 
 def wrap_nvfp4_linears(model: nn.Module, phase: str) -> int:
-    """Replace allowed ``nn.Linear`` with ``Nvfp4Linear``. Idempotent."""
+    """Replace allowed ``nn.Linear`` with NVFP4 Linear. Idempotent.
+
+    SM100/103: ``TeNvfp4Linear`` (copy-once TE). Elsewhere: ``Nvfp4Linear``
+    emulation. A single TE wrap failure falls back that module; it does not
+    disable the rest of the graph.
+    """
+    from cat_yoko.nvfp4_hw import prefer_te_linear
+
     swapped = 0
+    use_te = prefer_te_linear()
     for name, mod in list(model.named_modules()):
         if not isinstance(mod, nn.Linear) or isinstance(mod, Nvfp4Linear):
             continue
         if not name or not should_wrap_linear(name, mod, phase):
             continue
         parent, leaf = _parent_and_leaf(model, name)
-        setattr(parent, leaf, Nvfp4Linear.from_linear(mod))
+        wrapped: nn.Linear
+        if use_te:
+            try:
+                wrapped = TeNvfp4Linear.from_linear(mod)
+            except Exception:
+                wrapped = Nvfp4Linear.from_linear(mod)
+        else:
+            wrapped = Nvfp4Linear.from_linear(mod)
+        setattr(parent, leaf, wrapped)
         swapped += 1
     return swapped
 
@@ -429,6 +636,6 @@ def nvfp4_module_names(model: nn.Module) -> list[str]:
 def apply_nvfp4(model: nn.Module, phase: str, *, enabled: bool) -> int:
     if not enabled:
         return 0
-    if phase not in POLICY:
+    if policy_key(phase) not in POLICY:
         return 0
     return wrap_nvfp4_linears(model, phase)

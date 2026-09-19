@@ -6,6 +6,8 @@ YOCO cache therefore use ``kv_dim = n_kv * head_dim``, not full MHA.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -31,6 +33,38 @@ def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
         return x
     b, n_kv, s, hd = x.shape
     return x[:, :, None, :, :].expand(b, n_kv, n_rep, s, hd).reshape(b, n_kv * n_rep, s, hd)
+
+
+_SDPA_KERNEL = None  # None=uninit, False=unavailable, else zero-arg context factory
+
+
+def _cuda_sdpa_kernel():
+    """Prefer Flash / cuDNN / mem-efficient SDPA on CUDA. Math SDPA stays fallback."""
+    global _SDPA_KERNEL
+    if _SDPA_KERNEL is False:
+        return nullcontext()
+    if _SDPA_KERNEL is not None:
+        return _SDPA_KERNEL()
+    try:
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+
+        backends = [
+            backend
+            for name in ("FLASH_ATTENTION", "CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
+            if (backend := getattr(SDPBackend, name, None)) is not None
+        ]
+        if not backends:
+            _SDPA_KERNEL = False
+            return nullcontext()
+
+        def _ctx():
+            return sdpa_kernel(backends)
+
+        _SDPA_KERNEL = _ctx
+        return _ctx()
+    except Exception:
+        _SDPA_KERNEL = False
+        return nullcontext()
 
 
 def _sdpa(
@@ -67,7 +101,8 @@ def _sdpa(
         and q.dtype in (torch.bfloat16, torch.float16)
     )
     if cuda_fast:
-        return _call(q, k, v, is_causal=causal)
+        with _cuda_sdpa_kernel():
+            return _call(q, k, v, is_causal=causal)
     qf, kf, vf = q.float(), k.float(), v.float()
     if bias is None:
         out = _call(qf, kf, vf, is_causal=causal)
@@ -76,13 +111,47 @@ def _sdpa(
     return out.to(q.dtype)
 
 
+def collapse_doc_ids(doc_ids: torch.Tensor | None) -> torch.Tensor | None:
+    """Keep packed document ids only when a row actually crosses a boundary.
+
+    DummyStream / single-doc rows are constant along the sequence. Passing
+    those tensors into every attention layer used to ``.item()`` 60+ times
+    per step and stall the CUDA pipeline. One check here, then ``None``.
+    """
+    if doc_ids is None or doc_ids.size(-1) <= 1:
+        return None
+    if not bool((doc_ids[..., 1:] != doc_ids[..., :-1]).any().item()):
+        return None
+    return doc_ids
+
+
+def _mean_head_probs(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    window: int,
+    doc_ids: torch.Tensor | None,
+) -> torch.Tensor:
+    """Mean-over-heads softmax weights ``[B, S, S]``. Used only for indexer KL."""
+    h = q.size(-3)
+    n_kv = k.size(-3)
+    kk = k if n_kv == h else _repeat_kv(k, h // n_kv)
+    scale = q.size(-1) ** -0.5
+    logits = torch.matmul(q.float(), kk.float().transpose(-1, -2)) * scale
+    s = q.size(-2)
+    bias = _window_causal_bias(s, kk.size(-2), window, q.device, torch.float32, doc_ids)
+    logits = logits + bias
+    return torch.softmax(logits, dim=-1).mean(dim=1)
+
+
 def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) -> bool:
-    """Dense causal SDPA is enough when the window covers the row and docs do not mix."""
+    """Dense causal SDPA is enough when the window covers the row and docs do not mix.
+
+    Callers that went through ``collapse_doc_ids`` pass ``None`` for single-doc
+    rows, so this is a Python branch with no GPU sync.
+    """
     if window < q_len:
         return True
-    if doc_ids is None or q_len <= 1:
-        return False
-    return bool((doc_ids[:, 1:] != doc_ids[:, :-1]).any().item())
+    return doc_ids is not None
 
 
 def _window_causal_bias(
@@ -132,7 +201,14 @@ class WindowAttention(nn.Module):
         self.k_norm = RMSNorm(self.head_dim, cfg.rms_eps) if cfg.qk_norm else None
         self.rope = RotaryEmbedding(self.head_dim, cfg.rope_theta)
 
-    def forward(self, x: torch.Tensor, doc_ids: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        doc_ids: torch.Tensor | None = None,
+        *,
+        extra_bias: torch.Tensor | None = None,
+        return_probs: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q, k, v = _fused_qkv(self.q_proj, self.k_proj, self.v_proj, x)
@@ -144,15 +220,21 @@ class WindowAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        if _needs_explicit_mask(s, self.n_win, doc_ids):
+        need_mask = extra_bias is not None or _needs_explicit_mask(s, self.n_win, doc_ids)
+        if need_mask:
             k = _repeat_kv(k, h // n_kv)
             v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
+            if extra_bias is not None:
+                bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
             out = _sdpa(q, k, v, bias)
         else:
             # GQA: 16 Q / 2 KV. Do not repeat KV; SDPA enable_gqa on CUDA.
             out = _sdpa(q, k, v, causal=True)
-        return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        if return_probs:
+            return y, _mean_head_probs(q, k, self.n_win, doc_ids)
+        return y
 
 
 class CrossAttention(nn.Module):
@@ -176,7 +258,10 @@ class CrossAttention(nn.Module):
         k: torch.Tensor,
         v: torch.Tensor,
         doc_ids: torch.Tensor | None = None,
-    ) -> torch.Tensor:
+        *,
+        extra_bias: torch.Tensor | None = None,
+        return_probs: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
@@ -187,11 +272,17 @@ class CrossAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        if _needs_explicit_mask(s, s, doc_ids):
+        need_mask = extra_bias is not None or _needs_explicit_mask(s, s, doc_ids)
+        if need_mask:
             k = _repeat_kv(k, h // n_kv)
             v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
+            if extra_bias is not None:
+                bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
             out = _sdpa(q, k, v, bias)
         else:
             out = _sdpa(q, k, v, causal=True)
-        return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        if return_probs:
+            return y, _mean_head_probs(q, k, s, doc_ids)
+        return y

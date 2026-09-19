@@ -195,6 +195,15 @@ fi
 if [[ -f "$ROOT/huggingface/.gitattributes" ]]; then
   add_artifact "$ROOT/huggingface/.gitattributes" ".gitattributes"
 fi
+# Hub folder card for the live B0 overlay. Weights are extra args; this
+# README must still ship or https://huggingface.co/.../checkpoints/b0-full
+# stays on a stale 6000D pin.
+if [[ -f "$ROOT/checkpoints/b0-full/README.md" ]]; then
+  add_artifact "$ROOT/checkpoints/b0-full/README.md" "checkpoints/b0-full/README.md"
+fi
+if [[ -f "$ROOT/LICENSE" ]]; then
+  add_artifact "$ROOT/LICENSE" "LICENSE"
+fi
 
 for raw in "${EXTRA_FILES[@]+"${EXTRA_FILES[@]}"}"; do
   dest="$(resolve_extra "$raw")"
@@ -274,7 +283,7 @@ else
     die "staging $STAGING is not empty and is not a git repo"
   fi
   echo "cloning $REMOTE into staging"
-  if ! git clone "$REMOTE" "$STAGING"; then
+  if ! GIT_LFS_SKIP_SMUDGE=1 git clone "$REMOTE" "$STAGING"; then
     echo "clone failed; initializing empty staging repo"
     git -C "$STAGING" init
     git -C "$STAGING" checkout -B "$BRANCH"

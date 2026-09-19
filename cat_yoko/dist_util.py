@@ -13,6 +13,7 @@ from torch import nn
 
 from cat_yoko.fsdp import wrap_fsdp
 from cat_yoko.model import CATYokoForCausalLM
+from cat_yoko.moe import module_has_trainable
 from cat_yoko.optim import unwrap
 
 
@@ -169,7 +170,7 @@ def allreduce_router_loads(model: nn.Module, *, device: str, world: int) -> None
         mlp = getattr(blk, "mlp", None)
         if mlp is None or not hasattr(mlp, "mean_pending_load"):
             continue
-        if not any(p.requires_grad for p in mlp.parameters()):
+        if not module_has_trainable(mlp):
             continue
         load = mlp.mean_pending_load()
         if load is None:
