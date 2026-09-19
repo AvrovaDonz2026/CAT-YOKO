@@ -48,11 +48,11 @@ def _cuda_sdpa_kernel():
     try:
         from torch.nn.attention import SDPBackend, sdpa_kernel
 
-        backends = tuple(
+        backends = [
             backend
             for name in ("FLASH_ATTENTION", "CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
             if (backend := getattr(SDPBackend, name, None)) is not None
-        )
+        ]
         if not backends:
             _SDPA_KERNEL = False
             return nullcontext()

@@ -55,6 +55,7 @@ class PublishedPlanTests(unittest.TestCase):
         kernel_src = inspect.getsource(attn_mod._cuda_sdpa_kernel)
         self.assertIn("FLASH_ATTENTION", kernel_src)
         self.assertIn("sdpa_kernel", kernel_src)
+        self.assertNotIn("tuple(", kernel_src)
         # CPU / mask fallback still upcasts; CUDA bf16 keeps QKV and uses
         # flash/cuDNN (fp32 softmax accum inside the kernel).
         self.assertIn(".float()", src)
@@ -73,6 +74,28 @@ class PublishedPlanTests(unittest.TestCase):
         with patch.object(attn_mod.F, "scaled_dot_product_attention", _spy):
             _sdpa(q, k, v, causal=True)
         self.assertEqual(seen, [torch.float32])
+
+    def test_cuda_sdpa_kernel_passes_list_not_tuple(self) -> None:
+        from contextlib import nullcontext
+
+        try:
+            from torch.nn.attention import SDPBackend  # noqa: F401
+        except ImportError:
+            self.skipTest("sdpa_kernel missing")
+        seen: list = []
+
+        def _fake(backends, *args, **kwargs):
+            seen.append(backends)
+            return nullcontext()
+
+        attn_mod._SDPA_KERNEL = None
+        with patch("torch.nn.attention.sdpa_kernel", _fake):
+            with attn_mod._cuda_sdpa_kernel():
+                pass
+        attn_mod._SDPA_KERNEL = None
+        self.assertTrue(seen)
+        self.assertIsInstance(seen[0], list)
+        self.assertGreater(len(seen[0]), 0)
 
     def test_sdpa_gqa_does_not_require_repeated_kv(self) -> None:
         torch.manual_seed(0)
