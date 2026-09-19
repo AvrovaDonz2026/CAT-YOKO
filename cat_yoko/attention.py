@@ -41,8 +41,6 @@ _LAST_SDPA = {"kind": "uninit", "dtype": ""}
 _SDPA_COUNTS = {"dense": 0, "masked_bf16": 0, "math_fp32": 0}
 # Ampere 3090: Efficient SDPA wins below this seq; cuDNN wins at 384+.
 MASKED_SDPA_SWITCH_SEQ = 320
-# None=untried, True=enable_gqa+attn_mask works, False=must repeat KV.
-_SDPA_GQA_MASK_OK: bool | None = None
 _WINDOW_BIAS_CACHE: dict[tuple, torch.Tensor] = {}
 _WINDOW_BIAS_BYTES = 0
 _WINDOW_BIAS_BUDGET = 256 << 20
@@ -58,12 +56,10 @@ def sdpa_counts() -> dict:
 
 
 def reset_sdpa_counts() -> None:
-    global _SDPA_GQA_MASK_OK
     for key in _SDPA_COUNTS:
         _SDPA_COUNTS[key] = 0
     _LAST_SDPA["kind"] = "uninit"
     _LAST_SDPA["dtype"] = ""
-    _SDPA_GQA_MASK_OK = None
 
 
 def reset_window_bias_cache() -> None:
@@ -169,26 +165,17 @@ def _sdpa(
     Softmax accumulation stays fp32 inside the kernel.
     """
     def _call(qq, kk, vv, **extra):
-        global _SDPA_GQA_MASK_OK
         gqa_now = qq.size(-3) != kk.size(-3)
         if gqa_now:
-            want_gqa = True
-            if extra.get("attn_mask") is not None and _SDPA_GQA_MASK_OK is False:
-                want_gqa = False
-            if want_gqa:
+            # Fused masked kernels on Ampere need equal heads. enable_gqa+attn_mask
+            # does not raise; it silently drops to math. Repeat KV when masked.
+            if extra.get("attn_mask") is None:
                 try:
-                    out = F.scaled_dot_product_attention(
+                    return F.scaled_dot_product_attention(
                         qq, kk, vv, enable_gqa=True, **extra
                     )
-                    if extra.get("attn_mask") is not None:
-                        _SDPA_GQA_MASK_OK = True
-                    return out
                 except TypeError:
                     pass
-                except RuntimeError:
-                    if extra.get("attn_mask") is None:
-                        raise
-                    _SDPA_GQA_MASK_OK = False
             n_rep = qq.size(-3) // kk.size(-3)
             kk = _repeat_kv(kk, n_rep)
             vv = _repeat_kv(vv, n_rep)

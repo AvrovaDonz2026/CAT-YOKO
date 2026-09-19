@@ -210,8 +210,8 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
     )
 
     idx_d = 32 if d <= 128 else 64
-    fl = gemm_flops(b * s, s, idx_d)
-    nb = gemm_bytes_fp32(b * s, s, idx_d)
+    fl = 2 * gemm_flops(m, idx_d, d) + b * gemm_flops(s, s, idx_d)
+    nb = 2 * gemm_bytes_fp32(m, idx_d, d) + b * gemm_bytes_fp32(s, s, idx_d)
     rows.append(
         OpTheory(
             "indexer_fp32",
@@ -368,7 +368,7 @@ def measure_cuda() -> dict[str, Any]:
         nb = 2.0 * B * (H * S * HD + 2 * H * (S + extra) * HD + H * S * HD) + mask_bytes_bf16(S, S + extra)
         out["ops"].append(_row(f"masked_hca_{tag}", fl, dt, nb, f"k_len={S + extra}"))
 
-    # GQA + mask (2 KV). Falls back to repeat if the fused kernel rejects it.
+    # Masked GQA: fused kernels need equal heads; _sdpa repeats KV (stays bf16).
     from cat_yoko.attention import last_sdpa, reset_sdpa_counts
 
     reset_sdpa_counts()
@@ -380,9 +380,9 @@ def measure_cuda() -> dict[str, Any]:
     bias = _wcb(128, 128, 32, device, dt_peak, None)
     dt = _bench(lambda: _sdpa(q, k, v, bias), warmup=8, runs=20)
     fl = sdpa_flops(1, 16, 128, 128, 32, causal=True)
-    nb = flash_bytes_bf16(1, 16, 2, 128, 32) + mask_bytes_bf16(128, 128)
+    nb = flash_bytes_bf16(1, 16, 16, 128, 32) + mask_bytes_bf16(128, 128)
     out["ops"].append(
-        _row("masked_gqa_probe", fl, dt, nb, f"gqa_mask={last_sdpa()} enable_gqa+mask or repeat")
+        _row("masked_gqa_probe", fl, dt, nb, f"repeat KV then fused; {last_sdpa()}")
     )
 
     # Indexer fp32 scores (KEEP_HIGH_PREC); peak is FP32/TF32

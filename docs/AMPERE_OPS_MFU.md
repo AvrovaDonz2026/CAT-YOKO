@@ -21,10 +21,10 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 | fused QKV | A–E | 84.2% | 100% 算力墙 | 冻结权重 concat 一次，不再每步 `torch.cat` |
 | dense Flash GQA | YOCO cross；窗盖满 seq | 56.1%（再被 launch 打到 ~1%） | 100%；实测可到 ~87% 峰值 | Flash + `enable_gqa`，不 repeat KV |
 | masked window | encoder `n_win<seq` | 37.4%（付 S×S mask） | B0 `n_win=8192≥seq` 走 Flash；此行是 C/探针洞 | seq&lt;320 只用 Efficient；更长只用 cuDNN；静态窗 mask 缓存 |
-| CSA union | C-topk | 74.8% | 100% 强度，但 fused mask 核到不了 Flash | 同上；GQA+mask 能走则 `enable_gqa`，否则 **一次** 失败后 repeat KV |
+| CSA union | C-topk | 74.8% | 100% 强度，但 fused mask 核到不了 Flash | 同上；**不要** `enable_gqa+attn_mask`（Ampere 静默掉 math 核），repeat KV 后走 Efficient/cuDNN |
 | HCA concat | C-hca+ | 78.7% | 同左，k 更长 | 静态槽 bias 缓存；不把 CSA/HCA 换上 FlexAttention |
 | MoE bmm | B2+ | 13.0%（每专家 12 token，带宽墙） | 100% 强度；均匀专家实测 ~84% 峰值 | Ampere 禁止 grouped_mm；冻专家缓存 `gate‖up` |
-| indexer fp32 | C-index | 30.6%（FP32 峰值） | 82.3% | 分数仍 fp32（KEEP_HIGH_PREC）；TF32 `high` |
+| indexer fp32 | C-index | 29.7%（FP32 峰值） | 81.3% | 分数仍 fp32（KEEP_HIGH_PREC）；TF32 `high`；含 Q/K 投影 |
 
 12B B0 训练 `seq=4096`、`n_win=8192`：encoder 窗盖满，走 dense Flash，不是 masked 行。探针故意 `n_win<seq`，Theorem B 的压缩洞才露出来。
 
