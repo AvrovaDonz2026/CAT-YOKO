@@ -145,8 +145,22 @@ class B200LauncherTests(unittest.TestCase):
         overlay = ROOT / "scripts" / "download_hub_overlay.py"
         self.assertTrue(overlay.is_file())
         src = overlay.read_text()
-        self.assertIn("756e986489d30b27cd7c12280ec7c207a4008d28549f84f8f243f663a90165fc", src)
+        self.assertIn("0e81f0851b881c5ab36c3aae490cdd4e71b0be7230d3b83fc0178ffa6c313a64", src)
         self.assertIn("AvrovaDonz/CAT-YOKO", src)
+
+    def test_pull_vast_overlay_script(self) -> None:
+        script = ROOT / "scripts" / "pull_vast_b0_overlay.sh"
+        self.assertTrue(script.is_file())
+        self.assertTrue(script.stat().st_mode & 0o111)
+        text = script.read_text()
+        self.assertIn("vast-b200", text)
+        self.assertIn("trainable_step_", text)
+        self.assertIn("checkpoints/b0-full/trainable.pt", text)
+        self.assertIn("MIN_AGE", text)
+        self.assertNotIn("137.175.", text)
+        self.assertNotIn("git@hf.co", text)
+        self.assertNotRegex(text, r"PRIVATE KEY|dfghjkl|31jEePeb|vDw8xU9c")
+        self.assertNotIn("westc.seetacloud", text)
 
 
 if __name__ == "__main__":

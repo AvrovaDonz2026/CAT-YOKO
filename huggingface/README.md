@@ -70,7 +70,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | --- | --- | --- |
 | `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 | `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
-| `checkpoints/b0-full/trainable.pt` | Vast B200 发布档 B0 进行中（8e9 信封，seq=4096） | Hub 钉 step **24060**；`tokens_in_phase=106,448,896`（≈1.33%）；sha256 `f0926151bbaf109a47fd7d4ac9680118ecd98aefe6dbd9ad719cb020dbefc95f`。132 张量、无 Adam。torch 2.11+cu128 + TE nvcc 12.9 SM100。**micro-batch=2**（~15.7k tok/s，HBM ~138GiB）。MiniCPM5 上采样后 overlay 本文件，同阶段 resume。不是终局。 |
+| `checkpoints/b0-full/trainable.pt` | Vast B200 发布档 B0 进行中（8e9 信封，seq=4096） | Hub 钉 step **24640**；`tokens_in_phase=111,200,256`（≈1.39%）；sha256 `0e81f0851b881c5ab36c3aae490cdd4e71b0be7230d3b83fc0178ffa6c313a64`。132 张量、无 Adam。torch 2.11+cu128 + TE nvcc 12.9 SM100。**micro-batch=2**（~15.7k tok/s，HBM ~138GiB）。训练还在跑时约每 10 分钟覆盖本文件。MiniCPM5 上采样后 overlay 本文件，同阶段 resume。不是终局。 |
 | `checkpoints/b1/trainable.pt` | 6000D B1 `--try`（等 GPU） | decoder + `lm_head` + 最终 RMSNorm；resume B0 overlay + MiniCPM5。尚未上传 |
 | `checkpoints/b2/` | 6000D B2 `--try`（待 GPU） | 全模型 overlay；resume B1 + MiniCPM5 encoder/embed。指针 [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
 
@@ -111,6 +111,6 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 Data: Ultra-FineWeb en/zh + UltraData-Math. Tokenizer: [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B).
 
-This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envelopes): `checkpoints/b0/trainable.pt` (32 steps), `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap), `checkpoints/b0-full/` (published B0), `checkpoints/b1/` (B1 `--try`, pending GPU), and `checkpoints/b2/` (B2 `--try`, pending GPU). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
+This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envelopes): `checkpoints/b0/trainable.pt` (32 steps), `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap), `checkpoints/b0-full/` (published B0 in progress; same path overwritten about every 10 minutes), `checkpoints/b1/` (B1 `--try`, pending GPU), and `checkpoints/b2/` (B2 `--try`, pending GPU). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
 
 License: this repo BSD-3-Clause; MiniCPM5 base Apache-2.0. No eval scores.

@@ -11,15 +11,15 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
 | 阶段 | B0 |
-| step | 24060 |
-| tokens_in_phase | 106,448,896（信封 8e9 的 ≈1.33%） |
+| step | 24640 |
+| tokens_in_phase | 111,200,256（信封 8e9 的 ≈1.39%） |
 | seq | 4096 |
-| sha256 | `f0926151bbaf109a47fd7d4ac9680118ecd98aefe6dbd9ad719cb020dbefc95f` |
+| sha256 | `0e81f0851b881c5ab36c3aae490cdd4e71b0be7230d3b83fc0178ffa6c313a64` |
 | 可训练张量 | 132（无 Adam） |
 | 机器 | Vast NVIDIA B200 SM 10.0 |
 | 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |
 | 吞吐 / 显存 | ~15.7k tok/s，Trainer 137967 MiB（micro-batch=2） |
-| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。`MICRO_BATCH=1` 可回退。 |
+| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。`MICRO_BATCH=1` 可回退。训练进行中约每 10 分钟覆盖 Hub 同路径。 |
 
 上一份 6000D 快照是 step **16020**（`b5763b98…`）。本文件覆盖 Hub 同路径。
 
