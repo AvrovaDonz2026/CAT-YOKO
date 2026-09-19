@@ -59,9 +59,13 @@ export TMPDIR="${TMPDIR:-/dev/shm}"
 export NVTE_FRAMEWORK="${NVTE_FRAMEWORK:-pytorch}"
 export NVTE_CUDA_ARCHS="${NVTE_CUDA_ARCHS:-100}"
 export NVTE_CUDA_INCLUDE_PATH="${NVTE_CUDA_INCLUDE_PATH:-$CUDA_HOME/include}"
-export MAX_JOBS="${MAX_JOBS:-8}"
+# This box has 192 vCPU / ~2TiB RAM. Do not cap ninja at 8.
+if [ -z "${MAX_JOBS:-}" ]; then
+  MAX_JOBS="$(nproc)"
+fi
+export MAX_JOBS
 export NVTE_BUILD_THREADS_PER_JOB="${NVTE_BUILD_THREADS_PER_JOB:-1}"
-echo "nvcc $($CUDACXX --version | tail -1) CUDA_HOME=$CUDA_HOME CUDACXX=$CUDACXX"
+echo "nvcc $($CUDACXX --version | tail -1) CUDA_HOME=$CUDA_HOME CUDACXX=$CUDACXX MAX_JOBS=$MAX_JOBS nproc=$(nproc)"
 NVCC_MAJ_MIN="$("$CUDACXX" --version | sed -n 's/.*release \([0-9]\+\)\.\([0-9]\+\).*/\1\2/p' | head -1)"
 if [ -n "$NVCC_MAJ_MIN" ] && [ "$NVCC_MAJ_MIN" -lt 129 ]; then
   echo "ERROR: nvcc $NVCC_MAJ_MIN < 12.9; SM100A stg.256 will be compiled out. Install cuda-nvcc-12-9." >&2
@@ -71,6 +75,22 @@ CUDNN_PATH="$("$PY" -c "import nvidia.cudnn; p=list(getattr(nvidia.cudnn,'__path
 if [ -n "$CUDNN_PATH" ]; then
   export CUDNN_PATH CUDNN_HOME="$CUDNN_PATH"
   export LD_LIBRARY_PATH="$CUDNN_PATH/lib:${LD_LIBRARY_PATH:-}"
+fi
+NVTX_INC=""
+for cand in \
+  "$CUDA_HOME/include" \
+  "$CUDA_HOME/targets/x86_64-linux/include" \
+  /usr/local/cuda-12.8/targets/x86_64-linux/include \
+  /venv/main/lib/python3.12/site-packages/nvidia/nvtx/include; do
+  if [ -f "$cand/nvtx3/nvToolsExt.h" ]; then
+    NVTX_INC="$cand"
+    break
+  fi
+done
+if [ -n "$NVTX_INC" ]; then
+  export CPATH="$NVTX_INC${CPATH:+:$CPATH}"
+  export CPLUS_INCLUDE_PATH="$NVTX_INC${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+  echo "NVTX_INC=$NVTX_INC"
 fi
 if command -v uv >/dev/null 2>&1; then
   PIP=(uv pip install)

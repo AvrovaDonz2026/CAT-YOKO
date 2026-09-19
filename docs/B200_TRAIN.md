@@ -22,7 +22,7 @@ Master 仍是 bf16 Parameter。`state_dict` 键仍是 `q_proj.weight`。Adam 打
 
 PyPI `transformer-engine-torch` 预编译 `.so` 在 torch 2.11 上会 `undefined symbol: CUDAErrorLogCapture`。必须 `scripts/build_te_from_source.sh`（`--no-build-isolation --no-deps`，`NVTE_CUDA_ARCHS=100`），只留一份 SM100 `libtransformer_engine.so`，并把源码 metapackage 的 `Version` 钉成与 `transformer-engine-cu12` 一致。
 
-CUTLASS 把 SM100A `stg.256` 编进 kernel 的条件是 **nvcc ≥ 12.9**。CUDA 12.8 编出来的 core：16×128 FPROP 能过，B0 尺寸（4096×2048）的 NVFP4 quantize 会打 `CUTE_ARCH_STORE256_SM100A_ENABLED` 然后把 GPU 打挂。Vast 上 `apt-get install cuda-nvcc-12-9 libcublas-dev-12-9`（12.9 nvcc 默认没有 cuBLAS，CMake 会找不到 `CUDA::cublas`）。`te_linear_ready` 用 256×2048 探，不再用 16×128 玩具形状。
+CUTLASS 把 SM100A `stg.256` 编进 kernel 的条件是 **nvcc ≥ 12.9**。CUDA 12.8 编出来的 core：16×128 FPROP 能过，B0 尺寸（4096×2048）的 NVFP4 quantize 会打 `CUTE_ARCH_STORE256_SM100A_ENABLED` 然后把 GPU 打挂。Vast 上 `apt-get install cuda-nvcc-12-9 libcublas-dev-12-9 cuda-nvtx-12-9`（12.9 nvcc 默认没有 cuBLAS / NVTX）。`MAX_JOBS` 默认 `nproc`（这台 192 vCPU），不要钉死 8。`te_linear_ready` 用 256×2048 探，不再用 16×128 玩具形状。
 
 ## 从 Hub overlay 接 B0
 
