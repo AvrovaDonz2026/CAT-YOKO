@@ -32,10 +32,15 @@ class LightningIndexer(nn.Module):
         nn.init.normal_(self.k_proj.weight, mean=0.0, std=0.02)
 
     def scores(self, x: torch.Tensor) -> torch.Tensor:
-        """``[B, S, D] → [B, S, S]`` fp32 scores."""
+        """``[B, S, D] → [B, S, S]`` fp32 scores.
+
+        Weights stay on the module dtype (bf16 on CUDA C-index). GEMM is
+        explicit fp32 so eval / ``no_grad`` probes do not require autocast
+        to recast ``x.float()`` back onto bf16 ``Linear`` weights.
+        """
         xf = x.float()
-        q = F.relu(self.q_proj(xf))
-        k = self.k_proj(xf)
+        q = F.relu(F.linear(xf, self.q_proj.weight.float()))
+        k = F.linear(xf, self.k_proj.weight.float())
         scale = self.d_idx ** -0.5
         return torch.matmul(q, k.transpose(-1, -2)) * scale
 

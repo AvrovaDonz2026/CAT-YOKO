@@ -1,0 +1,115 @@
+=== plan-verify 2026-09-19T16:04:06Z device=cuda steps=2 ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB
+/dev/md0         50G  434M   50G   1% /root/autodl-tmp
+built plan-probe on cuda dtype=bf16 params=254,240 alloc=0.00GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe B0 step 1/2 nll=5.0493 ppl=155.9 aux=0.0000 gate=0.150 gn=0.02 moe_cv=0.21 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=80 mem=18MiB
+plan-probe B0 step 2/2 nll=4.9583 ppl=142.3 aux=0.0000 gate=0.301 gn=0.03 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=1555 mem=18MiB
+built plan-probe on cuda dtype=bf16 params=254,240 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe B1 step 1/2 nll=5.0485 ppl=155.8 aux=0.0011 gate=0.648 gn=1.16 moe_cv=0.21 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1125 mem=18MiB
+plan-probe B1 step 2/2 nll=4.9582 ppl=142.3 aux=0.0011 gate=1.000 gn=1.13 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=980 mem=19MiB
+built plan-probe on cuda dtype=bf16 params=254,240 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.25M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe B2 step 1/2 nll=5.0488 ppl=155.8 aux=0.0042 gate=1.000 gn=1.37 moe_cv=0.21 trainable=0.25M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=602 mem=19MiB
+plan-probe B2 step 2/2 nll=4.9577 ppl=142.3 aux=0.0042 gate=1.000 gn=1.35 moe_cv=0.23 trainable=0.25M lr=3.00e-08 fp8=False nvfp4=False tok=128 tok/s=716 mem=20MiB
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.00M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=indexer_kl PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe C-index step 1/2 nll=0.0882 ppl=1.1 aux=0.0000 gate=1.000 gn=0.03 moe_cv=0.21 trainable=0.00M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=914 mem=18MiB rec=0.627
+plan-probe C-index step 2/2 nll=0.0841 ppl=1.1 aux=0.0000 gate=1.000 gn=0.03 moe_cv=0.23 trainable=0.00M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=1615 mem=18MiB rec=0.625
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/plan_verify.py", line 725, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/plan_verify.py", line 706, in main
+    blob = run(device=args.device, out=args.out, steps=max(int(args.steps), 1))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/plan_verify.py", line 656, in run
+    ledger.extend(_probe_phase(model, cfg, phase, float(row.nll), device))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/plan_verify.py", line 457, in _probe_phase
+    slots = _cache_slots(raw, cfg, device)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/plan_verify.py", line 447, in _cache_slots
+    raw(input_ids=ids)
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/model.py", line 111, in forward
+    x, a = self._run_block(blk, x, input_ids, doc_ids)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/model.py", line 79, in _run_block
+    y = blk(*tensors)
+        ^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/blocks.py", line 76, in forward
+    self.last_indexer_kl = indexer_align_kl(
+                           ^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/indexer.py", line 68, in indexer_align_kl
+    log_q = F.log_softmax(indexer.scores(hidden) + bias, dim=-1).clamp(min=-50.0)
+                          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/autodl-tmp/plan-verify/CAT-YOKO/cat_yoko/indexer.py", line 37, in scores
+    q = F.relu(self.q_proj(xf))
+               ^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/linear.py", line 125, in forward
+    return F.linear(input, self.weight, self.bias)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != c10::BFloat16
+=== plan-verify 2026-09-19T16:08:54Z device=cuda steps=2 ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB
+/dev/md0         50G  436M   50G   1% /root/autodl-tmp
+built plan-probe on cuda dtype=bf16 params=254,240 alloc=0.01GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.02M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe B0 step 1/2 nll=4.8656 ppl=129.7 aux=0.0000 gate=0.150 gn=0.00 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=442 mem=18MiB
+plan-probe B0 step 2/2 nll=4.8841 ppl=132.2 aux=0.0000 gate=0.301 gn=0.01 moe_cv=0.22 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=1611 mem=18MiB
+built plan-probe on cuda dtype=bf16 params=254,240 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.12M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe B1 step 1/2 nll=4.8656 ppl=129.7 aux=0.0011 gate=0.648 gn=1.14 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1151 mem=18MiB
+plan-probe B1 step 2/2 nll=4.8838 ppl=132.1 aux=0.0011 gate=1.000 gn=1.25 moe_cv=0.22 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=1393 mem=19MiB
+built plan-probe on cuda dtype=bf16 params=254,240 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.25M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe B2 step 1/2 nll=4.8657 ppl=129.8 aux=0.0041 gate=1.000 gn=2.16 moe_cv=0.14 trainable=0.25M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=799 mem=19MiB
+plan-probe B2 step 2/2 nll=4.8838 ppl=132.1 aux=0.0042 gate=1.000 gn=2.50 moe_cv=0.22 trainable=0.25M lr=3.00e-08 fp8=False nvfp4=False tok=128 tok/s=895 mem=20MiB
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.00M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=indexer_kl PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe C-index step 1/2 nll=0.0677 ppl=1.1 aux=0.0000 gate=1.000 gn=0.02 moe_cv=0.14 trainable=0.00M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1059 mem=18MiB rec=0.580
+plan-probe C-index step 2/2 nll=0.0780 ppl=1.1 aux=0.0000 gate=1.000 gn=0.02 moe_cv=0.22 trainable=0.00M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=2133 mem=18MiB rec=0.679
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.26M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=topk loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe C-topk step 1/2 nll=4.8598 ppl=129.0 aux=0.0042 gate=1.000 gn=2.23 moe_cv=0.20 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=872 mem=19MiB
+plan-probe C-topk step 2/2 nll=4.8819 ppl=131.9 aux=0.0042 gate=1.000 gn=2.42 moe_cv=0.22 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=128 tok/s=888 mem=20MiB
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.26M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe C-hca step 1/2 nll=4.8612 ppl=129.2 aux=0.0041 gate=1.000 gn=2.25 moe_cv=0.18 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=876 mem=19MiB
+plan-probe C-hca step 2/2 nll=4.8841 ppl=132.2 aux=0.0042 gate=1.000 gn=2.41 moe_cv=0.21 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=128 tok/s=997 mem=20MiB
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.26M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe C-win step 1/2 nll=4.8613 ppl=129.2 aux=0.0041 gate=1.000 gn=2.25 moe_cv=0.18 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=769 mem=19MiB
+plan-probe C-win step 2/2 nll=4.8841 ppl=132.2 aux=0.0042 gate=1.000 gn=2.41 moe_cv=0.21 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=128 tok/s=930 mem=20MiB
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.26M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe D-8k step 1/2 nll=4.8574 ppl=128.7 aux=0.0041 gate=1.000 gn=2.28 moe_cv=0.16 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=796 mem=19MiB
+plan-probe D-8k step 2/2 nll=4.8894 ppl=132.9 aux=0.0043 gate=1.000 gn=2.41 moe_cv=0.25 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=128 tok/s=825 mem=20MiB
+built plan-probe on cuda dtype=bf16 params=256,288 alloc=0.02GiB grad_ckpt=False seq=32 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.26M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+plan-probe E step 1/2 nll=4.8613 ppl=129.2 aux=0.0041 gate=1.000 gn=2.25 moe_cv=0.18 trainable=0.26M lr=3.00e-06 fp8=False nvfp4=False tok=64 tok/s=826 mem=19MiB
+plan-probe E step 2/2 nll=4.8842 ppl=132.2 aux=0.0042 gate=1.000 gn=2.41 moe_cv=0.21 trainable=0.26M lr=3.00e-06 fp8=False nvfp4=False tok=128 tok/s=823 mem=20MiB
+plan-verify ok=True claims=128 fail=0 deferred=2 3.697s
+  A nll=4.8438 ok=True
+  B0 nll=4.8841 ok=True
+  B1 nll=4.8838 ok=True
+  B2 nll=4.8838 ok=True
+  C-index nll=0.0780 ok=True
+  C-topk nll=4.8819 ok=True
+  C-hca nll=4.8841 ok=True
+  C-win nll=4.8841 ok=True
+  D-8k nll=4.8894 ok=True
+  E nll=4.8842 ok=True
+DEFER pdsa.tier1_calibrated_fallback: Tier 1 confidence-gated expand/fallback is planned, not C1 B0
+DEFER pdsa.tier3_editable_memory: 
+=== exit 0 2026-09-19T16:09:02Z ===
+ledger ok=True claims=128 fail=0 deferred=2
+drwxr-xr-x 11 root root 175 Sep 20 00:09 /root/autodl-tmp/plan-verify/runs

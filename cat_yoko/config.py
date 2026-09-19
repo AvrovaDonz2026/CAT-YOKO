@@ -146,6 +146,29 @@ class CATYokoConfig:
             rms_eps=1e-6,
         )
 
+    @classmethod
+    def plan_probe(cls) -> CATYokoConfig:
+        """Tiny graph with sliding + CSA + HCA and a real Theorem-B hole.
+
+        ``n_win < seq`` so compression is not swallowed by the window;
+        ``n_win >= compress_m`` so the own-block hole is covered.
+        """
+        return replace(
+            cls.tiny(),
+            name="plan-probe",
+            encoder_layers=3,
+            decoder_layers=2,
+            seq_len=32,
+            n_win=8,
+            compress_m=4,
+            compress_m_hca=4,
+            index_topk=2,
+            use_nvfp4=False,
+            use_fp8=False,
+            use_kda=False,
+            global_batch_tokens=64,
+        )
+
 
 def encoder_layer_kind(
     index: int,
