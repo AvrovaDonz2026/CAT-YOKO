@@ -30,9 +30,9 @@ CUTLASS 把 SM100A `stg.256` 编进 kernel 的条件是 **nvcc ≥ 12.9**。CUDA
 
 | 项 | 值 |
 | --- | --- |
-| step | **25460** |
-| tokens_in_phase | 117,917,696（8e9 的 ≈1.47%） |
-| sha256 | `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c` |
+| step | **26760** |
+| tokens_in_phase | 128,567,296（8e9 的 ≈1.61%） |
+| sha256 | `99e14ff68df7bc6266773fa6f62d9d1b1671bf1aa7a5a7eac6d37a2dc64ceb9f` |
 | micro-batch | 2（`MICRO_BATCH=1` 回退） |
 
 ```bash
@@ -47,7 +47,7 @@ bash scripts/run_b0_full_b200.sh
 
 启动参数：**seq=4096**，`--micro-batch 2`（`MICRO_BATCH=1` 回退），`--no-offload-encoder`，`--no-grad-ckpt`，`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
 
-当前 B0（nvcc 12.9 cubin，**micro-batch=2**）：中位约 **15.7k tok/s**（~520ms/step，8192 tok/step），Trainer 记账 HBM **137967 MiB**，nvidia-smi ~141/183GiB（余量 ~42GiB）。相对 micro-batch=1 的 12.4k tok/s / 96GiB，吞吐 **+27%**（步时约 1.57×，不是 2×）。从 step **22100** overlay 重启时 `tokens_in_phase=90,392,576` 按 8192/step 接着加，同阶段 resume 正确。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。相对 B200 BF16 2.25 PFLOPS，Kaplan B0 账大约 **14.5% MFU**：Encoder 前向只占 B0 FLOPs 的 **17%**（已走 SM100 `TeNvfp4Linear` / `GroupedLinear`），其余是冻结 Decoder 的 bf16 FPROP+dX + student。不要把冻结 Decoder 也套 NVFP4——激活会量化进 bf16 student，动定理 A。Hub overlay 钉 step **25460**（micro-batch=2 快照，sha `efef3464…`）。热路径：`collapse_doc_ids`、向量化 `pad_packed_counts`（无每层 host list）、`repeat_interleave(..., output_size=)`、CE chunk 缓存、一步一次 D2H 的 nll/aux、CUDA SDPA 优先 Flash/cuDNN、冻结 MoE 不算 z-loss。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
+当前 B0（nvcc 12.9 cubin，**micro-batch=2**）：中位约 **15.7k tok/s**（~520ms/step，8192 tok/step），Trainer 记账 HBM **137967 MiB**，nvidia-smi ~141/183GiB（余量 ~42GiB）。相对 micro-batch=1 的 12.4k tok/s / 96GiB，吞吐 **+27%**（步时约 1.57×，不是 2×）。从 step **22100** overlay 重启时 `tokens_in_phase=90,392,576` 按 8192/step 接着加，同阶段 resume 正确。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。相对 B200 BF16 2.25 PFLOPS，Kaplan B0 账大约 **14.5% MFU**：Encoder 前向只占 B0 FLOPs 的 **17%**（已走 SM100 `TeNvfp4Linear` / `GroupedLinear`），其余是冻结 Decoder 的 bf16 FPROP+dX + student。不要把冻结 Decoder 也套 NVFP4——激活会量化进 bf16 student，动定理 A。Hub overlay 钉 step **26760**（micro-batch=2 快照，sha `99e14ff6…`）。热路径：`collapse_doc_ids`、向量化 `pad_packed_counts`（无每层 host list）、`repeat_interleave(..., output_size=)`、CE chunk 缓存、一步一次 D2H 的 nll/aux、CUDA SDPA 优先 Flash/cuDNN、冻结 MoE 不算 z-loss。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
 
 环境变量 `CAT_YOKO_TE_NVFP4=0` 可强制仿真。`FORCE_SM120=1` 才允许把 B200 启动脚本跑在 sm_120 上。
 

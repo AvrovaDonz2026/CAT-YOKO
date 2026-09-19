@@ -22,9 +22,9 @@ Clone：`git clone git@hf.co:AvrovaDonz/CAT-YOKO`
 | --- | --- |
 | Hub 文件 | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
 | Hub 说明 | [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md) |
-| step | **25460** |
-| tokens_in_phase | 117,917,696（≈1.47% of 8e9） |
-| sha256 | `efef3464730eaaee6b62a0e199437b3a06049812bfbc25e9a98f39467fdf0a2c` |
+| step | **26760** |
+| tokens_in_phase | 128,567,296（≈1.61% of 8e9） |
+| sha256 | `99e14ff68df7bc6266773fa6f62d9d1b1671bf1aa7a5a7eac6d37a2dc64ceb9f` |
 | 刷新 | 训练进行中约每 10 分钟覆盖同路径；从 Vast 拉 overlay：[`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh)（SSH Host `vast-b200`，不杀训练） |
 
 NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。B200 续训（默认 micro-batch=2）见 [`docs/B200_TRAIN.md`](../docs/B200_TRAIN.md)。B1 `--try` overlay 走 `checkpoints/b1/`（decoder + `lm_head` + 最终 RMSNorm；权重不进 GitHub）。B2 `--try` 指针：GitHub [`checkpoints/b2/README.md`](../checkpoints/b2/README.md) → Hub `checkpoints/b2/`（全模型 overlay；resume B1 + MiniCPM5 encoder/embed）。日志进 GitHub `artifacts/autodl-rtx6000d/`。
