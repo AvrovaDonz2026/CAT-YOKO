@@ -6,7 +6,9 @@ Usage::
     python3 -m cat_yoko.b1 --resume checkpoints/b0 --save-dir checkpoints/b1
     python3 -m cat_yoko.b2 --resume checkpoints/b1 --save-dir checkpoints/b2
     python3 -m cat_yoko.c --try --stage indexer --resume checkpoints/b2
+    python3 -m cat_yoko.c --try --chain
     python3 -m cat_yoko.d --try --stage 8k
+    python3 -m cat_yoko.d --try --chain
     python3 -m cat_yoko.e --try
     python3 -m cat_yoko.f --try
     python3 -m cat_yoko.g --try --algo grpo
@@ -25,7 +27,9 @@ from pathlib import Path
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 from cat_yoko.phases import (
+    C_CHAIN,
     C_STAGES,
+    D_CHAIN,
     D_STAGES,
     G_ALGOS,
     PHASES,
@@ -252,15 +256,53 @@ def _peel_flag(argv: list[str] | None, flag: str, default: str) -> tuple[str, li
     return default, rest
 
 
+def _strip_bool(argv: list[str] | None, flag: str) -> tuple[bool, list[str]]:
+    rest = list(argv or [])
+    if flag in rest:
+        rest.remove(flag)
+        return True, rest
+    return False, rest
+
+
+def _cli_chain(phases: tuple[str, ...], argv: list[str] | None) -> int:
+    """Sequential CLI: each stage writes ``save_dir/{phase}`` and the next resumes it."""
+    rest = list(argv or [])
+    save, rest = _peel_flag(rest, "--save-dir", str(Path("checkpoints") / phases[0].split("-")[0].lower()))
+    resume, rest = _peel_flag(rest, "--resume", "")
+    prev = resume or None
+    root = Path(save)
+    rc = 0
+    for phase in phases:
+        extra = list(rest)
+        extra.extend(["--save-dir", str(root / phase)])
+        if prev:
+            extra.extend(["--resume", prev])
+        rc = run_phase(phase, extra)
+        if rc:
+            return rc
+        prev = str(root / phase)
+    return rc
+
+
 def main_c(argv: list[str] | None = None) -> int:
-    stage, rest = _peel_flag(argv, "--stage", "indexer")
+    chain, rest = _strip_bool(argv, "--chain")
+    if chain:
+        if "--stage" in rest:
+            raise SystemExit("--chain runs indexer→topk→hca→win; do not pass --stage")
+        return _cli_chain(C_CHAIN, rest)
+    stage, rest = _peel_flag(rest, "--stage", "indexer")
     if stage not in C_STAGES:
         raise SystemExit(f"unknown C --stage {stage}; choose {sorted(C_STAGES)}")
     return run_phase(C_STAGES[stage], rest)
 
 
 def main_d(argv: list[str] | None = None) -> int:
-    stage, rest = _peel_flag(argv, "--stage", "8k")
+    chain, rest = _strip_bool(argv, "--chain")
+    if chain:
+        if "--stage" in rest:
+            raise SystemExit("--chain runs 8k→32k→128k; do not pass --stage")
+        return _cli_chain(D_CHAIN, rest)
+    stage, rest = _peel_flag(rest, "--stage", "8k")
     if stage not in D_STAGES:
         raise SystemExit(f"unknown D --stage {stage}; choose {sorted(D_STAGES)}")
     return run_phase(D_STAGES[stage], rest)

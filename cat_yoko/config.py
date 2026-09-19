@@ -47,6 +47,7 @@ class CATYokoConfig:
     grpo_max_new: int = 32
     dpo_beta: float = 0.1
     wsd_decay_min_ratio: float = 0.01
+    nll_spike_factor: float = 8.0
     lr: float = 1e-4
     lr_b2: float = 3e-5
     adam_beta1: float = 0.9
@@ -125,6 +126,7 @@ class CATYokoConfig:
             top_k_enc=2,
             top_k_dec=2,
             n_win=8,
+            compress_m_hca=4,
             hash_moe_decoder_layers=1,
             dim_model_base=64,
             seq_len=16,
@@ -141,11 +143,22 @@ class CATYokoConfig:
         )
 
 
-def encoder_layer_kind(index: int) -> str:
-    """Phase C labels. Phase B still runs sliding-window GQA on every encoder layer."""
-    if index < 2:
+def encoder_layer_kind(index: int, n_layers: int = 16) -> str:
+    """Phase C labels. Phase B still runs sliding-window GQA on every encoder layer.
+
+    12B (16 layers) is 2 sliding + 7 CSA + 7 HCA. Tiny graphs that cannot
+    hold that schedule keep a sliding bootstrap then CSA/HCA as they fit,
+    so C-index has an encoder CSA indexer to train.
+    """
+    n = int(n_layers)
+    i = int(index)
+    if n >= 16:
+        if i < 2:
+            return "sliding"
+        return "csa" if (i - 2) % 2 == 0 else "hca"
+    if i == 0:
         return "sliding"
-    return "csa" if (index - 2) % 2 == 0 else "hca"
+    return "csa" if (i - 1) % 2 == 0 else "hca"
 
 
 # Phase B C1 split (tokens).

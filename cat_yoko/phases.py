@@ -142,12 +142,12 @@ PHASES: dict[str, PhaseSpec] = {
         offload_encoder=False,
         offload_blocks=True,
         optim_cpu=True,
-        notes="8K window confirmation; seq=8192 sliding GQA",
+        notes="8K window + CSA top-k + HCA concat (theorem B union); seq=8192",
         seq_len=8192,
         freeze="none",
         loss="ce",
         lr_mode="b2",
-        sparse="window",
+        sparse="hca",
         tokens_offset=70e9,
     ),
     "D-8k": PhaseSpec(
@@ -281,6 +281,8 @@ G_ALGOS = {
     "grpo": "G",
     "dpo": "G-dpo",
 }
+C_CHAIN = ("C-index", "C-topk", "C-hca", "C-win")
+D_CHAIN = ("D-8k", "D-32k", "D-128k")
 
 # Hub shard cap. 4GiB keeps autodl-tmp / copy tools comfortable.
 HUB_SHARD_MAX_BYTES = 4 * (1 << 30)

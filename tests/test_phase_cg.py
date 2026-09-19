@@ -56,6 +56,7 @@ class PhaseEnvelopeTests(unittest.TestCase):
         self.assertEqual(PHASES["C-topk"].sparse, "topk")
         self.assertEqual(PHASES["C-hca"].sparse, "hca")
         self.assertEqual(PHASES["C-win"].seq_len, 8192)
+        self.assertEqual(PHASES["C-win"].sparse, "hca")
         self.assertEqual(PHASES["D-128k"].seq_len, 131072)
         self.assertEqual(PHASES["E"].lr_mode, "decay")
         self.assertEqual(PHASES["F"].loss, "sft")
@@ -117,6 +118,19 @@ class PhaseEnvelopeTests(unittest.TestCase):
             main_g(["--algo", "dpo", "--try"])
             self.assertEqual(run.call_args[0][0], "G-dpo")
 
+    def test_c_chain_runs_four_stages(self) -> None:
+        with patch("cat_yoko.phase_train.run_phase", return_value=0) as run:
+            self.assertEqual(main_c(["--chain", "--try", "--save-dir", "/tmp/c"]), 0)
+        self.assertEqual(run.call_count, 4)
+        names = [c.args[0] for c in run.call_args_list]
+        self.assertEqual(names, ["C-index", "C-topk", "C-hca", "C-win"])
+        second = run.call_args_list[1].args[1]
+        self.assertIn("--resume", second)
+
+    def test_c_chain_rejects_stage(self) -> None:
+        with self.assertRaises(SystemExit):
+            main_c(["--chain", "--stage", "topk"])
+
     def test_no_vast_ip_in_new_scripts(self) -> None:
         root = Path(__file__).resolve().parents[1]
         for name in ("train_c.py", "train_d.py", "train_e.py", "train_f.py", "train_g.py"):
@@ -132,6 +146,8 @@ class IndexerFreezeTests(unittest.TestCase):
         self.assertFalse(any("indexer" in n for n, _ in model.named_modules()))
         self.assertFalse(phase_needs_indexer("B0"))
         self.assertTrue(phase_needs_indexer("C-index"))
+        self.assertEqual(model.encoder[0].kind, "sliding")
+        self.assertEqual(model.encoder[1].kind, "csa")
 
     def test_c_index_trains_only_indexer(self) -> None:
         model = CATYokoForCausalLM(CATYokoConfig.tiny())
@@ -140,6 +156,8 @@ class IndexerFreezeTests(unittest.TestCase):
         names = trainable_names(model)
         self.assertTrue(names)
         self.assertTrue(all("indexer" in n for n in names))
+        self.assertFalse(any("cross_indexer" in n for n in names))
+        self.assertFalse(any("cross_indexer" in n for n, _ in model.named_modules()))
         self.assertFalse(model.embed.weight.requires_grad)
         self.assertFalse(next(model.encoder.parameters()).requires_grad)
         self.assertTrue(model.detach_cache)
@@ -184,6 +202,10 @@ class IndexerTrainTests(unittest.TestCase):
             self.assertFalse(any(k.startswith("embed.") for k in keys))
             row = json.loads(log.read_text().splitlines()[0])
             self.assertEqual(row["phase"], "C-index")
+            self.assertEqual(row["loss_mode"], "indexer_kl")
+            self.assertIn("indexer_recall", row)
+            self.assertGreaterEqual(row["indexer_recall"], 0.0)
+            self.assertLessEqual(row["indexer_recall"], 1.0)
 
     def test_c_topk_and_hca_ce_step(self) -> None:
         cfg = CATYokoConfig.tiny()
@@ -223,6 +245,53 @@ class LaterPhaseTests(unittest.TestCase):
         self.assertTrue(math.isfinite(g.nll))
         d = Trainer(cfg, "G-dpo", "cpu", steps=1, accum=1, micro_batch=1, seq_len=16).run()
         self.assertTrue(math.isfinite(d.nll))
+
+    def test_sft_prompt_ids_jsonl(self) -> None:
+        from cat_yoko.data import FileStream
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "sft.jsonl"
+            path.write_text(
+                json.dumps({"prompt_ids": [1, 2, 3, 4], "response_ids": [5, 6, 7, 8]}) + "\n"
+            )
+            batch = FileStream(path, 8).batch(1, "cpu")
+            self.assertTrue((batch["labels"][0, :4] == -100).all())
+            self.assertEqual(batch["labels"][0, 4:].tolist(), [5, 6, 7, 8])
+
+
+class TheoremBMaskTests(unittest.TestCase):
+    def test_compressed_keep_excludes_own_block(self) -> None:
+        from cat_yoko.sparse import compressed_keep_matrix, own_block_token_keep, window_keep_matrix
+
+        s, m = 32, 4
+        comp = compressed_keep_matrix(s, m, torch.device("cpu"))
+        own = own_block_token_keep(s, m, torch.device("cpu"))
+        win = window_keep_matrix(s, 8, torch.device("cpu"))
+        self.assertFalse((comp & own).any())
+        t, p = 13, 12  # own block 3 = tokens 12..15
+        self.assertFalse(bool(comp[t, p]))
+        self.assertTrue(bool(own[t, p]))
+        self.assertTrue(bool(win[t, p]))
+        self.assertTrue(bool(win[t, t]))
+        self.assertFalse(bool(win[t, t + 1]))
+
+    def test_hca_slot_excludes_own(self) -> None:
+        from cat_yoko.sparse import hca_slot_keep
+
+        keep = hca_slot_keep(16, 4, 4, torch.device("cpu"))
+        self.assertFalse(bool(keep[13, 3]))
+        self.assertTrue(bool(keep[13, 2]))
+
+    def test_indexer_topk_is_subset_of_compressed(self) -> None:
+        from cat_yoko.indexer import LightningIndexer, indexer_compressed_keep
+        from cat_yoko.sparse import compressed_keep_matrix
+
+        cfg = CATYokoConfig.tiny()
+        idx = LightningIndexer(cfg)
+        x = torch.randn(2, 16, cfg.hidden_size)
+        keep = indexer_compressed_keep(idx, x, group=4, topk=2)
+        comp = compressed_keep_matrix(16, 4, x.device)
+        self.assertFalse((keep & ~comp.unsqueeze(0)).any())
 
 
 class DocsRangeTests(unittest.TestCase):

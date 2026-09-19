@@ -55,6 +55,9 @@ class RecipeTests(unittest.TestCase):
         self.assertIn("phase-c", MIXES)
         self.assertIn("phase-f", MIXES)
         self.assertEqual(MIXES["phase-c"], PHASE_B)
+        self.assertIn("phase-e", MIXES)
+        self.assertIn("phase-g", MIXES)
+        self.assertNotEqual(MIXES["phase-e"], PHASE_B)
 
     def test_mix_named_rejects_unknown(self) -> None:
         with self.assertRaises(KeyError):

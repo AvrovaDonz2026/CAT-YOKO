@@ -25,7 +25,7 @@ class CATYokoForCausalLM(nn.Module):
         self.encoder = nn.ModuleList(
             EncoderBlock(
                 cfg,
-                kind=encoder_layer_kind(i),
+                kind=encoder_layer_kind(i, cfg.encoder_layers),
                 dense=cfg.first_dense and i == 0,
             )
             for i in range(cfg.encoder_layers)
@@ -115,12 +115,15 @@ class CATYokoForCausalLM(nn.Module):
             y, a = self._run_block(blk, y, k, v, input_ids, doc_ids)
             aux = aux + a
         idx_kl = self._indexer_kl()
+        idx_rec = self._indexer_recall()
         logits = None
         if labels is None or self.return_logits:
             logits = self.lm_head(self.norm(y)) / self.logit_scale
         out: dict[str, torch.Tensor] = {}
         if idx_kl is not None:
             out["indexer_kl"] = idx_kl
+        if idx_rec is not None:
+            out["indexer_recall"] = idx_rec
         if logits is not None:
             out["logits"] = logits
         if labels is not None:
@@ -163,6 +166,11 @@ class CATYokoForCausalLM(nn.Module):
         if not kl_terms:
             return None
         return torch.stack(kl_terms).mean()
+
+    def _indexer_recall(self) -> torch.Tensor | None:
+        from cat_yoko.indexer import mean_indexer_recall
+
+        return mean_indexer_recall(self)
 
     def step_router_bias(self) -> None:
         for blk in list(self.encoder) + list(self.decoder):

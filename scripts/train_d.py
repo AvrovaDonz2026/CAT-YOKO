@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Phase D. python3 scripts/train_d.py --try --stage 8k --save-dir checkpoints/d-8k"""
+"""Phase D. python3 scripts/train_d.py --try --stage 8k --save-dir checkpoints/d-8k
+python3 scripts/train_d.py --try --chain --save-dir checkpoints/d"""
 
 from __future__ import annotations
 

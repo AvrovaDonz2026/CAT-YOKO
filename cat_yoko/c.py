@@ -1,7 +1,8 @@
 """Phase C: indexer KL → top-k mask → HCA pool → 8K window.
 
 ``python3 -m cat_yoko.c --try --stage indexer``
-``--stage topk|hca|win``. No CSA CUDA kernel; SDPA + PyTorch masks only.
+``--stage topk|hca|win`` or ``--chain`` (indexer→topk→hca→win).
+No CSA CUDA kernel: theorem-B union mask + HCA concat only.
 """
 
 from __future__ import annotations

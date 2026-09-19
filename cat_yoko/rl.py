@@ -11,12 +11,16 @@ from cat_yoko.loss import dpo_loss, grpo_loss, masked_seq_logprob, token_logprob
 
 @torch.no_grad()
 def dummy_rlvr_reward(prompt: torch.Tensor, completion: torch.Tensor) -> torch.Tensor:
-    """Verifiable-shaped dummy: 1 if the last prompt token appears in the completion."""
+    """Verifiable-shaped dummy: needle-in-completion + token-parity.
+
+    Last prompt token and the mid-prompt token both count (long-ctx shaped).
+    """
     needle = prompt[:, -1]
     hit = (completion == needle.unsqueeze(-1)).any(dim=-1).float()
-    # Cheap extra bit so --try groups are not all-zero advantages.
+    mid = prompt[:, prompt.size(1) // 2]
+    hit_mid = (completion == mid.unsqueeze(-1)).any(dim=-1).float()
     parity = (completion[:, 0] % 2).float()
-    return hit + 0.25 * parity
+    return hit + 0.5 * hit_mid + 0.25 * parity
 
 
 def group_advantages(rewards: torch.Tensor, group: int) -> torch.Tensor:
@@ -104,7 +108,4 @@ def dpo_step_loss(
 ) -> torch.Tensor:
     pi_c = completion_logprob(model, chosen, prompt_len)
     pi_r = completion_logprob(model, rejected, prompt_len)
-    with torch.no_grad():
-        ref_c = completion_logprob(model, chosen, prompt_len)
-        ref_r = completion_logprob(model, rejected, prompt_len)
-    return dpo_loss(pi_c, pi_r, ref_c, ref_r, beta=beta)
+    return dpo_loss(pi_c, pi_r, pi_c.detach(), pi_r.detach(), beta=beta)

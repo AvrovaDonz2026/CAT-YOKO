@@ -350,10 +350,10 @@ YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decode
 
 遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩：
 
-1. **Indexer 稠密对齐**：冻结主干，仅训练 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（对 indexer 输出与真实注意力分布做 KL/MSE 对齐）。此步不改变主输出，只教 indexer "该选谁"。监督是**层内**的，叠在 B2 **之后**；不是穿过 YOCO cache 的 CE，也不要用这步永远冻住 Encoder。
-2. **打开 CSA top-k**：把 CSA 层从"全可见"切到"top-`index_topk`"，小步继续训练让主干适应稀疏。
-3. **打开 HCA 压缩**：启用 `m'=128` 强压缩 + 稠密压缩注意力。
-4. **打开 8K 滑窗**：确认滑窗分支与压缩分支 concat/mask 正确，端到端联训。
+1. **Indexer 稠密对齐**：冻结主干，仅训练 Encoder CSA 上的 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（层内 KL）。此步不改变主输出，只教 indexer "该选谁"。监督叠在 B2 **之后**。Indexer top-k 只从压缩块集合 \(S_{\mathrm{comp}}\) 里删，不许加（定理 B）。
+2. **打开 CSA top-k**：CSA 层从稠密滑窗切到 **滑窗 ∪ indexer 选中的压缩块**（自身块排除，窗补洞），小步继续训练让主干适应稀疏。不是替换成「只留 top-k token」。
+3. **打开 HCA 压缩**：HCA 层 **滑窗 KV concat 均值池化槽**（\(m'=128\)，自身块排除）。
+4. **打开 8K 滑窗联训**：`C-win` 在 seq=8192 上同时开 CSA top-k + HCA concat，确认窗支路与压缩支路 mask 正确。
 - 每一步都监控 loss 尖峰；出现不稳定就回退该步、延长对齐或降低 LR。
 
 ### Phase D — 长上下文扩展

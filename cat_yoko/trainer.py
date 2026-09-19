@@ -326,6 +326,12 @@ class Trainer:
             f"tok={row['tokens_seen']:.0f} "
             f"tok/s={row['tok_s']:.0f} mem={row['mem_mib']:.0f}MiB"
         )
+        rec = row.get("indexer_recall")
+        if isinstance(rec, (int, float)) and math.isfinite(rec):
+            line += f" rec={rec:.3f}"
+        rew = row.get("rl_reward")
+        if isinstance(rew, (int, float)) and math.isfinite(rew):
+            line += f" rew={rew:.3f}"
         print(line)
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -403,6 +409,7 @@ class Trainer:
             rank=self.rank,
             world=self.world,
             response_only=self.loss_mode == "sft",
+            needle=self.phase.startswith(("D", "G")) or self.loss_mode in {"grpo", "dpo"},
         )
 
     @torch.no_grad()
@@ -756,6 +763,7 @@ class Trainer:
                 p.requires_grad = False
 
         unwrap(model).train()
+        self._nll_ema = None
         use_fp8 = should_autocast(
             self.phase,
             cuda=str(self.device).startswith("cuda"),
@@ -814,6 +822,8 @@ class Trainer:
                 step_tokens = 0
                 step_n_valid = 0.0
                 kd_w = 0.0
+                step_recall = None
+                step_reward = None
                 if self.teacher is not None:
                     kd_w = kd_weight(
                         step,
@@ -867,6 +877,12 @@ class Trainer:
                     aux = out.get("aux")
                     aux_t = aux.detach().reshape(()).float() if torch.is_tensor(aux) else z.new_zeros(())
                     stats_aux = stats_aux + aux_t / self.accum
+                    rec = out.get("indexer_recall")
+                    if torch.is_tensor(rec):
+                        step_recall = rec.detach().float().reshape(())
+                    rew = out.get("rl_reward")
+                    if torch.is_tensor(rew):
+                        step_reward = rew.detach().float().reshape(())
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
                 next_step = step + 1
                 will_log = next_step == 1 or next_step % self.log_every == 0 or (
@@ -888,6 +904,18 @@ class Trainer:
                 step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
                 if not math.isfinite(step_nll):
                     raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
+                spike = float(getattr(self.cfg, "nll_spike_factor", 0.0) or 0.0)
+                if spike > 0 and step >= 7 and getattr(self, "_nll_ema", None) is not None:
+                    ema = float(self._nll_ema)
+                    if step_nll > spike * max(ema, 1e-3):
+                        raise RuntimeError(
+                            f"nll spike {step_nll:.4f} > {spike:g}× ema {ema:.4f} "
+                            f"at {self.phase} step {step + 1}"
+                        )
+                if getattr(self, "_nll_ema", None) is None:
+                    self._nll_ema = step_nll
+                else:
+                    self._nll_ema = 0.9 * float(self._nll_ema) + 0.1 * step_nll
                 if self.offload_blocks:
                     leftover = [p for p in trainable if p.grad is not None]
                     if leftover:
@@ -938,8 +966,14 @@ class Trainer:
                         "world": self.world,
                         "accum": self.accum,
                         "n_valid": step_n_valid,
+                        "loss_mode": self.loss_mode,
+                        "sparse": self.phase_sparse,
                         **moe_stats,
                     }
+                    if step_recall is not None:
+                        row["indexer_recall"] = float(step_recall.cpu())
+                    if step_reward is not None:
+                        row["rl_reward"] = float(step_reward.cpu())
                     if self.eval_every and self.eval_data is not None and step % self.eval_every == 0:
                         ev = self._allreduce_token_nll(*self._eval_nll_stats(model))
                         row["eval_nll"] = ev
@@ -977,18 +1011,19 @@ class Trainer:
             set_after_block_backward(None)
 
 
-def run_c1_chain(
+def run_phase_chain(
     cfg: CATYokoConfig,
     device: str,
+    phases: tuple[str, ...] | list[str],
     *,
     steps: int = 1,
     reuse_model: nn.Module | None = None,
     **kwargs,
 ) -> dict[str, TrainResult]:
-    """B0 then B1 then B2 on the same weights. Packed cursor continues across phases.
+    """Run ``phases`` on the same weights. Packed cursor continues.
 
-    ``save_dir`` becomes ``save_dir/{B0,B1,B2}/latest.pt`` so a later
-    ``--phase B1 --resume save_dir/B0/latest.pt`` handoff still works.
+    ``save_dir`` becomes ``save_dir/{phase}/``. Cross-phase resume still works
+    as ``--phase NEXT --resume save_dir/PREV``.
     """
     dtype = kwargs.pop("dtype", "bf16" if str(device).startswith("cuda") else "fp32")
     save_root = kwargs.pop("save_dir", None)
@@ -1003,7 +1038,7 @@ def run_c1_chain(
         kwargs.pop("upcycle_src", None)
     out: dict[str, TrainResult] = {}
     offset = float(kwargs.pop("global_tokens_offset", 0.0))
-    for phase in ("B0", "B1", "B2"):
+    for phase in phases:
         phase_dir = Path(save_root) / phase if save_root is not None else None
         tr = Trainer(
             cfg,
@@ -1024,6 +1059,50 @@ def run_c1_chain(
             trim_host_allocator()
             torch.cuda.empty_cache()
     return out
+
+
+def run_c1_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    """B0 then B1 then B2 on the same weights."""
+    return run_phase_chain(
+        cfg, device, ("B0", "B1", "B2"), steps=steps, reuse_model=reuse_model, **kwargs
+    )
+
+
+def run_c_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    from cat_yoko.phases import C_CHAIN
+
+    return run_phase_chain(
+        cfg, device, C_CHAIN, steps=steps, reuse_model=reuse_model, **kwargs
+    )
+
+
+def run_d_chain(
+    cfg: CATYokoConfig,
+    device: str,
+    *,
+    steps: int = 1,
+    reuse_model: nn.Module | None = None,
+    **kwargs,
+) -> dict[str, TrainResult]:
+    from cat_yoko.phases import D_CHAIN
+
+    return run_phase_chain(
+        cfg, device, D_CHAIN, steps=steps, reuse_model=reuse_model, **kwargs
+    )
 
 
 def train_loop(

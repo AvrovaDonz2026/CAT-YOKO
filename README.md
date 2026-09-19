@@ -39,7 +39,7 @@ bash scripts/run_b0_full_b200.sh
 | FFN / MoE | SwiGLU 6144；1 shared + 20 routed；top-\(k\) 7/10（enc/dec） |
 | Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
 
-发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G 骨架**（`python3 -m cat_yoko.c|d|e|f|g`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 Phase B 是滑窗 GQA；Phase C indexer 是层内 KL，**不是 CSA kernel**。
+发布入口是 **B0 / B1 / B2**，以及尚未开跑的 **C–G**（`python3 -m cat_yoko.c|d|e|f|g`，C/D 可 `--chain`）。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。注意力 Phase B 是滑窗 GQA；Phase C 按定理 B 做滑窗∪压缩，**不是 CSA kernel**。
 
 ## 课程 C1
 

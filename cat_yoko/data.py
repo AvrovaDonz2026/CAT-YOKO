@@ -139,6 +139,7 @@ class DummyStream:
         num_shards: int = 1,
         response_only: bool = False,
         prompt_frac: float = 0.5,
+        needle: bool = False,
     ) -> None:
         self.vocab_size = vocab_size
         self.seq_len = seq_len
@@ -148,6 +149,7 @@ class DummyStream:
         self.gen = torch.Generator().manual_seed(int(seed) + self.shard_id)
         self.response_only = bool(response_only)
         self.prompt_frac = float(prompt_frac)
+        self.needle = bool(needle)
 
     def state_dict(self) -> dict:
         return {"kind": "dummy", "gen": self.gen.get_state()}
@@ -165,6 +167,9 @@ class DummyStream:
             (micro_batch, self.seq_len),
             generator=self.gen,
         )
+        if self.needle and self.seq_len >= 2:
+            mid = self.seq_len // 2
+            ids[:, mid] = self.vocab_size - 1
         docs = torch.arange(micro_batch).unsqueeze(1).expand_as(ids)
         labels = ids.clone()
         if self.response_only:
@@ -187,6 +192,11 @@ def _jsonl_docs(path: Path) -> Iterator[list[int]]:
             if not line:
                 continue
             obj = json.loads(line)
+            if "prompt_ids" in obj and "response_ids" in obj:
+                prompt = [int(t) for t in obj["prompt_ids"]]
+                resp = [int(t) for t in obj["response_ids"]]
+                yield prompt + resp, ([-100] * len(prompt) + resp)
+                continue
             toks = obj.get("tokens", obj.get("input_ids", obj.get("ids")))
             if toks is None:
                 raise ValueError(f"jsonl row missing tokens/input_ids: {path}")
@@ -241,17 +251,21 @@ class FileStream:
         eos_id: int | None = None,
         shard_id: int = 0,
         num_shards: int = 1,
+        response_only: bool = False,
+        prompt_frac: float = 0.5,
     ) -> None:
         self.path = Path(path)
         self.seq_len = seq_len
         self.eos_id = eos_id
         self.stride = max(int(num_shards), 1)
         self._i = int(shard_id) % self.stride
+        had_labels = False
         suffix = self.path.suffix.lower()
         if suffix in {".jsonl", ".json"}:
             rows = list(_jsonl_docs(self.path))
             labeled = [lab is not None for _, lab in rows]
-            if any(labeled):
+            had_labels = any(labeled)
+            if had_labels:
                 self._packed = [
                     _pad_row(toks, lab, seq_len, i) for i, (toks, lab) in enumerate(rows)
                 ]
@@ -272,6 +286,12 @@ class FileStream:
                     )
         if not self._packed:
             raise ValueError(f"no sequences packed from {self.path}")
+        if response_only and not had_labels:
+            cut = max(int(seq_len * float(prompt_frac)), 1)
+            for row in self._packed:
+                lab = row["labels"].clone()
+                lab[:cut] = -100
+                row["labels"] = lab
 
     def state_dict(self) -> dict:
         return {"kind": "file", "i": self._i, "stride": self.stride}
@@ -389,6 +409,7 @@ def open_stream(
     world: int = 1,
     response_only: bool = False,
     prompt_frac: float = 0.5,
+    needle: bool = False,
 ) -> DummyStream | FileStream | PackedBinStream:
     world = max(int(world), 1)
     rank = int(rank) % world
@@ -401,6 +422,7 @@ def open_stream(
             num_shards=world,
             response_only=response_only,
             prompt_frac=prompt_frac,
+            needle=needle,
         )
     path = Path(data)
     eos = resolve_eos(path, eos_id)
@@ -409,4 +431,12 @@ def open_stream(
         return PackedBinStream(
             path, packed_seq, eos_id=eos, shard_id=rank, num_shards=world
         )
-    return FileStream(path, packed_seq, eos_id=eos, shard_id=rank, num_shards=world)
+    return FileStream(
+        path,
+        packed_seq,
+        eos_id=eos,
+        shard_id=rank,
+        num_shards=world,
+        response_only=response_only,
+        prompt_frac=prompt_frac,
+    )

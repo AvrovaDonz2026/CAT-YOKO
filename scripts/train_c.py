@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Phase C. python3 scripts/train_c.py --try --stage indexer --save-dir checkpoints/c-index"""
+"""Phase C. python3 scripts/train_c.py --try --stage indexer --save-dir checkpoints/c-index
+python3 scripts/train_c.py --try --chain --save-dir checkpoints/c"""
 
 from __future__ import annotations
 
