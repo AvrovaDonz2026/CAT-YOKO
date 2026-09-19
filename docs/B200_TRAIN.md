@@ -26,7 +26,7 @@ CUTLASS 把 SM100A `stg.256` 编进 kernel 的条件是 **nvcc ≥ 12.9**。CUDA
 
 ## 从 Hub overlay 接 B0
 
-上一台 6000D 停在 step **16020**，`tokens_in_phase=65,488,896`（8e9 的 ≈0.82%）。权重在 https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full 。
+上一台 6000D 停在 step **16020**。B200 已续到 step **18340**，`tokens_in_phase=74,991,616`（8e9 的 ≈0.94%）。权重在 https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full 。
 
 ```bash
 # 仓库根目录。Vast 默认 /venv/main + /workspace
@@ -40,7 +40,7 @@ bash scripts/run_b0_full_b200.sh
 
 启动参数：**seq=4096**，`--no-offload-encoder`，`--no-grad-ckpt`（约 179GiB HBM），`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
 
-当前 B0（nvcc 12.9 cubin，micro-batch=1）：约 **11.2k tok/s**（~365ms/step），HBM ~92/183GiB，功耗 ~630/1000W，SM 占用随逐步 host sync 在 5%–97% 之间抖。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。下一趟 resume 会吃到：单次 `collapse_doc_ids`、MoE 统计一次 D2H、CE 按剩余 HBM 自动加大 chunk。不要为了试 micro-batch 杀掉正在跑的 B0。
+当前 B0（nvcc 12.9 cubin，micro-batch=1）：约 **11.7k tok/s**（~350ms/step），HBM ~96/183GiB。Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。Hub overlay step **18340**。热路径已走 `collapse_doc_ids` / 一次 D2H 的 MoE 统计 / 按 HBM 自动加大的 CE chunk。不要为 B1/B2 `--try` 杀掉正在跑的 B0。
 
 环境变量 `CAT_YOKO_TE_NVFP4=0` 可强制仿真。`FORCE_SM120=1` 才允许把 B200 启动脚本跑在 sm_120 上。
 

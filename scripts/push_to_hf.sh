@@ -274,7 +274,7 @@ else
     die "staging $STAGING is not empty and is not a git repo"
   fi
   echo "cloning $REMOTE into staging"
-  if ! git clone "$REMOTE" "$STAGING"; then
+  if ! GIT_LFS_SKIP_SMUDGE=1 git clone "$REMOTE" "$STAGING"; then
     echo "clone failed; initializing empty staging repo"
     git -C "$STAGING" init
     git -C "$STAGING" checkout -B "$BRANCH"

@@ -17,7 +17,7 @@ HUB_REPO = "AvrovaDonz/CAT-YOKO"
 OVERLAYS = {
     "b0-full": {
         "filename": "checkpoints/b0-full/trainable.pt",
-        "sha256": "b5763b98aafa2990d753934b181fdf5731d54ec1c25099be95cedc0dc28fb52b",
+        "sha256": "f3f0d8f9454a0c373ea74f528705d13c7fad1e1de55084f5fee50ca8300f29c8",
     },
     "b0": {"filename": "checkpoints/b0/trainable.pt", "sha256": None},
     "b1": {"filename": "checkpoints/b1/trainable.pt", "sha256": None},

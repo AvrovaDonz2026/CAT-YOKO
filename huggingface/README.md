@@ -70,7 +70,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | --- | --- | --- |
 | `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
 | `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
-| `checkpoints/b0-full/trainable.pt` | 6000D 发布档 B0 进行中（8e9 信封，seq=4096）；**实例即将释放** | step **16020**；`tokens_in_phase=65,488,896`（≈0.82%）；sha256 `b5763b98aafa2990d753934b181fdf5731d54ec1c25099be95cedc0dc28fb52b`。132 张量、无 Adam。torch nightly + grouped MoE / fused QKV / chunked CE。~2820 tok/s。下一台 MiniCPM5 上采样后 overlay 本文件，同阶段 resume。不是终局。 |
+| `checkpoints/b0-full/trainable.pt` | Vast B200 发布档 B0 进行中（8e9 信封，seq=4096） | step **18340**；`tokens_in_phase=74,991,616`（≈0.94%）；sha256 `f3f0d8f9454a0c373ea74f528705d13c7fad1e1de55084f5fee50ca8300f29c8`。132 张量、无 Adam。torch 2.11+cu128 + TE nvcc 12.9 SM100。~11.7k tok/s，HBM 96GiB。MiniCPM5 上采样后 overlay 本文件，同阶段 resume。不是终局。 |
 | `checkpoints/b1/trainable.pt` | 6000D B1 `--try`（等 GPU） | decoder + `lm_head` + 最终 RMSNorm；resume B0 overlay + MiniCPM5。尚未上传 |
 | `checkpoints/b2/` | 6000D B2 `--try`（待 GPU） | 全模型 overlay；resume B1 + MiniCPM5 encoder/embed。指针 [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
 
