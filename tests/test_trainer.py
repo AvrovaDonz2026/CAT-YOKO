@@ -355,6 +355,7 @@ class LoopTests(unittest.TestCase):
                     "trainable_m": 1.0,
                     "lr": 1e-4,
                     "fp8": False,
+                    "nvfp4": False,
                     "tokens_seen": 1.0,
                     "tok_s": 1.0,
                     "mem_mib": 0.0,
@@ -508,6 +509,59 @@ class LoopTests(unittest.TestCase):
         self.assertIsNone(safe_ppl(float("nan")))
         self.assertIsNone(safe_ppl(99.0))
         self.assertGreater(safe_ppl(2.0), 7.0)
+
+    def test_chunked_ce_matches_full_logits(self) -> None:
+        from cat_yoko.loss import linear_cross_entropy
+
+        torch.manual_seed(0)
+        b, s, d, v = 2, 7, 8, 11
+        h1 = torch.randn(b, s, d, requires_grad=True)
+        h2 = h1.detach().clone().requires_grad_(True)
+        lm1 = torch.nn.Linear(d, v, bias=False)
+        lm2 = torch.nn.Linear(d, v, bias=False)
+        lm2.load_state_dict(lm1.state_dict())
+        labels = torch.randint(0, v, (b, s))
+        labels[0, 3] = -100
+        nll, n_valid = linear_cross_entropy(h1, labels, lm1, chunk_tokens=3)
+        logits = lm2(h2)
+        ref = torch.nn.functional.cross_entropy(
+            logits.reshape(-1, v),
+            labels.reshape(-1),
+            ignore_index=-100,
+        )
+        self.assertEqual(int(n_valid), int((labels != -100).sum()))
+        self.assertTrue(torch.allclose(nll, ref, atol=1e-5, rtol=1e-5))
+        nll.backward()
+        ref.backward()
+        self.assertTrue(torch.allclose(h1.grad, h2.grad, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(lm1.weight.grad, lm2.weight.grad, atol=1e-5, rtol=1e-5))
+
+    def test_runtime_flags_drop_logits_without_teacher(self) -> None:
+        from cat_yoko.model import CATYokoForCausalLM
+
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1)
+        model = CATYokoForCausalLM(self.cfg)
+        tr._apply_runtime_flags(model)
+        self.assertFalse(model.return_logits)
+        ids = torch.randint(0, self.cfg.vocab_size, (1, self.cfg.seq_len))
+        out = model(input_ids=ids, labels=ids)
+        self.assertNotIn("logits", out)
+        self.assertIn("nll", out)
+        self.assertTrue(torch.isfinite(out["nll"]))
+        out["loss"].backward()
+        self.assertIsNotNone(model.cache_k.weight.grad)
+
+    def test_runtime_flags_keep_logits_for_kd(self) -> None:
+        from cat_yoko.model import CATYokoForCausalLM
+
+        teacher = DummyTeacher(self.cfg.vocab_size, self.cfg.hidden_size)
+        tr = Trainer(self.cfg, "B0", "cpu", steps=1, teacher=teacher)
+        model = CATYokoForCausalLM(self.cfg)
+        tr._apply_runtime_flags(model)
+        self.assertTrue(model.return_logits)
+        ids = torch.randint(0, self.cfg.vocab_size, (1, 4))
+        out = model(input_ids=ids, labels=ids)
+        self.assertIn("logits", out)
 
     def test_auto_accum_tiny(self) -> None:
         self.assertEqual(auto_accum(self.cfg, micro_batch=2, world=1), 4)

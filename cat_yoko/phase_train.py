@@ -19,7 +19,14 @@ from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-from cat_yoko.phases import PHASES, TIGHT_GPU_SEQ, TRY_STEPS, spec as phase_spec
+from cat_yoko.phases import (
+    PHASES,
+    PUBLISHED_SAVE_EVERY,
+    PUBLISHED_SEQ,
+    TIGHT_GPU_SEQ,
+    TRY_STEPS,
+    spec as phase_spec,
+)
 from cat_yoko.recipe import MINICPM5_HF
 from cat_yoko.train import TIGHT_12B_GPU_GIB, cuda_runtime_available, main as train_main
 
@@ -59,7 +66,28 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--device", default="cuda")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--keep-last", type=int, default=2)
+    p.add_argument(
+        "--offload-encoder",
+        action="store_true",
+        help="force encoder CPU offload (B0/B1 spec default)",
+    )
+    p.add_argument(
+        "--no-offload-encoder",
+        action="store_true",
+        help="keep encoder on GPU (83GiB 6000D published B0)",
+    )
+    p.add_argument("--offload-blocks", action="store_true")
+    p.add_argument("--no-offload-blocks", action="store_true")
+    p.add_argument("--optim-cpu", action="store_true")
+    p.add_argument("--no-optim-cpu", action="store_true")
+    p.add_argument("--log-every", type=int, default=None)
     args, rest = p.parse_known_args(argv)
+    if args.offload_encoder and args.no_offload_encoder:
+        p.error("pick one of --offload-encoder / --no-offload-encoder")
+    if args.offload_blocks and args.no_offload_blocks:
+        p.error("pick one of --offload-blocks / --no-offload-blocks")
+    if args.optim_cpu and args.no_optim_cpu:
+        p.error("pick one of --optim-cpu / --no-optim-cpu")
 
     out: list[str] = [
         "--config",
@@ -85,11 +113,17 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         "--accum",
         "1",
     ]
-    if ph.offload_encoder:
+    if args.no_offload_encoder:
+        out.append("--no-offload-encoder")
+    elif args.offload_encoder or ph.offload_encoder:
         out.append("--offload-encoder")
-    if ph.offload_blocks:
+    if args.no_offload_blocks:
+        out.append("--no-offload-blocks")
+    elif args.offload_blocks or ph.offload_blocks:
         out.append("--offload-blocks")
-    if ph.optim_cpu:
+    if args.no_optim_cpu:
+        out.append("--no-optim-cpu")
+    elif args.optim_cpu or ph.optim_cpu:
         out.append("--optim-cpu")
     tight = str(args.device).startswith("cuda") and _tight_gpu()
     if tight and not args.try_run and args.steps is None and args.tokens is None:
@@ -102,6 +136,8 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     seq = args.seq_len
     if seq is None and (args.try_run or tight):
         seq = TIGHT_GPU_SEQ
+    elif seq is None and not args.try_run:
+        seq = PUBLISHED_SEQ
     if seq is not None:
         out.extend(["--seq-len", str(seq)])
     if args.try_run:
@@ -116,8 +152,10 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
             out.extend(["--tokens", str(args.tokens)])
         else:
             out.extend(["--tokens", str(ph.tokens)])
-        if args.save_every is not None:
-            out.extend(["--save-every", str(args.save_every)])
+        every = PUBLISHED_SAVE_EVERY if args.save_every is None else args.save_every
+        out.extend(["--save-every", str(every)])
+    if args.log_every is not None:
+        out.extend(["--log-every", str(args.log_every)])
     if args.data is not None:
         out.extend(["--data", str(args.data)])
     log = args.log if args.log is not None else args.save_dir / "metrics.jsonl"
@@ -139,7 +177,11 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.extend(["--upcycle", str(args.upcycle)])
     elif args.upcycle_hf is not None:
         out.extend(["--upcycle-hf", str(args.upcycle_hf)])
-    elif args.resume is None and args.try_run:
+    elif args.try_run and (args.resume is None or phase in {"B1", "B2"}):
+        # --try without --upcycle* uses dummy MiniCPM5 weights. B1/B2 overlay
+        # resume is MiniCPM5 (or dummy) upcycle + load_trainable_state: the
+        # previous overlay has no encoder/embed, so skipping upcycle leaves
+        # them random. AutoDL scripts pass --upcycle-hf when MiniCPM5 is local.
         out.append("--dummy-upcycle")
     out.extend(rest)
     return out

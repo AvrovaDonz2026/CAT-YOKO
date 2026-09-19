@@ -35,6 +35,12 @@ python3 -m cat_yoko.b2 --try --resume checkpoints/b1 --save-dir checkpoints/b2
 # source scripts/autodl_env.sh
 # python3 scripts/download_minicpm5.py
 # python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base
+# 6000D 发布档 B0（8e9 tokens, seq=4096, encoder on GPU）：
+# bash scripts/run_b0_full_autodl.sh
+# 6000D B2 --try（resume B1 overlay；GPU 空闲时）：
+# bash scripts/run_b2_try_autodl.sh
+# GPU 空闲后 B1 --try（32 步 seq=64，resume b0-full 否则 b0）：
+# bash scripts/run_b1_try_autodl.sh
 ```
 
 ```bash
@@ -66,7 +72,7 @@ python3 -m cat_yoko.train --config 12b --dump-megatron
 # 12B ckpt 不要放 /tmp（23GiB×2 会写满 overlay）。save_every 命中末步时 latest.pt 是 step_N 的 hardlink：
 # python3 -m cat_yoko.gpu_smoke --middle --save-dir /root/autodl-tmp/b0ckpt
 # python3 -m cat_yoko.gpu_smoke --middle --steps 2 --resume /root/autodl-tmp/b0ckpt
-python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
+python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear tests.test_moe_ops tests.test_b0_full
 # 有 CUDA 的机器：
 python3 -m cat_yoko.gpu_smoke
 python3 -m cat_yoko.gpu_smoke --middle
@@ -80,5 +86,5 @@ python3 -m unittest tests.test_gpu
 python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 fallback + NVFP4 ledger
 python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 python3 scripts/arch_verify.py --verify      # architecture invariants
-python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload
+python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear
 ```

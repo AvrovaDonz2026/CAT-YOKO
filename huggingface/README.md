@@ -49,7 +49,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 墙钟（发布账本）
 
-50B token 信封上的理论墙钟，**不是**实测。NVFP4 kernel **未实现**；trainer 仍是 bf16 autocast placeholder。
+50B token 信封上的理论墙钟，**不是**实测。允许的线性 GEMM 由 ``Nvfp4Linear`` 走 NVFP4（无 TE 时 E2M1/16 仿真）。attn softmax / SDPA 仍 fp32。fused TE kernel 不是硬依赖。
 
 | 配方 | H100-h | 角色 |
 | --- | ---: | --- |
@@ -66,9 +66,15 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 当前权重
 
-本 Hub `checkpoints/b0/trainable.pt`：AutoDL RTX 6000D sm_120 上 `--try` 32 步、真实 MiniCPM5-2B-Base 上采样；gate 0.301；peak 24244 MiB。**不是** 8B token 信封。尚未上传全图 / 8B 信封权重。
+| 路径 | 来源 | 说明 |
+| --- | --- | --- |
+| `checkpoints/b0/trainable.pt` | 6000D `--try` **32** 步，MiniCPM5 上采样 | gate 0.301；peak 24244 MiB；sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
+| `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** 步 | `nvfp4_n=2815`；gate 0.301；peak 34442 MiB；sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
+| `checkpoints/b0-full/trainable.pt` | 6000D 发布档 B0 进行中（8e9 信封，seq=4096）；**实例即将释放** | step **16020**；`tokens_in_phase=65,488,896`（≈0.82%）；sha256 `b5763b98aafa2990d753934b181fdf5731d54ec1c25099be95cedc0dc28fb52b`。132 张量、无 Adam。torch nightly + grouped MoE / fused QKV / chunked CE。~2820 tok/s。下一台 MiniCPM5 上采样后 overlay 本文件，同阶段 resume。不是终局。 |
+| `checkpoints/b1/trainable.pt` | 6000D B1 `--try`（等 GPU） | decoder + `lm_head` + 最终 RMSNorm；resume B0 overlay + MiniCPM5。尚未上传 |
+| `checkpoints/b2/` | 6000D B2 `--try`（待 GPU） | 全模型 overlay；resume B1 + MiniCPM5 encoder/embed。指针 [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
 
-GitHub 仓库不再存权重、也不再用 Git LFS。
+这些 overlay 里，`checkpoints/b0/` 与 `checkpoints/b0-nvfp4-try/` **不是** 8B token 信封（只是 `--try`）。`checkpoints/b0-full/trainable.pt` 是发布信封 **进行中** 的 B0 overlay（尚未跑完 8e9）。尚未上传 23GiB 全图。GitHub 不存权重、不用 Git LFS。日志在 GitHub [`artifacts/autodl-rtx6000d/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx6000d)。
 
 无公开评测分数。
 
@@ -95,7 +101,7 @@ GitHub 仓库不再存权重、也不再用 Git LFS。
 
 **C1:** B0/B1 freeze the encoder. B0 trains new modules only. B1 trains decoder + `lm_head` + final RMSNorm. B2 trains all. Tokens B0/B1/B2 = 8/27/15B.
 
-**Published wall-clock** (50B-token envelope, not measured). NVFP4 kernels are **not** implemented; the trainer is still a bf16 autocast placeholder.
+**Published wall-clock** (50B-token envelope, not measured). Allowed linear GEMMs use ``Nvfp4Linear`` (E2M1/16 emulation without TE). Attn softmax / SDPA stay fp32.
 
 | Recipe | H100-h | Role |
 | --- | ---: | --- |
@@ -105,6 +111,6 @@ GitHub 仓库不再存权重、也不再用 Git LFS。
 
 Data: Ultra-FineWeb en/zh + UltraData-Math. Tokenizer: [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B).
 
-This Hub copy is the RTX 6000D MiniCPM5-upcycle `--try` (32 steps, gate 0.301). It is not the 8B-token envelope. Weights do not live on GitHub.
+This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envelopes): `checkpoints/b0/trainable.pt` (32 steps), `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap), `checkpoints/b0-full/` (published B0), `checkpoints/b1/` (B1 `--try`, pending GPU), and `checkpoints/b2/` (B2 `--try`, pending GPU). Weights do not live on GitHub. Logs: GitHub `artifacts/autodl-rtx6000d/`.
 
 License: this repo BSD-3-Clause; MiniCPM5 base Apache-2.0. No eval scores.

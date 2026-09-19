@@ -1,0 +1,40 @@
+{
+  "device": "NVIDIA RTX 6000D",
+  "cap": [
+    12,
+    0
+  ],
+  "torch": "2.8.0+cu128",
+  "hardware_nvfp4": true,
+  "te_available": false,
+  "b0": {
+    "n": 77,
+    "lm_head": true,
+    "enc_q": true,
+    "cache_k_bf16": true,
+    "cross_bf16": true,
+    "router": true,
+    "window": true,
+    "qk_norm": true,
+    "nll": 5.0114054679870605,
+    "ms": 635.2,
+    "peak_mib": 18.5,
+    "ok": true
+  },
+  "b1_wrap": {
+    "new": 6,
+    "total": 83,
+    "cache_k": true,
+    "cross": true,
+    "cross_cls": "CrossAttention"
+  },
+  "causal_window": true,
+  "trainer_b1": {
+    "nll": 4.979166507720947,
+    "step": 1,
+    "nvfp4_n": 83,
+    "peak_mib": 21.35888671875,
+    "ok": true
+  },
+  "ok": true
+}

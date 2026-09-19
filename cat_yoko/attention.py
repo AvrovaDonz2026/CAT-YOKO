@@ -14,21 +14,15 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.rope import RMSNorm, RotaryEmbedding, apply_rope
 
 
-def _sdpa(
-    q: torch.Tensor,
-    k: torch.Tensor,
-    v: torch.Tensor,
-    bias: torch.Tensor | None = None,
-    *,
-    causal: bool = False,
-) -> torch.Tensor:
-    """Attention softmax in fp32 (must-high-prec); output matches ``q.dtype``."""
-    qf, kf, vf = q.float(), k.float(), v.float()
-    if bias is None:
-        out = F.scaled_dot_product_attention(qf, kf, vf, is_causal=causal)
-    else:
-        out = F.scaled_dot_product_attention(qf, kf, vf, attn_mask=bias.float())
-    return out.to(q.dtype)
+def _fused_qkv(
+    q_proj: nn.Linear, k_proj: nn.Linear, v_proj: nn.Linear, x: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """One GEMM for Q/K/V. Same math as three Linears."""
+    from cat_yoko.nvfp4_linear import fused_cat_linear
+
+    qkv = fused_cat_linear([q_proj, k_proj, v_proj], x)
+    d_q, d_k, d_v = q_proj.out_features, k_proj.out_features, v_proj.out_features
+    return qkv.split((d_q, d_k, d_v), dim=-1)
 
 
 def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -37,6 +31,49 @@ def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
         return x
     b, n_kv, s, hd = x.shape
     return x[:, :, None, :, :].expand(b, n_kv, n_rep, s, hd).reshape(b, n_kv * n_rep, s, hd)
+
+
+def _sdpa(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    bias: torch.Tensor | None = None,
+    *,
+    causal: bool = False,
+) -> torch.Tensor:
+    """Softmax stays high-prec; QKV stay in ``q.dtype`` on the CUDA fast path.
+
+    Flash / cuDNN SDPA accumulate the softmax in fp32. Materializing fp32 Q/K/V
+    disables those kernels and is only the CPU / explicit-mask fallback.
+    ``enable_gqa`` keeps 2 KV heads instead of repeating to 16 Q heads.
+    """
+    gqa = k.size(-3) != q.size(-3)
+
+    def _call(qq, kk, vv, **extra):
+        if gqa:
+            try:
+                return F.scaled_dot_product_attention(
+                    qq, kk, vv, enable_gqa=True, **extra
+                )
+            except TypeError:
+                n_rep = qq.size(-3) // kk.size(-3)
+                kk = _repeat_kv(kk, n_rep)
+                vv = _repeat_kv(vv, n_rep)
+        return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+
+    cuda_fast = (
+        bias is None
+        and q.is_cuda
+        and q.dtype in (torch.bfloat16, torch.float16)
+    )
+    if cuda_fast:
+        return _call(q, k, v, is_causal=causal)
+    qf, kf, vf = q.float(), k.float(), v.float()
+    if bias is None:
+        out = _call(qf, kf, vf, is_causal=causal)
+    else:
+        out = _call(qf, kf, vf, attn_mask=bias.float())
+    return out.to(q.dtype)
 
 
 def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) -> bool:
@@ -98,20 +135,22 @@ class WindowAttention(nn.Module):
     def forward(self, x: torch.Tensor, doc_ids: torch.Tensor | None = None) -> torch.Tensor:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
-        q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
-        k = self.k_proj(x).view(b, s, n_kv, hd).transpose(1, 2)
-        v = self.v_proj(x).view(b, s, n_kv, hd).transpose(1, 2)
+        q, k, v = _fused_qkv(self.q_proj, self.k_proj, self.v_proj, x)
+        q = q.view(b, s, h, hd).transpose(1, 2)
+        k = k.view(b, s, n_kv, hd).transpose(1, 2)
+        v = v.view(b, s, n_kv, hd).transpose(1, 2)
         if self.q_norm is not None:
             q = self.q_norm(q)
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        k = _repeat_kv(k, h // n_kv)
-        v = _repeat_kv(v, h // n_kv)
         if _needs_explicit_mask(s, self.n_win, doc_ids):
+            k = _repeat_kv(k, h // n_kv)
+            v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
             out = _sdpa(q, k, v, bias)
         else:
+            # GQA: 16 Q / 2 KV. Do not repeat KV; SDPA enable_gqa on CUDA.
             out = _sdpa(q, k, v, causal=True)
         return self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
 
@@ -148,9 +187,9 @@ class CrossAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        k = _repeat_kv(k, h // n_kv)
-        v = _repeat_kv(v, h // n_kv)
         if _needs_explicit_mask(s, s, doc_ids):
+            k = _repeat_kv(k, h // n_kv)
+            v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
             out = _sdpa(q, k, v, bias)
         else:

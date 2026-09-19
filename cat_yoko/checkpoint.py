@@ -91,22 +91,25 @@ def newest_trainable_checkpoint(save_dir: Path) -> Path | None:
 
 
 def resolve_resume_path(path: Path | str) -> Path:
-    """File as-is; directory prefers full ``latest.pt``, then ``trainable.pt``.
+    """File as-is; directory prefers full ``latest.pt``, then newest overlay step.
 
-    12B B0 on a 32GB card writes trainable-only (~0.4GiB) because a 23GiB
-    ``latest.pt`` will not fit a 50G data volume and does not belong on GitHub.
+    ``trainable.pt`` may be a stale hardlink (live 6000D B0 wrote
+    ``trainable_step_N`` without republishing the pointer). Prefer the
+    highest ``trainable_step_*.pt`` so operator restarts keep tokens_in_phase.
     """
     path = Path(path)
     if path.is_file():
         return path
     if path.is_dir():
-        for name in ("latest.pt", "trainable.pt"):
-            cand = path / name
-            if cand.is_file():
-                return cand
-        step = newest_step_checkpoint(path) or newest_trainable_checkpoint(path)
+        latest = path / "latest.pt"
+        if latest.is_file():
+            return latest
+        step = newest_trainable_checkpoint(path) or newest_step_checkpoint(path)
         if step is not None:
             return step
+        trainable = path / "trainable.pt"
+        if trainable.is_file():
+            return trainable
         raise FileNotFoundError(f"no latest.pt / trainable.pt / step_*.pt in {path}")
     raise FileNotFoundError(str(path))
 

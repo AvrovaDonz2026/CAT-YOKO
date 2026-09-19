@@ -20,6 +20,9 @@ from cat_yoko.ddp_smoke import run_fsdp_one, run_gloo_c1, run_gloo_ddp
 from cat_yoko.fp8 import should_autocast
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
+from cat_yoko.nvfp4_linear import Nvfp4Linear, apply_nvfp4, nvfp4_module_names
+from cat_yoko.attention import WindowAttention
+from cat_yoko.rope import RMSNorm
 from cat_yoko.optim import trim_host_allocator
 from cat_yoko.prepare import prepare
 from cat_yoko.teacher import DummyTeacher
@@ -71,6 +74,11 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     out["fp8_policy"] = {
         "b1_autocast": should_autocast("B1", cuda=True, enabled=True),
         "b0_autocast": should_autocast("B0", cuda=True, enabled=True),
+    }
+    out["nvfp4_policy"] = {
+        "b1_autocast": should_autocast("B1", cuda=True, enabled=True),
+        "b0_autocast": should_autocast("B0", cuda=True, enabled=True),
+        "hardware": torch.cuda.get_device_capability(0)[0] >= 10,
     }
     nll_fp8 = train_loop(
         fp8_cfg, "B1", steps=1, device=device, accum=1, micro_batch=micro_batch
@@ -231,6 +239,81 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
     model(input_ids=ids, labels=ids)["loss"].backward()
     enc_ok = all((not p.requires_grad) and p.grad is None for p in model.encoder.parameters())
     out["b0_encoder_frozen"] = {"ok": enc_ok}
+    nv_cfg = replace(CATYokoConfig.tiny(), use_nvfp4=True)
+    nv_model = CATYokoForCausalLM(nv_cfg).to(device)
+    apply_freeze(nv_model, "B0")
+    n_b0_new = apply_nvfp4(nv_model, "B0", enabled=True)
+    names_b0 = nvfp4_module_names(nv_model)
+    n_b0 = len(names_b0)
+    attn0 = nv_model.encoder[0].attn
+    out["nvfp4_b0_wrap"] = {
+        "n": n_b0,
+        "new": n_b0_new,
+        "lm_head_bf16": not isinstance(nv_model.lm_head, Nvfp4Linear),
+        "enc_q": isinstance(attn0.q_proj, Nvfp4Linear),
+        "dec_self_bf16": not isinstance(nv_model.decoder[0].self_attn.q_proj, Nvfp4Linear),
+        "cache_k_bf16": not isinstance(nv_model.cache_k, Nvfp4Linear),
+        "cross_q_bf16": not isinstance(nv_model.decoder[0].cross_attn.q_proj, Nvfp4Linear),
+        "router_bf16": not any(n.endswith("router") for n in names_b0),
+        "window_attn": isinstance(attn0, WindowAttention),
+        "qk_norm": isinstance(attn0.q_norm, RMSNorm),
+    }
+    out["nvfp4_b0_wrap"]["ok"] = all(
+        [
+            n_b0 > 0,
+            out["nvfp4_b0_wrap"]["lm_head_bf16"],
+            out["nvfp4_b0_wrap"]["enc_q"],
+            out["nvfp4_b0_wrap"]["dec_self_bf16"],
+            out["nvfp4_b0_wrap"]["cache_k_bf16"],
+            out["nvfp4_b0_wrap"]["cross_q_bf16"],
+            out["nvfp4_b0_wrap"]["router_bf16"],
+            out["nvfp4_b0_wrap"]["window_attn"],
+            out["nvfp4_b0_wrap"]["qk_norm"],
+        ]
+    )
+    apply_freeze(nv_model, "B1")
+    n_b1_new = apply_nvfp4(nv_model, "B1", enabled=True)
+    names_b1 = nvfp4_module_names(nv_model)
+    n_b1 = len(names_b1)
+    dec_attn = nv_model.decoder[0].self_attn
+    cross1 = nv_model.decoder[0].cross_attn
+    out["nvfp4_b1_wrap"] = {
+        "n": n_b1,
+        "new": n_b1_new,
+        "cache_k": isinstance(nv_model.cache_k, Nvfp4Linear),
+        "cache_v": isinstance(nv_model.cache_v, Nvfp4Linear),
+        "cross_q": isinstance(cross1.q_proj, Nvfp4Linear),
+        "cross_o": isinstance(cross1.o_proj, Nvfp4Linear),
+        "lm_head": isinstance(nv_model.lm_head, Nvfp4Linear),
+        "dec_q": isinstance(dec_attn.q_proj, Nvfp4Linear),
+        "dec_k": isinstance(dec_attn.k_proj, Nvfp4Linear),
+        "dec_v": isinstance(dec_attn.v_proj, Nvfp4Linear),
+        "dec_o": isinstance(dec_attn.o_proj, Nvfp4Linear),
+        "dec_expert": isinstance(nv_model.decoder[0].mlp.experts[0].gate_proj, Nvfp4Linear),
+        "router_bf16": not any(n.endswith("router") for n in names_b1),
+        "window_attn": isinstance(nv_model.encoder[0].attn, WindowAttention),
+        "dec_window": isinstance(dec_attn, WindowAttention),
+    }
+    out["nvfp4_b1_wrap"]["ok"] = all(
+        [
+            n_b1 > n_b0,
+            n_b1_new > 0,
+            out["nvfp4_b1_wrap"]["cache_k"],
+            out["nvfp4_b1_wrap"]["cache_v"],
+            out["nvfp4_b1_wrap"]["cross_q"],
+            out["nvfp4_b1_wrap"]["cross_o"],
+            out["nvfp4_b1_wrap"]["lm_head"],
+            out["nvfp4_b1_wrap"]["dec_q"],
+            out["nvfp4_b1_wrap"]["dec_k"],
+            out["nvfp4_b1_wrap"]["dec_v"],
+            out["nvfp4_b1_wrap"]["dec_o"],
+            out["nvfp4_b1_wrap"]["dec_expert"],
+            out["nvfp4_b1_wrap"]["router_bf16"],
+            out["nvfp4_b1_wrap"]["window_attn"],
+            out["nvfp4_b1_wrap"]["dec_window"],
+        ]
+    )
+    del nv_model
     ddp = run_gloo_ddp(device="cpu", world=2, steps=1)
     out["ddp_gloo"] = ddp
     out["ddp_cuda"] = run_gloo_ddp(device="cuda", world=2, steps=1)
@@ -253,6 +336,8 @@ def run_tiny_cuda(*, steps: int = 2, micro_batch: int = 2) -> dict:
             out["upcycle"]["ok"],
             out["eval"]["ok"],
             out["b0_encoder_frozen"]["ok"],
+            out["nvfp4_b0_wrap"]["ok"],
+            out["nvfp4_b1_wrap"]["ok"],
             out["ddp_gloo"]["ok"],
             out["ddp_cuda"]["ok"],
             out["ddp_cuda_c1"]["ok"],
@@ -596,6 +681,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  b1_offload ok={result['b1_offload']['ok']}")
         print(f"  b2_block_offload ok={result['b2_block_offload']['ok']}")
         print(f"  c1_chain ok={result['c1_chain']['ok']} ckpts ok={result['c1_ckpts']['ok']}")
+        print(f"  nvfp4_b0_wrap ok={result['nvfp4_b0_wrap']['ok']} n={result['nvfp4_b0_wrap']['n']}")
+        print(f"  nvfp4_b1_wrap ok={result['nvfp4_b1_wrap']['ok']} n={result['nvfp4_b1_wrap']['n']}")
         print(f"  ddp_gloo ok={result['ddp_gloo']['ok']}")
         print(f"  ddp_cuda ok={result['ddp_cuda']['ok']}")
         print(f"  ddp_cuda_c1 ok={result['ddp_cuda_c1']['ok']}")

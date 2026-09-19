@@ -28,7 +28,7 @@ from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.phase_train import build_phase_argv
-from cat_yoko.phases import PHASES, TRY_STEPS
+from cat_yoko.phases import PHASES, PUBLISHED_SAVE_EVERY, PUBLISHED_SEQ, TRY_STEPS
 from cat_yoko.trainer import Trainer
 
 
@@ -73,21 +73,57 @@ class PhaseSpecTests(unittest.TestCase):
             argv = build_phase_argv("B0", ["--try", "--save-dir", "/tmp/b0"])
             self.assertEqual(argv[argv.index("--steps") + 1], str(TRY_STEPS))
 
+    def test_b0_published_argv(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv("B0", ["--save-dir", "/tmp/b0-full"])
+        self.assertEqual(argv[argv.index("--phase") + 1], "B0")
+        self.assertEqual(argv[argv.index("--tokens") + 1], str(C1_SPLIT["B0"]))
+        self.assertEqual(argv[argv.index("--seq-len") + 1], str(PUBLISHED_SEQ))
+        self.assertEqual(argv[argv.index("--save-every") + 1], str(PUBLISHED_SAVE_EVERY))
+        self.assertIn("--offload-encoder", argv)
+        self.assertNotIn("--no-offload-encoder", argv)
+        self.assertNotIn("--try", argv)
+        self.assertNotIn("--dummy-upcycle", argv)
+
+    def test_b0_no_offload_encoder_on_6000d(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv(
+                "B0",
+                ["--save-dir", "/tmp/b0-full", "--no-offload-encoder", "--upcycle-hf", "/hf"],
+            )
+        self.assertIn("--no-offload-encoder", argv)
+        self.assertNotIn("--offload-encoder", argv)
+        self.assertIn("--upcycle-hf", argv)
+
     def test_b1_envelope_argv(self) -> None:
-        argv = build_phase_argv("B1", ["--save-dir", "/tmp/b1"])
+        from unittest.mock import patch
+
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv("B1", ["--save-dir", "/tmp/b1"])
         self.assertEqual(argv[argv.index("--phase") + 1], "B1")
         self.assertIn("--offload-encoder", argv)
         self.assertIn("--optim-cpu", argv)
         self.assertNotIn("--offload-blocks", argv)
         self.assertEqual(argv[argv.index("--tokens") + 1], str(C1_SPLIT["B1"]))
+        self.assertEqual(argv[argv.index("--seq-len") + 1], str(PUBLISHED_SEQ))
+        self.assertEqual(argv[argv.index("--save-every") + 1], str(PUBLISHED_SAVE_EVERY))
 
     def test_b2_envelope_argv(self) -> None:
-        argv = build_phase_argv("B2", ["--save-dir", "/tmp/b2"])
+        from unittest.mock import patch
+
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv("B2", ["--save-dir", "/tmp/b2"])
         self.assertIn("--offload-blocks", argv)
         self.assertIn("--optim-cpu", argv)
         self.assertNotIn("--offload-encoder", argv)
         self.assertEqual(argv[argv.index("--tokens") + 1], str(C1_SPLIT["B2"]))
         self.assertIn("--no-save-full", argv)
+        self.assertEqual(argv[argv.index("--seq-len") + 1], str(PUBLISHED_SEQ))
+        self.assertEqual(argv[argv.index("--save-every") + 1], str(PUBLISHED_SAVE_EVERY))
 
 
 class TrainableCkptTests(unittest.TestCase):
@@ -174,6 +210,7 @@ class TrainableCkptTests(unittest.TestCase):
             ).run()
             self.assertTrue((save / "trainable.pt").is_file())
             self.assertTrue((save / "trainable_step_1.pt").is_file())
+            self.assertTrue((save / "trainable.pt").samefile(save / "trainable_step_1.pt"))
             self.assertFalse((save / "latest.pt").is_file())
             self.assertFalse((save / "step_1.pt").is_file())
             ckpt = load_checkpoint(save / "trainable.pt")

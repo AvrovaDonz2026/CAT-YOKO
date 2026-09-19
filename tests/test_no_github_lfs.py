@@ -18,6 +18,16 @@ class NoGithubLfsTests(unittest.TestCase):
 
     def test_overlay_not_in_tree(self) -> None:
         self.assertFalse((ROOT / "checkpoints" / "b0" / "trainable.pt").exists())
+        self.assertFalse((ROOT / "checkpoints" / "b1" / "trainable.pt").exists())
+
+    def test_git_does_not_track_pt(self) -> None:
+        import subprocess
+
+        tracked = subprocess.check_output(
+            ["git", "-C", str(ROOT), "ls-files", "*.pt"],
+            text=True,
+        ).strip()
+        self.assertEqual(tracked, "")
 
     def test_gitignore_covers_pt(self) -> None:
         text = (ROOT / ".gitignore").read_text(encoding="utf-8")

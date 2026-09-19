@@ -71,6 +71,10 @@ PHASES: dict[str, PhaseSpec] = {
 HUB_SHARD_MAX_BYTES = 4 * (1 << 30)
 TIGHT_GPU_SEQ = 64
 TRY_STEPS = 32
+# Published envelope on a rental GPU: write trainable.pt often. 0 would only
+# save at the end of 8/27/15B tokens, which this box will not reach.
+PUBLISHED_SAVE_EVERY = 20
+PUBLISHED_SEQ = 4096  # CATYokoConfig.middle_12b().seq_len
 
 
 def spec(phase: str) -> PhaseSpec:

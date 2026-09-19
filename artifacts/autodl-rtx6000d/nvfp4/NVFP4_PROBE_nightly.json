@@ -1,0 +1,24 @@
+{
+  "python": "3.12.3",
+  "torch": "2.15.0.dev20260918+cu130",
+  "cuda": "13.0",
+  "cap": [
+    12,
+    0
+  ],
+  "float4_dtype": true,
+  "float4_cast": false,
+  "scaled_mm": true,
+  "functional_scaled_mm": true,
+  "grouped_mm": true,
+  "te": "2.19.0",
+  "te_pytorch": true,
+  "te_nvfp4_recipe": true,
+  "te_nvfp4_linear": false,
+  "hw_nvfp4_gemm": false,
+  "errors": {
+    "float4_cast": "RuntimeError: copy_() does not support casting Float4_e2m1fn_x2 to different types. Source dtype is BFloat16target dtype is Float4_e2m1fn_x2",
+    "te_nvfp4_linear": "RuntimeError: /tmp/pip-install-hq2lxq45/transformer-engine-torch_063e29b2cef34903a2aaa075e8eeb09f/csrc/quantizer.cpp:1982 in function create_tensor: Assertion failed: flat_first_dim % NVFP4_BLOCK_SIZE == 0. First dim for NVFP4 must be divisible by 16 (got shape=(8,128))",
+    "te_nvfp4_linear_tb": "rward\n    ) = _linear_forward_impl(fwd_args)\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/autodl-tmp/venv-nightly/lib/python3.12/site-packages/transformer_engine/pytorch/module/linear.py\", line 436, in _linear_forward_impl\n    inputmat = input_quantizer(inputmat)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/autodl-tmp/venv-nightly/lib/python3.12/site-packages/transformer_engine/pytorch/quantized_tensor.py\", line 465, in __call__\n    return self.quantize(tensor)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/autodl-tmp/venv-nightly/lib/python3.12/site-packages/transformer_engine/pytorch/quantized_tensor.py\", line 442, in quantize\n    result = _QuantizeFunc.forward(None, tensor, self.quantize_impl)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/autodl-tmp/venv-nightly/lib/python3.12/site-packages/transformer_engine/pytorch/tensor/_quantization_helpers.py\", line 82, in forward\n    return quantize_impl(tensor)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/autodl-tmp/venv-nightly/lib/python3.12/site-packages/transformer_engine/pytorch/tensor/nvfp4_tensor.py\", line 255, in quantize_impl\n    return tex.quantize(tensor, self)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: /tmp/pip-install-hq2lxq45/transformer-engine-torch_063e29b2cef34903a2aaa075e8eeb09f/csrc/quantizer.cpp:1982 in function create_tensor: Assertion failed: flat_first_dim % NVFP4_BLOCK_SIZE == 0. First dim for NVFP4 must be divisible by 16 (got shape=(8,128))\n"
+  }
+}

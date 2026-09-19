@@ -1,0 +1,123 @@
+=== timestamp 2026-09-18T16:32:58Z ===
+hostname=autodl-container-8x4c4zmh8d-e96e943a
+
+=== nvidia-smi ===
+Sat Sep 19 00:32:58 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 595.71.05              Driver Version: 595.71.05      CUDA Version: 13.2     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA RTX 6000D               On  |   00000000:38:00.0 Off |                  Off |
+| N/A   28C    P8             31W /  600W |       0MiB /  85651MiB |      0%      Default |
+|                                         |                        |             Disabled |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+
+name, compute_cap, memory.total [MiB], memory.free [MiB], driver_version
+NVIDIA RTX 6000D, 12.0, 85651 MiB, 85043 MiB, 595.71.05
+
+=== torch ===
+python /root/miniconda3/bin/python 3.12.3
+torch 2.8.0+cu128
+cuda_runtime 12.8
+cuda True
+device NVIDIA RTX 6000D
+cap (12, 0)
+mem_bytes 89173131264
+bf16 True
+
+=== TE ===
+te_root 2.19.0 /root/miniconda3/lib/python3.12/site-packages/transformer_engine/__init__.py
+NVFP4BlockScaling <class 'transformer_engine.common.recipe.NVFP4BlockScaling'>
+te_pytorch_fail ImportError /root/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cuda.so: undefined symbol: ncclCommWindowRegister
+
+Name: transformer_engine
+Version: 2.19.0
+Summary: Transformer acceleration library
+Home-page: 
+Author: 
+Author-email: 
+License: 
+Location: /root/miniconda3/lib/python3.12/site-packages
+Requires: 
+Required-by: 
+---
+Name: transformer_engine_cu12
+Version: 2.19.0
+Summary: Transformer acceleration library
+Home-page: 
+Author: 
+Author-email: 
+License: 
+Location: /root/miniconda3/lib/python3.12/site-packages
+Requires: importlib-metadata, packaging, pydantic
+Required-by: 
+
+=== CAT-YOKO git ===
+cursor/nvfp4-c1-theory-02c6
+39b6e2dc740bf1693beffb58ab2c5321140bdb06
+39b6e2d feat: freeze Phase B wall-clock as C1+NVFP4
+## cursor/nvfp4-c1-theory-02c6...origin/cursor/nvfp4-c1-theory-02c6
+ M cat_yoko/config.py
+ M cat_yoko/gpu_smoke.py
+ M cat_yoko/nvfp4.py
+ M cat_yoko/trainer.py
+?? cat_yoko/nvfp4_linear.py
+?? scripts/autodl_env.sh
+?? scripts/download_minicpm5.py
+?? scripts/run_b0_try_autodl.sh
+?? scripts/run_nvfp4_smoke_autodl.sh
+?? tests/test_attention_plan.py
+?? tests/test_nvfp4_linear.py
+
+=== MiniCPM5 ===
+total 4.7G
+-rw-r--r-- 1 root root 108K Sep 18 23:29 README-cn.md
+-rw-r--r-- 1 root root 110K Sep 18 23:29 README.md
+-rw-r--r-- 1 root root 8.9K Sep 18 23:29 chat_template.jinja
+-rw-r--r-- 1 root root  704 Sep 18 23:29 config.json
+-rw-r--r-- 1 root root   73 Sep 18 23:29 configuration.json
+-rw-r--r-- 1 root root  213 Sep 18 23:29 generation_config.json
+-rw-r--r-- 1 root root 4.7G Sep 18 23:35 model.safetensors
+-rw-r--r-- 1 root root  551 Sep 18 23:29 special_tokens_map.json
+-rw-r--r-- 1 root root 9.5M Sep 18 23:29 tokenizer.json
+-rw-r--r-- 1 root root  93K Sep 18 23:29 tokenizer_config.json
+
+=== runs/b0 ===
+total 1.3G
+-rw-r--r-- 1 root root  21K Sep 18 23:39 metrics.jsonl
+-rw-r--r-- 2 root root 419M Sep 18 23:39 trainable.pt
+-rw-r--r-- 1 root root 419M Sep 18 23:38 trainable_step_24.pt
+-rw-r--r-- 2 root root 419M Sep 18 23:39 trainable_step_32.pt
+
+=== runs/nvfp4 (parent smoke, small files only listed) ===
+/root/autodl-tmp/runs/nvfp4:
+total 12K
+drwxr-xr-x 2 root root   59 Sep 19 00:27 b0
+-rw-r--r-- 1 root root  703 Sep 19 00:27 cuda_nvfp4.json
+-rw-r--r-- 1 root root 5.5K Sep 19 00:28 gpu_nvfp4.log
+
+/root/autodl-tmp/runs/nvfp4/b0:
+total 419M
+-rw-r--r-- 1 root root 1.4K Sep 19 00:27 metrics.jsonl
+-rw-r--r-- 1 root root 419M Sep 19 00:27 trainable.pt
+
+=== disk ===
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  1.8G   29G   6% /
+/dev/md0         50G  7.4G   43G  15% /root/autodl-tmp
+
+=== HF env (this ssh) ===
+HF_ENDPOINT=https://hf-mirror.com
+HF_HUB_DISABLE_XET=1
+HF_HOME=/root/autodl-tmp/hf
