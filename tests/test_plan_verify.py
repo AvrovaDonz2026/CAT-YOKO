@@ -89,6 +89,8 @@ class StaticLedgerTests(unittest.TestCase):
         self.assertIn("ops.dense_sdpa_prefers_flash", names)
         self.assertIn("ops.masked_sdpa_skips_flash", names)
         self.assertIn("ops.compute_is_bf16", names)
+        self.assertIn("ops.masked_isolates_one_backend", names)
+        self.assertIn("ops.grouped_mm_sm90_gate", names)
 
     def test_bf16_static_claims_keep_theorem_b(self) -> None:
         ledger = static_ledger("bf16")
@@ -142,6 +144,10 @@ class SecretScanTests(unittest.TestCase):
             ROOT / "docs" / "PLAN_VERIFY.md",
             ROOT / "cat_yoko" / "ops.py",
             ROOT / "cat_yoko" / "attention.py",
+            ROOT / "cat_yoko" / "ampere_mfu.py",
+            ROOT / "cat_yoko" / "moe.py",
+            ROOT / "docs" / "AMPERE_OPS_MFU.md",
+            ROOT / "scripts" / "run_ampere_mfu.sh",
         ]
         for path in paths:
             self.assertTrue(path.is_file(), msg=str(path))
@@ -164,6 +170,14 @@ class SecretScanTests(unittest.TestCase):
         self.assertNotIn("/root/autodl-tmp/plan-verify", text)
         self.assertNotRegex(text, r"plan_verify[^\n]*--save-full")
         self.assertTrue((ROOT / "scripts" / "run_plan_verify.sh").stat().st_mode & 0o111)
+
+    def test_ampere_mfu_shell_is_dedicated_dir(self) -> None:
+        text = (ROOT / "scripts" / "run_ampere_mfu.sh").read_text(encoding="utf-8")
+        self.assertIn("/root/autodl-tmp/bf16-verify/mfu", text)
+        self.assertIn("cat_yoko.ampere_mfu", text)
+        self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertNotIn("save-full", text)
+        self.assertTrue((ROOT / "scripts" / "run_ampere_mfu.sh").stat().st_mode & 0o111)
 
 
 if __name__ == "__main__":

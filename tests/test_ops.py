@@ -28,6 +28,8 @@ class PhaseOpsTests(unittest.TestCase):
         self.assertEqual(row["seq_len"], 128)
         self.assertFalse(row["use_fp8"])
         self.assertIn("dense_cross", row["intended"])
+        self.assertIn("moe_bmm", PHASE_OPS["B2"])
+        self.assertNotIn("grouped_mm", PHASE_OPS["B2"])
 
 
 if __name__ == "__main__":

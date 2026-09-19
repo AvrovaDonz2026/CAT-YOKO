@@ -36,9 +36,16 @@ def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
 
 
 _SDPA_KERNEL = None  # dense cache: None=uninit, False=unavailable, else factory
-_SDPA_MASKED_KERNEL = None  # masked cache
+_SDPA_MASKED_KERNEL: dict = {}  # "small"|"large" -> factory|False
 _LAST_SDPA = {"kind": "uninit", "dtype": ""}
 _SDPA_COUNTS = {"dense": 0, "masked_bf16": 0, "math_fp32": 0}
+# Ampere 3090: Efficient SDPA wins below this seq; cuDNN wins at 384+.
+MASKED_SDPA_SWITCH_SEQ = 320
+# None=untried, True=enable_gqa+attn_mask works, False=must repeat KV.
+_SDPA_GQA_MASK_OK: bool | None = None
+_WINDOW_BIAS_CACHE: dict[tuple, torch.Tensor] = {}
+_WINDOW_BIAS_BYTES = 0
+_WINDOW_BIAS_BUDGET = 256 << 20
 
 
 def last_sdpa() -> dict:
@@ -51,10 +58,18 @@ def sdpa_counts() -> dict:
 
 
 def reset_sdpa_counts() -> None:
+    global _SDPA_GQA_MASK_OK
     for key in _SDPA_COUNTS:
         _SDPA_COUNTS[key] = 0
     _LAST_SDPA["kind"] = "uninit"
     _LAST_SDPA["dtype"] = ""
+    _SDPA_GQA_MASK_OK = None
+
+
+def reset_window_bias_cache() -> None:
+    global _WINDOW_BIAS_BYTES
+    _WINDOW_BIAS_CACHE.clear()
+    _WINDOW_BIAS_BYTES = 0
 
 
 def _note_sdpa(kind: str, dtype: torch.dtype) -> None:
@@ -102,23 +117,39 @@ def _cuda_sdpa_kernel():
         return nullcontext()
 
 
-def _cuda_masked_sdpa_kernel():
-    """CSA/HCA extra_bias: cuDNN → mem-efficient. Flash rejects attn_mask."""
+def _cuda_masked_sdpa_kernel(seq: int = 512):
+    """Preferred masked backend for this seq length. One backend, not Flash.
+
+    Isolate a single kernel: with both cuDNN and Efficient enabled, Ampere
+    dispatch at seq=128 still picks the slower cuDNN. seq<320 → Efficient;
+    longer → cuDNN. ``_sdpa`` falls back to the other on RuntimeError.
+    """
+    kind = "small" if int(seq) < MASKED_SDPA_SWITCH_SEQ else "large"
     global _SDPA_MASKED_KERNEL
-    if _SDPA_MASKED_KERNEL is False:
+    if not isinstance(_SDPA_MASKED_KERNEL, dict):
+        _SDPA_MASKED_KERNEL = {}
+    cached = _SDPA_MASKED_KERNEL.get(kind)
+    if cached is False:
         return nullcontext()
-    if _SDPA_MASKED_KERNEL is not None:
-        return _SDPA_MASKED_KERNEL()
+    if cached is not None:
+        return cached()
+    names = ("EFFICIENT_ATTENTION",) if kind == "small" else ("CUDNN_ATTENTION",)
     try:
-        factory = _sdpa_backend_ctx(("CUDNN_ATTENTION", "EFFICIENT_ATTENTION"))
+        factory = _sdpa_backend_ctx(names)
         if factory is None:
-            _SDPA_MASKED_KERNEL = False
+            _SDPA_MASKED_KERNEL[kind] = False
             return nullcontext()
-        _SDPA_MASKED_KERNEL = factory
+        _SDPA_MASKED_KERNEL[kind] = factory
         return factory()
     except Exception:
-        _SDPA_MASKED_KERNEL = False
+        _SDPA_MASKED_KERNEL[kind] = False
         return nullcontext()
+
+
+def _masked_backend_order(seq: int) -> tuple[str, ...]:
+    if int(seq) < MASKED_SDPA_SWITCH_SEQ:
+        return ("EFFICIENT_ATTENTION", "CUDNN_ATTENTION")
+    return ("CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
 
 
 def _sdpa(
@@ -133,22 +164,34 @@ def _sdpa(
 
     Dense causal (YOCO cross, or window when ``n_win`` covers seq): Flash / cuDNN
     / mem-efficient, with ``enable_gqa`` so 2 KV heads are not repeated.
-    Masked CSA/HCA ``attn_mask``: cuDNN / mem-efficient in bf16 (equal heads;
-    callers already repeat KV). Flash does not take a mask. fp32 math is the
-    CPU / last fallback. Softmax accumulation stays fp32 inside the kernel.
+    Masked CSA/HCA ``attn_mask``: isolate Efficient (seq<320) or cuDNN (longer)
+    in bf16. Flash rejects a mask. fp32 math is the CPU / last fallback.
+    Softmax accumulation stays fp32 inside the kernel.
     """
-    gqa = k.size(-3) != q.size(-3)
-
     def _call(qq, kk, vv, **extra):
-        if gqa:
-            try:
-                return F.scaled_dot_product_attention(
-                    qq, kk, vv, enable_gqa=True, **extra
-                )
-            except TypeError:
-                n_rep = qq.size(-3) // kk.size(-3)
-                kk = _repeat_kv(kk, n_rep)
-                vv = _repeat_kv(vv, n_rep)
+        global _SDPA_GQA_MASK_OK
+        gqa_now = qq.size(-3) != kk.size(-3)
+        if gqa_now:
+            want_gqa = True
+            if extra.get("attn_mask") is not None and _SDPA_GQA_MASK_OK is False:
+                want_gqa = False
+            if want_gqa:
+                try:
+                    out = F.scaled_dot_product_attention(
+                        qq, kk, vv, enable_gqa=True, **extra
+                    )
+                    if extra.get("attn_mask") is not None:
+                        _SDPA_GQA_MASK_OK = True
+                    return out
+                except TypeError:
+                    pass
+                except RuntimeError:
+                    if extra.get("attn_mask") is None:
+                        raise
+                    _SDPA_GQA_MASK_OK = False
+            n_rep = qq.size(-3) // kk.size(-3)
+            kk = _repeat_kv(kk, n_rep)
+            vv = _repeat_kv(vv, n_rep)
         return F.scaled_dot_product_attention(qq, kk, vv, **extra)
 
     cuda_low = q.is_cuda and q.dtype in (torch.bfloat16, torch.float16)
@@ -159,13 +202,31 @@ def _sdpa(
         return out
     if bias is not None and cuda_low:
         mask = bias if bias.dtype == q.dtype else bias.to(dtype=q.dtype)
+        seq = int(q.size(-2))
         try:
-            with _cuda_masked_sdpa_kernel():
+            with _cuda_masked_sdpa_kernel(seq):
                 out = _call(q, k, v, attn_mask=mask)
             _note_sdpa("masked_bf16", q.dtype)
             return out
         except RuntimeError:
             pass
+        try:
+            from torch.nn.attention import SDPBackend, sdpa_kernel
+        except ImportError:
+            SDPBackend = None  # type: ignore[assignment]
+            sdpa_kernel = None  # type: ignore[assignment]
+        if SDPBackend is not None and sdpa_kernel is not None:
+            for name in _masked_backend_order(seq):
+                backend = getattr(SDPBackend, name, None)
+                if backend is None:
+                    continue
+                try:
+                    with sdpa_kernel([backend]):
+                        out = _call(q, k, v, attn_mask=mask)
+                    _note_sdpa("masked_bf16", q.dtype)
+                    return out
+                except RuntimeError:
+                    continue
     qf, kf, vf = q.float(), k.float(), v.float()
     if bias is None:
         out = _call(qf, kf, vf, is_causal=causal)
@@ -230,7 +291,17 @@ def _window_causal_bias(
 
     If ``doc_ids`` is ``[B, S]``, tokens from different packed documents cannot attend
     (document mask). Returned shape is ``[S, S]`` or ``[B, 1, S, S]``.
+
+    DummyStream / single-doc rows rebuild the same ``S×S`` every layer. Cache
+    that static tensor so masked SDPA is not preceded by a fresh mask GEMM.
     """
+    global _WINDOW_BIAS_BYTES
+    if doc_ids is None:
+        dev = torch.device(device)
+        key = (int(q_len), int(k_len), int(window), dev.type, dev.index, str(dtype))
+        hit = _WINDOW_BIAS_CACHE.get(key)
+        if hit is not None:
+            return hit
     q = torch.arange(q_len, device=device)
     k = torch.arange(k_len, device=device)
     causal = k[None, :] <= q[:, None]
@@ -239,6 +310,11 @@ def _window_causal_bias(
     bias = torch.zeros(q_len, k_len, device=device, dtype=dtype)
     bias = bias.masked_fill(~keep, torch.finfo(dtype).min)
     if doc_ids is None:
+        nbytes = int(bias.numel() * bias.element_size())
+        if _WINDOW_BIAS_BYTES + nbytes > _WINDOW_BIAS_BUDGET:
+            reset_window_bias_cache()
+        _WINDOW_BIAS_CACHE[key] = bias
+        _WINDOW_BIAS_BYTES += nbytes
         return bias
     same = doc_ids[:, :, None] == doc_ids[:, None, :]
     bias = bias.view(1, q_len, k_len).expand(doc_ids.size(0), -1, -1)
@@ -286,8 +362,6 @@ class WindowAttention(nn.Module):
         q, k = apply_rope(q, k, cos, sin)
         need_mask = extra_bias is not None or _needs_explicit_mask(s, self.n_win, doc_ids)
         if need_mask:
-            k = _repeat_kv(k, h // n_kv)
-            v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
             if extra_bias is not None:
                 bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
@@ -338,8 +412,6 @@ class CrossAttention(nn.Module):
         q, k = apply_rope(q, k, cos, sin)
         need_mask = extra_bias is not None or _needs_explicit_mask(s, s, doc_ids)
         if need_mask:
-            k = _repeat_kv(k, h // n_kv)
-            v = _repeat_kv(v, h // n_kv)
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
             if extra_bias is not None:
                 bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)

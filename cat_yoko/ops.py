@@ -1,9 +1,10 @@
 """Ampere BF16 operator snapshot for the dedicated mini-verify.
 
 Dense causal (YOCO cross, or window when ``n_win`` covers seq): Flash → cuDNN
-→ mem-efficient. Masked CSA/HCA ``attn_mask`` (equal heads): cuDNN →
-mem-efficient in bf16, then fp32 math. Flash rejects ``attn_mask``. Not a
+→ mem-efficient. Masked CSA/HCA ``attn_mask``: isolate Efficient (seq<320) or
+cuDNN (longer) in bf16, then fp32 math. Flash rejects ``attn_mask``. Not a
 CSA CUDA kernel. Softmax accumulation stays fp32 inside the fused kernel.
+Ampere MoE is padded bmm; ``grouped_mm`` is SM90+.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ PHASE_OPS: dict[str, tuple[str, ...]] = {
     "A": ("dense_cross", "masked_window", "fused_qkv", "tf32"),
     "B0": ("dense_cross", "masked_window", "fused_qkv", "tf32"),
     "B1": ("dense_cross", "masked_window", "fused_qkv", "tf32"),
-    "B2": ("dense_cross", "masked_window", "fused_qkv", "tf32", "grouped_mm"),
+    "B2": ("dense_cross", "masked_window", "fused_qkv", "tf32", "moe_bmm"),
     "C-index": ("indexer_fp32", "masked_window", "fused_qkv"),
     "C-topk": ("masked_csa_union", "fused_qkv", "tf32"),
     "C-hca": ("masked_hca_concat", "masked_csa_union", "fused_qkv", "tf32"),
@@ -78,8 +79,10 @@ def probe_sdpa_backends(
             "seq": int(seq),
         }
     configure_cuda()
+    from cat_yoko.attention import _masked_backend_order
+
     dense_names = ("FLASH_ATTENTION", "CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
-    masked_names = ("CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
+    masked_names = _masked_backend_order(seq)
     q_g = torch.randn(1, n_heads, seq, head_dim, device=device, dtype=dtype)
     k_g = torch.randn(1, n_kv, seq, head_dim, device=device, dtype=dtype)
     v_g = torch.randn(1, n_kv, seq, head_dim, device=device, dtype=dtype)

@@ -717,11 +717,25 @@ def _ops_source_claims() -> list[Claim]:
             "Ampere CSA/HCA stay bf16 when the fused kernel runs",
         ),
         _claim(
+            "ops.masked_isolates_one_backend",
+            "attention",
+            "MASKED_SDPA_SWITCH_SEQ" in inspect.getsource(attn) and "_masked_backend_order" in sdpa,
+            "seq<320 Efficient; else cuDNN",
+            "Ampere dispatcher picks the slower kernel if both are enabled",
+        ),
+        _claim(
             "ops.dense_kernel_list_not_tuple",
             "attention",
             "tuple(" not in dense,
             "sdpa_kernel(list)",
             "PyTorch sdpa_kernel wants a list",
+        ),
+        _claim(
+            "ops.grouped_mm_sm90_gate",
+            "attention",
+            "major >= 9" in inspect.getsource(grouped_mm_available),
+            "SM90+",
+            "Ampere skips grouped_mm RuntimeError tax and uses padded bmm",
         ),
     ]
 
@@ -741,7 +755,7 @@ def _ops_graph_claims(cfg: CATYokoConfig) -> list[Claim]:
             "attention",
             True,
             grouped_mm_available(),
-            "prefer grouped_mm when the build exposes it",
+            "SM90+ grouped_mm; Ampere records False and uses moe_bmm",
         ),
     ]
     if cfg.name == "bf16-probe":

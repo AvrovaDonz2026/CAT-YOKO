@@ -169,10 +169,29 @@ def fused_cat_linear(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
             w = torch.cat([lin.quantized_weight() for lin in linears], dim=0)
             return F.linear(x_q, w, None)
     if all(isinstance(lin, nn.Linear) for lin in linears):
-        w = torch.cat([lin.weight for lin in linears], dim=0)
-        return F.linear(x, w, None)
+        return _fused_native_cat(linears, x)
     parts = [lin(x) for lin in linears]
     return torch.cat(parts, dim=-1)
+
+
+def _fused_native_cat(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor:
+    """One GEMM. Frozen weights are concatenated once; trainable still cat each call."""
+    frozen = all(not bool(lin.weight.requires_grad) for lin in linears)
+    if frozen:
+        owner = linears[0]
+        sig = tuple((id(lin.weight), int(lin.weight._version)) for lin in linears)
+        hit = getattr(owner, "_bf16_fused_cat", None)
+        if isinstance(hit, tuple) and len(hit) == 2 and hit[0] == sig:
+            w = hit[1]
+        else:
+            w = torch.cat([lin.weight for lin in linears], dim=0).contiguous()
+            try:
+                owner._bf16_fused_cat = (sig, w)
+            except Exception:
+                pass
+        return F.linear(x, w, None)
+    w = torch.cat([lin.weight for lin in linears], dim=0)
+    return F.linear(x, w, None)
 
 
 def _fused_frozen_te_cat(linears: list[nn.Linear], x: torch.Tensor) -> torch.Tensor | None:

@@ -17,6 +17,8 @@ from torch import nn
 
 from cat_yoko.config import CATYokoConfig
 
+_GROUPED_MM_OK: bool | None = None
+
 
 def module_has_trainable(mod: nn.Module | None) -> bool:
     """Cached ``any(p.requires_grad)``. Freeze/wrap run before the train loop."""
@@ -41,8 +43,34 @@ def _repeat_by_counts(values: torch.Tensor, counts: torch.Tensor, output_size: i
 
 
 def grouped_mm_available() -> bool:
-    """True when this PyTorch build exposes grouped GEMM (``F.grouped_mm`` / ``_grouped_mm``)."""
-    return callable(getattr(F, "grouped_mm", None)) or callable(getattr(torch, "_grouped_mm", None))
+    """True when jagged grouped GEMM can actually run on this device.
+
+    ``torch._grouped_mm`` exists in PyTorch 2.8+ builds but only executes on
+    SM90+ (Hopper / Blackwell). Ampere / Ada raise at runtime; calling it
+    inside try/except every MoE layer is a 2–3× dispatch tax versus padded bmm.
+    """
+    global _GROUPED_MM_OK
+    if _GROUPED_MM_OK is not None:
+        return _GROUPED_MM_OK
+    has = callable(getattr(F, "grouped_mm", None)) or callable(getattr(torch, "_grouped_mm", None))
+    if not has:
+        _GROUPED_MM_OK = False
+        return False
+    if not torch.cuda.is_available():
+        _GROUPED_MM_OK = False
+        return False
+    try:
+        major = int(torch.cuda.get_device_capability()[0])
+    except Exception:
+        _GROUPED_MM_OK = False
+        return False
+    _GROUPED_MM_OK = major >= 9
+    return _GROUPED_MM_OK
+
+
+def reset_grouped_mm_cache() -> None:
+    global _GROUPED_MM_OK
+    _GROUPED_MM_OK = None
 
 
 def _raw_grouped_mm(mat_a: torch.Tensor, mat_b: torch.Tensor, offs: torch.Tensor) -> torch.Tensor:
@@ -157,6 +185,10 @@ def _swiglu_expert_weights(
         isinstance(e.up_proj, Nvfp4Linear) and isinstance(e.down_proj, Nvfp4Linear) for e in experts
     )
     trainable = any(e.gate_proj.weight.requires_grad for e in experts)
+    if owner is not None and trainable:
+        if getattr(owner, "_swiglu_w", None) is not None:
+            owner._swiglu_w = None
+            owner._swiglu_gu = None
     if owner is not None and not trainable:
         hit = getattr(owner, "_swiglu_w", None)
         if hit is not None:
@@ -167,6 +199,7 @@ def _swiglu_expert_weights(
     pack = (gate_w, up_w, down_w, nv)
     if owner is not None and not trainable:
         owner._swiglu_w = pack
+        owner._swiglu_gu = torch.cat((gate_w, up_w), dim=1)
     return pack
 
 
@@ -240,18 +273,21 @@ def _swiglu_experts_batched(
     x_pad[expert_sorted, local] = x_sorted
 
     gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
+    gu_cached = getattr(owner, "_swiglu_gu", None) if owner is not None else None
     if nv:
         ctx = torch.autocast(device_type="cuda", enabled=False) if x_sorted.is_cuda else nullcontext()
         with ctx:
             x_q = quantize_nvfp4(x_pad) + x_pad - x_pad.detach()
-            gu_w = torch.cat((gate_w, up_w), dim=1)
+            gu_w = torch.cat((gate_w, up_w), dim=1) if gu_cached is None else gu_cached
             gu = torch.bmm(x_q, gu_w.transpose(1, 2))
             g, u = gu.chunk(2, dim=-1)
             hidden = F.silu(g) * u
             h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
             y_pad = torch.bmm(h_q, down_w.transpose(1, 2))
     else:
-        gu_w = torch.cat((gate_w, up_w), dim=1).to(dtype=x_pad.dtype)
+        gu_w = (gu_cached if gu_cached is not None else torch.cat((gate_w, up_w), dim=1)).to(
+            dtype=x_pad.dtype
+        )
         down_w = down_w.to(dtype=x_pad.dtype)
         gu = torch.bmm(x_pad, gu_w.transpose(1, 2))
         g, u = gu.chunk(2, dim=-1)
@@ -273,7 +309,8 @@ def _swiglu_experts_grouped(
         return x_sorted
     offs = torch.cumsum(counts, dim=0).to(dtype=torch.int32)
     gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
-    gu_w = torch.cat((gate_w, up_w), dim=1)
+    gu_cached = getattr(owner, "_swiglu_gu", None) if owner is not None else None
+    gu_w = gu_cached if gu_cached is not None else torch.cat((gate_w, up_w), dim=1)
     if nv:
         ctx = torch.autocast(device_type="cuda", enabled=False) if x_sorted.is_cuda else nullcontext()
         with ctx:

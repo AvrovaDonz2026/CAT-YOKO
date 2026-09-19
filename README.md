@@ -61,6 +61,7 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — 参数 / FLOPs / KV / μP 账本
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — 因果、残差切、M1/M2/M3
 - [`docs/PLAN_VERIFY.md`](docs/PLAN_VERIFY.md) — 单独目录最小化训练，证明注意力 / YOCO / PDSA 进图与 C1 计划
+- [`docs/AMPERE_OPS_MFU.md`](docs/AMPERE_OPS_MFU.md) — RTX 3090 上各算子理论 MFU 与调算子
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — 冻课程 C1
 - [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — C1+NVFP4 墙钟（571 H100-h）
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 回退（729 H100-h）

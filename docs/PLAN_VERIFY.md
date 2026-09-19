@@ -10,7 +10,7 @@
 | 阶段 | 探针做什么 | Ampere BF16 算子 |
 | --- | --- | --- |
 | **A** | 0 token。dummy MiniCPM5 上采样、两栈 MoE、gate=0、注意力仍是滑窗（先实现后点亮）。不拉 Hub 权重。 | YOCO cross：dense Flash/cuDNN GQA；encoder 窗：masked cuDNN/efficient bf16；fused QKV；TF32 |
-| **B0/B1/B2** | C1 冻结：新模块 → 冻 Encoder 训 decoder → 短联合 | 同上；B2 起 grouped_mm（有则用） |
+| **B0/B1/B2** | C1 冻结：新模块 → 冻 Encoder 训 decoder → 短联合 | 同上；B2 起 MoE padded bmm（`grouped_mm` 仅 SM90+） |
 | **C** | indexer → topk → hca → win | indexer 分数 fp32 GEMM；CSA union / HCA concat 走 masked bf16，不升 fp32 |
 | **D-8k** | DummyStream 中段针；sparse 保持 hca（探针 seq 仍是图宽，不拉到发布 8K） | 同 C-hca |
 | **E** | WSD decay | 同 C-hca |
@@ -43,5 +43,7 @@ bash scripts/run_plan_verify.sh
 ```
 
 入口：`python3 -m cat_yoko.plan_verify` 或 `cat-yoko-plan-verify`。写出 `--out/ledger.json`（含每阶段 `ops`）。
+
+各算子相对 3090 dense BF16 峰值的 **理论 MFU** 与调算子记录：[`docs/AMPERE_OPS_MFU.md`](AMPERE_OPS_MFU.md)，`python3 -m cat_yoko.ampere_mfu` / `bash scripts/run_ampere_mfu.sh`。
 
 探针把窗故意做得比序列短，压缩支路才会露出来；发布 12B 仍是 `n_win=8192`、`m'=128`。默认 `use_kda=False`，不改已发布 B0 overlay 的 132 张量。
