@@ -23,7 +23,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
 | C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel |
-| 计划探针 | **A→E GPU 已过**（RTX 3090，128/128 claims，0 fail，2 deferred）。单独目录 DummyStream：`cat_yoko.plan_verify` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。日志 [`artifacts/autodl-rtx3090/plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md)。不到 F/G。不拉 50B、不 `--save-full` |
+| 计划探针 | **plan-probe A→E 已过**（旧 3090 实例，128 claims）。现改 **bf16-probe**（hd=32 / seq=128 / n_win=32）在新 3090 上用 **BF16** 跑 A→E 并记算子。目录 `/root/autodl-tmp/bf16-verify/`，不要和旧 `plan-verify` 混。DummyStream：`cat_yoko.plan_verify --graph bf16` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。不到 F/G。不拉 50B。不写完整图 checkpoint |
 
 ## 机器沿革
 
@@ -32,7 +32,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | RTX 4080 SUPER | 图 / `--try` 烟测 | 已释放；日志 [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
 | RTX 6000D sm_120 | 发布档 B0 开跑（NVFP4 **仿真**） | step **16020**，`tokens_in_phase=65,488,896`；日志 [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
 | Vast B200 SM 10.0 | 发布档 B0 续训（硬件 NVFP4 FPROP） | step **26940**；日志 [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
-| RTX 3090 sm_86 | plan-probe **A→E** 最小化训练 | 128 claims ok；日志 [`artifacts/autodl-rtx3090/plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md) |
+| RTX 3090 sm_86 | 旧实例：plan-probe A→E。现实例：BF16 `bf16-probe` A→E + 算子账本 | 旧日志 [`artifacts/autodl-rtx3090/plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md)；新跑 [`artifacts/autodl-rtx3090/bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md) |
 
 同阶段 resume：`tokens_in_phase` 按 8192/step 接着加。step **22100** 时是 90,392,576。
 

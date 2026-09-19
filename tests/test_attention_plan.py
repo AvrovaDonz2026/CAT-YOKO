@@ -56,10 +56,15 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertIn("FLASH_ATTENTION", kernel_src)
         self.assertIn("sdpa_kernel", kernel_src)
         self.assertNotIn("tuple(", kernel_src)
-        # CPU / mask fallback still upcasts; CUDA bf16 keeps QKV and uses
-        # flash/cuDNN (fp32 softmax accum inside the kernel).
+        masked_src = inspect.getsource(attn_mod._cuda_masked_sdpa_kernel)
+        self.assertIn("CUDNN_ATTENTION", masked_src)
+        self.assertIn("EFFICIENT_ATTENTION", masked_src)
+        self.assertNotIn("FLASH_ATTENTION", masked_src)
+        # CPU / last-resort mask fallback still upcasts; CUDA dense keeps QKV
+        # and uses flash/cuDNN. CUDA masks try bf16 cuDNN/efficient first.
         self.assertIn(".float()", src)
         self.assertIn("to(q.dtype)", src)
+        self.assertIn("_cuda_masked_sdpa_kernel", src)
 
         seen: list[torch.dtype] = []
         orig = attn_mod.F.scaled_dot_product_attention
@@ -96,6 +101,31 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertTrue(seen)
         self.assertIsInstance(seen[0], list)
         self.assertGreater(len(seen[0]), 0)
+
+    def test_cuda_masked_sdpa_kernel_skips_flash(self) -> None:
+        from contextlib import nullcontext
+
+        try:
+            from torch.nn.attention import SDPBackend  # noqa: F401
+        except ImportError:
+            self.skipTest("sdpa_kernel missing")
+        seen: list = []
+
+        def _fake(backends, *args, **kwargs):
+            seen.append(backends)
+            return nullcontext()
+
+        attn_mod._SDPA_MASKED_KERNEL = None
+        with patch("torch.nn.attention.sdpa_kernel", _fake):
+            with attn_mod._cuda_masked_sdpa_kernel():
+                pass
+        attn_mod._SDPA_MASKED_KERNEL = None
+        self.assertTrue(seen)
+        self.assertIsInstance(seen[0], list)
+        names = [getattr(b, "name", str(b)) for b in seen[0]]
+        blob = " ".join(names).upper()
+        self.assertNotIn("FLASH", blob)
+        self.assertTrue("CUDNN" in blob or "EFFICIENT" in blob)
 
     def test_sdpa_gqa_does_not_require_repeated_kv(self) -> None:
         torch.manual_seed(0)

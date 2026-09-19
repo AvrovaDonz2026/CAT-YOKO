@@ -23,12 +23,14 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 import torch
 from torch import nn
 
-from cat_yoko.attention import CrossAttention, WindowAttention
+from cat_yoko.attention import CrossAttention, WindowAttention, reset_sdpa_counts
 from cat_yoko.blocks import DecoderBlock
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, encoder_layer_kind
 from cat_yoko.data import DummyStream
 from cat_yoko.freeze import gate_schedule, set_gate, trainable_names
 from cat_yoko.indexer import LightningIndexer, indexer_compressed_keep
+from cat_yoko.moe import grouped_mm_available
+from cat_yoko.ops import fused_qkv_smoke, probe_sdpa_backends, snapshot_ops
 from cat_yoko.optim import unwrap, wsd_lr
 from cat_yoko.phases import C_CHAIN, C_CHAIN_KDA, PHASES
 from cat_yoko.sparse import (
@@ -37,7 +39,7 @@ from cat_yoko.sparse import (
     hca_slot_keep,
     window_keep_matrix,
 )
-from cat_yoko.trainer import Trainer, build_model
+from cat_yoko.trainer import Trainer, build_model, configure_cuda
 
 # Published pretrain envelope: A (0-token surgery) through E (WSD). F/G are post-train.
 PHASES_RUN = (
@@ -52,6 +54,18 @@ PHASES_RUN = (
     "D-8k",
     "E",
 )
+
+GRAPHS = ("plan", "bf16")
+
+
+def graph_config(name: str) -> CATYokoConfig:
+    """``plan`` is the CPU/CI tiny graph; ``bf16`` is the Ampere Flash-shaped probe."""
+    key = str(name).strip().lower().replace("_", "-")
+    if key in {"plan", "plan-probe"}:
+        return CATYokoConfig.plan_probe()
+    if key in {"bf16", "bf16-probe"}:
+        return CATYokoConfig.bf16_probe()
+    raise ValueError(f"unknown graph {name!r}; expected plan|bf16")
 
 
 @dataclass
@@ -131,7 +145,7 @@ def _theorem_b_masks(cfg: CATYokoConfig) -> list[Claim]:
     union = win | comp
     future = torch.triu(torch.ones(s, s, dtype=torch.bool), diagonal=1)
     no_future = not bool((union & future).any().item())
-    t, p = min(s - 1, 20), 0
+    t, p = s - 1, 0
     beyond = (not bool(win[t, p].item())) and bool(comp[t, p].item()) and bool(union[t, p].item())
     hidden = torch.randn(1, s, cfg.hidden_size)
     indexer = LightningIndexer(cfg)
@@ -674,15 +688,130 @@ def _run_phase_a(model: nn.Module, cfg: CATYokoConfig, device: str) -> tuple[lis
     return claims, nll
 
 
-def static_ledger() -> list[Claim]:
+def _ops_source_claims() -> list[Claim]:
+    import cat_yoko.attention as attn
+
+    dense = inspect.getsource(attn._cuda_sdpa_kernel)
+    masked = inspect.getsource(attn._cuda_masked_sdpa_kernel)
+    sdpa = inspect.getsource(attn._sdpa)
+    return [
+        _claim(
+            "ops.dense_sdpa_prefers_flash",
+            "attention",
+            "FLASH_ATTENTION" in dense and "CUDNN_ATTENTION" in dense,
+            "Flash → cuDNN → efficient",
+            "dense causal fused kernels",
+        ),
+        _claim(
+            "ops.masked_sdpa_skips_flash",
+            "attention",
+            "FLASH_ATTENTION" not in masked and "CUDNN_ATTENTION" in masked and "EFFICIENT_ATTENTION" in masked,
+            "cuDNN + efficient, no Flash",
+            "Flash rejects attn_mask",
+        ),
+        _claim(
+            "ops.masked_tries_bf16_before_fp32",
+            "attention",
+            "masked_bf16" in sdpa and ".float()" in sdpa,
+            "bf16 mask then fp32 math",
+            "Ampere CSA/HCA stay bf16 when the fused kernel runs",
+        ),
+        _claim(
+            "ops.dense_kernel_list_not_tuple",
+            "attention",
+            "tuple(" not in dense,
+            "sdpa_kernel(list)",
+            "PyTorch sdpa_kernel wants a list",
+        ),
+    ]
+
+
+def _ops_graph_claims(cfg: CATYokoConfig) -> list[Claim]:
+    claims = [
+        _claim(
+            "ops.compute_is_bf16",
+            "plan",
+            (not cfg.use_nvfp4) and (not cfg.use_fp8),
+            f"nvfp4={cfg.use_nvfp4} fp8={cfg.use_fp8}",
+            "mini-verify is BF16; NVFP4/FP8 stay off",
+        ),
+        _claim("ops.kda_off", "plan", not cfg.use_kda, cfg.use_kda, False),
+        _claim(
+            "ops.grouped_mm_recorded",
+            "attention",
+            True,
+            grouped_mm_available(),
+            "prefer grouped_mm when the build exposes it",
+        ),
+    ]
+    if cfg.name == "bf16-probe":
+        claims += [
+            _claim(
+                "ops.flash_shaped",
+                "attention",
+                cfg.head_dim >= 32 and cfg.seq_len >= 64,
+                f"hd={cfg.head_dim} seq={cfg.seq_len}",
+                "hd>=32 seq>=64 so Ampere fused SDPA is in-distribution",
+            ),
+            _claim(
+                "ops.theorem_b_hole_kept",
+                "pdsa",
+                cfg.n_win < cfg.seq_len and cfg.n_win >= cfg.compress_m,
+                f"n_win={cfg.n_win} seq={cfg.seq_len} m={cfg.compress_m}",
+                "grow the graph without swallowing compression",
+            ),
+        ]
+    return claims
+
+
+def _ops_cuda_claims(cfg: CATYokoConfig, device: str, probe: dict) -> list[Claim]:
+    dense = str(probe.get("dense_gqa", ""))
+    masked = str(probe.get("masked_equal", ""))
+    hca = str(probe.get("hca_concat", ""))
+    fused = fused_qkv_smoke(device, torch.bfloat16, hidden=cfg.hidden_size, kv=cfg.kv_dim)
+    tf32 = bool(torch.backends.cuda.matmul.allow_tf32)
+    try:
+        prec = torch.get_float32_matmul_precision()
+    except Exception:
+        prec = ""
+    return [
+        _claim(
+            "ops.dense_gqa_fused",
+            "attention",
+            dense in {"flash", "cudnn", "efficient"},
+            dense,
+            "YOCO cross / covering window: Flash or cuDNN GQA",
+        ),
+        _claim(
+            "ops.masked_equal_bf16",
+            "attention",
+            masked in {"cudnn", "efficient"},
+            masked,
+            "CSA/window mask: cuDNN or mem-efficient bf16",
+        ),
+        _claim(
+            "ops.hca_concat_bf16",
+            "attention",
+            hca in {"cudnn", "efficient"},
+            hca,
+            "HCA concat mask stays fused bf16",
+        ),
+        _claim("ops.fused_qkv_smoke", "attention", fused, fused, "one GEMM for QKV"),
+        _claim("ops.tf32", "attention", tf32, f"tf32={tf32} prec={prec}", "TF32 tensor cores"),
+    ]
+
+
+def static_ledger(graph: str = "plan") -> list[Claim]:
     """Architecture + mask + plan claims; no Trainer loop."""
-    cfg = CATYokoConfig.plan_probe()
+    cfg = graph_config(graph)
     ledger: list[Claim] = []
     ledger.extend(_arch_claims())
     ledger.append(_source_has_no_csa_kernel())
     ledger.extend(_theorem_b_masks(cfg))
     ledger.extend(_live_attention_claims(cfg))
     ledger.extend(_static_plan_claims(cfg))
+    ledger.extend(_ops_source_claims())
+    ledger.extend(_ops_graph_claims(cfg))
     return ledger
 
 
@@ -691,26 +820,46 @@ def run(
     device: str,
     out: Path,
     steps: int = 2,
+    graph: str = "plan",
 ) -> dict:
-    cfg = CATYokoConfig.plan_probe()
+    cfg = graph_config(graph)
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    ledger: list[Claim] = static_ledger()
+    ledger: list[Claim] = static_ledger(graph)
+    cuda = str(device).startswith("cuda")
+    if cuda:
+        configure_cuda()
+    probe = None
+    if cuda and torch.cuda.is_available():
+        probe = probe_sdpa_backends(
+            device,
+            torch.bfloat16,
+            seq=cfg.seq_len,
+            n_heads=cfg.num_heads,
+            n_kv=cfg.num_kv_heads,
+            head_dim=cfg.head_dim,
+        )
+        ledger.extend(_ops_cuda_claims(cfg, device, probe))
 
-    dtype = "bf16" if str(device).startswith("cuda") else "fp32"
+    dtype = "bf16" if cuda else "fp32"
     model = build_model(cfg, device, dtype=dtype)
     t0 = time.perf_counter()
     phases = {}
+    ops_phases: dict[str, dict] = {}
     for phase in PHASES_RUN:
+        reset_sdpa_counts()
         if phase == "A":
             extra, nll = _run_phase_a(model, cfg, device)
             ledger.extend(extra)
+            ops_phases[phase] = snapshot_ops(cfg, device, phase=phase)
             phases[phase] = {
                 "nll": float(nll),
                 "step": 0,
                 "ok": _finite_pos(float(nll)),
                 "peak_mib": 0.0,
                 "tokens": 0,
+                "sdpa": ops_phases[phase].get("sdpa"),
+                "sdpa_counts": ops_phases[phase].get("sdpa_counts"),
             }
             continue
         tr = Trainer(
@@ -732,11 +881,14 @@ def run(
         )
         row = tr.run()
         finite = _finite_pos(float(row.nll))
+        ops_phases[phase] = snapshot_ops(cfg, device, phase=phase)
         phases[phase] = {
             "nll": float(row.nll),
             "step": int(row.step),
             "ok": finite,
             "peak_mib": float(row.peak_mib),
+            "sdpa": ops_phases[phase].get("sdpa"),
+            "sdpa_counts": ops_phases[phase].get("sdpa_counts"),
         }
         ledger.extend(_probe_phase(model, cfg, phase, float(row.nll), device))
     elapsed = time.perf_counter() - t0
@@ -749,10 +901,17 @@ def run(
         "n_deferred": len(deferred),
         "elapsed_s": round(elapsed, 3),
         "device": device,
+        "graph": graph,
+        "name": cfg.name,
+        "dtype": dtype,
+        "head_dim": cfg.head_dim,
         "seq_len": cfg.seq_len,
         "n_win": cfg.n_win,
         "encoder_layers": cfg.encoder_layers,
         "use_kda": cfg.use_kda,
+        "use_nvfp4": cfg.use_nvfp4,
+        "use_fp8": cfg.use_fp8,
+        "ops": {"probe": probe, "phases": ops_phases},
         "phases": phases,
         "failed": [asdict(c) for c in failed],
         "deferred": [asdict(c) for c in deferred],
@@ -768,37 +927,51 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--device", default="cuda")
     p.add_argument("--steps", type=int, default=2)
+    p.add_argument("--graph", choices=GRAPHS, default="plan")
     p.add_argument("--json", action="store_true")
     p.add_argument("--static-only", action="store_true", help="masks + live attn, no Trainer loop")
     args = p.parse_args(argv)
     if args.static_only:
-        ledger = static_ledger()
+        ledger = static_ledger(args.graph)
         failed = [c for c in ledger if not c.ok]
         blob = {
             "ok": not failed,
             "n_claims": len(ledger),
             "n_fail": len(failed),
             "n_deferred": sum(1 for c in ledger if c.deferred),
+            "graph": args.graph,
             "failed": [asdict(c) for c in failed],
             "deferred": [asdict(c) for c in ledger if c.deferred],
             "claims": [asdict(c) for c in ledger],
         }
         print(json.dumps({k: blob[k] for k in blob if k != "claims"}, indent=2) if args.json else
-              f"plan-verify static ok={blob['ok']} claims={blob['n_claims']} fail={blob['n_fail']}")
+              f"plan-verify static graph={blob['graph']} ok={blob['ok']} claims={blob['n_claims']} fail={blob['n_fail']}")
         for c in blob["failed"]:
             print(f"FAIL {c['name']}: {c['observed']} (want {c['expected']})", flush=True)
         return 0 if blob["ok"] else 1
-    blob = run(device=args.device, out=args.out, steps=max(int(args.steps), 1))
+    blob = run(device=args.device, out=args.out, steps=max(int(args.steps), 1), graph=args.graph)
     if args.json:
-        print(json.dumps({k: blob[k] for k in blob if k != "claims"}, indent=2))
+        print(json.dumps({k: blob[k] for k in blob if k != "claims" and k != "ops"}, indent=2))
     else:
         print(
-            f"plan-verify ok={blob['ok']} claims={blob['n_claims']} fail={blob['n_fail']} "
+            f"plan-verify graph={blob['graph']} dtype={blob['dtype']} ok={blob['ok']} "
+            f"claims={blob['n_claims']} fail={blob['n_fail']} "
             f"deferred={blob['n_deferred']} {blob['elapsed_s']}s",
             flush=True,
         )
+        probe = (blob.get("ops") or {}).get("probe") or {}
+        if probe:
+            print(
+                f"  ops dense_gqa={probe.get('dense_gqa')} masked={probe.get('masked_equal')} "
+                f"hca={probe.get('hca_concat')}",
+                flush=True,
+            )
         for phase, st in blob["phases"].items():
-            print(f"  {phase} nll={st['nll']:.4f} ok={st['ok']}", flush=True)
+            extra = ""
+            sdpa = st.get("sdpa") or {}
+            if sdpa:
+                extra = f" sdpa={sdpa.get('kind')}"
+            print(f"  {phase} nll={st['nll']:.4f} ok={st['ok']}{extra}", flush=True)
         for c in blob["failed"]:
             print(f"FAIL {c['name']}: {c['observed']} (want {c['expected']})", flush=True)
         for c in blob["deferred"]:

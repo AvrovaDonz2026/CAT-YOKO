@@ -169,6 +169,36 @@ class CATYokoConfig:
             global_batch_tokens=64,
         )
 
+    @classmethod
+    def bf16_probe(cls) -> CATYokoConfig:
+        """Ampere BF16 mini-verify: Flash-shaped heads, still a Theorem-B hole.
+
+        ``plan_probe`` (hd=16, seq=32) is too small for Flash / mem-efficient
+        SDPA. This graph keeps 3 encoder (sliding/CSA/HCA) + 2 decoder, grows
+        ``head_dim>=32`` and ``seq>=128``, and keeps ``n_win < seq`` so
+        compression is not swallowed by the window. FP8/NVFP4/KDA stay off.
+        """
+        return replace(
+            cls.plan_probe(),
+            name="bf16-probe",
+            hidden_size=128,
+            num_heads=4,
+            num_kv_heads=2,
+            dense_intermediate_size=256,
+            moe_intermediate_size=64,
+            seq_len=128,
+            n_win=32,
+            compress_m=8,
+            compress_m_hca=8,
+            index_topk=4,
+            indexer_dim=32,
+            dim_model_base=128,
+            global_batch_tokens=256,
+            use_nvfp4=False,
+            use_fp8=False,
+            use_kda=False,
+        )
+
 
 def encoder_layer_kind(
     index: int,

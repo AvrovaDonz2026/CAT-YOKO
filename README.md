@@ -75,7 +75,8 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) — B200 释放前日志
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — 6000D 日志（已释放）
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — 4080 SUPER 烟测（已释放）
-- [`artifacts/autodl-rtx3090/plan-verify/`](artifacts/autodl-rtx3090/plan-verify/README.md) — 3090 上 Phase A→E 计划探针
+- [`artifacts/autodl-rtx3090/plan-verify/`](artifacts/autodl-rtx3090/plan-verify/README.md) — 3090 上旧 plan-probe A→E
+- [`artifacts/autodl-rtx3090/bf16-verify/`](artifacts/autodl-rtx3090/bf16-verify/README.md) — 3090 上 BF16 Flash 形探针 A→E
 
 ## 本地测试
 
@@ -89,8 +90,8 @@ python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.
   tests.test_hw_recipe tests.test_kda
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
-python3 -m cat_yoko.plan_verify --out /tmp/plan-verify --device cpu --steps 1
-python3 -m unittest tests.test_plan_verify
+python3 -m cat_yoko.plan_verify --out /tmp/plan-verify --device cpu --steps 1 --graph plan
+python3 -m unittest tests.test_plan_verify tests.test_attention_plan
 ```
 
 有 CUDA：
