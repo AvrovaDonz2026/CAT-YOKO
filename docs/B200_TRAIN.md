@@ -11,6 +11,8 @@ sm_120（RTX PRO 6000D）继续走 `Nvfp4Linear` E2M1/16 仿真。那张卡没�
 | attn QKV/O、cross Q/O、cache KV、lm_head、shared SwiGLU | `TeNvfp4Linear`：wrap 时 `copy_` 一次进 `te.Linear`，`te.autocast(recipe=NVFP4BlockScaling())` | `Nvfp4Linear` 仿真 |
 | fused QKV / gate+up | 冻住：一次 fused `te.Linear`（copy-once 拼接 out 维）。可训练：顺序 native TE | 仿真 fused cat |
 | MoE routed experts | `te.GroupedLinear`；expert count 补到 16；冻住 gate+up 合成一次 GroupedLinear。禁止 stack TE master 进 bf16 `grouped_mm` | permute + `grouped_mm` 仿真 |
+| router / embed / RMSNorm / qk_norm / SDPA | 高精度，不变 | 同左 |
+| 注意力拓扑 | 因果 YOCO window + GQA 16/2/128；不实现 CSA | 同左 |
 
 leading dim 不是 16 的倍数时 **pad 零行再切回**，仍走 SM100 kernel，不掉回 STE。单次 TE 异常只记那一发 shape，**不会**把 SM100 整进程关掉。
 
