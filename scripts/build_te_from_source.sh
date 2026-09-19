@@ -55,6 +55,21 @@ fi
 export PATH="$(dirname "${NVCC_BIN:-$CUDA_HOME/bin/nvcc}"):$CUDA_HOME/bin:${PATH:-}"
 export CUDACXX="${NVCC_BIN:-$CUDA_HOME/bin/nvcc}"
 export CMAKE_CUDA_COMPILER="$CUDACXX"
+# 12.9 compiler prefix (and the pip nvidia wheels) must be on the loader
+# path or the post-install ``import transformer_engine.pytorch`` fails with
+# missing libcublas.so.12 even after the SM100 cubin linked.
+for _d in \
+  "$CUDA_HOME/lib64" \
+  /usr/local/cuda-12.9/lib64 \
+  /usr/local/cuda-12.8/lib64 \
+  /venv/main/lib/python3.12/site-packages/nvidia/cublas/lib \
+  /venv/main/lib/python3.12/site-packages/nvidia/cuda_runtime/lib \
+  /venv/main/lib/python3.12/site-packages/nvidia/cudnn/lib; do
+  if [ -d "$_d" ]; then
+    export LD_LIBRARY_PATH="$_d${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  fi
+done
+unset _d
 export TMPDIR="${TMPDIR:-/dev/shm}"
 export NVTE_FRAMEWORK="${NVTE_FRAMEWORK:-pytorch}"
 export NVTE_CUDA_ARCHS="${NVTE_CUDA_ARCHS:-100}"

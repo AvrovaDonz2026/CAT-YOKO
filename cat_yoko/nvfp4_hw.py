@@ -273,10 +273,10 @@ def prefer_te_linear() -> bool:
 
 
 def te_linear_ready() -> bool:
-    """Probe a B0-sized ``te.Linear`` (256×2048) with the family recipe. Cached.
+    """Probe a B0-seq ``te.Linear`` (4096×2048) with the family recipe. Cached.
 
-    16×128 can pass on a CUDA 12.8 SM100 core that then launch-fails on
-    NVFP4 quantize for real encoder GEMMs (stg.256 needs nvcc 12.9+).
+    16×128 and even 256×2048 can pass on a CUDA 12.8 SM100 core that then
+    launch-fails on real encoder GEMMs (stg.256 needs nvcc 12.9+).
     """
     global _PROBE_LINEAR
     if _PROBE_LINEAR is not None:
@@ -300,13 +300,13 @@ def te_linear_ready() -> bool:
         with torch.no_grad():
             layer.weight.copy_(src)
         layer.weight.requires_grad_(False)
-        # Toy 16×128 can succeed on a 12.8-built core that then dies on
-        # B0-sized NVFP4 quantize (stg.256 needs nvcc 12.9+). Probe a
-        # representative GEMM instead.
-        x = torch.randn(256, 2048, device=device, dtype=torch.bfloat16)
+        # Toy 16×128 / 256×2048 can succeed on a 12.8-built core that then
+        # dies on B0-seq NVFP4 quantize (stg.256 needs nvcc 12.9+). Probe
+        # the published encoder token count instead.
+        x = torch.randn(4096, 2048, device=device, dtype=torch.bfloat16)
         with te.autocast(enabled=True, recipe=recipe):
             y = layer(x)
-        ok = tuple(y.shape) == (256, 2048) and bool(torch.isfinite(y.float()).all())
+        ok = tuple(y.shape) == (4096, 2048) and bool(torch.isfinite(y.float()).all())
         _PROBE_LINEAR = ok
         return ok
     except Exception:
