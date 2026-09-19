@@ -70,18 +70,20 @@ class StreamShardTests(unittest.TestCase):
             self.assertEqual(ba, list(range(16)))
             self.assertEqual(bb, list(range(16, 32)))
 
-    def test_sidecar_seq_len_wins(self) -> None:
+    def test_sidecar_seq_len_wins_without_override(self) -> None:
         toks = list(range(32))
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "tok.bin"
             path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
             (Path(str(path) + ".meta.json")).write_text(json.dumps({"seq_len": 8, "eos_id": 2}))
             self.assertEqual(sidecar_meta(path)["seq_len"], 8)
-            from cat_yoko.data import open_stream
+            from cat_yoko.data import open_stream, resolve_seq_len
 
+            self.assertEqual(resolve_seq_len(path, 16), 8)
             stream = open_stream(path, vocab_size=128, seq_len=16)
             batch = stream.batch(1, "cpu")
-            self.assertEqual(tuple(batch["input_ids"].shape), (1, 8))
+            self.assertEqual(tuple(batch["input_ids"].shape), (1, 16))
+            self.assertEqual(batch["input_ids"][0].tolist(), list(range(16)))
 
 
 class LoopTests(unittest.TestCase):
@@ -224,14 +226,16 @@ class LoopTests(unittest.TestCase):
         nll = train_loop(self.cfg, "B2", steps=1, device="cpu", accum=1, grad_ckpt=True)
         self.assertTrue(nll > 0)
 
-    def test_seq_len_override_mismatch_raises(self) -> None:
+    def test_seq_len_override_rewindows_packed_bin(self) -> None:
         toks = list(range(32))
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "tok.bin"
             path.write_bytes(struct.pack("<" + "i" * len(toks), *toks))
             (Path(str(path) + ".meta.json")).write_text(json.dumps({"seq_len": 16}))
-            with self.assertRaises(ValueError):
-                Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, data=path, seq_len=8)
+            tr = Trainer(self.cfg, "B0", "cpu", steps=1, accum=1, data=path, seq_len=8)
+            self.assertEqual(tr.seq_len, 8)
+            nll = tr.run().nll
+            self.assertTrue(math.isfinite(nll))
 
     def test_log_includes_grad_norm(self) -> None:
         with tempfile.TemporaryDirectory() as td:

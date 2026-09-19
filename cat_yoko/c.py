@@ -4,6 +4,7 @@
 ``--stage kda|indexer|topk|hca|win`` or ``--chain`` (indexer→topk→hca→win).
 Implement KDA on B (``python3 -m cat_yoko.b0 --use-kda``); C only lights.
 ``--chain`` after a ``use_kda`` overlay: C-kda first, then CSA/HCA.
+Packed Phase-B bins re-window at C-win seq=8192. Prepare: ``--mix phase-c``.
 No CSA CUDA kernel: theorem-B union mask + HCA concat only.
 """
 

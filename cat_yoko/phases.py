@@ -184,10 +184,11 @@ PHASES: dict[str, PhaseSpec] = {
         offload_encoder=False,
         offload_blocks=True,
         optim_cpu=True,
-        notes="long-context 8K; MiniCPM5 rope_theta=5e6, no extra NTK required",
+        notes="long-context 8K; keep C-win lighting (CSA top-k + HCA); MiniCPM5 rope_theta=5e6",
         seq_len=8192,
         freeze="none",
         lr_mode="b2",
+        sparse="hca",
         tokens_offset=75e9,
     ),
     "D-32k": PhaseSpec(
@@ -200,10 +201,11 @@ PHASES: dict[str, PhaseSpec] = {
         offload_encoder=False,
         offload_blocks=True,
         optim_cpu=True,
-        notes="long-context 32K",
+        notes="long-context 32K; sparse stays hca after C",
         seq_len=32768,
         freeze="none",
         lr_mode="b2",
+        sparse="hca",
         tokens_offset=85e9,
     ),
     "D-128k": PhaseSpec(
@@ -216,10 +218,11 @@ PHASES: dict[str, PhaseSpec] = {
         offload_encoder=False,
         offload_blocks=True,
         optim_cpu=True,
-        notes="long-context 128K (MiniCPM5 native)",
+        notes="long-context 128K (MiniCPM5 native); sparse stays hca after C",
         seq_len=131072,
         freeze="none",
         lr_mode="b2",
+        sparse="hca",
         tokens_offset=100e9,
     ),
     "E": PhaseSpec(
@@ -236,6 +239,7 @@ PHASES: dict[str, PhaseSpec] = {
         seq_len=8192,
         freeze="none",
         lr_mode="decay",
+        sparse="hca",
         tokens_offset=115e9,
     ),
     "F": PhaseSpec(
@@ -249,9 +253,11 @@ PHASES: dict[str, PhaseSpec] = {
         offload_blocks=True,
         optim_cpu=True,
         notes="SFT; loss on response tokens only (prompt labels = -100)",
+        seq_len=8192,
         freeze="none",
         loss="sft",
         lr_mode="b2",
+        sparse="hca",
         tokens_offset=135e9,
     ),
     "G": PhaseSpec(
@@ -268,6 +274,7 @@ PHASES: dict[str, PhaseSpec] = {
         freeze="none",
         loss="grpo",
         lr_mode="b2",
+        sparse="hca",
         tokens_offset=136e9,
         default_steps=10_000,
     ),
@@ -285,6 +292,7 @@ PHASES: dict[str, PhaseSpec] = {
         freeze="none",
         loss="dpo",
         lr_mode="b2",
+        sparse="hca",
         tokens_offset=136e9,
         default_steps=10_000,
     ),
@@ -337,8 +345,9 @@ def resolve_phase_spec(name: str, *, use_kda: bool = False) -> PhaseSpec | None:
 
     Without ``use_kda`` this is ``PHASES[name]``. With it: C-index keeps KDA
     lit (CSA stays window for indexer KL) and carves 5e9 from the 10e9
-    indexer budget so C still sums to 25e9; D–G keep the last C lighting
-    (``hca`` = KDA + CSA top-k + HCA) instead of resetting to window.
+    indexer budget so C still sums to 25e9. D–G already pin ``sparse=hca``
+    (last C lighting). ``use_kda`` only keeps KDA-kind layers on gated-delta
+    inside that hca mode — it must not reset D–G back to window.
     """
     ph = PHASES.get(name)
     if ph is None:

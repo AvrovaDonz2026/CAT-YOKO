@@ -377,16 +377,19 @@ CSA/HCA **实现不后移、不删除**；后移的是**点亮**。KDA 也一样
 - RoPE：按目标长度做频率缩放（NTK/YaRN 类）或直接长序列继续训练；MiniCPM5-2B 原生 **128K 上下文 / `rope_theta=5e6`**，作为长上下文底座，不必再参考 MiniCPM-2B-128k 的 `rope_scaling`。
 - CSA/HCA 让长程注意力成本可控；8K 未压缩滑窗保证局部保真。
 - 数据切到长文档 / 拼接长样本；用 needle & RULER 做过程监控。
+- **实现**：`python3 -m cat_yoko.d --stage 8k|32k|128k` 或 `--chain`。Phase B 的 4K packed `.bin` **按目标 seq 重切窗**（扁平 int32 拼行）。`--try` DummyStream 在序列中点写入 needle。D/E/F **默认 `sparse=hca`**（C 点亮后不回到 window）；`--use-kda` 从 resume extra 继承，只让 KDA-kind 继续走 gated-delta。prepare `--mix phase-d`：en 45% / zh 20% / math 10% / StarCoder 25%。
 
 ### Phase E — WSD 退火（高质量数据）
 
 - 进入 WSD 的 **Decay** 段：LR 快速（指数/1-sqrt）衰减到峰值的 ~1/100。
 - 数据配比切向**高质量 + 数学 + 代码 + 长上下文 + 指令化**（MiniCPM 经验：退火段喂高质量数据收益最大）。
+- **实现**：`python3 -m cat_yoko.e`。`wsd_lr(..., lr_mode=decay)`。prepare `--mix phase-e`：en 30% / zh 15% / math 25% / StarCoder 15% / UltraChat 正文 15%。不在 CI 下载。
 
 ### Phase F — SFT
 
 - 指令/多轮对话/长上下文/工具调用/代码/数学；打包到目标长度，loss 只在 response。
 - 可按 DeepSeek-V4 的"**分域专家先各自 SFT+RL，再 on-policy 蒸馏成统一模型**"做，但本项目规模（12B）可先做单一混合 SFT。
+- **实现**：`python3 -m cat_yoko.f`。seq=8192。prepare `--mix phase-f` 写 jsonl（`tokens`+`labels=-100` on user；多段对话拼到目标长度）。解析 UltraChat `data` 列表、Chat `messages`、alpaca `instruction`/`output`，编码 `role: text`。Trainer `FileStream` 也吃已分词的 `prompt_ids`/`response_ids` 或 `messages[].ids` 并同样拼行。`--try` 仍用 DummyStream 掩 prompt 前缀。sparse 保持 `hca`。
 
 ### Phase G — RL
 

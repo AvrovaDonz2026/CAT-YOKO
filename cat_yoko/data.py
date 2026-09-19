@@ -8,6 +8,8 @@ from typing import Iterator
 
 import torch
 
+from cat_yoko.sft import pack_sft_pairs
+
 
 def sidecar_path(path: Path) -> Path:
     return Path(path).with_suffix(Path(path).suffix + ".meta.json")
@@ -37,10 +39,14 @@ def resolve_eos(path: Path | None, eos_id: int | None) -> int | None:
 
 
 def resolve_seq_len(path: Path | None, seq_len: int) -> int:
-    """Packed bins must be viewed with the seq_len they were written with."""
+    """Sidecar pack width when present; else ``seq_len``.
+
+    Phase D/C-win pass an explicit view length into ``open_stream`` and
+    re-window the flat int32 stream (concat 4K rows to 8K/32K/128K).
+    """
     meta = sidecar_meta(path)
     if meta.get("seq_len") is None:
-        return seq_len
+        return int(seq_len)
     packed = int(meta["seq_len"])
     if packed <= 0:
         raise ValueError(f"sidecar seq_len must be positive, got {packed}")
@@ -185,7 +191,28 @@ class DummyStream:
         )
 
 
-def _jsonl_docs(path: Path) -> Iterator[list[int]]:
+def _ids_and_sft_labels(messages: list) -> tuple[list[int], list[int]] | None:
+    ids: list[int] = []
+    labels: list[int] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        piece = m.get("ids") or m.get("input_ids") or m.get("tokens")
+        if piece is None:
+            continue
+        piece = [int(t) for t in piece]
+        role = str(m.get("role") or m.get("from") or "").lower()
+        ids.extend(piece)
+        if role in {"assistant", "gpt", "bot", "model"}:
+            labels.extend(piece)
+        else:
+            labels.extend([-100] * len(piece))
+    if not ids or all(x == -100 for x in labels):
+        return None
+    return ids, labels
+
+
+def _jsonl_docs(path: Path) -> Iterator[tuple[list[int], list[int] | None]]:
     with path.open() as f:
         for line in f:
             line = line.strip()
@@ -197,6 +224,12 @@ def _jsonl_docs(path: Path) -> Iterator[list[int]]:
                 resp = [int(t) for t in obj["response_ids"]]
                 yield prompt + resp, ([-100] * len(prompt) + resp)
                 continue
+            msgs = obj.get("messages") or obj.get("conversations")
+            if isinstance(msgs, list) and msgs and isinstance(msgs[0], dict):
+                packed = _ids_and_sft_labels(msgs)
+                if packed is not None:
+                    yield packed
+                    continue
             toks = obj.get("tokens", obj.get("input_ids", obj.get("ids")))
             if toks is None:
                 raise ValueError(f"jsonl row missing tokens/input_ids: {path}")
@@ -266,8 +299,13 @@ class FileStream:
             labeled = [lab is not None for _, lab in rows]
             had_labels = any(labeled)
             if had_labels:
+                packed_pairs = pack_sft_pairs(
+                    ((toks, lab) for toks, lab in rows if lab is not None),
+                    seq_len,
+                )
                 self._packed = [
-                    _pad_row(toks, lab, seq_len, i) for i, (toks, lab) in enumerate(rows)
+                    _pad_row(toks, lab, seq_len, i)
+                    for i, (toks, lab) in enumerate(packed_pairs)
                 ]
             else:
                 docs = [toks for toks, _ in rows]
@@ -426,14 +464,14 @@ def open_stream(
         )
     path = Path(data)
     eos = resolve_eos(path, eos_id)
-    packed_seq = resolve_seq_len(path, seq_len)
+    view = int(seq_len)
     if path.suffix.lower() in {".bin", ".tok"}:
         return PackedBinStream(
-            path, packed_seq, eos_id=eos, shard_id=rank, num_shards=world
+            path, view, eos_id=eos, shard_id=rank, num_shards=world
         )
     return FileStream(
         path,
-        packed_seq,
+        view,
         eos_id=eos,
         shard_id=rank,
         num_shards=world,

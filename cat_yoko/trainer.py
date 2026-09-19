@@ -270,9 +270,12 @@ class Trainer:
         self.device, self.rank, self.world = init_distributed(device, force=bool(fsdp))
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
-            if packed is not None and int(packed) != int(seq_len):
-                raise ValueError(f"seq_len override {seq_len} != packed bin seq_len {packed}")
             self.seq_len = int(seq_len)
+            if packed is not None and int(packed) != self.seq_len:
+                print(
+                    f"re-window packed bin sidecar seq_len={int(packed)} → {self.seq_len}",
+                    flush=True,
+                )
         else:
             self.seq_len = resolve_seq_len(data, cfg.seq_len)
         self.accum = (
@@ -669,6 +672,7 @@ class Trainer:
             f"te_linear={prefer_te_linear()} grouped_mm={grouped_mm_available()} "
             f"te={te_available()} te_nvfp4={te_nvfp4_linear_enabled()} "
             f"return_logits={bool(getattr(raw, 'return_logits', True))} "
+            f"sparse={self.phase_sparse} loss={self.loss_mode} "
             f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
             flush=True,
         )

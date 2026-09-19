@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import random
 import sys
 import tempfile
@@ -25,7 +26,7 @@ from cat_yoko.data import (
 )
 from cat_yoko.hf_minicpm import _unwrap_state, load_minicpm_state
 from cat_yoko.prepare import iter_hf_texts, iter_local_jsonl, main as prepare_main, mix_documents, prepare
-from cat_yoko.recipe import MIXES, PHASE_B, PHASE_B_WITH_CODE, mix_named
+from cat_yoko.recipe import MIXES, PHASE_B, PHASE_B_WITH_CODE, PHASE_D, PHASE_E, default_mix, mix_named
 from cat_yoko.tokenizer import HashTokenizer, load_tokenizer
 from cat_yoko.train import main as train_main
 from cat_yoko.trainer import Trainer
@@ -55,9 +56,47 @@ class RecipeTests(unittest.TestCase):
         self.assertIn("phase-c", MIXES)
         self.assertIn("phase-f", MIXES)
         self.assertEqual(MIXES["phase-c"], PHASE_B)
+        self.assertEqual(MIXES["phase-d"], PHASE_D)
+        self.assertAlmostEqual(sum(s.weight for s in PHASE_D), 1.0)
+        self.assertTrue(any(s.key == "starcoder" for s in PHASE_D))
         self.assertIn("phase-e", MIXES)
         self.assertIn("phase-g", MIXES)
         self.assertNotEqual(MIXES["phase-e"], PHASE_B)
+        self.assertAlmostEqual(sum(s.weight for s in PHASE_E), 1.0)
+        e_keys = {s.key for s in PHASE_E}
+        self.assertTrue({"ultradata-math", "starcoder", "ultrachat"} <= e_keys)
+        self.assertEqual(default_mix("C-index"), "phase-c")
+        self.assertEqual(default_mix("D-128k"), "phase-d")
+        self.assertEqual(default_mix("E"), "phase-e")
+        self.assertEqual(default_mix("F"), "phase-f")
+        self.assertEqual(default_mix("B0"), "phase-b")
+
+    def test_sft_turns_ultrachat_and_alpaca(self) -> None:
+        from cat_yoko.sft import encode_sft, sft_turns, turns_to_text
+
+        chat = sft_turns({"data": ["hello there", "hi, how can I help"]})
+        self.assertEqual(chat[0][0], "user")
+        self.assertEqual(chat[1][0], "assistant")
+        self.assertIn("user:", turns_to_text(chat))
+        alpaca = sft_turns({"instruction": "add", "input": "1+1", "output": "2"})
+        self.assertEqual([r for r, _ in alpaca], ["user", "assistant"])
+        tok = HashTokenizer(64)
+        packed = encode_sft(tok, chat, seq_len=32)
+        self.assertIsNotNone(packed)
+        ids, labels = packed
+        self.assertEqual(len(ids), len(labels))
+        self.assertIn(-100, labels)
+        self.assertTrue(any(x != -100 for x in labels))
+
+    def test_pack_sft_pairs_fills_seq_len(self) -> None:
+        from cat_yoko.sft import pack_sft_pairs
+
+        a = ([1, 2, 3], [-100, -100, 3])
+        b = ([4, 5], [-100, 5])
+        packed = list(pack_sft_pairs(iter([a, b]), seq_len=8))
+        self.assertEqual(len(packed), 1)
+        self.assertEqual(packed[0][0], [1, 2, 3, 4, 5])
+        self.assertEqual(packed[0][1], [-100, -100, 3, -100, 5])
 
     def test_mix_named_rejects_unknown(self) -> None:
         with self.assertRaises(KeyError):
@@ -167,6 +206,48 @@ class PrepareTrainTests(unittest.TestCase):
             result = tr.run()
             self.assertEqual(result.step, 1)
             self.assertGreater(result.nll, 0)
+
+    def test_local_sft_jsonl_masks_prompt_and_trains_f(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        tok = HashTokenizer(cfg.vocab_size)
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            src = td / "chat.jsonl"
+            _write_jsonl(
+                src,
+                [
+                    {"data": ["what is 2+2?", "4. the sum of two and two."]},
+                    {
+                        "messages": [
+                            {"role": "user", "content": "name a color"},
+                            {"role": "assistant", "content": "blue is a color"},
+                        ]
+                    },
+                ]
+                * 4,
+            )
+            out = td / "sft.bin"
+            meta = prepare(
+                mix="local",
+                out=out,
+                max_tokens=256,
+                seq_len=cfg.seq_len,
+                tokenizer=tok,
+                local_jsonl=src,
+                sft=True,
+            )
+            dest = Path(meta["out"])
+            self.assertEqual(meta["format"], "sft_jsonl")
+            self.assertTrue(dest.is_file())
+            self.assertTrue(str(dest).endswith(".jsonl"))
+            self.assertGreater(meta["sequences"], 0)
+            row = json.loads(dest.read_text().splitlines()[0])
+            self.assertIn(-100, row["labels"])
+            self.assertTrue(any(x != -100 for x in row["labels"]))
+            nll = Trainer(
+                cfg, "F", "cpu", steps=1, accum=1, micro_batch=1, data=dest
+            ).run().nll
+            self.assertTrue(math.isfinite(nll))
 
     def test_train_cli_on_prepared_bin_and_upcycle_pt(self) -> None:
         cfg = CATYokoConfig.tiny()
