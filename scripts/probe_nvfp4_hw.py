@@ -3,6 +3,11 @@
 
 Prints one JSON object. Exit 0 even when a path is missing so the launcher
 can record the result. Does not train. Does not download 50B tokens.
+
+SM 10.0 / 10.3 (B200): default ``NVFP4BlockScaling()`` (RHT + 2D + SR).
+sm_120 (6000D): reduced recipe. Probe uses legal 16×128 and 64×2048,
+copy-once ``te.Linear`` (not Parameter share). A single illegal shape is
+not a kernel miss.
 """
 
 from __future__ import annotations
@@ -10,6 +15,9 @@ from __future__ import annotations
 import json
 import sys
 import traceback
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def _exc(err: BaseException) -> str:
@@ -22,6 +30,9 @@ def probe() -> dict:
         "torch": None,
         "cuda": None,
         "cap": None,
+        "compute_family": None,
+        "nvfp4_training_capable": False,
+        "te_recipe_kwargs": {},
         "float4_dtype": False,
         "float4_cast": False,
         "scaled_mm": False,
@@ -31,6 +42,9 @@ def probe() -> dict:
         "te_pytorch": False,
         "te_nvfp4_recipe": False,
         "te_nvfp4_linear": False,
+        "te_nvfp4_linear_copy_once": False,
+        "te_nvfp4_linear_64x2048": False,
+        "te_grouped_linear": False,
         "hw_nvfp4_gemm": False,
         "errors": {},
     }
@@ -53,9 +67,41 @@ def probe() -> dict:
 
     if not torch.cuda.is_available():
         out["errors"]["cuda"] = "cuda not available"
+        out["compute_family"] = "cpu"
         return out
     out["cap"] = list(torch.cuda.get_device_capability(0))
     device = torch.device("cuda")
+    try:
+        from cat_yoko.nvfp4_hw import (
+            compute_family,
+            nvfp4_training_capable,
+            te_nvfp4_recipe_kwargs,
+        )
+
+        fam = compute_family(tuple(out["cap"]))
+        out["compute_family"] = fam
+        out["nvfp4_training_capable"] = nvfp4_training_capable(fam)
+        out["te_recipe_kwargs"] = te_nvfp4_recipe_kwargs(fam)
+    except Exception as err:
+        out["errors"]["nvfp4_hw"] = _exc(err)
+        major, minor = out["cap"]
+        if major == 10 and minor == 3:
+            out["compute_family"] = "sm103"
+        elif major == 10:
+            out["compute_family"] = "sm100"
+        elif major == 12:
+            out["compute_family"] = "sm120"
+        else:
+            out["compute_family"] = "other"
+        out["nvfp4_training_capable"] = out["compute_family"] in {"sm100", "sm103"}
+        if out["compute_family"] in {"sm100", "sm103"}:
+            out["te_recipe_kwargs"] = {}
+        elif out["compute_family"] == "sm120":
+            out["te_recipe_kwargs"] = {
+                "disable_rht": True,
+                "disable_stochastic_rounding": True,
+                "disable_2d_quantization": True,
+            }
 
     if out["float4_dtype"]:
         try:
@@ -83,7 +129,6 @@ def probe() -> dict:
 
             a = torch.zeros(16, 32, device=device, dtype=torch.bfloat16)
             b = torch.zeros(32, 16, device=device, dtype=torch.bfloat16)
-            # Best-effort: API moved across nightlies. Probe, do not require.
             y = F.scaled_mm(a, b, None, None, None, None)  # type: ignore[arg-type]
             out["hw_nvfp4_gemm"] = True
             out["functional_scaled_mm_out"] = str(getattr(y, "dtype", type(y)))
@@ -107,36 +152,72 @@ def probe() -> dict:
     try:
         from transformer_engine.common.recipe import NVFP4BlockScaling
 
-        out["te_nvfp4_recipe"] = NVFP4BlockScaling() is not None
+        kwargs = dict(out.get("te_recipe_kwargs") or {})
+        try:
+            recipe = NVFP4BlockScaling(**kwargs)
+        except TypeError:
+            recipe = NVFP4BlockScaling()
+        out["te_nvfp4_recipe"] = recipe is not None
+        out["te_recipe_used"] = sorted(kwargs.keys())
     except Exception as err:
         out["errors"]["te_nvfp4_recipe"] = _exc(err)
+        recipe = None
 
-    if out["te_pytorch"] and out["te_nvfp4_recipe"]:
+    if out["te_pytorch"] and out["te_nvfp4_recipe"] and recipe is not None:
         try:
             import transformer_engine.pytorch as tep
-            from transformer_engine.common.recipe import NVFP4BlockScaling
 
-            # sm_120 often needs RHT / 2D weight quant off.
-            kwargs = {}
-            try:
-                recipe = NVFP4BlockScaling(disable_rht=True, disable_2d_quantization=True)
-            except TypeError:
-                recipe = NVFP4BlockScaling()
-            # TE FP8: product of leading dims % 8 == 0, last dim % 16 == 0.
-            # TE NVFP4: flattened leading dim must also be % 16 == 0 (block=16).
-            # A 4×64 / 8×128 probe trips those checks and is not a kernel miss.
+            # Copy-once, legal 16×128. Do not require Parameter identity.
             layer = tep.Linear(128, 128, bias=False, params_dtype=torch.bfloat16)
             layer = layer.to(device)
+            src = torch.randn(128, 128, device=device, dtype=torch.bfloat16)
+            with torch.no_grad():
+                layer.weight.copy_(src)
             x = torch.randn(16, 128, device=device, dtype=torch.bfloat16)
             with tep.autocast(enabled=True, recipe=recipe):
                 y = layer(x)
                 loss = y.float().sum()
             loss.backward()
             out["te_nvfp4_linear"] = True
+            out["te_nvfp4_linear_copy_once"] = True
             out["te_nvfp4_linear_finite"] = bool(torch.isfinite(y).all().item())
         except Exception as err:
             out["errors"]["te_nvfp4_linear"] = _exc(err)
             out["errors"]["te_nvfp4_linear_tb"] = traceback.format_exc()[-1500:]
+
+        if out["te_nvfp4_linear"]:
+            try:
+                import transformer_engine.pytorch as tep
+
+                layer = tep.Linear(2048, 2048, bias=False, params_dtype=torch.bfloat16)
+                layer = layer.to(device)
+                x = torch.randn(64, 2048, device=device, dtype=torch.bfloat16)
+                with tep.autocast(enabled=True, recipe=recipe):
+                    y = layer(x)
+                out["te_nvfp4_linear_64x2048"] = bool(
+                    tuple(y.shape) == (64, 2048) and torch.isfinite(y.float()).all()
+                )
+            except Exception as err:
+                out["errors"]["te_nvfp4_linear_64x2048"] = _exc(err)
+
+        try:
+            import transformer_engine.pytorch as tep
+
+            grouped_cls = getattr(tep, "GroupedLinear", None)
+            out["te_grouped_linear_cls"] = grouped_cls is not None
+            if grouped_cls is not None:
+                gl = grouped_cls(2, 128, 128, bias=False, params_dtype=torch.bfloat16, device=device)
+                x = torch.randn(32, 128, device=device, dtype=torch.bfloat16)
+                splits = torch.tensor([16, 16], dtype=torch.int64)
+                with tep.autocast(enabled=True, recipe=recipe):
+                    y = gl(x, splits)
+                    loss = y.float().sum()
+                loss.backward()
+                out["te_grouped_linear"] = True
+                out["te_grouped_linear_finite"] = bool(torch.isfinite(y).all().item())
+        except Exception as err:
+            out["errors"]["te_grouped_linear"] = _exc(err)
+            out["errors"]["te_grouped_linear_tb"] = traceback.format_exc()[-1500:]
 
     return out
 

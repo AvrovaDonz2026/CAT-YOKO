@@ -93,8 +93,10 @@ class SwiGLU(nn.Module):
 
 
 def _stack_linear_weight(linears: list[nn.Linear]) -> torch.Tensor:
-    from cat_yoko.nvfp4_linear import Nvfp4Linear
+    from cat_yoko.nvfp4_linear import Nvfp4Linear, TeNvfp4Linear
 
+    if any(isinstance(lin, TeNvfp4Linear) for lin in linears):
+        raise RuntimeError("TE NVFP4 experts must not stack into bf16 grouped_mm")
     if all(isinstance(lin, Nvfp4Linear) for lin in linears):
         return torch.stack([lin.quantized_weight() for lin in linears])
     return torch.stack([lin.weight for lin in linears])
@@ -120,6 +122,19 @@ def _swiglu_expert_weights(
     if owner is not None and not trainable:
         owner._swiglu_w = pack
     return pack
+
+
+def _experts_are_te_nvfp4(experts: nn.ModuleList) -> bool:
+    from cat_yoko.nvfp4_linear import TeNvfp4Linear
+
+    if not experts:
+        return False
+    return all(
+        isinstance(e.gate_proj, TeNvfp4Linear)
+        and isinstance(e.up_proj, TeNvfp4Linear)
+        and isinstance(e.down_proj, TeNvfp4Linear)
+        for e in experts
+    )
 
 
 def _experts_are_swiglu(experts: nn.ModuleList) -> bool:
@@ -257,7 +272,13 @@ def _dispatch_experts(
         and grouped_mm_available()
         and x_sorted.is_cuda
     )
-    if want_grouped:
+    if _experts_are_te_nvfp4(experts):
+        from cat_yoko.nvfp4_hw import te_grouped_swiglu
+
+        y = te_grouped_swiglu(experts, x_sorted, counts, owner)
+        if y is None:
+            y = _swiglu_experts_serial(experts, x_sorted, counts)
+    elif want_grouped:
         try:
             y = _swiglu_experts_grouped(experts, x_sorted, counts, owner=owner)
         except (RuntimeError, NotImplementedError):

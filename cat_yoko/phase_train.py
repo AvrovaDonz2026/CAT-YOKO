@@ -81,6 +81,19 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--optim-cpu", action="store_true")
     p.add_argument("--no-optim-cpu", action="store_true")
     p.add_argument("--log-every", type=int, default=None)
+    p.add_argument(
+        "--grad-ckpt",
+        action="store_true",
+        dest="grad_ckpt",
+        default=None,
+        help="activation checkpoint (12b default on)",
+    )
+    p.add_argument(
+        "--no-grad-ckpt",
+        action="store_true",
+        dest="no_grad_ckpt",
+        help="keep activations; B200 192GiB default in run_b0_full_b200.sh",
+    )
     args, rest = p.parse_known_args(argv)
     if args.offload_encoder and args.no_offload_encoder:
         p.error("pick one of --offload-encoder / --no-offload-encoder")
@@ -88,6 +101,8 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         p.error("pick one of --offload-blocks / --no-offload-blocks")
     if args.optim_cpu and args.no_optim_cpu:
         p.error("pick one of --optim-cpu / --no-optim-cpu")
+    if args.grad_ckpt and args.no_grad_ckpt:
+        p.error("pick one of --grad-ckpt / --no-grad-ckpt")
 
     out: list[str] = [
         "--config",
@@ -98,7 +113,6 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         args.device,
         "--dtype",
         "bf16",
-        "--grad-ckpt",
         "--seed",
         str(args.seed),
         "--save-dir",
@@ -113,6 +127,10 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         "--accum",
         "1",
     ]
+    if args.no_grad_ckpt:
+        out.append("--no-grad-ckpt")
+    else:
+        out.append("--grad-ckpt")
     if args.no_offload_encoder:
         out.append("--no-offload-encoder")
     elif args.offload_encoder or ph.offload_encoder:

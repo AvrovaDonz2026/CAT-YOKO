@@ -143,6 +143,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seq-len", type=int, default=None, help="override cfg seq_len; must match packed .bin")
     p.add_argument("--grad-ckpt", action="store_true", help="activation checkpoint encoder/decoder blocks")
     p.add_argument(
+        "--no-grad-ckpt",
+        action="store_true",
+        help="disable activation checkpoint (B200 192GiB; 12b default is on)",
+    )
+    p.add_argument(
         "--c1-smoke",
         action="store_true",
         help="B0→B1→B2 on the same weights (ignores --phase); writes --save-dir/{B0,B1,B2}",
@@ -240,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
         p.error("pick one of --save-full / --no-save-full")
     if args.save_trainable and args.no_save_trainable:
         p.error("pick one of --save-trainable / --no-save-trainable")
+    if args.grad_ckpt and args.no_grad_ckpt:
+        p.error("pick one of --grad-ckpt / --no-grad-ckpt")
     args.c1_smoke = bool(args.c1_smoke or args.c1)
     if args.c1_smoke and args.resume is not None:
         p.error("--c1-smoke builds a fresh C1 chain; do not pass --resume")
@@ -287,7 +294,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.config == "12b":
         if args.dtype != "bf16":
             args.dtype = "bf16"
-        if not args.grad_ckpt:
+        if args.no_grad_ckpt:
+            args.grad_ckpt = False
+        else:
             args.grad_ckpt = True
         try:
             args.accum = resolve_12b_accum(

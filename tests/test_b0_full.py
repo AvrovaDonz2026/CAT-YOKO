@@ -64,6 +64,57 @@ class B0FullLauncherTests(unittest.TestCase):
         self.assertIn("torch.randn(16, 128", probe_src)
         self.assertNotIn("torch.randn(4, 64", probe_src)
         self.assertNotIn("torch.randn(8, 128", probe_src)
+        self.assertIn("copy_once", probe_src)
+        self.assertIn("64, 2048", probe_src)
+
+
+class B200LauncherTests(unittest.TestCase):
+    def test_b0_b200_script_is_published_envelope(self) -> None:
+        script = ROOT / "scripts" / "run_b0_full_b200.sh"
+        self.assertTrue(script.is_file())
+        text = script.read_text()
+        self.assertIn("cat_yoko.b0", text)
+        self.assertIn("--no-offload-encoder", text)
+        self.assertIn("--no-grad-ckpt", text)
+        self.assertIn("--upcycle-hf", text)
+        self.assertIn("8e9", text)
+        self.assertIn("4096", text)
+        self.assertIn("download_hub_overlay.py", text)
+        self.assertIn("b0-full", text)
+        self.assertIn("HF_HOME", text)
+        self.assertIn("huggingface.co", text)
+        self.assertNotRegex(text, r"cat_yoko\.b0.*--try")
+        self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertNotIn("git fetch", text)
+        self.assertNotRegex(text, r"31jEePeb|vDw8xU9c|PRIVATE KEY|dfghjkl")
+        self.assertNotIn("westc.seetacloud", text)
+        self.assertNotIn("137.175.", text)
+
+    def test_upgrade_and_try_scripts(self) -> None:
+        up = (ROOT / "scripts" / "upgrade_torch_te_b200.sh").read_text()
+        self.assertIn("cu128", up)
+        self.assertIn("transformer_engine[pytorch,core-cu12]", up)
+        self.assertIn("core-cu13", up)
+        self.assertIn("--no-build-isolation", up)
+        self.assertIn("uv pip uninstall -y transformer-engine-cu13", up)
+        self.assertIn("NVTE_CUDA_ARCHS", up)
+        self.assertIn("probe_nvfp4_hw.py", up)
+        boot = (ROOT / "scripts" / "run_b200.sh").read_text()
+        self.assertIn("run_b0_full_b200.sh", boot)
+        self.assertIn("download_minicpm5.py", boot)
+        self.assertIn("HF_HOME", boot)
+        self.assertIn("huggingface.co", boot)
+        b1 = (ROOT / "scripts" / "run_b1_try_b200.sh").read_text()
+        self.assertIn("cat_yoko.b1", b1)
+        self.assertIn("--try", b1)
+        self.assertIn("--no-grad-ckpt", b1)
+        b2 = (ROOT / "scripts" / "run_b2_try_b200.sh").read_text()
+        self.assertIn("cat_yoko.b2", b2)
+        overlay = ROOT / "scripts" / "download_hub_overlay.py"
+        self.assertTrue(overlay.is_file())
+        src = overlay.read_text()
+        self.assertIn("b5763b98aafa2990d753934b181fdf5731d54ec1c25099be95cedc0dc28fb52b", src)
+        self.assertIn("AvrovaDonz/CAT-YOKO", src)
 
 
 if __name__ == "__main__":

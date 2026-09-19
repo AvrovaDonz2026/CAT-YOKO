@@ -18,6 +18,7 @@ from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.nvfp4_linear import (
     Nvfp4Linear,
+    TeNvfp4Linear,
     apply_nvfp4,
     fused_cat_linear,
     hw_nvfp4_gemm_available,
@@ -87,6 +88,7 @@ class QuantizeTests(unittest.TestCase):
         wrapped = Nvfp4Linear.from_linear(lin)
         self.assertEqual(wrapped.weight.data_ptr(), ptr)
         self.assertIs(wrapped.weight, lin.weight)
+        self.assertFalse(isinstance(wrapped, TeNvfp4Linear))
 
 
 class WrapPolicyTests(unittest.TestCase):

@@ -46,6 +46,7 @@ from cat_yoko.nvfp4_linear import (
     te_available,
     te_nvfp4_linear_enabled,
 )
+from cat_yoko.nvfp4_hw import compute_family, prefer_te_linear
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
@@ -531,7 +532,8 @@ class Trainer:
             f"optim_cpu={self.optim_cpu} adam={adam_state} "
             f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
             f"nvfp4={bool(getattr(self.cfg, 'use_nvfp4', False))} "
-            f"nvfp4_n={self.nvfp4_n} grouped_mm={grouped_mm_available()} "
+            f"nvfp4_n={self.nvfp4_n} nvfp4_family={compute_family()} "
+            f"te_linear={prefer_te_linear()} grouped_mm={grouped_mm_available()} "
             f"te={te_available()} te_nvfp4={te_nvfp4_linear_enabled()} "
             f"return_logits={bool(getattr(raw, 'return_logits', True))} "
             f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
@@ -775,6 +777,7 @@ class Trainer:
                         "nvfp4_n": self.nvfp4_n,
                         "grouped_mm": grouped_mm_available(),
                         "te_nvfp4": te_nvfp4_linear_enabled(),
+                        "nvfp4_family": compute_family(),
                         "tokens_seen": tokens_seen,
                         "tokens_in_phase": tokens_in_phase,
                         "tok_s": (step_tokens * self.world) / dt,

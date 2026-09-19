@@ -56,6 +56,19 @@ class PhaseSpecTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--seq-len") + 1], "64")
         self.assertEqual(argv[argv.index("--steps") + 1], str(TRY_STEPS))
         self.assertNotIn("--tokens", argv)
+        self.assertIn("--grad-ckpt", argv)
+        self.assertNotIn("--no-grad-ckpt", argv)
+
+    def test_b0_no_grad_ckpt_argv(self) -> None:
+        from unittest.mock import patch
+
+        with patch("cat_yoko.phase_train._tight_gpu", return_value=False):
+            argv = build_phase_argv(
+                "B0",
+                ["--save-dir", "/tmp/b0-full", "--no-offload-encoder", "--no-grad-ckpt"],
+            )
+        self.assertIn("--no-grad-ckpt", argv)
+        self.assertNotIn("--grad-ckpt", argv)
 
     def test_b0_try_keeps_explicit_upcycle(self) -> None:
         argv = build_phase_argv(

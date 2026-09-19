@@ -49,7 +49,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 墙钟（发布账本）
 
-50B token 信封上的理论墙钟，**不是**实测。允许的线性 GEMM 由 ``Nvfp4Linear`` 走 NVFP4（无 TE 时 E2M1/16 仿真）。attn softmax / SDPA 仍 fp32。fused TE kernel 不是硬依赖。
+50B token 信封上的理论墙钟，**不是**实测。B200 / SM100 允许的线性 GEMM 走 ``TeNvfp4Linear``（TE ``NVFP4BlockScaling``）。无 TE / sm_120 时 ``Nvfp4Linear`` E2M1/16 仿真。attn softmax / SDPA 仍 fp32。
 
 | 配方 | H100-h | 角色 |
 | --- | ---: | --- |
@@ -101,7 +101,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 **C1:** B0/B1 freeze the encoder. B0 trains new modules only. B1 trains decoder + `lm_head` + final RMSNorm. B2 trains all. Tokens B0/B1/B2 = 8/27/15B.
 
-**Published wall-clock** (50B-token envelope, not measured). Allowed linear GEMMs use ``Nvfp4Linear`` (E2M1/16 emulation without TE). Attn softmax / SDPA stay fp32.
+**Published wall-clock** (50B-token envelope, not measured). B200 / SM100 allowed linear GEMMs use ``TeNvfp4Linear`` (TE ``NVFP4BlockScaling``). Without TE or on sm_120, ``Nvfp4Linear`` E2M1/16 emulation. Attn softmax / SDPA stay fp32.
 
 | Recipe | H100-h | Role |
 | --- | ---: | --- |

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Fetch MiniCPM5-2B-Base for AutoDL.
+"""Fetch MiniCPM5-2B-Base.
 
 Order:
-1. HuggingFace Hub via ``HF_ENDPOINT`` (default ``https://hf-mirror.com``).
-2. ModelScope ``OpenBMB/MiniCPM5-2B-Base`` if Hub resolve 302s to Xet
-   (``cas-bridge.xethub.hf.co`` 403s on this China AutoDL path).
+1. HuggingFace Hub via ``HF_ENDPOINT``. AutoDL (``/root/autodl-tmp`` present)
+   defaults to ``https://hf-mirror.com``; otherwise ``https://huggingface.co``.
+2. ModelScope ``OpenBMB/MiniCPM5-2B-Base`` if Hub fails (China AutoDL Xet 403).
 
 Tokenizer json is in the same snapshot. Instruct ``openbmb/MiniCPM5-2B`` is
 not required for upcycling; Base already ships ``tokenizer.json``.
@@ -24,15 +24,27 @@ SAFETENSORS = "model.safetensors"
 SAFETENSORS_BYTES = 5_033_557_128
 SAFETENSORS_SHA256 = "d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a"
 DEFAULT_LOCAL = "/root/autodl-tmp/hf/MiniCPM5-2B-Base"
+AUTODL_TMP = Path("/root/autodl-tmp")
+
+
+def _autodl_root() -> Path | None:
+    return AUTODL_TMP if AUTODL_TMP.is_dir() else None
 
 
 def _env() -> None:
-    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-    os.environ.setdefault("HF_HOME", "/root/autodl-tmp/hf")
+    autodl = _autodl_root()
+    if autodl is not None:
+        os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+        os.environ.setdefault("HF_HOME", str(autodl / "hf"))
+        os.environ.setdefault("MODELSCOPE_CACHE", str(autodl / "ms"))
+    else:
+        os.environ.setdefault("HF_ENDPOINT", "https://huggingface.co")
+        work = Path("/workspace") if Path("/workspace").is_dir() else Path.home()
+        os.environ.setdefault("HF_HOME", str(work / ".hf_home"))
+        os.environ.setdefault("MODELSCOPE_CACHE", str(work / ".ms_cache"))
     os.environ.setdefault("HUGGINGFACE_HUB_CACHE", os.path.join(os.environ["HF_HOME"], "hub"))
     os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
     os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
-    os.environ.setdefault("MODELSCOPE_CACHE", "/root/autodl-tmp/ms")
 
 
 def safetensors_ok(root: Path, *, check_hash: bool) -> bool:

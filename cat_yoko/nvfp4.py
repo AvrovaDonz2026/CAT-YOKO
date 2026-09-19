@@ -1,11 +1,10 @@
 """Published C1+NVFP4 compute policy. Master weights stay bf16.
 
 Anything that is not a must-bf16/fp32 op is an NVFP4 linear GEMM on
-Blackwell (RTX PRO 6000 / 6000D). ``cat_yoko.nvfp4_linear`` wraps allowed
-``nn.Linear`` modules (E2M1/16 emulation; Transformer Engine
-``NVFP4BlockScaling`` when importable). Outer ``torch.autocast(bf16)``
-still covers unwrapped ops. Attn softmax / SDPA stay fp32 in
-``attention._sdpa``; do not NVFP4 the score path.
+Blackwell. B200 / SM 10.0 / 10.3 wrap ``TeNvfp4Linear`` (Transformer Engine
+``NVFP4BlockScaling`` default recipe). sm_120 / CPU use ``Nvfp4Linear``
+E2M1/16 emulation. Outer ``torch.autocast(bf16)`` still covers unwrapped
+ops. Attn softmax / SDPA stay fp32 in ``attention._sdpa``.
 
 Must-high-prec (not NVFP4): embed lookup, RMSNorm / QK-Norm, router,
 scalar gate, indexer, attn softmax / SDPA scores. B0 student stays
