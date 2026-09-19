@@ -1,0 +1,2 @@
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=14.66GiB grad_ckpt=True seq=64 offload_enc=True offload_blocks=False optim_cpu=False adam=gpu trainable=219.21M reuse=False nvfp4=False int8=True nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+CAT-YOKO-12B B0 step 1/1 nll=12.1368 ppl=186605.4 aux=0.0000 gate=0.301 gn=6.56 moe_cv=1.00 trainable=219.21M lr=1.00e-07 fp8=False nvfp4=False int8=True tok=64 tok/s=4 mem=36586MiB

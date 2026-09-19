@@ -74,6 +74,7 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) — B200 释放前日志
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — 6000D 日志（已释放）
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — 4080 SUPER 烟测（已释放）
+- [`artifacts/autodl-rtx3090/`](artifacts/autodl-rtx3090/README.md) — Ampere INT8 mini-verify（SageBwd QK）
 
 ## 本地测试
 
@@ -84,7 +85,7 @@ python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
 python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint \
   tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 \
   tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full tests.test_phase_cg \
-  tests.test_hw_recipe tests.test_kda
+  tests.test_hw_recipe tests.test_kda tests.test_int8_attn tests.test_mini_verify
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
 ```
@@ -99,3 +100,4 @@ python3 -m cat_yoko.gpu_smoke --c1
 ## License
 
 Apache-2.0。见 [`LICENSE`](LICENSE)。MiniCPM5-2B 底座同样是 Apache-2.0。
+INT8 注意力核来自 luyanaa/flash-attn-triton，BSD-3-Clause（Copyright 2025 Alyssa Vance），见 [`cat_yoko/kernels/LICENSE.flash-attn-triton`](cat_yoko/kernels/LICENSE.flash-attn-triton)。

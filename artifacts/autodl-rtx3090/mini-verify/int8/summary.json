@@ -1,0 +1,91 @@
+{
+  "recipe": "int8",
+  "twelve": false,
+  "device": "cuda",
+  "seq_len": 64,
+  "steps": 2,
+  "use_fp8": false,
+  "use_nvfp4": false,
+  "use_int8": true,
+  "int8_backend": "triton",
+  "head_dim": 32,
+  "n_win": 64,
+  "low_prec": false,
+  "b0_autocast": false,
+  "b1_autocast": false,
+  "phases": {
+    "B0": {
+      "nll": 5.101100861080109,
+      "step": 2,
+      "tokens_seen": 256.0,
+      "peak_mib": 20.3642578125,
+      "ok": true
+    },
+    "B1": {
+      "nll": 5.045002286396329,
+      "step": 2,
+      "tokens_seen": 512.0,
+      "peak_mib": 22.5517578125,
+      "ok": true
+    },
+    "B2": {
+      "nll": 4.951773022848462,
+      "step": 2,
+      "tokens_seen": 768.0,
+      "peak_mib": 25.88232421875,
+      "ok": true
+    },
+    "C-index": {
+      "nll": 0.12606877088546753,
+      "step": 2,
+      "tokens_seen": 1024.0,
+      "peak_mib": 19.783203125,
+      "ok": true
+    },
+    "C-topk": {
+      "nll": 4.958351256355407,
+      "step": 2,
+      "tokens_seen": 1280.0,
+      "peak_mib": 25.90576171875,
+      "ok": true
+    },
+    "C-hca": {
+      "nll": 4.9742315383184526,
+      "step": 2,
+      "tokens_seen": 1536.0,
+      "peak_mib": 25.87890625,
+      "ok": true
+    },
+    "C-win": {
+      "nll": 5.006068638392857,
+      "step": 2,
+      "tokens_seen": 1792.0,
+      "peak_mib": 25.87060546875,
+      "ok": true
+    },
+    "D-8k": {
+      "nll": 5.017210460844494,
+      "step": 2,
+      "tokens_seen": 2048.0,
+      "peak_mib": 25.86865234375,
+      "ok": true
+    },
+    "E": {
+      "nll": 4.988176618303571,
+      "step": 2,
+      "tokens_seen": 2304.0,
+      "peak_mib": 25.86083984375,
+      "ok": true
+    },
+    "F": {
+      "nll": 5.031416416168213,
+      "step": 2,
+      "tokens_seen": 2560.0,
+      "peak_mib": 25.88818359375,
+      "ok": true
+    }
+  },
+  "elapsed_s": 5.421,
+  "ok": true,
+  "out": "/root/autodl-tmp/mini-verify/runs/int8"
+}

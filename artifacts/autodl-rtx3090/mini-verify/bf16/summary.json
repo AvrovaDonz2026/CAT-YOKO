@@ -1,0 +1,91 @@
+{
+  "recipe": "bf16",
+  "twelve": false,
+  "device": "cuda",
+  "seq_len": 16,
+  "steps": 2,
+  "use_fp8": false,
+  "use_nvfp4": false,
+  "use_int8": false,
+  "int8_backend": "none",
+  "head_dim": 16,
+  "n_win": 8,
+  "low_prec": false,
+  "b0_autocast": false,
+  "b1_autocast": false,
+  "phases": {
+    "B0": {
+      "nll": 5.103047688802083,
+      "step": 2,
+      "tokens_seen": 64.0,
+      "peak_mib": 17.38037109375,
+      "ok": true
+    },
+    "B1": {
+      "nll": 5.117008972167969,
+      "step": 2,
+      "tokens_seen": 128.0,
+      "peak_mib": 18.0078125,
+      "ok": true
+    },
+    "B2": {
+      "nll": 4.972393798828125,
+      "step": 2,
+      "tokens_seen": 192.0,
+      "peak_mib": 18.8330078125,
+      "ok": true
+    },
+    "C-index": {
+      "nll": 0.06712916493415833,
+      "step": 2,
+      "tokens_seen": 256.0,
+      "peak_mib": 17.490234375,
+      "ok": true
+    },
+    "C-topk": {
+      "nll": 4.956041971842448,
+      "step": 2,
+      "tokens_seen": 320.0,
+      "peak_mib": 18.830078125,
+      "ok": true
+    },
+    "C-hca": {
+      "nll": 4.9806157430013025,
+      "step": 2,
+      "tokens_seen": 384.0,
+      "peak_mib": 18.82275390625,
+      "ok": true
+    },
+    "C-win": {
+      "nll": 5.065950520833334,
+      "step": 2,
+      "tokens_seen": 448.0,
+      "peak_mib": 18.83935546875,
+      "ok": true
+    },
+    "D-8k": {
+      "nll": 4.787738037109375,
+      "step": 2,
+      "tokens_seen": 512.0,
+      "peak_mib": 18.826171875,
+      "ok": true
+    },
+    "E": {
+      "nll": 4.962784830729166,
+      "step": 2,
+      "tokens_seen": 576.0,
+      "peak_mib": 18.82470703125,
+      "ok": true
+    },
+    "F": {
+      "nll": 5.120970726013184,
+      "step": 2,
+      "tokens_seen": 640.0,
+      "peak_mib": 18.83056640625,
+      "ok": true
+    }
+  },
+  "elapsed_s": 5.593,
+  "ok": true,
+  "out": "/root/autodl-tmp/mini-verify/runs/bf16"
+}

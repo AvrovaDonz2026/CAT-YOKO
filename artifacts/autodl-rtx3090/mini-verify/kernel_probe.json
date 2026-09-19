@@ -1,0 +1,13 @@
+{
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "capability": [8, 6],
+  "torch": "2.8.0+cu128",
+  "triton": "3.4.0",
+  "shape": [1, 4, 64, 32],
+  "dtype": "bfloat16",
+  "causal": true,
+  "backend": "triton",
+  "cosine_vs_sdpa": 0.9999831318855286,
+  "max_abs": 0.015625,
+  "finite": true
+}
