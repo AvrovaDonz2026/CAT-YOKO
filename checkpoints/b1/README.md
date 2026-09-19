@@ -6,7 +6,7 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b1
 
 这是 C1 B1 的 **`trainable.pt` overlay**（decoder + untied `lm_head` + 最终 RMSNorm），不是 27e9 token 发布信封。
 
-恢复：
+恢复（等 B0 不再占 GPU；发布档 overlay 用 Hub `b0-full`，不要用 32 步 `--try`）：
 
 ```bash
 # MiniCPM5 上采样（冻结 encoder + embed）+ B0 overlay + 本目录 B1 overlay

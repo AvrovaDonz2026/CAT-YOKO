@@ -9,6 +9,8 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 
 同一份说明会推到 Hub 文件夹：https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md
 
+Vast B200 **已回收**（2026-09-19）。下表是释放前快照。进度：[`docs/STATUS.md`](../../docs/STATUS.md)。
+
 | 项 | 值 |
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
@@ -18,10 +20,10 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 | seq | 4096 |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
 | 可训练张量 | 132（无 Adam） |
-| 机器 | Vast NVIDIA B200 SM 10.0 |
+| 机器 | Vast NVIDIA B200 SM 10.0（已回收） |
 | 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |
-| 吞吐 / 显存 | ~15.7k tok/s，Trainer 137967 MiB（micro-batch=2） |
-| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。`MICRO_BATCH=1` 可回退。训练进行中约每 10 分钟覆盖 Hub 同路径。 |
+| 吞吐 / 显存 | ~15.7k tok/s，Trainer ~138GiB（micro-batch=2） |
+| 说明 | DummyStream；student bf16；冻结 encoder GEMM 硬件 NVFP4 FPROP；同阶段 resume 可接。不是终局。`MICRO_BATCH=1` 可回退。 |
 
 上一份 6000D 快照是 step **16020**（`b5763b98…`）。本文件覆盖 Hub 同路径。
 

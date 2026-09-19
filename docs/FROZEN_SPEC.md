@@ -9,7 +9,7 @@
 
 ## 0. 一句话
 
-**CAT-YOKO-12B**：MiniCPM5-2B 上采样的因果 YOCO MoE；Phase B 按 **C1+NVFP4** 训（目标卡 RTX PRO 6000 / 6000D）；注意力 Phase B 只跑滑窗 GQA + 门控 cross-attn；M2 关；KDA / mHC / MTP / Muon / PDSA 默认关。
+**CAT-YOKO-12B**：MiniCPM5-2B 上采样的因果 YOCO MoE；Phase B 按 **C1+NVFP4** 训。发布档 B0 实测在 **NVIDIA B200 / SM 10.0**（冻 encoder 硬件 NVFP4 FPROP）；sm_120（6000D）走仿真。注意力 Phase B 只跑滑窗 GQA + 门控 cross-attn；M2 关；KDA / mHC / MTP / Muon / PDSA 默认关。
 
 **底座许可**：`MiniCPM-2B-sft-bf16` 走 OpenBMB GML / 需商业授权；`MiniCPM5-2B` 是 **Apache-2.0**，所以发布底座是 MiniCPM5。上采样 / teacher 用 `openbmb/MiniCPM5-2B-Base`（`LlamaForCausalLM` GQA），tokenizer 用 `openbmb/MiniCPM5-2B`。
 

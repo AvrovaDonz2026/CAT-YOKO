@@ -11,6 +11,7 @@
 > 本文是可执行的工程训练计划。**实现默认已敲死**在 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)
 > / `cat_yoko.config.CATYokoConfig.middle_12b()`：因果 16/26、C1 全 MoE、C1+NVFP4、Phase B 滑窗 + 门控
 > cross-attn、AdamW；**KDA / mHC / MTP / Muon / 首层 dense / M2 不是发布默认**。本文其余档位与消融是敏感性，不是训练代码的开关默认。
+> **当前训练进度**（Hub overlay step、哪台卡已回收）见 [`docs/STATUS.md`](STATUS.md)，不要在本文里找 step 钉。
 
 ---
 

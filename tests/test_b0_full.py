@@ -163,6 +163,20 @@ class B200LauncherTests(unittest.TestCase):
         self.assertNotRegex(text, r"PRIVATE KEY|dfghjkl|31jEePeb|vDw8xU9c")
         self.assertNotIn("westc.seetacloud", text)
 
+    def test_status_doc_matches_hub_pin(self) -> None:
+        status = (ROOT / "docs" / "STATUS.md").read_text()
+        self.assertIn("26940", status)
+        self.assertIn("7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955", status)
+        self.assertIn("Apache-2.0", status)
+        self.assertIn("8e9", status)
+        self.assertIn("b0-full", status)
+        self.assertNotIn("137.175.", status)
+        self.assertNotIn("westc.seetacloud", status)
+        root = (ROOT / "README.md").read_text()
+        self.assertIn("docs/STATUS.md", root)
+        self.assertIn("26940", root)
+        self.assertIn("Apache-2.0", root)
+
 
 if __name__ == "__main__":
     unittest.main()

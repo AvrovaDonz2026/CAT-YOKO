@@ -1,100 +1,99 @@
 # CAT-YOKO
 
-Causal Encoder-Decoder (YOCO-style) hybrid-attention MoE, upcycled from MiniCPM5-2B. License: **Apache-2.0**.
+Causal Encoder-Decoder（YOCO 式）MoE，从 MiniCPM5-2B 上采样。许可 **Apache-2.0**。
 
-Default spec (**middle compute tier**): ≈12.25B total, Encoder ≈2.03B active / input token, Decoder ≈4.33B active / output token. CSA/HCA + 8K sliding window; primary long-context target 128K–256K. Phase B wall-clock **C1+NVFP4 = 571 H100-h**.
+中间档：≈12.25B 存储；Encoder ≈2.03B active / 输入 token，Decoder ≈4.33B active / 输出 token。Phase B 墙钟 **C1+NVFP4 = 571 H100-h**（理论信封，不是实测）。注意力 Phase B 是滑窗 GQA + 门控 cross-attn，**不实现 CSA**。
 
-## Docs
+## 现状
 
-- [`docs/FROZEN_SPEC.md`](docs/FROZEN_SPEC.md) — **published recipe** (what the 12B trainer implements)
-- [`docs/TRAINING_PLAN.md`](docs/TRAINING_PLAN.md) — architecture, staged upcycling recipe, data, optimizer, eval
-- [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — middle-tier parameter / FLOPs / KV / μP ledger
-- [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — causality, residual-cut equivalence, M1/M2/M3 cache interface
-- [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — freeze-curriculum **C1** (MoE both stacks, freeze encoder in B0/B1)
-- [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 Hopper/Ada fallback (729 H100-h)
-- [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — **C1+NVFP4** frozen Phase B wall-clock (571 H100-h)
-- [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子与开训（Hub overlay step 26940；micro-batch=2）
-- [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — RTX 4080 SUPER 烟测 JSON / B0 `--try` 日志（实例已释放）
-- [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — RTX 6000D sm_120；Hub 走 `https://hf-mirror.com`
-- [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) — Vast B200 释放前日志；Hub overlay step 26940
-- [`huggingface/README.md`](huggingface/README.md) — HuggingFace model card；大权重 https://huggingface.co/AvrovaDonz/CAT-YOKO
-- [`docs/HF_HUB.md`](docs/HF_HUB.md) — 权重只走 HuggingFace；`scripts/push_to_hf.sh`
+发布档 **B0 进行中**，尚未跑完 8e9。Vast B200 已于 2026-09-19 回收。最新 overlay 在 HuggingFace，不是 GitHub。
 
-## Train (12B graph; tiny for tests)
+| 项 | 值 |
+| --- | --- |
+| Hub | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
+| step | **26940** |
+| tokens_in_phase | 130,041,856（≈1.63% of 8e9） |
+| sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
+| 上次机器 | Vast B200，micro-batch=2，~15.7k tok/s |
+| 日志 | [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) |
 
-Phase B 语料走 OpenBMB：**Ultra-FineWeb**（en/zh）+ **UltraData-Math**，用 **MiniCPM5-2B** tokenizer（`openbmb/MiniCPM5-2B`，`V=130560`，不要 MiniCPM-2B / MiniCPM3）。仓库不进 50B token；`prepare` 只切一块 mmap `.bin`。
+完整口径、机器沿革、禁止项：[`docs/STATUS.md`](docs/STATUS.md)。
 
-发布入口是 **B0 / B1 / B2**，不是裸 `--phase`。12B 默认写 `trainable.pt` overlay（B0 ≈0.44GiB bf16）到本地 / [HuggingFace](https://huggingface.co/AvrovaDonz/CAT-YOKO)；23GiB 全图 `latest.pt` **不进 GitHub**。32GB 卡跑不完 8B token，用 `--try`（32 步、seq=64）。
+下一台 B200 / SM100：
+
+```bash
+python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
+python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
+bash scripts/run_b0_full_b200.sh
+```
+
+开训说明：[`docs/B200_TRAIN.md`](docs/B200_TRAIN.md)。`MICRO_BATCH=1` 可回退。同阶段 resume 会接上 `tokens_in_phase`。**不要** resume `checkpoints/b0/` 那份 32 步 `--try`，不要 `--save-full`。
+
+## 规格
+
+| 项 | 值 |
+| --- | --- |
+| 底座 | [`openbmb/MiniCPM5-2B-Base`](https://huggingface.co/openbmb/MiniCPM5-2B-Base)（Llama GQA，Apache-2.0） |
+| \(d\) / \(V\) / \(L\) | 2048 / 130560 / 42（16 encoder + 26 decoder） |
+| 注意力 | 16 Q / 2 KV，`head_dim=128` |
+| FFN / MoE | SwiGLU 6144；1 shared + 20 routed；top-\(k\) 7/10（enc/dec） |
+| Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
+
+发布入口是 **B0 / B1 / B2**，不是裸 `--phase`。B0 默认写 ~419MiB `trainable.pt` overlay。23GiB 全图不进 GitHub。
+
+## 课程 C1
+
+| 子阶段 | token | Encoder | 可训练 |
+| --- | ---: | --- | --- |
+| B0 | 8B | 冻结 | 仅新模块 |
+| B1 | 27B | 冻结 | decoder + `lm_head` + 最终 RMSNorm |
+| B2 | 15B | 可训练 | 全部 |
+
+B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
+
+## 文档
+
+**规格与理论**
+
+- [`docs/FROZEN_SPEC.md`](docs/FROZEN_SPEC.md) — 发布配方（训练代码按这个实现）
+- [`docs/TRAINING_PLAN.md`](docs/TRAINING_PLAN.md) — 架构、上采样、数据、优化器
+- [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — 参数 / FLOPs / KV / μP 账本
+- [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — 因果、残差切、M1/M2/M3
+- [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — 冻课程 C1
+- [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — C1+NVFP4 墙钟（571 H100-h）
+- [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 回退（729 H100-h）
+
+**训练与产物**
+
+- [`docs/STATUS.md`](docs/STATUS.md) — **当前进度**
+- [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子与接训
+- [`docs/HF_HUB.md`](docs/HF_HUB.md) — 权重只走 Hub；`scripts/push_to_hf.sh`
+- [`huggingface/README.md`](huggingface/README.md) — Hub 模型卡源
+- [`checkpoints/b0-full/README.md`](checkpoints/b0-full/README.md) — 发布档 B0 overlay 指针
+- [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) — B200 释放前日志
+- [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — 6000D 日志（已释放）
+- [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — 4080 SUPER 烟测（已释放）
+
+## 本地测试
+
+仓库不进 50B token。tiny 配置只给单测。
 
 ```bash
 python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
-python3 -m cat_yoko.b1 --try --resume checkpoints/b0 --save-dir checkpoints/b1
-python3 -m cat_yoko.b2 --try --resume checkpoints/b1 --save-dir checkpoints/b2
-# H100 包络（8/27/15B tokens；<40GiB 卡会拒绝，除非显式 --steps/--tokens）：
-# python3 -m cat_yoko.b0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin
-
-# 中国 AutoDL：Hub 走 hf-mirror；Xet 403 时 download 脚本改 ModelScope
-# source scripts/autodl_env.sh
-# python3 scripts/download_minicpm5.py
-# python3 -m cat_yoko.b0 --try --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base
-# 6000D 发布档 B0（8e9 tokens, seq=4096, encoder on GPU）：
-# bash scripts/run_b0_full_autodl.sh
-# B200 / SM100（Hub overlay step 26940 续训，硬件 NVFP4；默认 micro-batch=2）：
-# bash scripts/run_b200.sh
-# bash scripts/run_b0_full_b200.sh
-# MICRO_BATCH=1 bash scripts/run_b0_full_b200.sh   # 显存回退
-# 6000D B2 --try（resume B1 overlay；GPU 空闲时）：
-# bash scripts/run_b2_try_autodl.sh
-# GPU 空闲后 B1 --try（32 步 seq=64，resume b0-full 否则 b0）：
-# bash scripts/run_b1_try_autodl.sh
+python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint \
+  tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 \
+  tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full
+python3 scripts/param_budget.py --verify
+python3 scripts/arch_verify.py --verify
 ```
 
+有 CUDA：
+
 ```bash
-# 本地 jsonl 烟测（不下载 HuggingFace）
-python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy \
-  --config tiny --out /tmp/t.bin --max-tokens 256
-python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin
-python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin \
-  --device cuda --dtype bf16 --grad-ckpt
-
-python3 -m cat_yoko.train --config 12b --meta
-python3 -m cat_yoko.train --config 12b --dump-megatron
-
-# 生产（需 pip install 'cat-yoko[data]'，会拉 Ultra-FineWeb；不要在 CI / 小 VM 上跑）
-# python3 -m cat_yoko.prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B \
-#   --config 12b --out data/phaseb.bin --max-tokens 1e8
-# python3 -m cat_yoko.train --config 12b --phase B0 \
-#   --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin \
-#   --dtype bf16 --grad-ckpt --device cuda --steps N --save-dir runs/b0
-# 12B 图在 ≥28GiB GPU 上跑 C1（bf16 直接建图，不经 CPU fp32）：
-# python3 -m cat_yoko.gpu_smoke --middle
-# python3 -m cat_yoko.gpu_smoke --middle --steps 2 --seq-len 64
-# python3 -m cat_yoko.gpu_smoke --c1 --seq-len 64
-# python3 -m cat_yoko.train --config 12b --device cuda --dtype bf16 --grad-ckpt \
-#   --steps 1 --accum 1 --micro-batch 1 --seq-len 64
-# python3 -m cat_yoko.train --config 12b --device cuda --c1-smoke --steps 1 --seq-len 64
-# 12B 默认 micro-batch=1、grad-ckpt、bf16、weights-only ckpt
-# python3 -m cat_yoko.train --config 12b --device cuda --c1 --steps 1 --seq-len 64 --save-dir runs/c1
-# 12B ckpt 不要放 /tmp（23GiB×2 会写满 overlay）。save_every 命中末步时 latest.pt 是 step_N 的 hardlink：
-# python3 -m cat_yoko.gpu_smoke --middle --save-dir /root/autodl-tmp/b0ckpt
-# python3 -m cat_yoko.gpu_smoke --middle --steps 2 --resume /root/autodl-tmp/b0ckpt
-python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full
-# 有 CUDA 的机器：
-python3 -m cat_yoko.gpu_smoke
 python3 -m cat_yoko.gpu_smoke --middle
 python3 -m cat_yoko.gpu_smoke --c1
-python3 -m unittest tests.test_gpu
-```
-
-## Recalculate / verify
-
-```bash
-python3 scripts/param_budget.py --verify     # middle-tier + freeze-curriculum + FP8 fallback + NVFP4 ledger
-python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
-python3 scripts/arch_verify.py --verify      # architecture invariants
-python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 tests.test_nvfp4_linear
 ```
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE). MiniCPM5-2B 底座同样是 Apache-2.0。
+Apache-2.0。见 [`LICENSE`](LICENSE)。MiniCPM5-2B 底座同样是 Apache-2.0。

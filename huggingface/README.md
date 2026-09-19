@@ -66,7 +66,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 
 ## 当前 B0 快照
 
-发布信封 **进行中**（DummyStream，尚未跑完 8e9）。训练还在跑时约每 10 分钟覆盖同路径。不是终局。
+发布信封 **进行中**（DummyStream，尚未跑完 8e9）。Vast B200 **已回收**（2026-09-19）。本文件是释放前快照，不是终局。GitHub 口径：[`docs/STATUS.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/blob/main/docs/STATUS.md)。
 
 | 项 | 值 |
 | --- | --- |
@@ -76,7 +76,7 @@ YOCO 式因果 encoder-decoder MoE。从 MiniCPM5-2B 上采样：[`openbmb/MiniC
 | tokens_in_phase | 130,041,856（信封 8e9 的 ≈1.63%） |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
 | 张量 | 132，无 Adam |
-| 机器 | Vast NVIDIA B200 SM 10.0 |
+| 机器 | Vast NVIDIA B200 SM 10.0（已回收） |
 | 运行时 | torch 2.11+cu128 + TE nvcc 12.9 SM100 |
 | 吞吐 / 显存 | **micro-batch=2**，~15.7k tok/s，Trainer ~138GiB |
 | 续训 | MiniCPM5 上采样后 overlay 本文件；同阶段 resume 保留 `tokens_in_phase` |
@@ -132,6 +132,6 @@ Data: Ultra-FineWeb en/zh + UltraData-Math. Tokenizer: [`openbmb/MiniCPM5-2B`](h
 
 This Hub has RTX 6000D MiniCPM5-upcycle overlays (not the 8B/27B/15B-token envelopes): `checkpoints/b0/trainable.pt` (32 steps), `checkpoints/b0-nvfp4-try/trainable.pt` (2 steps, NVFP4 wrap), `checkpoints/b1/` (B1 `--try`, pending GPU), and `checkpoints/b2/` (B2 `--try`, pending GPU).
 
-**Current published B0 overlay** (in progress, DummyStream, not finished 8e9): [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt). Step **26940**, `tokens_in_phase=130,041,856` (≈1.63% of 8e9), sha256 `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955`. Vast B200, micro-batch=2, ~15.7k tok/s. Same path overwritten about every 10 minutes. Folder card: [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md). Weights do not live on GitHub. Logs: GitHub `artifacts/vast-b200/` (this B200 run) and `artifacts/autodl-rtx6000d/`.
+**Current published B0 overlay** (in progress, DummyStream, not finished 8e9; Vast B200 recycled 2026-09-19): [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt). Step **26940**, `tokens_in_phase=130,041,856` (≈1.63% of 8e9), sha256 `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955`. Last run: micro-batch=2, ~15.7k tok/s. Folder card: [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md). Weights do not live on GitHub. Logs: GitHub `artifacts/vast-b200/` and `artifacts/autodl-rtx6000d/`.
 
 License: Apache-2.0 (this repo, derived weights, and MiniCPM5 base). No eval scores.

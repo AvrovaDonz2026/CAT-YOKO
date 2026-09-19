@@ -1,6 +1,6 @@
 # AutoDL RTX 6000D（Blackwell sm_120）
 
-实例 `autodl-container-8x4c4zmh8d-e96e943a`，SSH 曾是 `connect.weste.seetacloud.com:34864`（**weste**，不是已释放的 westc）。**本机即将释放**；不要再连。下一台从 Hub [`checkpoints/b0-full/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full) 同阶段 resume B0。
+实例 `autodl-container-8x4c4zmh8d-e96e943a`，SSH 曾是 `connect.weste.seetacloud.com:34864`（**weste**，不是已释放的 westc）。**本机已释放**；不要再连。后续 B200 也已回收。当前 Hub 钉与接训见 [`docs/STATUS.md`](../../docs/STATUS.md) 和 [`checkpoints/b0-full/README.md`](../../checkpoints/b0-full/README.md)（step **26940**）。
 
 发布档 B0 **已切到** `/root/autodl-tmp/venv-nightly`：torch `2.15.0.dev20260918+cu130`，驱动 595.71.05，CUDA 13.2。miniconda 里仍留着 2.8.0+cu128。
 

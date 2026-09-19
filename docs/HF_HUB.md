@@ -2,9 +2,9 @@
 
 发布模型仓：[AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)
 
-GitHub **不用 LFS**。代码和文档在 GitHub；`trainable.pt` / 全图 / shard / 未来 NVFP4 checkpoint 只走 Hub。代码与派生权重 **Apache-2.0**（[`LICENSE`](../LICENSE)）；`push_to_hf.sh` 会把 `LICENSE` 一并推到 Hub。
+GitHub **不用 LFS**。代码、文档、日志在 GitHub；`trainable.pt` / 全图 / shard 只走 Hub。代码与派生权重 **Apache-2.0**（[`LICENSE`](../LICENSE)）。
 
-推送：[`scripts/push_to_hf.sh`](../scripts/push_to_hf.sh)。**不要**把 GitHub 整仓推进 Hub。
+进度口径：[`STATUS.md`](STATUS.md)。**不要**把 GitHub 整仓推进 Hub。
 
 ```bash
 ssh -T git@hf.co
@@ -12,11 +12,17 @@ ssh -T git@hf.co
 ./scripts/push_to_hf.sh checkpoints/b0-full/trainable.pt
 ```
 
-`push_to_hf.sh` 每次都会带上 Hub 根卡片 `huggingface/README.md` 和文件夹说明 `checkpoints/b0-full/README.md`。
+`push_to_hf.sh` 每次带上：
+
+- 根卡片 `huggingface/README.md` → Hub `README.md`
+- `checkpoints/b0-full/README.md`
+- `LICENSE`
 
 Clone：`git clone git@hf.co:AvrovaDonz/CAT-YOKO`
 
 ## 当前 B0 overlay
+
+Vast B200 **已回收**。下表是 2026-09-19T06:44Z 释放前快照，不是终局。
 
 | 项 | 值 |
 | --- | --- |
@@ -25,10 +31,18 @@ Clone：`git clone git@hf.co:AvrovaDonz/CAT-YOKO`
 | step | **26940** |
 | tokens_in_phase | 130,041,856（≈1.63% of 8e9） |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| 刷新 | 训练进行中约每 10 分钟覆盖同路径；从 Vast 拉 overlay：[`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh)（SSH Host `vast-b200`，不杀训练） |
+| 下一台 | [`B200_TRAIN.md`](B200_TRAIN.md)；`download_hub_overlay.py --name b0-full` |
 
-NVFP4 wrap 的 2 步 overlay 在 Hub `checkpoints/b0-nvfp4-try/trainable.pt`（不覆盖 32 步 `checkpoints/b0/`）。B200 续训（默认 micro-batch=2）见 [`docs/B200_TRAIN.md`](../docs/B200_TRAIN.md)。B1 `--try` overlay 走 `checkpoints/b1/`（decoder + `lm_head` + 最终 RMSNorm；权重不进 GitHub）。B2 `--try` 指针：GitHub [`checkpoints/b2/README.md`](../checkpoints/b2/README.md) → Hub `checkpoints/b2/`（全模型 overlay；resume B1 + MiniCPM5 encoder/embed）。日志进 GitHub `artifacts/autodl-rtx6000d/`。
+[`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh) 走 SSH Host `vast-b200`。那台已经回收，不要假设还能连。
+
+其它 Hub 路径：
+
+- `checkpoints/b0/` — 6000D `--try` 32 步，**不是** 8e9 信封
+- `checkpoints/b0-nvfp4-try/` — 6000D NVFP4 wrap 2 步
+- `checkpoints/b1/`、`checkpoints/b2/` — 尚未上传（等 GPU）
+
+日志：GitHub [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md)、[`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md)。
 
 Deploy SSH key 只放本机 `~/.ssh`（`HF_SSH_KEY` 可覆盖路径），在 https://huggingface.co/settings/keys 加公钥。**不要进 git**。
 
-中国 AutoDL **下载**仍走 `HF_ENDPOINT=https://hf-mirror.com`（`scripts/autodl_env.sh`）。**上传**走 `huggingface.co` / `hf.co`。Key 若拷到 AutoDL，只放 `/root/autodl-tmp`。不要再连已释放的 `connect.westc.seetacloud.com`。
+中国机器 **下载**可走 `HF_ENDPOINT=https://hf-mirror.com`（`scripts/autodl_env.sh`）。**上传**走 `huggingface.co` / `hf.co`。不要再连已释放的 `connect.westc.seetacloud.com`。
