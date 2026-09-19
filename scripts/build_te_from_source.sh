@@ -131,17 +131,20 @@ rm -rf "$SRC/build" "$SRC/transformer_engine/common/build"
 find "$SRC" -name CMakeCache.txt -delete 2>/dev/null || true
 cd "$SRC"
 "${PIP[@]}" --no-build-isolation --no-deps .
+# Importing from $SRC shadows site-packages and trips TE's PyPI sanity
+# check (git Version suffix, Root-Is-Purelib: false). Patch dist-info
+# first, then import from a cwd that is not the TE tree.
 "$PY" - <<'PY'
 """Source metapackage + leftover PyPI cu12 can trip TE's PyPI sanity check
 (version suffix mismatch, or two libtransformer_engine.so cores). Keep the
 SM100 source .so, drop a fat wheel_lib copy, pin Version to the cu12 core.
 """
 from pathlib import Path
-import transformer_engine as te
+import sysconfig
 
-root = Path(te.__file__).resolve().parent
-sos = list(root.rglob("libtransformer_engine.so"))
-print("te cores", [(str(p.relative_to(root)), round(p.stat().st_size / 1024 / 1024, 1)) for p in sos])
+site = Path(sysconfig.get_paths()["purelib"])
+sos = list((site / "transformer_engine").rglob("libtransformer_engine.so")) if (site / "transformer_engine").is_dir() else []
+print("te cores", [(str(p.relative_to(site)), round(p.stat().st_size / 1024 / 1024, 1)) for p in sos])
 if len(sos) > 1:
     keep = None
     for p in sos:
@@ -154,7 +157,6 @@ if len(sos) > 1:
         if p != keep:
             print("remove extra TE core", p, "MiB", round(p.stat().st_size / 1024 / 1024, 1))
             p.unlink()
-site = root.parent
 for meta in site.glob("transformer_engine-*.dist-info/METADATA"):
     if "cu12" in meta.parent.name or "cu13" in meta.parent.name or "torch" in meta.parent.name:
         continue
@@ -177,7 +179,12 @@ for wheel in site.glob("transformer_engine-*.dist-info/WHEEL"):
     if "Root-Is-Purelib: false" in text:
         wheel.write_text(text.replace("Root-Is-Purelib: false", "Root-Is-Purelib: true"))
         print("patched", wheel, "Root-Is-Purelib")
-print("te", getattr(te, "__version__", "ok"))
+print("dist-info patched under", site)
+PY
+cd /tmp
+"$PY" - <<'PY'
+import transformer_engine as te
+print("te", getattr(te, "__version__", "ok"), te.__file__)
 import transformer_engine.pytorch as tep
 print("pytorch", tep)
 PY
