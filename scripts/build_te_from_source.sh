@@ -92,6 +92,12 @@ if [ -n "$NVTX_INC" ]; then
   export CPLUS_INCLUDE_PATH="$NVTX_INC${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
   echo "NVTX_INC=$NVTX_INC"
 fi
+# 12.9 nvcc prefix is incomplete vs the 12.8 toolkit (nvrtc, cupti, …).
+if [ -d /usr/local/cuda-12.8/targets/x86_64-linux/include ]; then
+  export CPATH="/usr/local/cuda-12.8/targets/x86_64-linux/include${CPATH:+:$CPATH}"
+  export CPLUS_INCLUDE_PATH="/usr/local/cuda-12.8/targets/x86_64-linux/include${CPLUS_INCLUDE_PATH:+:$CPLUS_INCLUDE_PATH}"
+  echo "CUDA12.8_INC=/usr/local/cuda-12.8/targets/x86_64-linux/include"
+fi
 if command -v uv >/dev/null 2>&1; then
   PIP=(uv pip install)
 else
