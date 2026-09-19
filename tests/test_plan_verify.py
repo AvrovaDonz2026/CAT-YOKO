@@ -11,6 +11,8 @@ from pathlib import Path
 from cat_yoko.config import CATYokoConfig, encoder_layer_kind
 from cat_yoko.plan_verify import PHASES_RUN, run, static_ledger
 
+import torch
+
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN = (
     "137.175.",
@@ -45,6 +47,14 @@ class PlanProbeConfigTests(unittest.TestCase):
         kinds = [encoder_layer_kind(i, 16) for i in range(16)]
         self.assertEqual((kinds.count("sliding"), kinds.count("csa"), kinds.count("hca")), (2, 7, 7))
 
+    def test_chain_is_phase_a_through_e(self) -> None:
+        self.assertEqual(
+            PHASES_RUN,
+            ("A", "B0", "B1", "B2", "C-index", "C-topk", "C-hca", "C-win", "D-8k", "E"),
+        )
+        self.assertNotIn("F", PHASES_RUN)
+        self.assertNotIn("G", PHASES_RUN)
+
 
 class StaticLedgerTests(unittest.TestCase):
     def test_static_claims_pass_except_deferred_pdsa(self) -> None:
@@ -59,6 +69,7 @@ class StaticLedgerTests(unittest.TestCase):
         self.assertIn("yoco.cross_attn_q_o_only", names)
         self.assertIn("theorem_b.indexer_deletes_only", names)
         self.assertIn("attention.no_csa_cuda_kernel", names)
+        self.assertIn("plan.mini_train_is_a_through_e", names)
 
 
 class MiniTrainTests(unittest.TestCase):
@@ -76,7 +87,22 @@ class MiniTrainTests(unittest.TestCase):
         for phase, st in blob["phases"].items():
             self.assertTrue(st["ok"], msg=phase)
             self.assertGreater(st["nll"], 0.0)
+        self.assertEqual(blob["phases"]["A"]["step"], 0)
+        self.assertEqual(blob["phases"]["A"]["tokens"], 0)
+        self.assertNotIn("F", blob["phases"])
         self.assertNotIn("--save-full", json.dumps(blob["phases"]))
+
+
+class IndexerDtypeTests(unittest.TestCase):
+    def test_scores_fp32_against_bf16_weights(self) -> None:
+        from cat_yoko.indexer import LightningIndexer
+
+        cfg = CATYokoConfig.plan_probe()
+        idx = LightningIndexer(cfg).to(dtype=torch.bfloat16)
+        x = torch.randn(1, cfg.seq_len, cfg.hidden_size, dtype=torch.bfloat16)
+        scores = idx.scores(x)
+        self.assertEqual(scores.dtype, torch.float32)
+        self.assertTrue(torch.isfinite(scores).all())
 
 
 class SecretScanTests(unittest.TestCase):

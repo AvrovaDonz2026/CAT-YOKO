@@ -1,9 +1,9 @@
 """Dedicated-dir mini-train proof of the published attention / YOCO / PDSA plan.
 
-Static claims plus a tiny C1→C→D/E/F DummyStream run. Writes ``--out/ledger.json``.
-Does not download Ultra-FineWeb. Not a CSA CUDA kernel. PDSA Tier 1/3 stay
-deferred (FROZEN_SPEC: PDSA off); borrowed *principles* that are in the graph
-are checked: query-time window fallback, M1≠M3, M2 off, HCA last, Theorem B.
+Static claims plus Phase **A→E** on a tiny DummyStream graph (A is 0-token
+surgery; B0–E are 1–N trainer steps). Writes ``--out/ledger.json``.
+Does not download Ultra-FineWeb. Not a CSA CUDA kernel. F/G are registered
+but not this mini-train. PDSA Tier 1/3 stay deferred (FROZEN_SPEC: PDSA off).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from cat_yoko.attention import CrossAttention, WindowAttention
 from cat_yoko.blocks import DecoderBlock
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, encoder_layer_kind
 from cat_yoko.data import DummyStream
-from cat_yoko.freeze import gate_schedule, trainable_names
+from cat_yoko.freeze import gate_schedule, set_gate, trainable_names
 from cat_yoko.indexer import LightningIndexer, indexer_compressed_keep
 from cat_yoko.optim import unwrap, wsd_lr
 from cat_yoko.phases import C_CHAIN, C_CHAIN_KDA, PHASES
@@ -39,7 +39,9 @@ from cat_yoko.sparse import (
 )
 from cat_yoko.trainer import Trainer, build_model
 
+# Published pretrain envelope: A (0-token surgery) through E (WSD). F/G are post-train.
 PHASES_RUN = (
+    "A",
     "B0",
     "B1",
     "B2",
@@ -49,7 +51,6 @@ PHASES_RUN = (
     "C-win",
     "D-8k",
     "E",
-    "F",
 )
 
 
@@ -373,11 +374,18 @@ def _static_plan_claims(cfg: CATYokoConfig) -> list[Claim]:
             "Phase E WSD to ~1/100 peak",
         ),
         _claim(
-            "plan.g_registered_not_in_mini_train",
+            "plan.mini_train_is_a_through_e",
+            "plan",
+            PHASES_RUN[0] == "A" and PHASES_RUN[-1] == "E" and "F" not in PHASES_RUN,
+            "→".join(PHASES_RUN),
+            "Phase A surgery through Phase E WSD; F/G are post-train",
+        ),
+        _claim(
+            "plan.fg_registered_after_e",
             "plan",
             PHASES["G"].loss == "grpo" and PHASES["G-dpo"].loss == "dpo" and PHASES["F"].loss == "sft",
             "G=grpo G-dpo=dpo F=sft",
-            "mini-train stops at F; G is dummy RLVR on --try",
+            "F/G exist; this mini-train stops at E",
         ),
         _claim(
             "plan.d8k_published_keeps_hca",
@@ -594,10 +602,76 @@ def _probe_phase(model: nn.Module, cfg: CATYokoConfig, phase: str, nll: float, d
                 "plan",
                 masked,
                 f"labels[:{cut}]=-100",
-                "SFT DummyStream response-only",
+                "SFT DummyStream response-only (not in A–E mini-train)",
             )
         )
     return claims
+
+
+def _run_phase_a(model: nn.Module, cfg: CATYokoConfig, device: str) -> tuple[list[Claim], float]:
+    """Offline Phase A: dummy MiniCPM5 upcycle, both stacks MoE, gate=0, window compute."""
+    from cat_yoko.moe import MoE
+    from cat_yoko.upcycle import dummy_minicpm_state, init_new_modules, upcycle_from_minicpm
+
+    raw = unwrap(model)
+    src = dummy_minicpm_state(cfg)
+    upcycle_from_minicpm(raw, src, cfg)
+    init_new_modules(raw)
+    set_gate(raw, 0.0)
+    enc_moe = all(isinstance(unwrap(b).mlp, MoE) for b in raw.encoder)
+    dec_moe = all(isinstance(unwrap(b).mlp, MoE) for b in raw.decoder)
+    hash0 = bool(getattr(unwrap(raw.decoder[0]).mlp, "hash_route", False))
+    modes = [getattr(b, "sparse_mode", "window") for b in raw.encoder]
+    window_only = all(m == "window" for m in modes)
+    g = float(raw.decoder[0].gate)
+    raw.eval()
+    ids = torch.randint(0, cfg.vocab_size, (1, cfg.seq_len), device=device)
+    atol = _atol(device)
+    with torch.no_grad():
+        a = raw(input_ids=ids)["logits"]
+        delta = torch.randn_like(raw.cache_k.weight)
+        raw.cache_k.weight.add_(delta)
+        b = raw(input_ids=ids)["logits"]
+        raw.cache_k.weight.sub_(delta)
+        nll = float(raw(input_ids=ids, labels=ids)["nll"])
+    thm_a = bool(torch.allclose(a, b, atol=atol, rtol=atol))
+    raw.train()
+    claims = [
+        _claim("train.A.zero_tokens", "plan", True, "offline dummy upcycle", "Phase A is 0-token surgery"),
+        _claim(
+            "train.A.both_stacks_moe",
+            "plan",
+            enc_moe and dec_moe,
+            f"enc={enc_moe} dec={dec_moe}",
+            "C1: both stacks MoE at token 0",
+        ),
+        _claim("train.A.no_first_dense", "plan", not cfg.first_dense, cfg.first_dense, False),
+        _claim("train.A.gate_zero", "yoco", abs(g) < 1e-6, g, 0.0),
+        _claim(
+            "train.A.sparse_still_window",
+            "attention",
+            window_only,
+            modes,
+            "implement then light; A/B stay window",
+        ),
+        _claim("train.A.hash_moe_decoder_bootstrap", "plan", hash0, hash0, "decoder first layers hash-route"),
+        _claim(
+            "train.A.theorem_a_cache_irrelevant",
+            "yoco",
+            thm_a,
+            thm_a,
+            "gate=0 ⇒ cache W_K does not change logits",
+        ),
+        _claim(
+            "train.A.no_mup",
+            "plan",
+            (not cfg.use_mup) and abs(cfg.residual_scale - 1.0) < 1e-9,
+            cfg.residual_scale,
+            1.0,
+        ),
+    ]
+    claims.extend(_probe_phase(raw, cfg, "A", nll, device))
+    return claims, nll
 
 
 def static_ledger() -> list[Claim]:
@@ -628,6 +702,17 @@ def run(
     t0 = time.perf_counter()
     phases = {}
     for phase in PHASES_RUN:
+        if phase == "A":
+            extra, nll = _run_phase_a(model, cfg, device)
+            ledger.extend(extra)
+            phases[phase] = {
+                "nll": float(nll),
+                "step": 0,
+                "ok": _finite_pos(float(nll)),
+                "peak_mib": 0.0,
+                "tokens": 0,
+            }
+            continue
         tr = Trainer(
             cfg,
             phase,

@@ -629,7 +629,7 @@ BBH（推理），IFEval（指令遵循）。
 
 ### 15.2 三条低预算路线（按实际卡数选）
 
-- **Route A — 架构验证（最省，≤ 几张卡，~10–50 H100-h，可租）**：upcycle 小 MiniCPM5（减专家）→ **0.5–1.5B 小 MoE**，装 YOCO+CSA/HCA(+可选 KDA)，继续训 10–20B tok。目标：证明这套注意力/编解码器能跑、不掉点、长上下文省 KV。**推荐作为默认起点。** 仓库里的探针是 [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)：`plan-probe` 图 + DummyStream 短训，ledger 覆盖滑窗/CSA/HCA/YOCO 与 PDSA 已进图原则（Tier 1/3 延期）。
+- **Route A — 架构验证（最省，≤ 几张卡，~10–50 H100-h，可租）**：upcycle 小 MiniCPM5（减专家）→ **0.5–1.5B 小 MoE**，装 YOCO+CSA/HCA(+可选 KDA)，继续训 10–20B tok。目标：证明这套注意力/编解码器能跑、不掉点、长上下文省 KV。**推荐作为默认起点。** 仓库里的探针是 [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)：`plan-probe` 图按 **Phase A→E** DummyStream 短训（A 离线手术，不到 F/G）。
 - **Route B — 放大到 12B 目标（~8×A100/H100 或一张 RTX PRO 6000；Phase B 定稿 C1+NVFP4 ≈ 571 H100-h）**：MiniCPM5-2B → **12.25B** upcycle（可先经 3–6B 里程碑），继续训 50–60B tok + 短长上下文阶段，得到目标模型。联合 bf16 1,325 只作对照。
 - **Route C — PDSA 扩展（几乎不花训练算力，契合已有工作）**：冻结 backbone，仅训小组件（写入器/reranker/阈值）+ 落地"校准回退 / 可训练 editable memory"（§14）。**零预算最优**，直接产出 PDSA 的可训练生命周期后续。
 - **Route D — 24B（远期，暂不作为目标）**：仅在拿到真集群/算力资助后再考虑放大。
@@ -644,7 +644,7 @@ BBH（推理），IFEval（指令遵循）。
 
 ### 15.4 修订后的默认路径
 
-**L0 tiny 正确性 → plan-probe ledger（[`PLAN_VERIFY.md`](PLAN_VERIFY.md)）→ Route A（0.5–1.5B 架构验证，出架构论文）→ 有预算再 Route B（放大到 12B 目标）→ 远期（可选）Route D（24B）。**
+**L0 tiny 正确性 → plan-probe A→E ledger（[`PLAN_VERIFY.md`](PLAN_VERIFY.md)）→ Route A（0.5–1.5B 架构验证，出架构论文）→ 有预算再 Route B（放大到 12B 目标）→ 远期（可选）Route D（24B）。**
 §1.2 的 **12B 为目标规格**；预算紧时**当前默认先执行 Route A**，§3 的预算脚本可直接把 `Nr_e/Nr_d` 调小到 0.5–1.5B 档做验证。
 
 ---

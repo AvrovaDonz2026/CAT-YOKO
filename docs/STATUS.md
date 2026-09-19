@@ -23,7 +23,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
 | C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel |
-| 计划探针 | **单独目录** DummyStream 短训：`cat_yoko.plan_verify` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。证明滑窗/CSA/HCA/YOCO cross-attn、Theorem B、PDSA 已进图原则（窗回退、M1≠M3、M2 关、HCA 最后）、C1→F 冻结与点亮。PDSA Tier 1/3 **延期**。不拉 50B、不 `--save-full`。GPU 默认 `/root/autodl-tmp/plan-verify/` |
+| 计划探针 | **A→E** 单独目录 DummyStream：`cat_yoko.plan_verify` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。A 离线 dummy 上采样；B0–E 短训。证明滑窗/CSA/HCA/YOCO、Theorem A/B、PDSA 已进图原则、C1 冻结与点亮。不到 F/G。PDSA Tier 1/3 **延期**。不拉 50B、不 `--save-full`。GPU 默认 `/root/autodl-tmp/plan-verify/` |
 
 ## 机器沿革
 
