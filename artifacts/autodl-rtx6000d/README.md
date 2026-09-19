@@ -79,7 +79,7 @@ Nightly 目标：`https://download.pytorch.org/whl/nightly/cu130` 上当天的 t
 
 **已切换（2026-09-18T18:06Z）：** B0 从 step 1400 overlay 同阶段 resume，进程是 nightly Python。`transformer_engine.pytorch` 2.19 可以 import；`float4_e2m1fn_x2` 的 `copy_` 仍失败，所以 GEMM 还是仿真。探活 JSON：[`nvfp4/NVFP4_PROBE_nightly.json`](nvfp4/NVFP4_PROBE_nightly.json)。吞吐约 1350 → 1670 tok/s。
 
-下一档算子（grouped MoE / 融合 QKV / 分块 lm_head+CE / TE NVFP4 尽力）已进仓库；要进当前 B0 内存图，需等一次完整 `trainable_step_*.pt` 后同阶段 restart，不要为 B1/B2 `--try` 杀 B0。
+**已切换（2026-09-19T00:27Z）：** 从 step **10560** 同阶段 resume，新算子进内存图。`grouped_mm=True`，`te=True`，`te_nvfp4=False`（TE NVFP4 Linear 在 sm_120 上失败后整进程禁用），`return_logits=False`。吞吐约 **1670 → 2820 tok/s**，mem **42092 → 56090 MiB**。Hub 快照 step **10680**。不要为 B1/B2 `--try` 杀这份 B0。
 
 ## NVFP4 wrap 烟测（2026-09-18）
 

@@ -11,14 +11,14 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
 | 阶段 | B0 |
-| step | 9720 |
-| tokens_in_phase | 39,684,096（信封 8e9 的 ≈0.50%） |
+| step | 10680 |
+| tokens_in_phase | 43,616,256（信封 8e9 的 ≈0.55%） |
 | seq | 4096 |
-| sha256 | `faba210cd24da6b331fd93fe1fb37f6fc128c1c4c05da8a6138f1cb75ddb2a5f` |
+| sha256 | `26c6c84193482fc273fb330b3d49c4af1f49579bc8b11ba6b64317749529ae07` |
 | 机器 | AutoDL RTX 6000D sm_120 |
-| 运行时 | torch `2.15.0.dev20260918+cu130`（`venv-nightly`）+ batched MoE / frozen NVFP4 cache |
+| 运行时 | torch `2.15.0.dev20260918+cu130`（`venv-nightly`）+ grouped MoE / fused QKV / chunked CE |
 | 说明 | DummyStream；student bf16；冻结 encoder GEMM NVFP4 仿真；同阶段 resume 可接。实例随时可能没，这是落盘快照，不是终局。 |
 
-2026-09-18T18:06Z 从 step 1400 同阶段重启：新算子 + nightly。吞吐约 **1670 tok/s**。原生 `float4` `copy_` 仍失败，GEMM 继续 E2M1/16 仿真。
+2026-09-19T00:27Z 从 step **10560** 同阶段重启：jagged `grouped_mm` MoE + 融合 QKV + 分块 lm_head+CE。吞吐约 **1670 → 2820 tok/s**，mem **42092 → 56090 MiB**。`grouped_mm=True`，`te=True`，`te_nvfp4=False`（sm_120 上 TE NVFP4 Linear 仍失败，整进程禁用回 E2M1/16 仿真），`return_logits=False`。
 
 启动：`scripts/run_b0_full_autodl.sh`。日志：[`artifacts/autodl-rtx6000d/b0-full/`](../../artifacts/autodl-rtx6000d/b0-full/)。
