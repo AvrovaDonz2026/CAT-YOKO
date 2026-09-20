@@ -816,6 +816,12 @@ class Trainer:
             if type(opt).__name__ == "DeepSpeedCPUAdam":
                 adam_state = "ds-cpuadam"
                 self.adam_state = adam_state
+            elif self.zero_offload:
+                print(
+                    "DeepSpeedCPUAdam unavailable (need ninja + cpu_adam op); "
+                    "torch AdamW on ZeRO CPU shards",
+                    flush=True,
+                )
             cfg = zero_config(
                 stage=self.zero_stage,
                 offload_optimizer=self.zero_offload,

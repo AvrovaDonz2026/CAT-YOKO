@@ -49,8 +49,8 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 
 算子本身（Flash GQA / fused QKV / MoE TN bmm）已经在算力墙上。占用掉到 **0%** 来自步进空窗，不是 kernel 太慢：
 
-1. **ZeRO 预取被 live cap 掐掉**（默认 `stage3_max_live_parameters=1e9`）——一层冻结 MoE ~0.75e9，再加 0.5e9 预取桶就超了，预取静默不跑，每步 GPU 空约 1s。现 `max_live/reuse=2e9`，预取桶 **5e8**，`persistence=5e6`（2048×2048 留卡上；专家 12.6e6 仍 offload）。
-2. **CPU Adam 太慢**——ZeRO-3 把 student 切成碎片，torch AdamW 每步 ~1s，nvidia-smi 打成 0%。走 **DeepSpeedCPUAdam**（仍是两组 decay / no-decay，不 `zero_force` 压扁）。
+1. **ZeRO 预取被 live cap 掐掉**（默认 `stage3_max_live_parameters=1e9`）——一层冻结 MoE ~0.75e9，再加 0.5e9 预取桶就超了，预取静默不跑，每步 GPU 空约 1s。现 `max_live/reuse=2e9`，预取桶 **5e8**。`persistence` 留 **1e6**：5e6 会把全部 2048×2048 Q/O 钉在卡上，3090 第一步 `persistent all_gather` 在 47.34/47.41 GiB OOM。专家 12.6e6 仍 offload。
+2. **CPU Adam 太慢**——ZeRO-3 把 student 切成碎片，torch AdamW 每步 ~1s，nvidia-smi 打成 0%。走 **DeepSpeedCPUAdam**（仍是两组 decay / no-decay，不 `zero_force` 压扁）。算子要 JIT：3090 脚本把 miniconda `ninja` 放进 PATH，并用系统 `libstdc++`（GLIBCXX_3.4.30）preload。装不上就回退 torch AdamW，banner 仍是 `adam=ds-cpu`。
 3. **每步 D2H**（nll / DS grad-norm / moe_utilization / `cuda.get_rng_state_all`）。`LOG_EVERY=20`；CUDA RNG 只在存盘时拍。
 4. **torch inductor 32 workers** 抢 CPU。`TORCH_COMPILE_DISABLE=1`。`CUDA_DEVICE_MAX_CONNECTIONS=8`。
 5. DummyStream `doc_ids` 留 host；下一批 H2D 和 backward 重叠。MoE `counts.max()` 侧流藏进共享专家。

@@ -28,6 +28,16 @@ if [[ -z "${PY:-}" ]]; then
     PY=python3
   fi
 fi
+# cpu_adam JIT looks up `ninja` on PATH. AutoDL SSH PATH has no miniconda.
+PY_BIN="$(dirname "$PY")"
+if [[ -x "$PY_BIN/ninja" || -x "$PY_BIN/python3" ]]; then
+  export PATH="$PY_BIN:$PATH"
+fi
+# Miniconda libstdc++ stops at GLIBCXX_3.4.26; cpu_adam.so needs 3.4.30.
+SYS_STDCPP="/usr/lib/x86_64-linux-gnu/libstdc++.so.6"
+if [[ -f "$SYS_STDCPP" ]]; then
+  export LD_PRELOAD="${SYS_STDCPP}${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
 
 HUB_COPY="${HUB_COPY:-$WORK/hub-b0-full}"
 RESUME="${RESUME:-$HUB_COPY}"
@@ -88,6 +98,17 @@ if ! "$PY" -c "import deepspeed" >/dev/null 2>&1; then
     echo "DeepSpeed install failed; cannot shard 12B on 48GiB without ZeRO-3" >&2
     exit 3
   }
+fi
+# DeepSpeedCPUAdam JIT-builds cpu_adam. Without ninja it silently falls back
+# to torch AdamW on ZeRO CPU shards (~1s/step, GPU util 0%).
+if ! "$PY" -c "from torch.utils.cpp_extension import verify_ninja_availability; verify_ninja_availability()" >/dev/null 2>&1; then
+  echo "ninja missing; installing so DeepSpeedCPUAdam can JIT"
+  "$PY" -m pip install ninja || echo "ninja install failed; Adam stays torch"
+fi
+if "$PY" -c "import torch; from deepspeed.ops.adam import DeepSpeedCPUAdam; DeepSpeedCPUAdam([torch.nn.Parameter(torch.zeros(8))], lr=1e-3)" >/dev/null 2>&1; then
+  echo "DeepSpeedCPUAdam op ready"
+else
+  echo "DeepSpeedCPUAdam unavailable; trainer will use torch AdamW"
 fi
 
 if [[ ! -d "$LOCAL" ]] || [[ ! -f "$LOCAL/model.safetensors" ]]; then

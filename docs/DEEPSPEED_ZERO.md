@@ -20,7 +20,7 @@ DeepSpeed ZeRO 的分工：
 
 所以 3090 的配方是 **ZeRO-3 + optimizer CPU offload + param CPU offload**，
 不是 ZeRO-1/2。ZeRO **能塞进显存**；它不能让 8e9 B0 在一张 3090 上变成合理墙钟
-（PCIe offload 会把 MFU 打到个位数）。**预取必须真的能跑**：DeepSpeed 默认 `stage3_max_live_parameters=1e9`，一层冻结 MoE 已经 ~0.75e9，5e8 预取桶会被 live cap 静默丢掉，GPU 每步空约 1s。现在 **max_live/reuse=2e9**、预取 **5e8**、`persistence=5e6`（attn 2048×2048 留卡；专家仍 offload）+ **DeepSpeedCPUAdam**（仍两组 decay）。`CUDA_DEVICE_MAX_CONNECTIONS=8`。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。不要覆盖 `b0-full`。
+（PCIe offload 会把 MFU 打到个位数）。**预取必须真的能跑**：DeepSpeed 默认 `stage3_max_live_parameters=1e9`，一层冻结 MoE 已经 ~0.75e9，5e8 预取桶会被 live cap 静默丢掉，GPU 每步空约 1s。现在 **max_live/reuse=2e9**、预取 **5e8**、`persistence=1e6`（5e6 把 2048×2048 全留卡，3090 会 OOM）+ **DeepSpeedCPUAdam**（仍两组 decay；需要 ninja 才能 JIT）。`CUDA_DEVICE_MAX_CONNECTIONS=8`。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。不要覆盖 `b0-full`。
 
 ## 安装
 

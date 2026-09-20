@@ -62,8 +62,9 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(z["stage3_gather_16bit_weights_on_model_save"])
         self.assertGreaterEqual(z["stage3_prefetch_bucket_size"], 400_000_000)
         self.assertGreaterEqual(z["reduce_bucket_size"], 400_000_000)
-        self.assertGreaterEqual(z["stage3_param_persistence_threshold"], 4_194_304)
-        self.assertLess(z["stage3_param_persistence_threshold"], 12_000_000)
+        # 2048×2048 = 4_194_304 must stay below the threshold (5e6 OOM'd).
+        self.assertGreaterEqual(z["stage3_param_persistence_threshold"], 1_000_000)
+        self.assertLess(z["stage3_param_persistence_threshold"], 4_194_304)
         self.assertGreaterEqual(z["stage3_max_live_parameters"], 2_000_000_000)
         self.assertGreaterEqual(z["stage3_max_reuse_distance"], 2_000_000_000)
         self.assertEqual(z["offload_param"]["buffer_count"], 8)
@@ -356,7 +357,9 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", (ROOT / "cat_yoko" / "trainer.py").read_text(encoding="utf-8"))
         self.assertIn("TORCH_COMPILE_DISABLE", inspect.getsource(quiet_inductor))
         self.assertIn("copy_stream", inspect.getsource(_kick_max_count))
-        self.assertIn("cpu_adam_fast", inspect.getsource(Trainer._wrap_and_optim))
+        wrap_src = inspect.getsource(Trainer._wrap_and_optim)
+        self.assertIn("cpu_adam_fast", wrap_src)
+        self.assertIn("ninja", wrap_src)
         self.assertIn("stage3_max_live_parameters", inspect.getsource(zero_config))
         self.assertIn("DeepSpeedCPUAdam", inspect.getsource(_deepspeed_cpu_adam))
 

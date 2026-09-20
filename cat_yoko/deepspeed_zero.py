@@ -118,9 +118,11 @@ def zero_config(
         }
     if stage_i == 3:
         zero["stage3_gather_16bit_weights_on_model_save"] = True
-        # 2048×2048 attn / student Q,O stay on GPU. Experts are 2048×6144
-        # (12.6e6) and stay offloaded. Default 1e6 streamed every Q/O.
-        zero["stage3_param_persistence_threshold"] = 5_000_000
+        # Params smaller than this stay gathered. 5e6 would keep every
+        # 2048×2048 Q/O resident; on 3090 ZeRO-3+offload that OOM'd at
+        # post-step persistent all_gather (47.34/47.41 GiB). Keep 1e6 so
+        # Q/O (4.19e6) still stream. Experts 12.6e6 stay offloaded.
+        zero["stage3_param_persistence_threshold"] = 1_000_000
         # Default max_live=1e9 (~2GiB). One frozen MoE layer is ~0.75e9 plus
         # a 0.5e9 prefetch bucket, so the default silently dropped prefetch
         # and GPU util fell to 0% for ~1s every step.
