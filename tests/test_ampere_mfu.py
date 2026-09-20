@@ -49,6 +49,16 @@ class RooflineTests(unittest.TestCase):
         self.assertIn("covers seq", pub_notes["masked_window"])
 
 
+class BshdLayoutSourceTests(unittest.TestCase):
+    def test_qk_norm_rope_stays_bshd(self) -> None:
+        from cat_yoko.attention import CrossAttention, WindowAttention, rope_after_qk_norm
+
+        self.assertIn("seq_dim=1", inspect.getsource(rope_after_qk_norm))
+        self.assertNotIn("contiguous()", inspect.getsource(WindowAttention.forward))
+        self.assertNotIn("contiguous()", inspect.getsource(CrossAttention.forward))
+        self.assertIn("to_sdpa_layout", inspect.getsource(WindowAttention.forward))
+
+
 class GroupedMmGateTests(unittest.TestCase):
     def test_source_requires_sm90(self) -> None:
         src = inspect.getsource(grouped_mm_available)

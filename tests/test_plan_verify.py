@@ -92,6 +92,7 @@ class StaticLedgerTests(unittest.TestCase):
         self.assertIn("ops.masked_isolates_one_backend", names)
         self.assertIn("ops.grouped_mm_sm90_gate", names)
         self.assertIn("ops.banded_sliding_window", names)
+        self.assertIn("ops.bshd_qk_rope", names)
 
     def test_bf16_static_claims_keep_theorem_b(self) -> None:
         ledger = static_ledger("bf16")

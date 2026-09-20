@@ -12,6 +12,21 @@
 
 FlexAttention 滑窗在这套 torch 2.8 / sm_86 上约 1.7 ms，对照 SDPA 0.02 ms，是速度陷阱。CSA/HCA 不换上去。不是 CSA CUDA kernel。
 
+## Layout（激活，不是 overlay 权重）
+
+12B `qk_norm=True`。旧路径是 fused QKV → `view+transpose` 成 `[B,H,S,D]` 再 RMSNorm / RoPE。RMSNorm 和 `torch.cat` 式 `rotate_half` 会把 Flash 要的 **BSHD 内存序**（stride `(S·H·D, D, H·D, 1)`）打成 packed BHSD，每层多一次 Q/K 拷贝；`o_proj` 前再 `contiguous().view` 又拷一次。
+
+现在：
+
+- qk_norm + RoPE 留在连续 `[B,S,H,D]`（最后一维是 `head_dim`）
+- SDPA 只拿 `transpose` 视图，不 `.contiguous()`
+- `o_proj` 用 `reshape`；Flash 若写出同一 BSHD 内存，这步是 view
+- fat-tile 滑窗仍要 packed BHSD（`unfold` 沿 S），只在带状路径上 pack；B0 覆盖窗不走这条
+- 冻结 MoE `bmm(x, W.transpose(1,2))` 保持 **TN**（K stride-1）。不要把 `W.T` contiguous 成 NN
+- **不**把 3 个 QKV Linear 收成一个 fused Linear 模块（Hub overlay 仍是 132 张量）
+
+3090 正在跑的 B0 进程不重测；Flash GQA seq=4096 上次 ~85% MFU 仍是对照。这是激活 layout，不改 step 26940 权重。
+
 ## 各块（理论）
 
 CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOPS；indexer 相对 35.58 TFLOPS FP32/TF32）：
@@ -19,7 +34,7 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 | 算子 | 阶段 | bf16-probe 理论 MFU | 12B 形理论 MFU | 调整（逼近 roofline） |
 | --- | --- | ---: | ---: | --- |
 | fused QKV | A–E | 84.2% | 100% 算力墙 | 冻结权重 concat 一次，不再每步 `torch.cat` |
-| dense Flash GQA | YOCO cross；窗盖满 seq | 56.1%（再被 launch 打到 ~1%） | 100%；实测可到 ~87% 峰值 | Flash + `enable_gqa`，不 repeat KV |
+| dense Flash GQA | YOCO cross；窗盖满 seq | 56.1%（再被 launch 打到 ~1%） | 100%；实测可到 ~87% 峰值 | Flash + `enable_gqa`，不 repeat KV；qk_norm/RoPE 在 BSHD |
 | masked window | encoder `n_win<seq` | 37.4%（旧 S×S 行） | B0 `n_win=8192≥seq` 走 Flash | **fat tiles 256**（仅 `seq≥2048`）；seq=512 上 256 宽仍 0.14× S×S；CSA union 仍是 S×S |
 | CSA union | C-topk | 74.8% | 100% 强度，但 fused mask 核到不了 Flash | 同上；**不要** `enable_gqa+attn_mask`（Ampere 静默掉 math 核），repeat KV 后走 Efficient/cuDNN |
 | HCA concat | C-hca+ | 78.7% | 同左，k 更长 | 静态槽 bias 缓存；不把 CSA/HCA 换上 FlexAttention |

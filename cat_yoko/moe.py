@@ -289,6 +289,8 @@ def _swiglu_experts_batched(
             dtype=x_pad.dtype
         )
         down_w = down_w.to(dtype=x_pad.dtype)
+        # W is [E, N, K] row-major. transpose(1,2) is [E, K, N] with K stride-1
+        # (cuBLAS OP_T). Do not ``.contiguous()`` that into NN.
         gu = torch.bmm(x_pad, gu_w.transpose(1, 2))
         g, u = gu.chunk(2, dim=-1)
         y_pad = torch.bmm(F.silu(g) * u, down_w.transpose(1, 2))

@@ -35,6 +35,46 @@ def _repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     return x[:, :, None, :, :].expand(b, n_kv, n_rep, s, hd).reshape(b, n_kv * n_rep, s, hd)
 
 
+def split_heads(x: torch.Tensor, n_heads: int, head_dim: int) -> torch.Tensor:
+    """``[B, S, n_heads * head_dim]`` → ``[B, S, n_heads, head_dim]``."""
+    b, s, packed = x.shape
+    if packed != n_heads * head_dim:
+        raise ValueError(f"packed dim {packed} != {n_heads}*{head_dim}")
+    return x.view(b, s, n_heads, head_dim)
+
+
+def to_sdpa_layout(x: torch.Tensor) -> torch.Tensor:
+    """``[B, S, H, D]`` → ``[B, H, S, D]`` without packing.
+
+    Memory stays BSHD (stride ``(S·H·D, D, H·D, 1)``). Ampere Flash / FA2
+    read that order. ``.contiguous()`` here would pack BHSD and add a copy
+    on every layer (12B qk_norm used to do that after the transpose).
+    """
+    return x.transpose(1, 2)
+
+
+def merge_heads(x: torch.Tensor) -> torch.Tensor:
+    """``[B, H, S, D]`` → ``[B, S, H*D]`` for ``o_proj``. View if BSHD memory."""
+    b, h, s, d = x.shape
+    return x.transpose(1, 2).reshape(b, s, h * d)
+
+
+def rope_after_qk_norm(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    *,
+    rope: RotaryEmbedding,
+    q_norm: RMSNorm | None,
+    k_norm: RMSNorm | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """qk_norm + RoPE on contiguous ``[B, S, H, D]`` (last dim = head_dim)."""
+    if q_norm is not None:
+        q = q_norm(q)
+        k = k_norm(k)
+    cos, sin = rope(int(q.size(1)), q.device, q.dtype)
+    return apply_rope(q, k, cos, sin, seq_dim=1)
+
+
 _SDPA_KERNEL = None  # dense cache: None=uninit, False=unavailable, else factory
 _SDPA_MASKED_KERNEL: dict = {}  # "small"|"large" -> factory|False
 _LAST_SDPA = {"kind": "uninit", "dtype": ""}
@@ -360,13 +400,19 @@ def _banded_window_sdpa(
     ``lookback + tile`` keys with a static keep-set. Same keep-set as
     ``_window_causal_bias``. Left-padded dummy keys on tile 0 are masked out.
     """
+    w = int(window)
+    tile = min(int(q.size(-2)), max(w, BANDED_TILE))
+    if tile >= int(q.size(-2)):
+        bias = _window_causal_bias(int(q.size(-2)), int(q.size(-2)), w, q.device, q.dtype, None)
+        return _sdpa(q, k, v, bias)
+    # Fat tiles need packed BHSD so unfold/reshape along S is a view.
+    # Dense Flash keeps the BSHD-memory transpose from ``to_sdpa_layout``.
+    if not q.is_contiguous():
+        q = q.contiguous()
+        k = k.contiguous()
+        v = v.contiguous()
     b, hq, s, d = q.shape
     hk = k.size(-3)
-    w = int(window)
-    tile = min(s, max(w, BANDED_TILE))
-    if tile >= s:
-        bias = _window_causal_bias(s, s, w, q.device, q.dtype, None)
-        return _sdpa(q, k, v, bias)
     lookback = w - 1
     k_width = lookback + tile
     pad = (tile - (s % tile)) % tile
@@ -443,18 +489,17 @@ class WindowAttention(nn.Module):
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
         q, k, v = _fused_qkv(self.q_proj, self.k_proj, self.v_proj, x)
-        q = q.view(b, s, h, hd).transpose(1, 2)
-        k = k.view(b, s, n_kv, hd).transpose(1, 2)
-        v = v.view(b, s, n_kv, hd).transpose(1, 2)
-        if self.q_norm is not None:
-            q = self.q_norm(q)
-            k = self.k_norm(k)
-        cos, sin = self.rope(s, x.device, x.dtype)
-        q, k = apply_rope(q, k, cos, sin)
-        out = _window_sdpa(q, k, v, self.n_win, doc_ids, extra_bias)
-        y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+        q = split_heads(q, h, hd)
+        k = split_heads(k, n_kv, hd)
+        v = split_heads(v, n_kv, hd)
+        q, k = rope_after_qk_norm(
+            q, k, rope=self.rope, q_norm=self.q_norm, k_norm=self.k_norm
+        )
+        qh, kh, vh = to_sdpa_layout(q), to_sdpa_layout(k), to_sdpa_layout(v)
+        out = _window_sdpa(qh, kh, vh, self.n_win, doc_ids, extra_bias)
+        y = self.o_proj(merge_heads(out))
         if return_probs:
-            return y, _mean_head_probs(q, k, self.n_win, doc_ids)
+            return y, _mean_head_probs(qh, kh, self.n_win, doc_ids)
         return y
 
 
@@ -485,23 +530,22 @@ class CrossAttention(nn.Module):
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         b, s, d = x.shape
         h, hd, n_kv = self.n_heads, self.head_dim, self.n_kv
-        q = self.q_proj(x).view(b, s, h, hd).transpose(1, 2)
-        k = k.view(b, s, n_kv, hd).transpose(1, 2)
-        v = v.view(b, s, n_kv, hd).transpose(1, 2)
-        if self.q_norm is not None:
-            q = self.q_norm(q)
-            k = self.k_norm(k)
-        cos, sin = self.rope(s, x.device, x.dtype)
-        q, k = apply_rope(q, k, cos, sin)
+        q = split_heads(self.q_proj(x), h, hd)
+        k = split_heads(k, n_kv, hd)
+        v = split_heads(v, n_kv, hd)
+        q, k = rope_after_qk_norm(
+            q, k, rope=self.rope, q_norm=self.q_norm, k_norm=self.k_norm
+        )
+        qh, kh, vh = to_sdpa_layout(q), to_sdpa_layout(k), to_sdpa_layout(v)
         need_mask = extra_bias is not None or _needs_explicit_mask(s, s, doc_ids)
         if need_mask:
             bias = _window_causal_bias(s, s, s, x.device, q.dtype, doc_ids)
             if extra_bias is not None:
                 bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
-            out = _sdpa(q, k, v, bias)
+            out = _sdpa(qh, kh, vh, bias)
         else:
-            out = _sdpa(q, k, v, causal=True)
-        y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+            out = _sdpa(qh, kh, vh, causal=True)
+        y = self.o_proj(merge_heads(out))
         if return_probs:
-            return y, _mean_head_probs(q, k, s, doc_ids)
+            return y, _mean_head_probs(qh, kh, s, doc_ids)
         return y

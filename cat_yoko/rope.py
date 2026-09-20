@@ -26,16 +26,53 @@ class RMSNorm(nn.Module):
 
 
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
-    x1, x2 = x.chunk(2, dim=-1)
-    return torch.cat((-x2, x1), dim=-1)
+    """``[-x2; x1]`` on the last dim. ``empty_like`` keeps ``x``'s strides.
+
+    ``torch.cat`` of the two halves always packs a new contiguous tensor, so
+    RoPE on a ``[B, H, S, D]`` view of ``[B, S, H, D]`` memory used to destroy
+    the Flash-native BSHD layout.
+    """
+    d = int(x.size(-1))
+    if d % 2:
+        raise ValueError(f"RoPE head dim must be even, got {d}")
+    h = d // 2
+    out = torch.empty_like(x)
+    out[..., :h] = -x[..., h:]
+    out[..., h:] = x[..., :h]
+    return out
 
 
-def apply_rope(q: torch.Tensor, k: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    # q,k: [B, H, S, D]; cos/sin: [S, D]
-    cos = cos.unsqueeze(0).unsqueeze(0)
-    sin = sin.unsqueeze(0).unsqueeze(0)
-    q = q * cos + rotate_half(q) * sin
-    k = k * cos + rotate_half(k) * sin
+def apply_rope(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+    *,
+    seq_dim: int = -2,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """RoPE. ``cos``/``sin`` are ``[S, D]``.
+
+    Default ``seq_dim=-2`` is BHSD ``[B, H, S, D]``. Pass ``seq_dim=1`` for
+    contiguous ``[B, S, H, D]`` (qk_norm + RoPE before the SDPA transpose).
+    """
+    if q.size(-1) != cos.size(-1) or k.size(-1) != sin.size(-1):
+        raise ValueError(
+            f"RoPE head dim mismatch q={tuple(q.shape)} k={tuple(k.shape)} "
+            f"cos={tuple(cos.shape)}"
+        )
+    sd = seq_dim if seq_dim >= 0 else q.dim() + seq_dim
+    seq = int(cos.size(0))
+    if q.size(sd) != seq or k.size(sd) != seq:
+        raise ValueError(
+            f"RoPE seq {seq} != q.size({sd})={q.size(sd)} or k.size({sd})={k.size(sd)}"
+        )
+    shape = [1] * q.dim()
+    shape[sd] = seq
+    shape[-1] = int(cos.size(-1))
+    cos_b = cos.reshape(*shape)
+    sin_b = sin.reshape(*shape)
+    q = q * cos_b + rotate_half(q) * sin_b
+    k = k * cos_b + rotate_half(k) * sin_b
     return q, k
 
 

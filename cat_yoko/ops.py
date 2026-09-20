@@ -1,12 +1,14 @@
 """Ampere BF16 operator snapshot for the dedicated mini-verify.
 
 Dense causal (YOCO cross, or window when ``n_win`` covers seq): Flash → cuDNN
-→ mem-efficient. Static sliding window with ``n_win < seq`` and
-``seq >= 2048`` uses fat tiles (width ``max(n_win, 256)``), not crumbs of
-``n_win`` itself. Masked CSA/HCA ``attn_mask``: isolate
-Efficient (seq<320) or cuDNN (longer) in bf16, then fp32 math. Flash rejects
-``attn_mask``. Not a CSA CUDA kernel. Softmax accumulation stays fp32 inside
-the fused kernel. Ampere MoE is padded bmm; ``grouped_mm`` is SM90+.
+→ mem-efficient. qk_norm + RoPE stay on contiguous ``[B, S, H, D]``; SDPA
+gets a transpose view (BSHD memory, not packed BHSD). Static sliding window
+with ``n_win < seq`` and ``seq >= 2048`` uses fat tiles (width
+``max(n_win, 256)``), not crumbs of ``n_win`` itself. Masked CSA/HCA
+``attn_mask``: isolate Efficient (seq<320) or cuDNN (longer) in bf16, then
+fp32 math. Flash rejects ``attn_mask``. Not a CSA CUDA kernel. Softmax
+accumulation stays fp32 inside the fused kernel. Ampere MoE is padded bmm
+(TN weight view, not a contiguous NN copy); ``grouped_mm`` is SM90+.
 """
 
 from __future__ import annotations

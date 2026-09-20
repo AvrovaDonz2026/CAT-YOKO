@@ -29,12 +29,15 @@ from cat_yoko.attention import (
     _use_banded_window,
     _window_causal_bias,
     _window_sdpa,
+    merge_heads,
+    split_heads,
+    to_sdpa_layout,
 )
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, NVFP4_GEMM_SLOTS
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
 from cat_yoko.nvfp4_linear import Nvfp4Linear, apply_nvfp4
-from cat_yoko.rope import RMSNorm
+from cat_yoko.rope import RMSNorm, RotaryEmbedding, apply_rope, rotate_half
 
 
 class PublishedPlanTests(unittest.TestCase):
@@ -382,11 +385,85 @@ class BandedWindowTests(unittest.TestCase):
         got = _window_sdpa(q, k, v, window=8)
         self.assertTrue(torch.allclose(got, flash, atol=1e-4, rtol=1e-4))
 
+    def test_fat_tile_accepts_bshd_memory(self) -> None:
+        torch.manual_seed(2)
+        b, s, h, kv, w, hd = 1, 512, 2, 1, 32, 8
+        q = torch.randn(b, s, h, hd).transpose(1, 2)
+        k = torch.randn(b, s, kv, hd).transpose(1, 2)
+        v = torch.randn(b, s, kv, hd).transpose(1, 2)
+        self.assertFalse(q.is_contiguous())
+        bias = _window_causal_bias(s, s, w, q.device, torch.float32)
+        ref = _sdpa(q.contiguous(), k.contiguous(), v.contiguous(), bias)
+        got = _banded_window_sdpa(q, k, v, w)
+        self.assertTrue(torch.allclose(got, ref, atol=3e-4, rtol=3e-4))
+
     def test_doc_ids_do_not_take_banded_path(self) -> None:
         src = inspect.getsource(_window_sdpa)
         self.assertIn("doc_ids", src)
         self.assertIn("_banded_window_sdpa", src)
         self.assertIn("extra_bias", src)
+
+
+class QkvLayoutTests(unittest.TestCase):
+    def test_rotate_half_keeps_bshd_strides(self) -> None:
+        x = torch.randn(2, 8, 4, 16)
+        view = x.transpose(1, 2)
+        self.assertFalse(view.is_contiguous())
+        y = rotate_half(view)
+        self.assertEqual(y.stride(), view.stride())
+        h = 8
+        ref = torch.cat((-view[..., h:], view[..., :h]), dim=-1)
+        self.assertTrue(torch.allclose(y, ref))
+
+    def test_apply_rope_seq_dim_matches_bhsd(self) -> None:
+        torch.manual_seed(0)
+        rope = RotaryEmbedding(8, 10_000.0)
+        cos, sin = rope(6, torch.device("cpu"), torch.float32)
+        q_bh = torch.randn(2, 4, 6, 8)
+        k_bh = torch.randn(2, 2, 6, 8)
+        q1, k1 = apply_rope(q_bh, k_bh, cos, sin, seq_dim=-2)
+        q_bs = q_bh.transpose(1, 2).contiguous()
+        k_bs = k_bh.transpose(1, 2).contiguous()
+        q2, k2 = apply_rope(q_bs, k_bs, cos, sin, seq_dim=1)
+        self.assertTrue(torch.allclose(q1, q2.transpose(1, 2), atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(k1, k2.transpose(1, 2), atol=1e-5, rtol=1e-5))
+
+    def test_sdpa_q_keeps_bshd_memory_with_qk_norm(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        self.assertTrue(cfg.qk_norm)
+        attn = WindowAttention(cfg)
+        seen: list[tuple[int, ...]] = []
+        orig = attn_mod.F.scaled_dot_product_attention
+
+        def _spy(q, k, v, *args, **kwargs):
+            seen.append(tuple(q.stride()))
+            self.assertEqual(q.stride(-1), 1)
+            self.assertFalse(q.is_contiguous())
+            return orig(q, k, v, *args, **kwargs)
+
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        with patch.object(attn_mod.F, "scaled_dot_product_attention", _spy):
+            y = attn(x)
+        self.assertTrue(seen)
+        b, s, h, hd = 2, cfg.seq_len, cfg.num_heads, cfg.head_dim
+        self.assertEqual(seen[0], (s * h * hd, hd, h * hd, 1))
+        self.assertEqual(tuple(y.shape), (2, cfg.seq_len, cfg.hidden_size))
+
+    def test_window_forward_does_not_pack_before_sdpa(self) -> None:
+        src = inspect.getsource(WindowAttention.forward)
+        self.assertIn("to_sdpa_layout", src)
+        self.assertIn("rope_after_qk_norm", src)
+        self.assertIn("merge_heads", src)
+        self.assertNotIn("contiguous()", src)
+
+    def test_split_merge_roundtrip_is_view(self) -> None:
+        x = torch.randn(2, 8, 4 * 16)
+        h = split_heads(x, 4, 16)
+        sdpa = to_sdpa_layout(h)
+        self.assertFalse(sdpa.is_contiguous())
+        back = merge_heads(sdpa)
+        self.assertTrue(back.data_ptr() == x.data_ptr() or torch.allclose(back, x))
+        self.assertTrue(torch.allclose(back, x))
 
 
 if __name__ == "__main__":
