@@ -15,7 +15,7 @@ python3 -m cat_yoko.hw_recipe --json
 bash scripts/run_b0_next.sh
 ```
 
-`cat_yoko.hw_recipe` 按 family+GiB 选出 profile（`sm100_b200` / `sm120_6000d` / `hopper_h100` / `ada_tight` / `cpu`），再生成 `cat_yoko.b0` 的 seq / micro-batch / offload / grad-ckpt / `--try`。CPU 只打 JSON，不建 12B。`<40GiB` 拒绝 8e9 信封。Megatron 适配面（`ParallelPlan`、`--dump-megatron`）继续留着，等真有多卡节点再填。
+`cat_yoko.hw_recipe` 按 family+GiB 选出 profile（`sm100_b200` / `sm120_6000d` / `hopper_h100` / `ada_tight` / `cpu`），再生成 `cat_yoko.b0` 的 seq / micro-batch / offload / grad-ckpt / `--try`。CPU 只打 JSON，不建 12B。`<40GiB` 拒绝 8e9 信封。Ampere/Ada 卸 encoder 的发布信封会在 JSON 里附 `deepspeed_zero` 提示（默认 argv 仍是 torch）。Megatron 适配面（`ParallelPlan`、`--dump-megatron`）继续留着，等真有多卡节点再填。
 
 下面仍是 **已知 B200 / SM100** 的算子与快捷脚本。
 

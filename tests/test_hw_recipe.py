@@ -155,6 +155,20 @@ class RecipeTableTests(unittest.TestCase):
         self.assertTrue(rec.offload_encoder)
         self.assertEqual(rec.nvfp4_path, "emu")
 
+    def test_ampere_48gib_zero_hint_does_not_change_argv(self) -> None:
+        snap = _snap((8, 6), 48.0)
+        rec = recipe_for(snap)
+        self.assertEqual(rec.profile, "ampere_a100")
+        self.assertTrue(rec.published)
+        self.assertTrue(rec.offload_encoder)
+        self.assertNotIn("deepspeed", rec.argv)
+        self.assertIn("DEEPSPEED_ZERO", rec.notes)
+        hint = recipe_payload(snap, rec)["recipe"]["deepspeed_zero"]
+        self.assertIsNotNone(hint)
+        self.assertEqual(hint["zero"], 3)
+        self.assertIn("--zero-offload-param", hint["argv"])
+        self.assertTrue(hint["offload_param"])
+
     def test_ada_tight_try(self) -> None:
         rec = recipe_for(_snap((8, 9), 32.0))
         self.assertEqual(rec.profile, "ada_tight")

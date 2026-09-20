@@ -466,12 +466,12 @@ BBH（推理），IFEval（指令遵循）。
 
 | 组件 | 建议 |
 | --- | --- |
-| 训练框架 | 本仓库参考实现是 **PyTorch**（`cat_yoko.train --backend torch`）。规模化走 **[Megatron-LM](https://github.com/NVIDIA/Megatron-LM)** / Megatron-Core（MoE + EP/TP/PP/CP + upcycling）。映射：`cat_yoko.megatron.mapping.megatron_blueprint`；`--dump-megatron` 打 JSON。YOCO **不是** `GPTModel`。 |
+| 训练框架 | 本仓库参考实现是 **PyTorch**（`cat_yoko.train --backend torch`）。单卡装不下 12B 时走 **DeepSpeed ZeRO**（`--backend deepspeed`，[`docs/DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md)；`--dump-deepspeed` 打 JSON，CI 不强装）。规模化 EP/TP 预留 **[Megatron-LM](https://github.com/NVIDIA/Megatron-LM)** / Megatron-Core。映射：`cat_yoko.megatron.mapping.megatron_blueprint`；`--dump-megatron` 打 JSON。YOCO **不是** `GPTModel`。 |
 | 并行 | `ParallelPlan`：TP/PP/EP/CP/SP。12B：TP ∈ {1,2,4,8,16}（整除 16 头与 \(d=2048\)）；**EP ∈ {1,2,4,5,10,20}**（整除 20 routed）。PP>1 时 encoder|decoder 切在第 16 层（`pipeline_split_rank`）。长上下文用 Context/Sequence Parallel。YOCO **不是** Megatron `GPTModel`。 |
 | 注意力 kernel | **FlashMLA** 稀疏 prefill/decode kernel（支撑 DSA，FP8 KV）；**NSA** 的 Triton kernel 可参考压缩+选择+滑窗三分支实现 |
 | MoE kernel | 融合的 MoE dispatch/combine kernel（计算/通信/访存 overlap） |
 | 精度 | bf16 master + 定稿 NVFP4 GEMM（§6 / [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)）；Hopper/Ada 回退 FP8；确定性/可复现 kernel（可选） |
-| 显存 | 张量级重计算（`--grad-ckpt`）、B0/B1 冻结 Encoder CPU offload、B2 逐层 offload、Adam 动量 CPU offload（`--optim-cpu`）；规模化再 ZeRO / 专家 offload |
+| 显存 | 张量级重计算（`--grad-ckpt`）、B0/B1 冻结 Encoder CPU offload、B2 逐层 offload、Adam 动量 CPU offload（`--optim-cpu`）；**DeepSpeed ZeRO-3 + CPU offload** 切冻权重（48GiB Ampere）。不是 Megatron EP/TP |
 | 推理 | vLLM / SGLang（已集成 DSA/FlashMLA 稀疏 kernel）用于评测与 RL rollout |
 
 > 若无法自研 CSA/HCA kernel，**起步可用 HuggingFace `transformers` 的 `DeepseekV4` 参考实现**
@@ -515,6 +515,7 @@ BBH（推理），IFEval（指令遵循）。
 3. 有 GPU：`python3 -m cat_yoko.gpu_smoke`（tiny）；`python3 -m cat_yoko.gpu_smoke --middle`（12B B0 一步，≥28GiB，bf16 直接建图）；`--middle --phase B1`（Encoder 卸载 + CPU Adam）；`--c1`（同一张 12B 图 B0→B1→B2）
 4. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
 5. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
+5b. `python3 -m cat_yoko.train --config 12b --dump-deepspeed --zero 3 --zero-offload-param`（ZeRO JSON，不装 DeepSpeed）
 6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` 按 C1+NVFP4 开训。B1/B2 用 `--resume` 接 `latest.pt` 或 save 目录（权重 + packed 游标 + RNG；不恢复上一阶段 Adam / step）。`latest.pt` 在已有 `step_{last}.pt` 时 hardlink，不要对 12B 再写第二份 23GiB；ckpt 放到大盘（`/root/autodl-tmp`），不要放 `/tmp`。也可用 `--c1 --save-dir runs/c1 --steps N` 在同一张图上连跑三阶段，写出 `runs/c1/{B0,B1,B2}/latest.pt`。12B 默认不存 Adam。单卡 32GB + ~62GiB host cgroup：B0 直接一步；B1 卸冻结 Encoder + CPU Adam（一步 smoke 走 ephemeral 动量）；B2 逐层 offload，backward 完一层就 clip+Adam（`--accum 1`）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
 
 不要再改 16/26、C1、C1+NVFP4、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。

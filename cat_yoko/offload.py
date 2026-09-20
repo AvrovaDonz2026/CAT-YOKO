@@ -170,10 +170,22 @@ def auto_offload_flags(
     offload_encoder: bool | None,
     offload_blocks: bool | None,
     optim_cpu: bool | None,
+    deepspeed: bool = False,
 ) -> tuple[bool, bool, bool]:
     cuda = str(device).startswith("cuda")
     big = cfg_name == "CAT-YOKO-12B"
     dist = bool(fsdp or ddp)
+    if deepspeed:
+        if offload_encoder is True or offload_blocks is True:
+            raise ValueError(
+                "DeepSpeed ZeRO cannot mix native --offload-encoder/--offload-blocks; "
+                "use --zero-offload-param"
+            )
+        if optim_cpu is True:
+            raise ValueError(
+                "DeepSpeed ZeRO cannot mix native --optim-cpu; use --zero-offload"
+            )
+        return False, False, False
     # Explicit --offload-encoder/--offload-blocks with DDP/FSDP would put
     # some params on CPU while the reducer expects a single device.
     if dist and (offload_encoder is True or offload_blocks is True):

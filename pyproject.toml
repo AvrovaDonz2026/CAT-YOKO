@@ -9,6 +9,7 @@ dependencies = ["torch>=2.4"]
 
 [project.optional-dependencies]
 megatron = ["megatron-core>=0.12"]
+deepspeed = ["deepspeed>=0.14"]
 data = ["datasets>=2.18", "transformers>=4.40"]
 
 [project.scripts]
@@ -27,6 +28,7 @@ cat-yoko-hw-recipe = "cat_yoko.hw_recipe:main"
 
 [project.urls]
 Megatron-LM = "https://github.com/NVIDIA/Megatron-LM"
+DeepSpeed = "https://github.com/microsoft/DeepSpeed"
 
 [tool.setuptools.packages.find]
 include = ["cat_yoko*"]

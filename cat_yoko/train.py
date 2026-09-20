@@ -103,7 +103,7 @@ def resolve_12b_accum(
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="CAT-YOKO-12B C1 trainer")
+    p = argparse.ArgumentParser(prog="cat-yoko-train", description="CAT-YOKO-12B C1 trainer")
     p.add_argument("--config", choices=["12b", "tiny"], default="tiny")
     p.add_argument("--phase", choices=sorted(PHASES), default="B0")
     p.add_argument(
@@ -217,9 +217,28 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-optim-cpu", action="store_true", help="keep AdamW moments on the param device")
     p.add_argument(
         "--backend",
-        choices=["torch", "megatron"],
+        choices=["torch", "megatron", "deepspeed"],
         default="torch",
-        help="torch = in-repo trainer; megatron = NVIDIA Megatron-LM hook",
+        help="torch = in-repo trainer; megatron = NVIDIA Megatron-LM hook; "
+        "deepspeed = ZeRO (optional extra)",
+    )
+    p.add_argument(
+        "--zero",
+        type=int,
+        choices=[1, 2, 3],
+        default=None,
+        help="DeepSpeed ZeRO stage (default 2 with --backend deepspeed; "
+        "--zero-offload-param forces 3)",
+    )
+    p.add_argument(
+        "--zero-offload",
+        action="store_true",
+        help="ZeRO-Offload: optimizer states on CPU (DeepSpeed, not native --optim-cpu)",
+    )
+    p.add_argument(
+        "--zero-offload-param",
+        action="store_true",
+        help="ZeRO-3 param CPU offload; implies stage 3 + optimizer offload. 3090 48GiB path",
     )
     p.add_argument("--tp", type=int, default=1)
     p.add_argument("--pp", type=int, default=1)
@@ -231,9 +250,41 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print Megatron TransformerConfig mapping JSON and exit",
     )
+    p.add_argument(
+        "--dump-deepspeed",
+        action="store_true",
+        help="print DeepSpeed ZeRO config JSON and exit (no deepspeed install)",
+    )
     args = p.parse_args(argv)
     if args.backend == "megatron" and args.fsdp:
         p.error("--fsdp is the torch path; Megatron uses its own DDP/FSDP")
+    if args.backend == "deepspeed" and (args.fsdp or args.ddp):
+        p.error("--fsdp/--ddp is the torch path; DeepSpeed ZeRO cannot wrap DDP/FSDP")
+    if args.backend == "megatron" and (
+        args.zero is not None or args.zero_offload or args.zero_offload_param or args.dump_deepspeed
+    ):
+        p.error("ZeRO is --backend deepspeed, not megatron")
+    if args.dump_megatron and args.dump_deepspeed:
+        p.error("pick one of --dump-megatron / --dump-deepspeed")
+    if args.c1_smoke or args.c1:
+        if args.backend == "deepspeed" or args.zero_offload or args.zero_offload_param:
+            p.error(
+                "--c1-smoke rebuilds freeze each phase; DeepSpeed ZeRO cannot re-wrap "
+                "in-process. Run B0/B1/B2 separately with --resume overlay"
+            )
+    zero_requested = (
+        args.backend == "deepspeed"
+        or args.zero is not None
+        or args.zero_offload
+        or args.zero_offload_param
+    )
+    if zero_requested and args.backend == "torch" and not args.dump_deepspeed:
+        p.error("ZeRO needs --backend deepspeed (or --dump-deepspeed)")
+    if args.zero_offload_param:
+        args.zero = 3
+        args.zero_offload = True
+    elif args.backend == "deepspeed" and args.zero is None:
+        args.zero = 2
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
     if args.use_kda:
         cfg = replace(cfg, use_kda=True)
@@ -252,6 +303,19 @@ def main(argv: list[str] | None = None) -> int:
             dump_mapping(cfg, plan, args.phase)
             return 0
         return run_pretrain(cfg, plan, args.phase)
+    if args.dump_deepspeed:
+        from cat_yoko.deepspeed_zero import dump_zero_config
+
+        dump_zero_config(
+            stage=args.zero,
+            offload_optimizer=bool(args.zero_offload or args.zero_offload_param),
+            offload_param=bool(args.zero_offload_param),
+            bf16=args.dtype == "bf16" or args.config == "12b",
+            gradient_accumulation_steps=max(args.accum, 1),
+            train_micro_batch_size_per_gpu=1 if args.config == "12b" else (args.micro_batch or 2),
+            phase=args.phase,
+        )
+        return 0
     if args.meta:
         print_meta(cfg)
         return 0
@@ -291,7 +355,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.c1_smoke and args.tokens is not None:
         p.error("--c1-smoke is step-limited; do not pass --tokens")
     if args.config == "12b" and not str(args.device).startswith("cuda"):
-        p.error("12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron only)")
+        p.error(
+            "12b training needs --device cuda --dtype bf16 "
+            "(CPU is --meta / --dump-megatron / --dump-deepspeed only)"
+        )
+    if args.backend == "deepspeed" and not str(args.device).startswith("cuda"):
+        p.error("DeepSpeed ZeRO needs --device cuda (CPU is --dump-deepspeed only)")
     if args.config == "12b" and str(args.device).startswith("cuda"):
         import torch
 
@@ -319,6 +388,17 @@ def main(argv: list[str] | None = None) -> int:
     offload_encoder = True if args.offload_encoder else (False if args.no_offload_encoder else None)
     offload_blocks = True if args.offload_blocks else (False if args.no_offload_blocks else None)
     optim_cpu = True if args.optim_cpu else (False if args.no_optim_cpu else None)
+    if args.backend == "deepspeed":
+        if offload_encoder is True or offload_blocks is True:
+            p.error(
+                "DeepSpeed ZeRO cannot mix native --offload-encoder/--offload-blocks; "
+                "use --zero-offload-param"
+            )
+        if optim_cpu is True:
+            p.error("DeepSpeed ZeRO cannot mix native --optim-cpu; use --zero-offload")
+        offload_encoder = False
+        offload_blocks = False
+        optim_cpu = False
     save_optim = True if args.save_optim else (False if args.no_save_optim else None)
     save_full = True if args.save_full else (False if args.no_save_full else None)
     save_trainable = True if args.save_trainable else (False if args.no_save_trainable else None)
@@ -382,6 +462,10 @@ def main(argv: list[str] | None = None) -> int:
         teacher=teacher,
         fsdp=args.fsdp,
         ddp=args.ddp,
+        deepspeed=args.backend == "deepspeed",
+        zero_stage=2 if args.zero is None else args.zero,
+        zero_offload=bool(args.zero_offload),
+        zero_offload_param=bool(args.zero_offload_param),
         save_dir=args.save_dir,
         save_every=args.save_every,
         log_every=args.log_every,
