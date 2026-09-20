@@ -757,7 +757,7 @@ class Trainer:
                 gradient_clipping=float(self.cfg.grad_clip),
                 train_micro_batch_size_per_gpu=self.micro_batch,
             )
-            model, opt = wrap_deepspeed(raw, opt, cfg, dist_init_required=False)
+            model, opt = wrap_deepspeed(raw, opt, cfg)
             return model, opt, n_train, adam_state
         model = wrap_distributed(raw, fsdp=self.fsdp, ddp=self.ddp)
         adam_state = "gpu"

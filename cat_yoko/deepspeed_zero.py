@@ -11,6 +11,7 @@ card needs ZeRO-3 + optimizer CPU offload + param CPU offload.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from typing import Any
 
@@ -49,6 +50,7 @@ NOTES = (
     "Not Megatron EP/TP. Not a CSA kernel. Not a 50B download.",
     "C1 chain: run B0/B1/B2 as separate processes with --resume; do not --c1 in-process.",
     "ZeRO fits memory. It does not make the 8e9 B0 envelope sane on one 3090.",
+    "Single-process python -m does not need the deepspeed launcher; seed LOCAL_RANK=0.",
 )
 
 
@@ -192,6 +194,22 @@ def is_zero_partitioned(model: nn.Module) -> bool:
     return False
 
 
+def seed_single_process_rank_env() -> None:
+    """DeepSpeed asserts ``LOCAL_RANK`` even without the deepspeed launcher.
+
+    ``python -m cat_yoko.b0 --backend deepspeed`` on one 3090 is world=1.
+    Do not require ``deepspeed --num_gpus 1``. Leave already-set launcher env.
+    """
+    os.environ.setdefault("LOCAL_RANK", "0")
+    os.environ.setdefault("RANK", "0")
+    os.environ.setdefault("WORLD_SIZE", "1")
+    os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
+    if "MASTER_PORT" not in os.environ:
+        from cat_yoko.dist_util import free_tcp_port
+
+        os.environ["MASTER_PORT"] = str(free_tcp_port())
+
+
 def wrap_deepspeed(
     model: nn.Module,
     optimizer,
@@ -208,6 +226,7 @@ def wrap_deepspeed(
             "cannot re-wrap a ZeRO-3 partitioned module; "
             "run B0/B1/B2 as separate processes with --resume overlay"
         )
+    seed_single_process_rank_env()
     ds = import_deepspeed()
     import torch.distributed as dist
 

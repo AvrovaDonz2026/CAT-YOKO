@@ -22,6 +22,8 @@ from cat_yoko.deepspeed_zero import (
     is_deepspeed_engine,
     is_zero_partitioned,
     resolve_zero_stage,
+    seed_single_process_rank_env,
+    wrap_deepspeed,
     zero_config,
 )
 from cat_yoko.offload import auto_offload_flags
@@ -287,6 +289,26 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("wrap_deepspeed", wrap_src)
         self.assertIn("wrap_distributed", wrap_src)
         self.assertIn("gradient_accumulation_steps=1", wrap_src)
+        self.assertIn("seed_single_process_rank_env", inspect.getsource(wrap_deepspeed))
+
+    def test_single_process_seeds_local_rank(self) -> None:
+        import os
+
+        src = inspect.getsource(seed_single_process_rank_env)
+        self.assertIn('setdefault("LOCAL_RANK"', src)
+        old = {k: os.environ.get(k) for k in ("LOCAL_RANK", "RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT")}
+        for k in ("LOCAL_RANK", "RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT"):
+            os.environ.pop(k, None)
+        try:
+            seed_single_process_rank_env()
+            self.assertEqual(os.environ["LOCAL_RANK"], "0")
+            self.assertEqual(os.environ["WORLD_SIZE"], "1")
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
 
     def test_zero3_gather_before_rank0_save(self) -> None:
         src = inspect.getsource(Trainer._maybe_save)

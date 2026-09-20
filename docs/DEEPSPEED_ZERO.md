@@ -62,6 +62,8 @@ offload 抢同一份参数。
    B0 → B1 → B2 分开进程，``--resume`` overlay。
 8. 模型自己的 ``--grad-ckpt`` 留着。不要开 DeepSpeed activation checkpointing。
 9. 不是 Megatron EP/TP loop，不是 CSA CUDA kernel，不拉 50B Ultra-FineWeb。
+10. 单卡 ``python -m cat_yoko.b0 --backend deepspeed`` 不需要 deepspeed launcher；
+    ``wrap_deepspeed`` 会 ``setdefault LOCAL_RANK=0``。不要覆盖 Hub B0 overlay。
 
 ## 和 torch / Megatron 的边界
 
