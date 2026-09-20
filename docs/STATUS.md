@@ -23,7 +23,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
 | B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
 | C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel |
-| 计划探针 | **bf16-probe A→E GPU 已过**（RTX 3090，142/142 claims，0 fail，2 deferred，3.1s）。dense GQA=Flash，masked/HCA=cuDNN bf16，`math_fp32=0`。目录 `/root/autodl-tmp/bf16-verify/`。DummyStream：`cat_yoko.plan_verify --graph bf16` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。日志 [`artifacts/autodl-rtx3090/bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)。算子 roofline：[`docs/AMPERE_OPS_MFU.md`](AMPERE_OPS_MFU.md)。不到 F/G。不拉 50B。不写完整图 checkpoint |
+| 计划探针 | **bf16-probe A→E GPU 已过**（RTX 3090，142/142 claims，0 fail，2 deferred，3.1s）。dense GQA=Flash，masked/HCA=cuDNN bf16，`math_fp32=0`。目录 `/root/autodl-tmp/bf16-verify/`。DummyStream：`cat_yoko.plan_verify --graph bf16` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。日志 [`artifacts/autodl-rtx3090/bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)。更早的 plan-probe 128/128：[`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md)。算子 roofline：[`docs/AMPERE_OPS_MFU.md`](AMPERE_OPS_MFU.md)。不到 F/G。不拉 50B。不写完整图 checkpoint |
 
 ## 机器沿革
 
@@ -32,7 +32,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | RTX 4080 SUPER | 图 / `--try` 烟测 | 已释放；日志 [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
 | RTX 6000D sm_120 | 发布档 B0 开跑（NVFP4 **仿真**） | step **16020**，`tokens_in_phase=65,488,896`；日志 [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
 | Vast B200 SM 10.0 | 发布档 B0 续训（硬件 NVFP4 FPROP） | step **26940**；日志 [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
-| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline | **142 claims ok**；Flash **85%** / MoE bmm **81%** of 71.16T；日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)。旧 plan-probe：[`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md) |
+| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline | **142 claims ok**；Flash **85%** / MoE bmm **81%** of 71.16T；日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)。旧 plan-probe 128 claims：[`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md) |
 
 同阶段 resume：`tokens_in_phase` 按 8192/step 接着加。step **22100** 时是 90,392,576。
 
@@ -57,6 +57,7 @@ bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自�
 | SM100/103 且 ≥160GiB（B200 类） | 发布信封 seq=4096，mb=2，encoder 在 GPU，无 grad-ckpt，TE NVFP4 FPROP |
 | sm_120 且 ≥90GiB（6000D 类） | 发布信封 seq=4096，mb=1，encoder 在 GPU，grad-ckpt，`Nvfp4Linear` 仿真 |
 | Hopper SM90 且 ≥40GiB | 发布信封；<90GiB 卸 encoder；仿真 NVFP4（文档上的 FP8 回退，不新写 wrap） |
+| Ampere/Ada 且 40–90GiB | recipe 默认仍是 torch 卸 encoder。要切冻住的 24.5GiB 权重：`--backend deepspeed --zero 3 --zero-offload --zero-offload-param`（[`DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md)）。塞进 ≠ 跑完 8e9 |
 | `<40GiB` | **拒绝** 8e9 信封 → `--try` seq=64 / 32 步 |
 | CPU | 只打 JSON，不建 12B 图 |
 
@@ -68,6 +69,7 @@ bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自�
 - `--save-full` / 23GiB `latest.pt`（尤其 32GiB 容器盘）
 - 为 B1/B2 `--try` 在 B0 还占 GPU 时抢卡
 - 实现 Megatron EP/TP 循环、CSA CUDA kernel
+- 把 ZeRO 当成一张 3090 上重开 8e9 的理由（Hub overlay 已经 1.63%，同阶段 resume）
 - 把 50B Ultra-FineWeb 拉进仓库或小盘
 - 再连已释放的 AutoDL `westc` / `weste`
 - 把 SSH 密码、deploy key 写进 git

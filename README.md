@@ -65,6 +65,7 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — 冻课程 C1
 - [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — C1+NVFP4 墙钟（571 H100-h）
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 回退（729 H100-h）
+- [`docs/DEEPSPEED_ZERO.md`](docs/DEEPSPEED_ZERO.md) — DeepSpeed ZeRO（可选；3090 48GiB 走 ZeRO-3 + CPU offload）
 
 **训练与产物**
 
@@ -76,8 +77,8 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) — B200 释放前日志
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — 6000D 日志（已释放）
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — 4080 SUPER 烟测（已释放）
-- [`artifacts/autodl-rtx3090/plan-verify/`](artifacts/autodl-rtx3090/plan-verify/README.md) — 3090 上旧 plan-probe A→E
-- [`artifacts/autodl-rtx3090/bf16-verify/`](artifacts/autodl-rtx3090/bf16-verify/README.md) — 3090 上 BF16 Flash 形探针 A→E
+- [`artifacts/autodl-rtx3090/plan-verify/`](artifacts/autodl-rtx3090/plan-verify/README.md) — 3090 上旧 plan-probe A→E（128 claims）
+- [`artifacts/autodl-rtx3090/bf16-verify/`](artifacts/autodl-rtx3090/bf16-verify/README.md) — 3090 上 BF16 Flash 形探针 A→E（142 claims）
 - [`artifacts/autodl-rtx3090/bf16-verify/mfu/`](artifacts/autodl-rtx3090/bf16-verify/mfu/README.md) — 各算子理论 vs 实测 MFU
 
 ## 本地测试
@@ -89,11 +90,11 @@ python3 -m cat_yoko.b0 --try --save-dir checkpoints/b0
 python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.test_checkpoint \
   tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload tests.test_b1 tests.test_b2 \
   tests.test_nvfp4_linear tests.test_nvfp4_hw tests.test_moe_ops tests.test_b0_full tests.test_phase_cg \
-  tests.test_hw_recipe tests.test_kda
+  tests.test_hw_recipe tests.test_kda tests.test_deepspeed_zero
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
 python3 -m cat_yoko.plan_verify --out /tmp/plan-verify --device cpu --steps 1 --graph plan
-python3 -m unittest tests.test_plan_verify tests.test_attention_plan
+python3 -m unittest tests.test_plan_verify tests.test_attention_plan tests.test_ampere_mfu
 ```
 
 有 CUDA：

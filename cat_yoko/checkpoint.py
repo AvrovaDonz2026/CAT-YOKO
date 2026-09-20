@@ -234,11 +234,16 @@ def save_trainable_checkpoint(
     *,
     model: nn.Module,
     extra: dict[str, Any],
+    state: dict[str, torch.Tensor] | None = None,
 ) -> None:
-    """Trainable overlay for HuggingFace Hub. Resume = MiniCPM5 upcycle + this file."""
+    """Trainable overlay for HuggingFace Hub. Resume = MiniCPM5 upcycle + this file.
+
+    ``state`` is the already-gathered overlay (ZeRO-3). All ranks must gather
+    before rank-0 calls this; do not gather inside this function.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    sd = trainable_state_dict(model)
+    sd = state if state is not None else trainable_state_dict(model)
     payload = {
         "kind": "trainable",
         "trainable": sd,
@@ -336,6 +341,7 @@ def save_checkpoint(
     optimizer: Optimizer | None,
     extra: dict[str, Any],
     save_optimizer: bool = True,
+    model_state: dict[str, torch.Tensor] | None = None,
 ) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -343,7 +349,7 @@ def save_checkpoint(
     if save_optimizer and optimizer is not None:
         est *= 2
     require_host_bytes(est, what=str(path))
-    model_sd = model_state_dict(model)
+    model_sd = model_state if model_state is not None else model_state_dict(model)
     # FSDP already offloads via FullStateDictConfig; still pin every tensor on CPU.
     model_sd = _cpu_copy(model_sd)
     opt_sd = None
