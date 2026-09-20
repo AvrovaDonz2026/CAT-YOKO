@@ -53,7 +53,6 @@ NOTES = (
     "ZeRO fits memory. It does not make the 8e9 B0 envelope sane on one 3090.",
     "Single-process python -m does not need the deepspeed launcher; seed LOCAL_RANK=0.",
     "Warm up ZeRO-3 with one dummy backward (no Adam step) so the first timed step is not the allgather-trace pass.",
-    "After initialize, raise ZeRO's hardcoded 2 inflight H2D events so leaf fetches do not host-sync mid-step.",
 )
 
 
@@ -140,9 +139,9 @@ def zero_config(
         # Mixtral: leaf MoE so top-k order does not invalidate the prefetch
         # trace. Also leaf EncoderBlock/DecoderBlock so one H2D covers attn+
         # all experts (~1.6GiB) and the previous layer's GEMM can hide it.
-        # DeepSpeed then host-syncs when inflight H2D events exceed 2 — that
-        # is the remaining ~1s SM 0%. wrap_deepspeed raises the cap to 8.
-        # Do not persist experts. Class names match __class__.__name__.
+        # Raising DeepSpeed's inflight H2D event cap from 2 to 8 made 1s SM 0%
+        # denser (1.38/min vs 0.67/min). Leave the default 2. Do not persist
+        # experts. Class names match __class__.__name__.
         zero["leaf_module"] = {
             "classes": ["MoE", "EncoderBlock", "DecoderBlock"],
         }
@@ -274,75 +273,7 @@ def wrap_deepspeed(
         config=config,
         dist_init_required=dist_init_required,
     )
-    n_ev = tune_zero3_prefetch_overlap(engine)
-    if n_ev:
-        print(f"ZeRO prefetch overlap max_ongoing_fetch_events={n_ev}", flush=True)
     return engine, opt
-
-
-ZERO3_MAX_ONGOING_FETCH_EVENTS = 8
-
-
-def _zero3_param_coordinator(engine: Any) -> Any | None:
-    """DeepSpeed 0.19 keeps the coordinator on the ZeRO-3 offload helper."""
-    seen: set[int] = set()
-    stack = [engine, getattr(engine, "optimizer", None)]
-    while stack:
-        obj = stack.pop()
-        if obj is None:
-            continue
-        ident = id(obj)
-        if ident in seen:
-            continue
-        seen.add(ident)
-        fn = getattr(obj, "get_param_coordinator", None) or getattr(
-            obj, "_get_param_coordinator", None
-        )
-        if callable(fn):
-            try:
-                coord = fn()
-            except Exception:
-                coord = None
-            if coord is not None:
-                return coord
-        off = getattr(obj, "parameter_offload", None)
-        if off is not None and id(off) not in seen:
-            stack.append(off)
-        coord = getattr(obj, "param_coordinator", None)
-        if coord is not None:
-            return coord
-    return None
-
-
-def tune_zero3_prefetch_overlap(
-    engine: Any,
-    *,
-    max_ongoing_fetch_events: int = ZERO3_MAX_ONGOING_FETCH_EVENTS,
-) -> int:
-    """Raise DeepSpeed's inflight H2D event cap (hardcoded 2).
-
-    ``partitioned_param_coordinator`` records a CUDA event per fetch and
-    ``Event.synchronize()`` when the deque exceeds 2. A MoE leaf is ~1GiB
-    H2D; the third block then blocks the host, the default stream drains,
-    and nvidia-smi shows ~1s SM 0% at 260–300W. 8 lets several leaf copies
-    stay queued on the allgather stream. Do not set this unbounded: DeepSpeed
-    allocates the destination tensor on the host thread before the copy
-    stream consumes it. Returns the cap actually written, or 0 if the
-    coordinator is missing (not ZeRO-3 / tests without DeepSpeed).
-    """
-    coord = _zero3_param_coordinator(engine)
-    if coord is None:
-        return 0
-    cap = int(max(2, max_ongoing_fetch_events))
-    written = 0
-    for name in dir(coord):
-        if not name.endswith("max_ongoing_fetch_events"):
-            continue
-        cur = getattr(coord, name, None)
-        if isinstance(cur, int):
-            setattr(coord, name, cap)
-            written = cap
-    return written
 
 
 def freeze_host_gc_after_zero_init() -> None:

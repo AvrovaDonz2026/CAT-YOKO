@@ -389,32 +389,12 @@ class SourceContractTests(unittest.TestCase):
             ["MoE", "EncoderBlock", "DecoderBlock"],
         )
         from cat_yoko.deepspeed_zero import (
-            ZERO3_MAX_ONGOING_FETCH_EVENTS,
             freeze_host_gc_after_zero_init,
             gathered_trainable_state_dict,
-            tune_zero3_prefetch_overlap,
-            wrap_deepspeed,
         )
 
-        self.assertGreaterEqual(ZERO3_MAX_ONGOING_FETCH_EVENTS, 8)
-        self.assertEqual(tune_zero3_prefetch_overlap(object()), 0)
-
-        class _Coord:
-            _PartitionedParameterCoordinator__max_ongoing_fetch_events = 2
-
-        coord = _Coord()
-
-        class _Off:
-            param_coordinator = coord
-
-        class _Eng:
-            optimizer = type("O", (), {"parameter_offload": _Off()})()
-
-        self.assertEqual(tune_zero3_prefetch_overlap(_Eng()), 8)
-        self.assertEqual(coord._PartitionedParameterCoordinator__max_ongoing_fetch_events, 8)
         freeze_host_gc_after_zero_init()
         self.assertIn("freeze_host_gc_after_zero_init", inspect.getsource(Trainer.run))
-        self.assertIn("tune_zero3_prefetch_overlap", inspect.getsource(wrap_deepspeed))
 
         overlay = inspect.getsource(gathered_trainable_state_dict)
         self.assertIn("GatheredParameters", overlay)
