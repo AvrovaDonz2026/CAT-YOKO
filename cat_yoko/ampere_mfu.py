@@ -160,8 +160,8 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
             + (
                 " covers seq so B0 window is Flash; this row is C/probe hole"
                 if n_win >= s
-                else " fat tiles 256 when seq>=512; shorter stays S×S"
-                " (tile-by-window launch trap); CSA union still S×S"
+                else " fat tiles 256 when seq>=2048; shorter stays S×S"
+                " (tile-by-window / seq=512 fat tiles lose on Ampere); CSA union still S×S"
             ),
         )
     )

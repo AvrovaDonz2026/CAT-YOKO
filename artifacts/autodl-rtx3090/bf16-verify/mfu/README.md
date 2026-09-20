@@ -18,6 +18,15 @@
 | indexer fp32 | 12B S=4096 d=64 | 14.28 | 81%（FP32 峰值） | 50%（瘦 K） |
 | grouped_mm | — | n/a | 0 | Ampere 不开 |
 
+2026-09-20T01:02Z 重测滑窗（校准 GEMM 72.09 T）。按 `n_win` 切和 seq=512 的 256 宽 fat tiles **都慢于 S×S**；seq=2048 起才持平/略快。交叉表见 [`band_xover.log`](band_xover.log)。代码把门设成 `BANDED_SEQ_MIN=2048`。B0 覆盖窗仍走 Flash。
+
+| 算子 | 形状 | 实测 TFLOPS | roof |
+| --- | --- | ---: | ---: |
+| masked window | seq=512 | 18.89 | 26.5% |
+| fat tiles 256 | seq=512 n_win=32 | 2.02 | 2.8%（禁用） |
+| masked window | seq=2048 | 31.78 | 44.7% |
+| fat tiles 256 | seq=2048 n_win=32 | 32.50 | 45.7% |
+
 探针 seq=128 全部 launch 墙，逼近 roofline 没有意义。12B B0 窗盖满走 Flash。CSA/HCA 在 Theorem B 洞上必须付 mask，没有 flash-attn / 不写 CSA CUDA kernel 就上不去 Flash。第一次跑曾误开 `enable_gqa+attn_mask`，Ampere **不报错、静默 math 核**；已改成 repeat KV。日志里 17:26 那次是陷阱，17:28 是修正后。
 
-文件：[`ledger.json`](ledger.json)、[`ampere_mfu.log`](ampere_mfu.log)。规格见 [`docs/AMPERE_OPS_MFU.md`](../../../../docs/AMPERE_OPS_MFU.md)。
+文件：[`ledger.json`](ledger.json)、[`ampere_mfu.log`](ampere_mfu.log)、[`band_xover.log`](band_xover.log)。规格见 [`docs/AMPERE_OPS_MFU.md`](../../../../docs/AMPERE_OPS_MFU.md)。

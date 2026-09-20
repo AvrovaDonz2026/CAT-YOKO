@@ -20,17 +20,30 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 | --- | --- | ---: | ---: | --- |
 | fused QKV | A–E | 84.2% | 100% 算力墙 | 冻结权重 concat 一次，不再每步 `torch.cat` |
 | dense Flash GQA | YOCO cross；窗盖满 seq | 56.1%（再被 launch 打到 ~1%） | 100%；实测可到 ~87% 峰值 | Flash + `enable_gqa`，不 repeat KV |
-| masked window | encoder `n_win<seq` | 37.4%（旧 S×S 行） | B0 `n_win=8192≥seq` 走 Flash | **fat tiles 256**（`seq≥512`）；按 `n_win` 本身切是 launch 陷阱；CSA union 仍是 S×S |
+| masked window | encoder `n_win<seq` | 37.4%（旧 S×S 行） | B0 `n_win=8192≥seq` 走 Flash | **fat tiles 256**（仅 `seq≥2048`）；seq=512 上 256 宽仍 0.14× S×S；CSA union 仍是 S×S |
 | CSA union | C-topk | 74.8% | 100% 强度，但 fused mask 核到不了 Flash | 同上；**不要** `enable_gqa+attn_mask`（Ampere 静默掉 math 核），repeat KV 后走 Efficient/cuDNN |
 | HCA concat | C-hca+ | 78.7% | 同左，k 更长 | 静态槽 bias 缓存；不把 CSA/HCA 换上 FlexAttention |
 | MoE bmm | B2+ | 13.0%（每专家 12 token，带宽墙） | 100% 强度；均匀专家实测 ~84% 峰值 | Ampere 禁止 grouped_mm；冻专家缓存 `gate‖up` |
 | indexer fp32 | C-index | 29.7%（FP32 峰值） | 81.3% | 分数仍 fp32（KEEP_HIGH_PREC）；TF32 `high`；含 Q/K 投影 |
 
-12B B0 训练 `seq=4096`、`n_win=8192`：encoder 窗盖满，走 dense Flash，不是 masked 行。探针故意 `n_win<seq`，Theorem B 的压缩洞才露出来。滑窗在 `n_win<seq` 且 `seq≥512` 时走 **256 宽 fat tiles**（不是按 `n_win` 切 32×64 碎核，那次 3090 上 3.30T / 4.6% 是回归；不是 FlexAttention，不是 CSA kernel）。短序列仍走一张 S×S mask。CSA/HCA 的 union / concat 仍要付 S×S mask。
+12B B0 训练 `seq=4096`、`n_win=8192`：encoder 窗盖满，走 dense Flash，不是 masked 行。探针故意 `n_win<seq`，Theorem B 的压缩洞才露出来。滑窗在 `n_win<seq` 且 `seq≥2048` 时走 **256 宽 fat tiles**。按 `n_win` 切 32×64 是 launch 陷阱；256 宽在 seq=512 上仍是 0.14× S×S，seq=4096 / n_win=32 才到 2.93×。不是 FlexAttention，不是 CSA kernel。短序列仍走一张 S×S mask。CSA/HCA 的 union / concat 仍要付 S×S mask。
 
 3090 上续训 B0：**resume Hub overlay，写到独立目录**，不要覆盖 `checkpoints/b0-full` / Hub step **26940**。Ampere 没有 FP4 tensor core，续训加 `--no-nvfp4`（C1+NVFP4 发布墙钟结论不变，只是这张卡跑 BF16）。ZeRO-3 只解决装得下。
 
-## 实测（3090，2026-09-19T17:28Z）
+## 滑窗交叉（3090，2026-09-20T01:06Z，H=16 hd=128 equal-head）
+
+| seq | n_win | S×S | fat 256 | 相对 S×S |
+| --- | ---: | ---: | ---: | ---: |
+| 512 | 32 | 0.07 ms | 0.53 ms | **0.14×**（禁用） |
+| 1024 | 32 | 0.19 ms | 0.55 ms | **0.35×**（禁用） |
+| 2048 | 32 | 0.63 ms | 0.54 ms | 1.17×（门槛） |
+| 4096 | 32 | 2.27 ms | 0.78 ms | **2.93×** |
+| 4096 | 256 | 2.27 ms | 1.07 ms | 2.13× |
+| 4096 | 8192 覆盖 | 2.08 ms mask | 1.18 ms Flash | 覆盖窗走 Flash |
+
+`BANDED_SEQ_MIN=2048`。B0 训练窗盖满，不走这条。
+
+## 实测（3090，2026-09-19T17:28Z；滑窗 2026-09-20 重测）
 
 校准 GEMM **72.12 TFLOPS**。`grouped_mm=False`。
 
@@ -42,6 +55,9 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 | CSA union seq=512 | 36.73 T | 52%（mask 核，非 Flash） |
 | HCA concat seq=512 | 40.34 T | 57% |
 | masked window seq=512 | 17.99 T | 25% |
+| banded fat-tile seq=512 n_win=32（已禁用） | 2.02 T | 2.8%（0.14× S×S，故 `BANDED_SEQ_MIN=2048`） |
+| masked window seq=2048 | 31.78 T | 45% |
+| banded fat-tile seq=2048 n_win=32 | 32.50 T | 46%（1.17× S×S） |
 | indexer fp32 12B 形 | 14.28 T | 50% of FP32 roofline（d_idx=64 瘦 K） |
 | 全部 bf16-probe seq=128 | &lt;1 T | launch 墙，理论 30–84% 也够不着 |
 

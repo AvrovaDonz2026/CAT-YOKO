@@ -47,7 +47,9 @@ BANDED_WINDOW_MIN = 16
 # launches dozens of 32×64 kernels and loses to one S×S mask.
 BANDED_TILE = 256
 # S×S mask is cheaper than many tiles until the sequence is long enough.
-BANDED_SEQ_MIN = 512
+# 3090 2026-09-20: seq=512 → 0.14× S×S; seq=1024 → 0.35×; seq=2048 → 1.17×;
+# seq=4096 n_win=32 → 2.93×. Gate at the first non-regression.
+BANDED_SEQ_MIN = 2048
 _WINDOW_BIAS_CACHE: dict[tuple, torch.Tensor] = {}
 _WINDOW_BIAS_BYTES = 0
 _WINDOW_BIAS_BUDGET = 256 << 20

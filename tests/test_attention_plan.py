@@ -331,8 +331,9 @@ class SdpaNumericTests(unittest.TestCase):
 class BandedWindowTests(unittest.TestCase):
     def test_use_banded_window_gates(self) -> None:
         self.assertEqual(BANDED_TILE, 256)
-        self.assertEqual(BANDED_SEQ_MIN, 512)
+        self.assertEqual(BANDED_SEQ_MIN, 2048)
         self.assertFalse(_use_banded_window(64, 64, 16))
+        self.assertFalse(_use_banded_window(512, 512, 32))
         self.assertFalse(_use_banded_window(4096, 4096, 8192))
         self.assertTrue(_use_banded_window(BANDED_SEQ_MIN, BANDED_SEQ_MIN, 32))
         self.assertFalse(_use_banded_window(BANDED_SEQ_MIN, BANDED_SEQ_MIN + 8, 32))
@@ -352,7 +353,7 @@ class BandedWindowTests(unittest.TestCase):
 
     def test_fat_tile_banded_matches_mask(self) -> None:
         torch.manual_seed(0)
-        b, h, kv, s, w, hd = 1, 2, 1, BANDED_SEQ_MIN, 32, 8
+        b, h, kv, s, w, hd = 1, 2, 1, 512, 32, 8
         q = torch.randn(b, h, s, hd)
         k = torch.randn(b, kv, s, hd)
         v = torch.randn(b, kv, s, hd)
@@ -363,7 +364,7 @@ class BandedWindowTests(unittest.TestCase):
 
     def test_fat_tile_handles_remainder_seq(self) -> None:
         torch.manual_seed(1)
-        b, h, kv, s, w, hd = 2, 2, 1, BANDED_SEQ_MIN + 8, 32, 8
+        b, h, kv, s, w, hd = 2, 2, 1, 520, 32, 8
         q = torch.randn(b, h, s, hd)
         k = torch.randn(b, kv, s, hd)
         v = torch.randn(b, kv, s, hd)
