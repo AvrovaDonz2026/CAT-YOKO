@@ -15,7 +15,7 @@
 
 **仓库许可**：CAT-YOKO 代码与派生权重 **Apache-2.0**（[`LICENSE`](../LICENSE)）。
 
-仓库训练代码是这份 12B 图的 **PyTorch 参考实现**；规模化并行预留 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 适配面（`cat_yoko.megatron`，双栈 TransformerConfig + model_provider 钩子）。**不要**把 YOCO 塞进现成 `GPTModel`。tiny 配置只给单测。
+仓库训练代码是这份 12B 图的 **PyTorch 参考实现**；装不下 12B 时走可选 **DeepSpeed ZeRO**（`cat_yoko.deepspeed_zero`，CI 不强装）；规模化并行预留 [Megatron-LM](https://github.com/NVIDIA/Megatron-LM) 适配面（`cat_yoko.megatron`，双栈 TransformerConfig + model_provider 钩子）。**不要**把 YOCO 塞进现成 `GPTModel`。tiny 配置只给单测。
 
 ---
 

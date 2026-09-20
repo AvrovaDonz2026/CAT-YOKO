@@ -208,6 +208,10 @@ class Trainer:
         teacher: nn.Module | None = None,
         fsdp: bool = False,
         ddp: bool = False,
+        deepspeed: bool = False,
+        zero_stage: int = 2,
+        zero_offload: bool = False,
+        zero_offload_param: bool = False,
         save_dir: Path | None = None,
         save_every: int = 0,
         resume: Path | None = None,
@@ -242,6 +246,17 @@ class Trainer:
         self.teacher = teacher
         self.fsdp = fsdp
         self.ddp = ddp
+        self.deepspeed = bool(deepspeed)
+        self.zero_offload_param = bool(zero_offload_param)
+        self.zero_offload = bool(zero_offload or zero_offload_param)
+        if self.zero_offload_param:
+            self.zero_stage = 3
+        elif self.deepspeed:
+            self.zero_stage = int(zero_stage or 2)
+        else:
+            self.zero_stage = 0
+        if self.deepspeed and (self.fsdp or self.ddp):
+            raise ValueError("DeepSpeed ZeRO cannot mix --fsdp/--ddp")
         self.save_dir = Path(save_dir) if save_dir else None
         self.save_every = save_every
         self.resume = Path(resume) if resume else None
@@ -267,7 +282,10 @@ class Trainer:
         self.initial_stream = initial_stream
         self.save_full_arg = save_full
         self.save_trainable_arg = save_trainable
-        self.device, self.rank, self.world = init_distributed(device, force=bool(fsdp))
+        self._trainable_names: set[str] = set()
+        self.device, self.rank, self.world = init_distributed(
+            device, force=bool(fsdp or self.deepspeed)
+        )
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
             self.seq_len = int(seq_len)
@@ -351,7 +369,26 @@ class Trainer:
         set_sparse_mode(raw, self.phase_sparse)
 
     def _maybe_save(self, model: nn.Module, opt, extra: dict, tag: str) -> None:
-        if self.save_dir is None or not is_rank0(self.rank):
+        if self.save_dir is None:
+            return
+        from cat_yoko.deepspeed_zero import (
+            gathered_state_dict,
+            gathered_trainable_state_dict,
+            is_deepspeed_engine,
+            zero_stage_of,
+        )
+
+        trainable_sd = None
+        full_sd = None
+        if is_deepspeed_engine(model) and zero_stage_of(model) >= 3:
+            # All ranks must enter the ZeRO-3 gather. Rank-0-only would deadlock.
+            if self.save_trainable:
+                trainable_sd = gathered_trainable_state_dict(
+                    model, names=self._trainable_names or None
+                )
+            if self.save_full:
+                full_sd = gathered_state_dict(model)
+        if not is_rank0(self.rank):
             return
         if self.save_trainable:
             if tag == "latest.pt":
@@ -363,10 +400,14 @@ class Trainer:
                 if step_path is not None and step_path.is_file():
                     publish_latest(step_path, dest)
                 else:
-                    save_trainable_checkpoint(dest, model=model, extra=extra)
+                    save_trainable_checkpoint(
+                        dest, model=model, extra=extra, state=trainable_sd
+                    )
             elif tag.startswith("step_"):
                 dest = self.save_dir / f"trainable_{tag}"
-                save_trainable_checkpoint(dest, model=model, extra=extra)
+                save_trainable_checkpoint(
+                    dest, model=model, extra=extra, state=trainable_sd
+                )
                 # Rental GPUs die mid-envelope. Point trainable.pt at this
                 # step so --resume save_dir works before the final latest.pt.
                 publish_latest(dest, self.save_dir / "trainable.pt")
@@ -384,6 +425,7 @@ class Trainer:
                 optimizer=opt,
                 extra=extra,
                 save_optimizer=self.save_optim,
+                model_state=full_sd,
             )
         if tag.startswith("step_") and self.save_keep:
             prune_step_checkpoints(self.save_dir, self.save_keep)
@@ -462,6 +504,7 @@ class Trainer:
             device=str(self.device),
             fsdp=self.fsdp,
             ddp=self.ddp,
+            deepspeed=self.deepspeed,
             offload_encoder=self.offload_encoder_arg,
             offload_blocks=self.offload_blocks_arg,
             optim_cpu=self.optim_cpu_arg,
@@ -514,10 +557,11 @@ class Trainer:
         tokens_in_phase = 0.0
         tokens_seen = self.global_tokens_offset
         if same_phase:
-            try:
-                load_optimizer_state(opt, ckpt.get("optimizer"))
-            except (ValueError, RuntimeError, KeyError):
-                pass
+            if opt is not None:
+                try:
+                    load_optimizer_state(opt, ckpt.get("optimizer"))
+                except (ValueError, RuntimeError, KeyError):
+                    pass
             step = int(extra.get("step", 0))
             tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
@@ -666,6 +710,8 @@ class Trainer:
             f"grad_ckpt={self.grad_ckpt} seq={self.seq_len} "
             f"offload_enc={self.offload_encoder} offload_blocks={self.offload_blocks} "
             f"optim_cpu={self.optim_cpu} adam={adam_state} "
+            f"zero={self.zero_stage} ds={self.deepspeed} "
+            f"zero_offload={self.zero_offload} zero_offload_param={self.zero_offload_param} "
             f"trainable={n_train/1e6:.2f}M reuse={self.reuse_model is not None} "
             f"nvfp4={bool(getattr(self.cfg, 'use_nvfp4', False))} "
             f"nvfp4_n={self.nvfp4_n} nvfp4_family={compute_family()} "
@@ -676,6 +722,56 @@ class Trainer:
             f"PYTORCH_CUDA_ALLOC_CONF={alloc_conf}",
             flush=True,
         )
+
+    def _wrap_and_optim(self, model: nn.Module):
+        """Freeze/NVFP4 already applied. DeepSpeed initialize, else DDP/FSDP."""
+        from cat_yoko.deepspeed_zero import is_zero_partitioned, wrap_deepspeed, zero_config
+
+        raw = unwrap(model)
+        if is_zero_partitioned(raw):
+            raise RuntimeError(
+                "cannot re-wrap a ZeRO-3 partitioned module; "
+                "run B0/B1/B2 as separate processes with --resume overlay"
+            )
+        self._trainable_names = {
+            n for n, p in raw.named_parameters() if p.requires_grad
+        }
+        n_train = sum(p.numel() for n, p in raw.named_parameters() if p.requires_grad)
+        if self.deepspeed:
+            if not str(self.device).startswith("cuda"):
+                raise RuntimeError("DeepSpeed ZeRO needs --device cuda")
+            adam_state = "ds-cpu" if self.zero_offload else "ds"
+            self.adam_state = adam_state
+            opt = build_optimizer(raw, self.cfg, cpu_offload=False)
+            cfg = zero_config(
+                stage=self.zero_stage,
+                offload_optimizer=self.zero_offload,
+                offload_param=self.zero_offload_param,
+                bf16=self.dtype == "bf16",
+                # Trainer owns the micro-loop (loss / accum). DS GAS=1.
+                gradient_accumulation_steps=1,
+                gradient_clipping=float(self.cfg.grad_clip),
+                train_micro_batch_size_per_gpu=self.micro_batch,
+            )
+            model, opt = wrap_deepspeed(raw, opt, cfg, dist_init_required=False)
+            return model, opt, n_train, adam_state
+        model = wrap_distributed(raw, fsdp=self.fsdp, ddp=self.ddp)
+        adam_state = "gpu"
+        state_dtype = torch.float32
+        retain_state = True
+        if self.optim_cpu:
+            state_dtype, retain_state, adam_state = plan_cpu_adam(
+                n_train, steps=self.steps
+            )
+        self.adam_state = adam_state
+        opt = build_optimizer(
+            model,
+            self.cfg,
+            cpu_offload=self.optim_cpu,
+            state_dtype=state_dtype,
+            retain_state=retain_state,
+        )
+        return model, opt, n_train, adam_state
 
     def _begin_step_peak(self) -> None:
         """Start peak tracking after freeze/offload, not at 12B ``build_model``.
@@ -743,17 +839,18 @@ class Trainer:
         self._attach_phase_modules(model)
         self._apply_nvfp4(model)
         self._apply_runtime_flags(model)
-        model = wrap_distributed(unwrap(model), fsdp=self.fsdp, ddp=self.ddp)
-        trainable = [p for p in model.parameters() if p.requires_grad]
-        n_train = sum(p.numel() for p in trainable)
-        adam_state = "gpu"
-        state_dtype = torch.float32
-        retain_state = True
-        if self.optim_cpu:
-            state_dtype, retain_state, adam_state = plan_cpu_adam(
-                n_train, steps=self.steps
-            )
-        self.adam_state = adam_state
+        stream = self._open(self.data, self.seed)
+        step = 0
+        tokens_in_phase = 0.0
+        tokens_seen = self.global_tokens_offset
+        if self.deepspeed:
+            if self.resume is not None:
+                step, tokens_in_phase, tokens_seen = self._load_resume(
+                    unwrap(model), None, stream
+                )
+            elif self.initial_stream is not None:
+                stream.load_state_dict(self.initial_stream)
+        model, opt, n_train, adam_state = self._wrap_and_optim(model)
         if is_rank0(self.rank) and str(self.device).startswith("cuda") and torch.cuda.is_available():
             self._print_built(unwrap(model), n_train, adam_state)
             if (
@@ -766,21 +863,11 @@ class Trainer:
                     "moments; --steps 1 or omit --save-dir on a 62GiB cgroup",
                     flush=True,
                 )
-        opt = build_optimizer(
-            model,
-            self.cfg,
-            cpu_offload=self.optim_cpu,
-            state_dtype=state_dtype,
-            retain_state=retain_state,
-        )
-        stream = self._open(self.data, self.seed)
-        step = 0
-        tokens_in_phase = 0.0
-        tokens_seen = self.global_tokens_offset
-        if self.resume is not None:
-            step, tokens_in_phase, tokens_seen = self._load_resume(model, opt, stream)
-        elif self.initial_stream is not None:
-            stream.load_state_dict(self.initial_stream)
+        if not self.deepspeed:
+            if self.resume is not None:
+                step, tokens_in_phase, tokens_seen = self._load_resume(model, opt, stream)
+            elif self.initial_stream is not None:
+                stream.load_state_dict(self.initial_stream)
 
         if self.teacher is not None:
             self.teacher.to(self.device)
@@ -799,8 +886,11 @@ class Trainer:
         last = 0.0
         phase_budget = self.tokens_target
         max_steps = self.steps
-        trainable = [p for p in model.parameters() if p.requires_grad]
-        n_train = sum(p.numel() for p in trainable)
+        if not self.deepspeed:
+            trainable = [p for p in model.parameters() if p.requires_grad]
+            n_train = sum(p.numel() for p in trainable)
+        else:
+            trainable = []
 
         gn_parts: list[float] = []
         if self.offload_blocks and isinstance(opt, CPUOffloadAdamW):
@@ -839,9 +929,17 @@ class Trainer:
                     tokens_in_phase=tokens_in_phase,
                     phase_budget=phase_budget,
                 )
-                for g in opt.param_groups:
+                lr_opt = getattr(model, "optimizer", None) if self.deepspeed else opt
+                if lr_opt is None:
+                    lr_opt = opt
+                for g in lr_opt.param_groups:
                     g["lr"] = lr
-                opt.zero_grad(set_to_none=True)
+                if self.deepspeed:
+                    zfn = getattr(model, "zero_grad", None)
+                    if callable(zfn):
+                        zfn()
+                else:
+                    opt.zero_grad(set_to_none=True)
                 step_nll_w = 0.0
                 step_loss = 0.0
                 step_aux = 0.0
@@ -883,7 +981,10 @@ class Trainer:
                                 self.cfg.kd_temperature,
                                 ignore=shift_labels,
                             )
-                        loss.backward()
+                        if self.deepspeed:
+                            model.backward(loss)
+                        else:
+                            loss.backward()
                     z = out["loss"].detach().reshape(()).float()
                     if stats_nll_w is None:
                         stats_nll_w = z.new_zeros(())
@@ -942,14 +1043,23 @@ class Trainer:
                     self._nll_ema = step_nll
                 else:
                     self._nll_ema = 0.9 * float(self._nll_ema) + 0.1 * step_nll
-                if self.offload_blocks:
+                if self.deepspeed:
+                    gn_fn = getattr(model, "get_global_grad_norm", None)
+                    gn_val = gn_fn() if callable(gn_fn) else None
+                    try:
+                        grad_norm = float(gn_val) if gn_val is not None else 0.0
+                    except (TypeError, ValueError):
+                        grad_norm = 0.0
+                    model.step()
+                elif self.offload_blocks:
                     leftover = [p for p in trainable if p.grad is not None]
                     if leftover:
                         gn_parts.append(clip_grad_norm_mixed(leftover, self.cfg.grad_clip))
                     grad_norm = math.sqrt(sum(g * g for g in gn_parts)) if gn_parts else 0.0
+                    opt.step()
                 else:
                     grad_norm = self._clip(model, trainable)
-                opt.step()
+                    opt.step()
                 dt = max(time.perf_counter() - t0, 1e-9)
                 step += 1
                 tokens_in_phase += step_tokens * self.world
@@ -988,6 +1098,10 @@ class Trainer:
                         "offload_blocks": self.offload_blocks,
                         "optim_cpu": self.optim_cpu,
                         "adam": self.adam_state,
+                        "backend": "deepspeed" if self.deepspeed else "torch",
+                        "zero": self.zero_stage,
+                        "zero_offload": self.zero_offload,
+                        "zero_offload_param": self.zero_offload_param,
                         "kd_w": kd_w,
                         "world": self.world,
                         "accum": self.accum,

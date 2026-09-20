@@ -1,0 +1,285 @@
+"""DeepSpeed ZeRO backend. Optional extra; CI does not install DeepSpeed.
+
+Not Megatron EP/TP. Not a CSA kernel. Overlay save gathers ZeRO-3 16-bit
+weights; do not ``--save-full``. Native encoder/block/Adam CPU offload stays
+on the torch path — ZeRO owns partitioning when this backend is on.
+
+Single-GPU ZeRO-1/2 does **not** shard frozen 12B weights. A 48GiB Ampere
+card needs ZeRO-3 + optimizer CPU offload + param CPU offload.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from typing import Any
+
+from torch import nn
+
+from cat_yoko.optim import unwrap
+
+DEEPSPEED = "https://github.com/microsoft/DeepSpeed"
+
+_IMPORT_HINT = (
+    "DeepSpeed backend is reserved but not installed.\n"
+    f"  pip install 'cat-yoko[deepspeed]'   # or: pip install deepspeed\n"
+    f"Upstream: {DEEPSPEED}\n"
+    "3090 48GiB: --backend deepspeed --zero 3 --zero-offload --zero-offload-param. "
+    "ZeRO-1/2 on one GPU does not shard the frozen 12B weights."
+)
+
+AMPERE_48GIB_ARGV = (
+    "--backend",
+    "deepspeed",
+    "--zero",
+    "3",
+    "--zero-offload",
+    "--zero-offload-param",
+    "--no-offload-encoder",
+    "--no-offload-blocks",
+    "--no-optim-cpu",
+)
+
+NOTES = (
+    "Freeze + NVFP4 wrap before deepspeed.initialize.",
+    "Do not wrap DDP/FSDP around the engine.",
+    "Disable native --offload-encoder/--offload-blocks/--optim-cpu.",
+    "ZeRO-3 overlay: gather 16-bit trainable weights. Do not --save-full.",
+    "Single-GPU ZeRO-1/2 does not shard 12B frozen weights; 48GiB needs ZeRO-3 + param CPU offload.",
+    "Not Megatron EP/TP. Not a CSA kernel. Not a 50B download.",
+    "C1 chain: run B0/B1/B2 as separate processes with --resume; do not --c1 in-process.",
+    "ZeRO fits memory. It does not make the 8e9 B0 envelope sane on one 3090.",
+)
+
+
+class DeepSpeedNotInstalled(ImportError):
+    pass
+
+
+class DeepSpeedBackendError(RuntimeError):
+    """Installed DeepSpeed cannot serve this request (CPU, C1 reuse, gather)."""
+
+
+def import_deepspeed() -> Any:
+    try:
+        import deepspeed as ds  # noqa: F401
+    except ImportError as exc:
+        raise DeepSpeedNotInstalled(_IMPORT_HINT) from exc
+    return ds
+
+
+def resolve_zero_stage(stage: int | None, *, offload_param: bool = False) -> int:
+    """Param CPU offload is ZeRO-3 only. Default stage is 2."""
+    if offload_param:
+        return 3
+    if stage is None:
+        return 2
+    stage_i = int(stage)
+    if stage_i not in {1, 2, 3}:
+        raise ValueError(f"ZeRO stage must be 1, 2, or 3; got {stage}")
+    return stage_i
+
+
+def zero_config(
+    *,
+    stage: int | None = 2,
+    offload_optimizer: bool = False,
+    offload_param: bool = False,
+    bf16: bool = True,
+    gradient_accumulation_steps: int = 1,
+    gradient_clipping: float = 1.0,
+    train_micro_batch_size_per_gpu: int = 1,
+    overlap_comm: bool = True,
+) -> dict[str, Any]:
+    """JSON-serializable DeepSpeed config. Does not import DeepSpeed."""
+    stage_i = resolve_zero_stage(stage, offload_param=offload_param)
+    offload_optimizer = bool(offload_optimizer or offload_param)
+    zero: dict[str, Any] = {
+        "stage": stage_i,
+        "overlap_comm": bool(overlap_comm),
+        "contiguous_gradients": True,
+        "reduce_scatter": True,
+    }
+    if offload_optimizer:
+        zero["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
+    if offload_param:
+        zero["offload_param"] = {"device": "cpu", "pin_memory": True}
+    if stage_i == 3:
+        zero["stage3_gather_16bit_weights_on_model_save"] = True
+        zero["stage3_param_persistence_threshold"] = 1_000_000
+        # Modest buckets so a 48GiB card is not pinned by prefetch.
+        zero["stage3_prefetch_bucket_size"] = 50_000_000
+        zero["reduce_bucket_size"] = 50_000_000
+    cfg: dict[str, Any] = {
+        "train_micro_batch_size_per_gpu": int(max(train_micro_batch_size_per_gpu, 1)),
+        "gradient_accumulation_steps": int(max(gradient_accumulation_steps, 1)),
+        "gradient_clipping": float(gradient_clipping),
+        "zero_optimization": zero,
+        "zero_allow_untested_optimizer": True,
+        # Keep torch AdamW + router no-decay groups; do not swap DeepSpeedCPUAdam.
+        "zero_force_ds_cpu_optimizer": False,
+        "steps_per_print": 2_147_483_647,
+        "wall_clock_breakdown": False,
+        "prescale_gradients": False,
+        # Model already has --grad-ckpt. Do not enable DS activation checkpointing.
+        "activation_checkpointing": {"partition_activations": False},
+        "bf16": {"enabled": bool(bf16)},
+        "fp16": {"enabled": False},
+    }
+    return cfg
+
+
+def dump_zero_config(
+    *,
+    stage: int | None = 2,
+    offload_optimizer: bool = False,
+    offload_param: bool = False,
+    bf16: bool = True,
+    gradient_accumulation_steps: int = 1,
+    gradient_clipping: float = 1.0,
+    train_micro_batch_size_per_gpu: int = 1,
+    phase: str = "B0",
+    file=None,
+) -> dict[str, Any]:
+    """Print the ZeRO mapping JSON (no DeepSpeed import) and return it."""
+    config = zero_config(
+        stage=stage,
+        offload_optimizer=offload_optimizer,
+        offload_param=offload_param,
+        bf16=bf16,
+        gradient_accumulation_steps=gradient_accumulation_steps,
+        gradient_clipping=gradient_clipping,
+        train_micro_batch_size_per_gpu=train_micro_batch_size_per_gpu,
+    )
+    payload = {
+        "upstream": DEEPSPEED,
+        "backend": "deepspeed",
+        "phase": phase,
+        "zero": config,
+        "ampere_48gib_argv": list(AMPERE_48GIB_ARGV),
+        "notes": list(NOTES),
+    }
+    json.dump(payload, file or sys.stdout, indent=2)
+    (file or sys.stdout).write("\n")
+    return payload
+
+
+def is_deepspeed_engine(model: nn.Module) -> bool:
+    name = type(model).__name__
+    if name in {"DeepSpeedEngine", "PipelineEngine"}:
+        return True
+    mod = type(model).__module__
+    return "deepspeed" in mod and hasattr(model, "backward") and hasattr(model, "module")
+
+
+def zero_stage_of(model: nn.Module) -> int:
+    if not is_deepspeed_engine(model):
+        return 0
+    fn = getattr(model, "zero_optimization_stage", None)
+    if callable(fn):
+        try:
+            return int(fn())
+        except Exception:
+            return 0
+    return 0
+
+
+def is_zero_partitioned(model: nn.Module) -> bool:
+    """True after ZeRO-3 has replaced Parameters with partitioned tensors."""
+    for p in unwrap(model).parameters():
+        if hasattr(p, "ds_id"):
+            return True
+    return False
+
+
+def wrap_deepspeed(
+    model: nn.Module,
+    optimizer,
+    config: dict[str, Any],
+    *,
+    dist_init_required: bool | None = None,
+):
+    """``deepspeed.initialize`` after freeze + NVFP4. Do not wrap DDP/FSDP first."""
+    if is_deepspeed_engine(model):
+        raise DeepSpeedBackendError("model is already a DeepSpeed engine")
+    raw = unwrap(model)
+    if is_zero_partitioned(raw):
+        raise DeepSpeedBackendError(
+            "cannot re-wrap a ZeRO-3 partitioned module; "
+            "run B0/B1/B2 as separate processes with --resume overlay"
+        )
+    ds = import_deepspeed()
+    import torch.distributed as dist
+
+    if dist_init_required is None:
+        dist_init_required = not (dist.is_available() and dist.is_initialized())
+    engine, opt, _, _ = ds.initialize(
+        model=raw,
+        optimizer=optimizer,
+        config=config,
+        dist_init_required=dist_init_required,
+    )
+    return engine, opt
+
+
+def _cpu_sd(state: dict[str, Any] | None) -> dict[str, Any] | None:
+    if state is None:
+        return None
+    import torch
+
+    out: dict[str, Any] = {}
+    for key, value in state.items():
+        if torch.is_tensor(value):
+            out[key] = value.detach().contiguous().cpu()
+        else:
+            out[key] = value
+    return out
+
+
+def gathered_state_dict(model: nn.Module) -> dict[str, Any] | None:
+    """All ranks must enter on ZeRO-3. Rank 0 returns a CPU 16-bit dict.
+
+    Non-rank-0 typically gets ``None``. Callers that are not a DeepSpeed
+    engine, or are ZeRO-1/2 (full params on each rank), get ``None`` so the
+    torch ``state_dict`` path can run on rank 0 only.
+    """
+    if not is_deepspeed_engine(model) or zero_stage_of(model) < 3:
+        return None
+    fn = getattr(model, "_zero3_consolidated_16bit_state_dict", None)
+    if not callable(fn):
+        raise DeepSpeedBackendError(
+            "ZeRO-3 overlay/full gather needs consolidate 16-bit weights"
+        )
+    try:
+        state = fn(exclude_frozen_parameters=False)
+    except TypeError:
+        state = fn()
+    return _cpu_sd(state) if isinstance(state, dict) else state
+
+
+def gathered_trainable_state_dict(
+    model: nn.Module,
+    names: set[str] | frozenset[str] | None = None,
+) -> dict[str, Any] | None:
+    """ZeRO-3: all ranks enter; rank 0 returns the Hub overlay tensors.
+
+    ``None`` means “not ZeRO-3; use ``trainable_state_dict`` on rank 0”.
+    An empty dict is the non-rank-0 ZeRO-3 result (still participated).
+    """
+    if not is_deepspeed_engine(model) or zero_stage_of(model) < 3:
+        return None
+    fn = getattr(model, "_zero3_consolidated_16bit_state_dict", None)
+    if not callable(fn):
+        raise DeepSpeedBackendError(
+            "ZeRO-3 overlay gather needs consolidate 16-bit weights"
+        )
+    if names is None:
+        names = {n for n, p in unwrap(model).named_parameters() if p.requires_grad}
+    try:
+        state = fn(exclude_frozen_parameters=True)
+    except TypeError:
+        state = fn()
+    if not isinstance(state, dict):
+        return {} if state is None else None
+    cpu = _cpu_sd(state) or {}
+    return {k: v for k, v in cpu.items() if k in names}

@@ -55,6 +55,7 @@ bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自�
 | SM100/103 且 ≥160GiB（B200 类） | 发布信封 seq=4096，mb=2，encoder 在 GPU，无 grad-ckpt，TE NVFP4 FPROP |
 | sm_120 且 ≥90GiB（6000D 类） | 发布信封 seq=4096，mb=1，encoder 在 GPU，grad-ckpt，`Nvfp4Linear` 仿真 |
 | Hopper SM90 且 ≥40GiB | 发布信封；<90GiB 卸 encoder；仿真 NVFP4（文档上的 FP8 回退，不新写 wrap） |
+| Ampere/Ada 且 40–90GiB | recipe 默认仍是 torch 卸 encoder。要切冻住的 24.5GiB 权重：`--backend deepspeed --zero 3 --zero-offload --zero-offload-param`（[`DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md)）。塞进 ≠ 跑完 8e9 |
 | `<40GiB` | **拒绝** 8e9 信封 → `--try` seq=64 / 32 步 |
 | CPU | 只打 JSON，不建 12B 图 |
 
@@ -66,6 +67,7 @@ bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自�
 - `--save-full` / 23GiB `latest.pt`（尤其 32GiB 容器盘）
 - 为 B1/B2 `--try` 在 B0 还占 GPU 时抢卡
 - 实现 Megatron EP/TP 循环、CSA CUDA kernel
+- 把 ZeRO 当成一张 3090 上重开 8e9 的理由（Hub overlay 已经 1.63%，同阶段 resume）
 - 把 50B Ultra-FineWeb 拉进仓库或小盘
 - 再连已释放的 AutoDL `westc` / `weste`
 - 把 SSH 密码、deploy key 写进 git

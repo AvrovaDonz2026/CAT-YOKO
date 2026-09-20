@@ -333,6 +333,14 @@ def recipe_for(snap: HwSnapshot, *, force_try: bool = False) -> B0Recipe:
                 f"{'encoder offload, ' if offload_encoder else 'encoder on GPU, '}"
                 "grad-ckpt on. Resume Hub b0-full. Not Megatron."
             )
+            if offload_encoder and snap.arch in {"ampere", "ada"}:
+                notes += (
+                    " Native encoder offload is the torch path. "
+                    "To shard 24.5GiB frozen weights on ~48GiB: "
+                    "--backend deepspeed --zero 3 --zero-offload --zero-offload-param "
+                    "(docs/DEEPSPEED_ZERO.md). Ampere NVFP4 emu is a speed trap. "
+                    "ZeRO fits memory; it does not make 8e9 wall-clock sane on one 3090."
+                )
 
     if nvfp4 == "emu" and snap.family in {"sm100", "sm103"} and not try_run:
         notes += " TE FPROP miss or CAT_YOKO_TE_NVFP4=0 → emulation this process."
@@ -374,7 +382,26 @@ def recipe_payload(snap: HwSnapshot, rec: B0Recipe) -> dict:
     rec_d["argv"] = list(rec.argv)
     rec_d["save_every"] = TRY_STEPS // 4 if rec.try_run else PUBLISHED_SAVE_EVERY
     rec_d["try_steps"] = TRY_STEPS if rec.try_run else None
+    rec_d["deepspeed_zero"] = deepspeed_zero_hint(snap, rec)
     return {"snapshot": snap_d, "recipe": rec_d}
+
+
+def deepspeed_zero_hint(snap: HwSnapshot, rec: B0Recipe) -> dict | None:
+    """Optional ZeRO-3 CPU-offload flags. Default launch argv stays torch."""
+    from cat_yoko.deepspeed_zero import AMPERE_48GIB_ARGV
+
+    if rec.try_run or rec.profile == "cpu":
+        return None
+    if snap.arch in {"ampere", "ada"} and rec.offload_encoder:
+        return {
+            "backend": "deepspeed",
+            "zero": 3,
+            "offload_optimizer": True,
+            "offload_param": True,
+            "argv": list(AMPERE_48GIB_ARGV),
+            "doc": "docs/DEEPSPEED_ZERO.md",
+        }
+    return None
 
 
 def shell_export(snap: HwSnapshot, rec: B0Recipe) -> str:

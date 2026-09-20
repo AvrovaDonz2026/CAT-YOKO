@@ -100,6 +100,24 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--no-offload-blocks", action="store_true")
     p.add_argument("--optim-cpu", action="store_true")
     p.add_argument("--no-optim-cpu", action="store_true")
+    p.add_argument(
+        "--backend",
+        choices=["torch", "megatron", "deepspeed"],
+        default="torch",
+        help="torch trainer, Megatron hook, or DeepSpeed ZeRO",
+    )
+    p.add_argument("--zero", type=int, choices=[1, 2, 3], default=None)
+    p.add_argument("--zero-offload", action="store_true")
+    p.add_argument(
+        "--zero-offload-param",
+        action="store_true",
+        help="ZeRO-3 param CPU offload (implies stage 3 + optimizer offload)",
+    )
+    p.add_argument(
+        "--dump-deepspeed",
+        action="store_true",
+        help="print DeepSpeed ZeRO JSON via cat_yoko.train and exit",
+    )
     p.add_argument("--log-every", type=int, default=None)
     p.add_argument(
         "--micro-batch",
@@ -160,18 +178,37 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.append("--no-grad-ckpt")
     else:
         out.append("--grad-ckpt")
-    if args.no_offload_encoder:
-        out.append("--no-offload-encoder")
-    elif args.offload_encoder or ph.offload_encoder:
-        out.append("--offload-encoder")
-    if args.no_offload_blocks:
-        out.append("--no-offload-blocks")
-    elif args.offload_blocks or ph.offload_blocks:
-        out.append("--offload-blocks")
-    if args.no_optim_cpu:
-        out.append("--no-optim-cpu")
-    elif args.optim_cpu or ph.optim_cpu:
-        out.append("--optim-cpu")
+    use_ds = args.backend == "deepspeed"
+    dump_ds = bool(args.dump_deepspeed)
+    if use_ds or dump_ds:
+        out.extend(["--no-offload-encoder", "--no-offload-blocks", "--no-optim-cpu"])
+    else:
+        if args.no_offload_encoder:
+            out.append("--no-offload-encoder")
+        elif args.offload_encoder or ph.offload_encoder:
+            out.append("--offload-encoder")
+        if args.no_offload_blocks:
+            out.append("--no-offload-blocks")
+        elif args.offload_blocks or ph.offload_blocks:
+            out.append("--offload-blocks")
+        if args.no_optim_cpu:
+            out.append("--no-optim-cpu")
+        elif args.optim_cpu or ph.optim_cpu:
+            out.append("--optim-cpu")
+    if use_ds:
+        out.extend(["--backend", "deepspeed"])
+        stage = 3 if args.zero_offload_param else (2 if args.zero is None else int(args.zero))
+        out.extend(["--zero", str(stage)])
+    elif args.zero is not None:
+        out.extend(["--zero", str(args.zero)])
+    if args.zero_offload or args.zero_offload_param:
+        out.append("--zero-offload")
+    if args.zero_offload_param:
+        out.append("--zero-offload-param")
+        if not use_ds and args.zero is None:
+            out.extend(["--zero", "3"])
+    if dump_ds:
+        out.append("--dump-deepspeed")
     tight = str(args.device).startswith("cuda") and _tight_gpu()
     if tight and not args.try_run and args.steps is None and args.tokens is None:
         p.error(
