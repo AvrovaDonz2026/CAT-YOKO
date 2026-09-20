@@ -48,8 +48,8 @@ SEQ="${SEQ:-4096}"
 # 50 步约 4–5 分钟一次 ZeRO-3 gather，GPU 占用会掉到 0 约 6s。
 SAVE_EVERY="${SAVE_EVERY:-200}"
 KEEP_LAST="${KEEP_LAST:-2}"
-# 每步 D2H / DS grad-norm 会把 GPU 打到 0%。20 步打一行仍能看 tok/s。
-LOG_EVERY="${LOG_EVERY:-20}"
+# 每步 D2H / DS grad-norm 会把 GPU 打到 0%。40 步一行：看 tok/s，少一半 log 同步。
+LOG_EVERY="${LOG_EVERY:-40}"
 # STEPS is extra optimizer steps after resume. 0 = run until the 8e9 envelope
 # (or the instance dies). --steps is an absolute cap; Hub is already 26940.
 STEPS="${STEPS:-8}"

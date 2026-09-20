@@ -1046,6 +1046,10 @@ class Trainer:
             set_after_block_backward(_on_block)
         self._begin_step_peak()
         self._warmup_zero(model)
+        if self.deepspeed:
+            from cat_yoko.deepspeed_zero import freeze_host_gc_after_zero_init
+
+            freeze_host_gc_after_zero_init()
         if not (
             (max_steps is not None and step >= max_steps)
             or (phase_budget is not None and tokens_in_phase >= phase_budget)

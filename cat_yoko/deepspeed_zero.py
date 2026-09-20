@@ -53,6 +53,7 @@ NOTES = (
     "ZeRO fits memory. It does not make the 8e9 B0 envelope sane on one 3090.",
     "Single-process python -m does not need the deepspeed launcher; seed LOCAL_RANK=0.",
     "Warm up ZeRO-3 with one dummy backward (no Adam step) so the first timed step is not the allgather-trace pass.",
+    "After initialize, raise ZeRO's hardcoded 2 inflight H2D events so leaf fetches do not host-sync mid-step.",
 )
 
 
@@ -136,13 +137,14 @@ def zero_config(
         # (measured ~45.6/49.1GiB with the old 50e6 bucket).
         zero["stage3_prefetch_bucket_size"] = 500_000_000
         zero["reduce_bucket_size"] = 500_000_000
-        # MoE top-k order changes every step. ZeRO-3 traces the last forward
-        # and prefetches the wrong expert, so SM sits at 0% ~1s while PCIe
-        # catches up. Leaf modules prefetch all children on entry (DeepSpeed
-        # Mixtral recipe). Do not persist experts; this only changes fetch
-        # granularity. Class names match __class__.__name__.
+        # Mixtral recipe: leaf the MoE block only. Top-k order changes every
+        # step; a leaf fetches every expert on entry so the trace stays
+        # stable. Do **not** leaf EncoderBlock/DecoderBlock — that waits on
+        # ~1.6GiB (attn+all experts) before any GEMM, and DeepSpeed's default
+        # 2 inflight H2D events then host-synchronize the oldest (~1s SM 0%).
+        # Do not persist experts. Class names match __class__.__name__.
         zero["leaf_module"] = {
-            "classes": ["MoE", "EncoderBlock", "DecoderBlock"],
+            "classes": ["MoE"],
         }
     cfg: dict[str, Any] = {
         "train_micro_batch_size_per_gpu": int(max(train_micro_batch_size_per_gpu, 1)),
@@ -272,7 +274,83 @@ def wrap_deepspeed(
         config=config,
         dist_init_required=dist_init_required,
     )
+    n_ev = tune_zero3_prefetch_overlap(engine)
+    if n_ev:
+        print(f"ZeRO prefetch overlap max_ongoing_fetch_events={n_ev}", flush=True)
     return engine, opt
+
+
+ZERO3_MAX_ONGOING_FETCH_EVENTS = 8
+
+
+def _zero3_param_coordinator(engine: Any) -> Any | None:
+    """DeepSpeed 0.19 keeps the coordinator on the ZeRO-3 offload helper."""
+    seen: set[int] = set()
+    stack = [engine, getattr(engine, "optimizer", None)]
+    while stack:
+        obj = stack.pop()
+        if obj is None:
+            continue
+        ident = id(obj)
+        if ident in seen:
+            continue
+        seen.add(ident)
+        fn = getattr(obj, "get_param_coordinator", None) or getattr(
+            obj, "_get_param_coordinator", None
+        )
+        if callable(fn):
+            try:
+                coord = fn()
+            except Exception:
+                coord = None
+            if coord is not None:
+                return coord
+        off = getattr(obj, "parameter_offload", None)
+        if off is not None and id(off) not in seen:
+            stack.append(off)
+        coord = getattr(obj, "param_coordinator", None)
+        if coord is not None:
+            return coord
+    return None
+
+
+def tune_zero3_prefetch_overlap(
+    engine: Any,
+    *,
+    max_ongoing_fetch_events: int = ZERO3_MAX_ONGOING_FETCH_EVENTS,
+) -> int:
+    """Raise DeepSpeed's inflight H2D event cap (hardcoded 2).
+
+    ``partitioned_param_coordinator`` records a CUDA event per fetch and
+    ``Event.synchronize()`` when the deque exceeds 2. A MoE leaf is ~1GiB
+    H2D; the third block then blocks the host, the default stream drains,
+    and nvidia-smi shows ~1s SM 0% at 260–300W. 8 lets several leaf copies
+    stay queued on the allgather stream. Do not set this unbounded: DeepSpeed
+    allocates the destination tensor on the host thread before the copy
+    stream consumes it. Returns the cap actually written, or 0 if the
+    coordinator is missing (not ZeRO-3 / tests without DeepSpeed).
+    """
+    coord = _zero3_param_coordinator(engine)
+    if coord is None:
+        return 0
+    cap = int(max(2, max_ongoing_fetch_events))
+    written = 0
+    for name in dir(coord):
+        if not name.endswith("max_ongoing_fetch_events"):
+            continue
+        cur = getattr(coord, name, None)
+        if isinstance(cur, int):
+            setattr(coord, name, cap)
+            written = cap
+    return written
+
+
+def freeze_host_gc_after_zero_init() -> None:
+    """Stop scanning the post-init tensor graph. New objects still collect."""
+    import gc
+
+    gc.collect()
+    gc.freeze()
 
 
 def warmup_zero3(engine: nn.Module, loss) -> bool:

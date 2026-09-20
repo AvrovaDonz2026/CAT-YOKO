@@ -70,10 +70,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(z["offload_param"]["buffer_count"], 8)
         self.assertEqual(z["offload_optimizer"]["buffer_count"], 8)
         self.assertTrue(z["round_robin_gradients"])
-        self.assertEqual(
-            z["leaf_module"]["classes"],
-            ["MoE", "EncoderBlock", "DecoderBlock"],
-        )
+        self.assertEqual(z["leaf_module"]["classes"], ["MoE"])
+        self.assertNotIn("EncoderBlock", z["leaf_module"]["classes"])
+        self.assertNotIn("DecoderBlock", z["leaf_module"]["classes"])
 
     def test_json_roundtrip(self) -> None:
         json.dumps(zero_config(stage=3, offload_optimizer=True, offload_param=True))
@@ -383,8 +382,35 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("ninja", wrap_src)
         self.assertIn("stage3_max_live_parameters", inspect.getsource(zero_config))
         self.assertIn("leaf_module", inspect.getsource(zero_config))
-        self.assertIn("EncoderBlock", inspect.getsource(zero_config))
-        from cat_yoko.deepspeed_zero import gathered_trainable_state_dict
+        z3 = zero_config(stage=3, offload_param=True)["zero_optimization"]
+        self.assertEqual(z3["leaf_module"]["classes"], ["MoE"])
+        from cat_yoko.deepspeed_zero import (
+            ZERO3_MAX_ONGOING_FETCH_EVENTS,
+            freeze_host_gc_after_zero_init,
+            gathered_trainable_state_dict,
+            tune_zero3_prefetch_overlap,
+            wrap_deepspeed,
+        )
+
+        self.assertGreaterEqual(ZERO3_MAX_ONGOING_FETCH_EVENTS, 8)
+        self.assertEqual(tune_zero3_prefetch_overlap(object()), 0)
+
+        class _Coord:
+            _PartitionedParameterCoordinator__max_ongoing_fetch_events = 2
+
+        coord = _Coord()
+
+        class _Off:
+            param_coordinator = coord
+
+        class _Eng:
+            optimizer = type("O", (), {"parameter_offload": _Off()})()
+
+        self.assertEqual(tune_zero3_prefetch_overlap(_Eng()), 8)
+        self.assertEqual(coord._PartitionedParameterCoordinator__max_ongoing_fetch_events, 8)
+        freeze_host_gc_after_zero_init()
+        self.assertIn("freeze_host_gc_after_zero_init", inspect.getsource(Trainer.run))
+        self.assertIn("tune_zero3_prefetch_overlap", inspect.getsource(wrap_deepspeed))
 
         overlay = inspect.getsource(gathered_trainable_state_dict)
         self.assertIn("GatheredParameters", overlay)

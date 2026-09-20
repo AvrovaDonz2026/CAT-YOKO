@@ -199,7 +199,7 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("unlimited", text)
         self.assertIn("STEPS=0", text)
         self.assertIn('SAVE_EVERY="${SAVE_EVERY:-200}"', text)
-        self.assertIn('LOG_EVERY="${LOG_EVERY:-20}"', text)
+        self.assertIn('LOG_EVERY="${LOG_EVERY:-40}"', text)
         self.assertIn("TORCH_COMPILE_DISABLE", text)
         self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", text)
         self.assertIn("OMP_NUM_THREADS", text)
