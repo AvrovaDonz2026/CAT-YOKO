@@ -852,6 +852,64 @@ class Trainer:
         )
         return model, opt, n_train, adam_state
 
+    def _synthetic_lm_batch(self) -> dict:
+        """Same shape as DummyStream, own Generator. Does not advance the stream."""
+        from cat_yoko.data import to_device
+
+        g = torch.Generator()
+        g.manual_seed(int(self.seed) ^ 0x5A170000)
+        ids = torch.randint(
+            0,
+            int(self.cfg.vocab_size),
+            (self.micro_batch, self.seq_len),
+            generator=g,
+        )
+        docs = torch.arange(self.micro_batch).unsqueeze(1).expand_as(ids)
+        out = to_device({"input_ids": ids, "labels": ids.clone()}, self.device)
+        out["doc_ids"] = docs
+        return out
+
+    def _warmup_zero(self, model: nn.Module) -> None:
+        """Prime ZeRO-3 prefetch + kernel JIT. Does not Adam / step / tokens.
+
+        The mid-run 647 tok/s valley was dropped prefetch + torch CPU Adam, not
+        a cold first step. This only pulls the allgather-trace pass and the
+        first-step 404 tok/s JIT off the timed loop. Restore RNG so resume
+        extra still matches DummyStream.
+        """
+        from cat_yoko.deepspeed_zero import warmup_zero3
+
+        if not self.deepspeed or not str(self.device).startswith("cuda"):
+            return
+        if not torch.cuda.is_available():
+            return
+        if self.loss_mode not in {"ce", "sft", "indexer_kl"}:
+            return
+        cpu_rng = torch.get_rng_state()
+        py_rng = random.getstate()
+        cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+        ran = False
+        try:
+            batch = self._synthetic_lm_batch()
+            with self._amp():
+                loss = self._forward_loss(model, batch)["loss"]
+            ran = warmup_zero3(model, loss)
+        except torch.cuda.OutOfMemoryError:
+            zfn = getattr(model, "zero_grad", None)
+            if callable(zfn):
+                zfn()
+            torch.cuda.empty_cache()
+            if is_rank0(self.rank):
+                print("ZeRO warmup skipped (OOM); training continues", flush=True)
+            ran = False
+        finally:
+            torch.set_rng_state(cpu_rng)
+            random.setstate(py_rng)
+            if cuda_rng is not None:
+                torch.cuda.set_rng_state_all(cuda_rng)
+        if ran and is_rank0(self.rank):
+            print("ZeRO warmup fwd+bwd (no Adam step)", flush=True)
+
     def _begin_step_peak(self) -> None:
         """Start peak tracking after freeze/offload, not at 12B ``build_model``.
 
@@ -863,7 +921,10 @@ class Trainer:
         if not str(self.device).startswith("cuda") or not torch.cuda.is_available():
             return
         torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+        # ZeRO-3+offload is already at ~48GiB. empty_cache here forces the
+        # first timed step to re-grow the caching allocator and flush.
+        if not self.deepspeed:
+            torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
 
     def run(self) -> TrainResult:
@@ -984,6 +1045,12 @@ class Trainer:
 
             set_after_block_backward(_on_block)
         self._begin_step_peak()
+        self._warmup_zero(model)
+        if not (
+            (max_steps is not None and step >= max_steps)
+            or (phase_budget is not None and tokens_in_phase >= phase_budget)
+        ):
+            self._prefetch_batch = stream.batch(self.micro_batch, self.device)
         try:
             while True:
                 if max_steps is not None and step >= max_steps:

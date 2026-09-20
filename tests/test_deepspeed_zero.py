@@ -362,13 +362,25 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("ninja", wrap_src)
         self.assertIn("stage3_max_live_parameters", inspect.getsource(zero_config))
         self.assertIn("DeepSpeedCPUAdam", inspect.getsource(_deepspeed_cpu_adam))
+        self.assertIn("_warmup_zero", run_src)
+        self.assertIn("warmup_zero3", inspect.getsource(Trainer._warmup_zero))
+        warm = inspect.getsource(Trainer._warmup_zero)
+        self.assertNotIn("model.step(", warm)
+        self.assertNotIn("engine.step", warm)
+        self.assertIn("set_rng_state", warm)
+        self.assertNotIn("stream.batch", inspect.getsource(Trainer._synthetic_lm_batch))
+        peak = inspect.getsource(Trainer._begin_step_peak)
+        self.assertIn("if not self.deepspeed", peak)
 
     def test_plain_module_is_not_engine(self) -> None:
         import torch
 
+        from cat_yoko.deepspeed_zero import warmup_zero3
+
         m = torch.nn.Linear(4, 4)
         self.assertFalse(is_deepspeed_engine(m))
         self.assertFalse(is_zero_partitioned(m))
+        self.assertFalse(warmup_zero3(m, torch.zeros(())))
 
 
 class SecretScanTests(unittest.TestCase):

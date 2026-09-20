@@ -51,6 +51,7 @@ NOTES = (
     "C1 chain: run B0/B1/B2 as separate processes with --resume; do not --c1 in-process.",
     "ZeRO fits memory. It does not make the 8e9 B0 envelope sane on one 3090.",
     "Single-process python -m does not need the deepspeed launcher; seed LOCAL_RANK=0.",
+    "Warm up ZeRO-3 with one dummy backward (no Adam step) so the first timed step is not the allgather-trace pass.",
 )
 
 
@@ -263,6 +264,21 @@ def wrap_deepspeed(
         dist_init_required=dist_init_required,
     )
     return engine, opt
+
+
+def warmup_zero3(engine: nn.Module, loss) -> bool:
+    """Record the ZeRO-3 allgather trace with one dummy backward.
+
+    Does **not** ``engine.step()``: no Adam, no overlay write, no token
+    accounting. Caller restores RNG. False if ``engine`` is not DeepSpeed.
+    """
+    if not is_deepspeed_engine(engine):
+        return False
+    engine.backward(loss)
+    zfn = getattr(engine, "zero_grad", None)
+    if callable(zfn):
+        zfn()
+    return True
 
 
 def _cpu_sd(state: dict[str, Any] | None) -> dict[str, Any] | None:
