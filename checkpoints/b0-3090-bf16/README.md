@@ -10,10 +10,10 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
 | 阶段 | B0 |
-| step | 28600 |
-| tokens_in_phase | 136,841,216（信封 8e9 的 ≈1.71%） |
+| step | 28800 |
+| tokens_in_phase | 137,660,416（信封 8e9 的 ≈1.72%） |
 | seq | 4096 |
-| sha256 | `46ef6f99df2a94e5a1a1b98a4c7a675b2f7e45aaa1563631f134f3d33613a728` |
+| sha256 | `17a2c495b31033d149ed2b95a42ecaa49dcd3d81acb25b0b19b64b33386d3393` |
 | 可训练张量 | 132（无 Adam） |
 | 机器 | AutoDL RTX 3090 sm_86 |
 | 运行时 | BF16，`--backend deepspeed --zero 3 --zero-offload --zero-offload-param` |
