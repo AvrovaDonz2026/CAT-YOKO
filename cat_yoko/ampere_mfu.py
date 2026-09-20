@@ -160,7 +160,7 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
             + (
                 " covers seq so B0 window is Flash; this row is C/probe hole"
                 if n_win >= s
-                else " still materializes S×S mask; not Flash"
+                else " banded w×2w tiles (not full S×S); CSA union still S×S"
             ),
         )
     )
@@ -330,18 +330,29 @@ def measure_cuda() -> dict[str, Any]:
         nb = flash_bytes_bf16(B, H, KVH, S, HD)
         out["ops"].append(_row(f"dense_flash_gqa_{tag}", fl, dt, nb, "YOCO cross / covering window"))
 
-    # Masked window (equal heads)
-    for tag, B, H, S, HD in (("probe", 2, 4, 128, 32), ("mid", 1, 16, 512, 128)):
+    # Masked window (equal heads) vs banded sliding-window tiles
+    for tag, B, H, S, HD, W in (("probe", 2, 4, 128, 32, 32), ("mid", 1, 16, 512, 128, 32)):
         q = torch.randn(B, H, S, HD, device=device, dtype=dt_peak)
         k = torch.randn(B, H, S, HD, device=device, dtype=dt_peak)
         v = torch.randn(B, H, S, HD, device=device, dtype=dt_peak)
-        from cat_yoko.attention import _window_causal_bias
+        from cat_yoko.attention import _window_causal_bias, _window_sdpa
 
-        bias = _window_causal_bias(S, S, 32, device, dt_peak, None)
+        bias = _window_causal_bias(S, S, W, device, dt_peak, None)
         dt = _bench(lambda: _sdpa(q, k, v, bias), warmup=8, runs=20)
         fl = sdpa_flops(B, H, S, S, HD, causal=True)
         nb = flash_bytes_bf16(B, H, H, S, HD) + mask_bytes_bf16(S, S)
-        out["ops"].append(_row(f"masked_window_{tag}", fl, dt, nb, f"seq={S} switch={MASKED_SDPA_SWITCH_SEQ}"))
+        out["ops"].append(_row(f"masked_window_{tag}", fl, dt, nb, f"seq={S} S×S mask switch={MASKED_SDPA_SWITCH_SEQ}"))
+        dt_b = _bench(lambda: _window_sdpa(q, k, v, W), warmup=8, runs=20)
+        nb_b = flash_bytes_bf16(B, H, H, W, HD) * max(S // W, 1) + mask_bytes_bf16(W, 2 * W)
+        out["ops"].append(
+            _row(
+                f"banded_window_{tag}",
+                fl,
+                dt_b,
+                nb_b,
+                f"seq={S} n_win={W} first-block Flash + w×2w tiles",
+            )
+        )
 
     # CSA-style full extra_bias (non-covering union still S×S)
     for tag, B, H, S, HD in (("probe", 2, 4, 128, 32), ("mid", 1, 16, 512, 128)):

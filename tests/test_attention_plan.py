@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch
 
 import cat_yoko.attention as attn_mod
-from cat_yoko.attention import CrossAttention, WindowAttention, _fused_qkv, _sdpa, _window_causal_bias
+from cat_yoko.attention import CrossAttention, WindowAttention, _fused_qkv, _sdpa, _window_causal_bias, _window_sdpa
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, NVFP4_GEMM_SLOTS
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
@@ -315,6 +315,34 @@ class SdpaNumericTests(unittest.TestCase):
         masked = _sdpa(q, k, v, bias)
         fast = _sdpa(q, k, v, causal=True)
         self.assertTrue(torch.allclose(fast, masked, atol=1e-4, rtol=1e-4))
+
+
+class BandedWindowTests(unittest.TestCase):
+    def test_banded_matches_sxs_mask_gqa(self) -> None:
+        torch.manual_seed(0)
+        b, h, kv, s, w, hd = 2, 4, 2, 40, 16, 8
+        q = torch.randn(b, h, s, hd)
+        k = torch.randn(b, kv, s, hd)
+        v = torch.randn(b, kv, s, hd)
+        bias = _window_causal_bias(s, s, w, q.device, torch.float32)
+        ref = _sdpa(q, k, v, bias)
+        got = _window_sdpa(q, k, v, w)
+        self.assertTrue(torch.allclose(got, ref, atol=2e-4, rtol=2e-4))
+
+    def test_covering_window_stays_causal_flash(self) -> None:
+        torch.manual_seed(1)
+        q = torch.randn(1, 2, 8, 8)
+        k = torch.randn(1, 2, 8, 8)
+        v = torch.randn(1, 2, 8, 8)
+        flash = _sdpa(q, k, v, causal=True)
+        got = _window_sdpa(q, k, v, window=8)
+        self.assertTrue(torch.allclose(got, flash, atol=1e-4, rtol=1e-4))
+
+    def test_doc_ids_do_not_take_banded_path(self) -> None:
+        src = inspect.getsource(_window_sdpa)
+        self.assertIn("doc_ids", src)
+        self.assertIn("_banded_window_sdpa", src)
+        self.assertIn("extra_bias", src)
 
 
 if __name__ == "__main__":

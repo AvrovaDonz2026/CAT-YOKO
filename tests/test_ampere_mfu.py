@@ -43,7 +43,7 @@ class RooflineTests(unittest.TestCase):
         self.assertLess(probe["dense_cross_flash"], pub["dense_cross_flash"])
         self.assertGreaterEqual(pub["fused_qkv"], 0.99)
         probe_notes = {r["name"]: r["note"] for r in blob["bf16_probe"]}
-        self.assertIn("still materializes", probe_notes["masked_window"])
+        self.assertIn("banded w×2w", probe_notes["masked_window"])
         pub_notes = {r["name"]: r["note"] for r in blob["published_12b"]}
         self.assertIn("covers seq", pub_notes["masked_window"])
 

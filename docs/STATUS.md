@@ -70,6 +70,7 @@ bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自�
 - 为 B1/B2 `--try` 在 B0 还占 GPU 时抢卡
 - 实现 Megatron EP/TP 循环、CSA CUDA kernel
 - 把 ZeRO 当成一张 3090 上重开 8e9 的理由（Hub overlay 已经 1.63%，同阶段 resume）
+- 覆盖 Hub `checkpoints/b0-full`（step **26940**，sha256 `7eebc9a4…`）。3090 BF16 续训写独立目录，见 [`scripts/run_b0_ampere_3090.sh`](../scripts/run_b0_ampere_3090.sh)
 - 把 50B Ultra-FineWeb 拉进仓库或小盘
 - 再连已释放的 AutoDL `westc` / `weste`
 - 把 SSH 密码、deploy key 写进 git

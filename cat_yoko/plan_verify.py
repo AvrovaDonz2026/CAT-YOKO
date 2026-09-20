@@ -737,6 +737,14 @@ def _ops_source_claims() -> list[Claim]:
             "SM90+",
             "Ampere skips grouped_mm RuntimeError tax and uses padded bmm",
         ),
+        _claim(
+            "ops.banded_sliding_window",
+            "attention",
+            "_banded_window_sdpa" in inspect.getsource(attn)
+            and "_window_sdpa" in inspect.getsource(attn.WindowAttention.forward),
+            "covering Flash; else w×2w tiles; CSA union still S×S",
+            "do not materialize S×S for a static sliding window",
+        ),
     ]
 
 

@@ -41,6 +41,8 @@ _LAST_SDPA = {"kind": "uninit", "dtype": ""}
 _SDPA_COUNTS = {"dense": 0, "masked_bf16": 0, "math_fp32": 0}
 # Ampere 3090: Efficient SDPA wins below this seq; cuDNN wins at 384+.
 MASKED_SDPA_SWITCH_SEQ = 320
+# Below this width, w×2w tiles are launch-bound; keep the S×S mask.
+BANDED_WINDOW_MIN = 16
 _WINDOW_BIAS_CACHE: dict[tuple, torch.Tensor] = {}
 _WINDOW_BIAS_BYTES = 0
 _WINDOW_BIAS_BUDGET = 256 << 20
@@ -266,6 +268,16 @@ def _needs_explicit_mask(q_len: int, window: int, doc_ids: torch.Tensor | None) 
     return doc_ids is not None
 
 
+def _use_banded_window(q_len: int, k_len: int, window: int) -> bool:
+    """True when a static sliding window should be tiled instead of S×S.
+
+    CSA/HCA union masks are not a band — those stay on ``_sdpa(..., bias)``.
+    Published B0 ``n_win=8192 >= seq=4096`` never takes this path (dense Flash).
+    """
+    w = int(window)
+    return k_len == q_len and w >= BANDED_WINDOW_MIN and w < int(q_len)
+
+
 def _window_causal_bias(
     q_len: int,
     k_len: int,
@@ -309,6 +321,95 @@ def _window_causal_bias(
     return bias.unsqueeze(1)
 
 
+def _banded_window_bias(window: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    """Static ``[w, 2w]`` keep-set for tiled sliding window (prev block | curr block).
+
+    Query local ``i`` sees previous-block key ``j`` iff ``j >= i+1`` (the token
+    one window behind is just outside), and current-block key ``j`` iff ``j <= i``.
+    """
+    global _WINDOW_BIAS_BYTES
+    w = int(window)
+    dev = torch.device(device)
+    key = ("banded", w, dev.type, dev.index, str(dtype))
+    hit = _WINDOW_BIAS_CACHE.get(key)
+    if hit is not None:
+        return hit
+    i = torch.arange(w, device=device)[:, None]
+    j = torch.arange(w, device=device)[None, :]
+    keep = torch.cat((j >= (i + 1), j <= i), dim=-1)
+    bias = torch.zeros(w, 2 * w, device=device, dtype=dtype)
+    bias = bias.masked_fill(~keep, torch.finfo(dtype).min)
+    nbytes = int(bias.numel() * bias.element_size())
+    if _WINDOW_BIAS_BYTES + nbytes > _WINDOW_BIAS_BUDGET:
+        reset_window_bias_cache()
+    _WINDOW_BIAS_CACHE[key] = bias
+    _WINDOW_BIAS_BYTES += nbytes
+    return bias
+
+
+def _banded_window_sdpa(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    window: int,
+) -> torch.Tensor:
+    """Causal sliding window as first-block Flash + batched ``w×2w`` SDPA.
+
+    Same keep-set as ``_window_causal_bias`` without materializing ``S×S``.
+    Not a CSA kernel; extra_bias / packed docs stay on the full mask path.
+    """
+    b, hq, s, d = q.shape
+    hk = k.size(-3)
+    w = int(window)
+    pad = (w - (s % w)) % w
+    if pad:
+        q = F.pad(q, (0, 0, 0, pad))
+        k = F.pad(k, (0, 0, 0, pad))
+        v = F.pad(v, (0, 0, 0, pad))
+    s_pad = s + pad
+    n = s_pad // w
+    y0 = _sdpa(q[:, :, :w], k[:, :, :w], v[:, :, :w], causal=True)
+    if n == 1:
+        return y0[:, :, :s]
+    n_rest = n - 1
+    q_b = q[:, :, w:].reshape(b, hq, n_rest, w, d)
+    k_curr = k[:, :, w:].reshape(b, hk, n_rest, w, d)
+    v_curr = v[:, :, w:].reshape(b, hk, n_rest, w, d)
+    k_prev = k[:, :, : s_pad - w].reshape(b, hk, n_rest, w, d)
+    v_prev = v[:, :, : s_pad - w].reshape(b, hk, n_rest, w, d)
+    k_cat = torch.cat((k_prev, k_curr), dim=3)
+    v_cat = torch.cat((v_prev, v_curr), dim=3)
+    q_flat = q_b.permute(0, 2, 1, 3, 4).reshape(b * n_rest, hq, w, d)
+    k_flat = k_cat.permute(0, 2, 1, 3, 4).reshape(b * n_rest, hk, 2 * w, d)
+    v_flat = v_cat.permute(0, 2, 1, 3, 4).reshape(b * n_rest, hk, 2 * w, d)
+    y_rest = _sdpa(q_flat, k_flat, v_flat, _banded_window_bias(w, q.device, q.dtype))
+    y_rest = y_rest.reshape(b, n_rest, hq, w, d).permute(0, 2, 1, 3, 4).reshape(
+        b, hq, n_rest * w, d
+    )
+    return torch.cat((y0, y_rest), dim=2)[:, :, :s]
+
+
+def _window_sdpa(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    window: int,
+    doc_ids: torch.Tensor | None = None,
+    extra_bias: torch.Tensor | None = None,
+) -> torch.Tensor:
+    """Sliding-window GQA: covering Flash, else banded tiles, else S×S mask."""
+    s = int(q.size(-2))
+    k_len = int(k.size(-2))
+    if extra_bias is not None or doc_ids is not None or not _use_banded_window(s, k_len, window):
+        if extra_bias is None and doc_ids is None and int(window) >= s and k_len == s:
+            return _sdpa(q, k, v, causal=True)
+        bias = _window_causal_bias(s, k_len, window, q.device, q.dtype, doc_ids)
+        if extra_bias is not None:
+            bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
+        return _sdpa(q, k, v, bias)
+    return _banded_window_sdpa(q, k, v, window)
+
+
 class WindowAttention(nn.Module):
     def __init__(self, cfg: CATYokoConfig) -> None:
         super().__init__()
@@ -347,15 +448,7 @@ class WindowAttention(nn.Module):
             k = self.k_norm(k)
         cos, sin = self.rope(s, x.device, x.dtype)
         q, k = apply_rope(q, k, cos, sin)
-        need_mask = extra_bias is not None or _needs_explicit_mask(s, self.n_win, doc_ids)
-        if need_mask:
-            bias = _window_causal_bias(s, s, self.n_win, x.device, q.dtype, doc_ids)
-            if extra_bias is not None:
-                bias = bias + extra_bias.to(device=bias.device, dtype=bias.dtype)
-            out = _sdpa(q, k, v, bias)
-        else:
-            # GQA: 16 Q / 2 KV. Do not repeat KV; SDPA enable_gqa on CUDA.
-            out = _sdpa(q, k, v, causal=True)
+        out = _window_sdpa(q, k, v, self.n_win, doc_ids, extra_bias)
         y = self.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
         if return_probs:
             return y, _mean_head_probs(q, k, self.n_win, doc_ids)

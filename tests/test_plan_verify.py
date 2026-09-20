@@ -91,6 +91,7 @@ class StaticLedgerTests(unittest.TestCase):
         self.assertIn("ops.compute_is_bf16", names)
         self.assertIn("ops.masked_isolates_one_backend", names)
         self.assertIn("ops.grouped_mm_sm90_gate", names)
+        self.assertIn("ops.banded_sliding_window", names)
 
     def test_bf16_static_claims_keep_theorem_b(self) -> None:
         ledger = static_ledger("bf16")
@@ -148,6 +149,7 @@ class SecretScanTests(unittest.TestCase):
             ROOT / "cat_yoko" / "moe.py",
             ROOT / "docs" / "AMPERE_OPS_MFU.md",
             ROOT / "scripts" / "run_ampere_mfu.sh",
+            ROOT / "scripts" / "run_b0_ampere_3090.sh",
         ]
         for path in paths:
             self.assertTrue(path.is_file(), msg=str(path))
@@ -178,6 +180,19 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("Does not download Ultra-FineWeb", text)
         self.assertNotIn("save-full", text)
         self.assertTrue((ROOT / "scripts" / "run_ampere_mfu.sh").stat().st_mode & 0o111)
+
+    def test_ampere_b0_shell_does_not_clobber_hub(self) -> None:
+        text = (ROOT / "scripts" / "run_b0_ampere_3090.sh").read_text(encoding="utf-8")
+        self.assertIn("WORK:-/root/autodl-tmp", text)
+        self.assertIn("b0-3090-bf16", text)
+        self.assertIn("hub-b0-full", text)
+        self.assertIn("--no-nvfp4", text)
+        self.assertIn("--resume", text)
+        self.assertIn("Does not overwrite Hub", text)
+        self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertNotIn("push_to_hf", text)
+        self.assertNotRegex(text, r"--save-full")
+        self.assertTrue((ROOT / "scripts" / "run_b0_ampere_3090.sh").stat().st_mode & 0o111)
 
 
 if __name__ == "__main__":

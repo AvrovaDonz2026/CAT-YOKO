@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from cat_yoko.config import CATYokoConfig
 from cat_yoko.deepspeed_zero import (
     AMPERE_48GIB_ARGV,
     DEEPSPEED,
@@ -267,6 +268,15 @@ class PhaseArgvTests(unittest.TestCase):
         self.assertNotIn("--offload-encoder", argv)
         self.assertIn("--no-save-full", argv)
         self.assertIn("--save-trainable", argv)
+
+    def test_phase_argv_forwards_no_nvfp4(self) -> None:
+        argv = build_phase_argv(
+            "B0",
+            ["--try", "--no-nvfp4", "--save-dir", "/tmp/b0-ds", "--device", "cpu"],
+        )
+        self.assertIn("--no-nvfp4", argv)
+        self.assertIn("--no-save-full", argv)
+        self.assertTrue(CATYokoConfig.middle_12b().use_nvfp4)
 
 
 class SourceContractTests(unittest.TestCase):

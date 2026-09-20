@@ -111,6 +111,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
     )
+    p.add_argument(
+        "--no-nvfp4",
+        action="store_true",
+        help="keep published Linear math in bf16; skip Nvfp4Linear wrap (Ampere has no FP4 tensor core)",
+    )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
@@ -288,6 +293,8 @@ def main(argv: list[str] | None = None) -> int:
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
     if args.use_kda:
         cfg = replace(cfg, use_kda=True)
+    if args.no_nvfp4:
+        cfg = replace(cfg, use_nvfp4=False)
     plan = ParallelPlan(
         tensor_parallel=args.tp,
         pipeline_parallel=args.pp,
