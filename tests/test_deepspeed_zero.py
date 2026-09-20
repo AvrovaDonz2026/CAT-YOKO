@@ -282,6 +282,15 @@ class PhaseArgvTests(unittest.TestCase):
 
 
 class SourceContractTests(unittest.TestCase):
+    def test_phase_argv_forwards_more_steps(self) -> None:
+        argv = build_phase_argv(
+            "B0",
+            ["--more-steps", "8", "--save-dir", "/tmp/b0-ds", "--device", "cpu"],
+        )
+        self.assertIn("--more-steps", argv)
+        self.assertEqual(argv[argv.index("--more-steps") + 1], "8")
+        self.assertIn("--tokens", argv)
+
     def test_freeze_before_wrap_deepspeed(self) -> None:
         src = inspect.getsource(Trainer.run)
         wrap_src = inspect.getsource(Trainer._wrap_and_optim)

@@ -34,6 +34,8 @@ LOCAL="${LOCAL:-$WORK/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
 SAVE_EVERY="${SAVE_EVERY:-2}"
 KEEP_LAST="${KEEP_LAST:-2}"
+# STEPS is extra optimizer steps after resume. --steps is an absolute cap;
+# Hub overlay is already step 26940, so --steps 8 would no-op and rewrite SAVE.
 STEPS="${STEPS:-8}"
 
 hub_overlay_forbidden() {
@@ -101,7 +103,7 @@ echo "Hub overlay copy ok sha256=$got (read-only; will not write this file)"
 
 echo "resume (read-only Hub copy) $RESUME"
 echo "save (new overlay, not Hub) $SAVE"
-echo "B0 Ampere argv seq=$SEQ steps=$STEPS no-nvfp4 zero-3"
+echo "B0 Ampere argv seq=$SEQ more-steps=$STEPS (absolute --steps would no-op at Hub 26940) no-nvfp4 zero-3"
 
 cd "$ROOT"
 "$PY" -m cat_yoko.b0 \
@@ -109,7 +111,7 @@ cd "$ROOT"
   --no-nvfp4 \
   --device cuda --dtype bf16 \
   --seq-len "$SEQ" --micro-batch 1 --grad-ckpt \
-  --steps "$STEPS" \
+  --more-steps "$STEPS" \
   --save-dir "$SAVE" \
   --save-every "$SAVE_EVERY" \
   --keep-last "$KEEP_LAST" \

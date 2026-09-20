@@ -201,6 +201,7 @@ class Trainer:
         device: str,
         *,
         steps: int | None = None,
+        more_steps: int | None = None,
         tokens: float | None = None,
         micro_batch: int = 2,
         accum: int = 1,
@@ -240,6 +241,7 @@ class Trainer:
         self.cfg = cfg
         self.phase = phase
         self.steps = steps
+        self.more_steps = int(more_steps) if more_steps is not None else None
         self.tokens_target = tokens
         self.micro_batch = micro_batch
         self.seed = seed
@@ -890,6 +892,8 @@ class Trainer:
         last = 0.0
         phase_budget = self.tokens_target
         max_steps = self.steps
+        if self.more_steps is not None:
+            max_steps = int(step) + int(self.more_steps)
         if not self.deepspeed:
             trainable = [p for p in model.parameters() if p.requires_grad]
             n_train = sum(p.numel() for p in trainable)
@@ -921,10 +925,10 @@ class Trainer:
                     "moe_layers": 0,
                 }
                 progress = 0.0
-                if max_steps:
-                    progress = (step + 1) / max_steps
-                elif phase_budget:
+                if phase_budget:
                     progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
+                elif max_steps:
+                    progress = (step + 1) / max_steps
                 set_gate(unwrap(model), gate_schedule(self.phase, progress))
                 lr = wsd_lr(
                     tokens_seen,

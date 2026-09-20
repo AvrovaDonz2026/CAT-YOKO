@@ -188,6 +188,8 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("hub-b0-full", text)
         self.assertIn("--no-nvfp4", text)
         self.assertIn("--resume", text)
+        self.assertIn("--more-steps", text)
+        self.assertNotRegex(text, r"--steps \"\$STEPS\"")
         self.assertIn("Does not overwrite Hub", text)
         self.assertIn("Does not download Ultra-FineWeb", text)
         self.assertIn("7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955", text)

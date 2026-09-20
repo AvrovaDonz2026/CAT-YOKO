@@ -117,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
         help="keep published Linear math in bf16; skip Nvfp4Linear wrap (Ampere has no FP4 tensor core)",
     )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
+    p.add_argument(
+        "--more-steps",
+        type=int,
+        default=None,
+        help="run this many optimizer steps after resume (same-phase; --steps is an absolute cap)",
+    )
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
     p.add_argument("--micro-batch", type=int, default=None, help="default 2 (tiny) / 1 (12b)")
@@ -504,6 +510,7 @@ def main(argv: list[str] | None = None) -> int:
         args.phase,
         args.device,
         steps=args.steps,
+        more_steps=args.more_steps,
         tokens=args.tokens,
         upcycle_src=src,
         resume=args.resume,
