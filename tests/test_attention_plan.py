@@ -52,12 +52,18 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertIn("enable_gqa", src)
         self.assertIn("is_causal", src)
         self.assertIn("_cuda_sdpa_kernel", src)
+        self.assertIn("_masked_backend_order", src)
+        self.assertIn("_cuda_masked_sdpa_kernel", src)
         kernel_src = inspect.getsource(attn_mod._cuda_sdpa_kernel)
         self.assertIn("FLASH_ATTENTION", kernel_src)
         self.assertIn("sdpa_kernel", kernel_src)
         self.assertNotIn("tuple(", kernel_src)
-        # CPU / mask fallback still upcasts; CUDA bf16 keeps QKV and uses
-        # flash/cuDNN (fp32 softmax accum inside the kernel).
+        masked_src = inspect.getsource(attn_mod._cuda_masked_sdpa_kernel)
+        self.assertIn("CUDNN_ATTENTION", masked_src)
+        self.assertIn("EFFICIENT_ATTENTION", inspect.getsource(attn_mod._masked_backend_order))
+        self.assertNotIn("FLASH_ATTENTION", masked_src)
+        # CPU / last-resort mask fallback still upcasts; CUDA dense keeps QKV
+        # and uses flash/cuDNN. CUDA masks try bf16 Efficient/cuDNN first.
         self.assertIn(".float()", src)
         self.assertIn("to(q.dtype)", src)
 
@@ -97,6 +103,55 @@ class PublishedPlanTests(unittest.TestCase):
         self.assertIsInstance(seen[0], list)
         self.assertGreater(len(seen[0]), 0)
 
+    def test_cuda_masked_sdpa_kernel_skips_flash(self) -> None:
+        from contextlib import nullcontext
+
+        try:
+            from torch.nn.attention import SDPBackend  # noqa: F401
+        except ImportError:
+            self.skipTest("sdpa_kernel missing")
+        seen: list = []
+
+        def _fake(backends, *args, **kwargs):
+            seen.append(backends)
+            return nullcontext()
+
+        attn_mod._SDPA_MASKED_KERNEL = {}
+        with patch("torch.nn.attention.sdpa_kernel", _fake):
+            with attn_mod._cuda_masked_sdpa_kernel(512):
+                pass
+        attn_mod._SDPA_MASKED_KERNEL = {}
+        self.assertTrue(seen)
+        self.assertIsInstance(seen[0], list)
+        names = [getattr(b, "name", str(b)) for b in seen[0]]
+        blob = " ".join(names).upper()
+        self.assertNotIn("FLASH", blob)
+        self.assertIn("CUDNN", blob)
+
+    def test_small_seq_masked_prefers_efficient(self) -> None:
+        from contextlib import nullcontext
+
+        try:
+            from torch.nn.attention import SDPBackend  # noqa: F401
+        except ImportError:
+            self.skipTest("sdpa_kernel missing")
+        seen: list = []
+
+        def _fake(backends, *args, **kwargs):
+            seen.append(backends)
+            return nullcontext()
+
+        attn_mod._SDPA_MASKED_KERNEL = {}
+        with patch("torch.nn.attention.sdpa_kernel", _fake):
+            with attn_mod._cuda_masked_sdpa_kernel(128):
+                pass
+        attn_mod._SDPA_MASKED_KERNEL = {}
+        self.assertTrue(seen)
+        names = [getattr(b, "name", str(b)) for b in seen[0]]
+        blob = " ".join(names).upper()
+        self.assertIn("EFFICIENT", blob)
+        self.assertNotIn("FLASH", blob)
+
     def test_sdpa_gqa_does_not_require_repeated_kv(self) -> None:
         torch.manual_seed(0)
         q = torch.randn(1, 4, 8, 8)
@@ -107,6 +162,29 @@ class PublishedPlanTests(unittest.TestCase):
         gqa = _sdpa(q, k, v, causal=True)
         rep = _sdpa(q, k_rep, v_rep, causal=True)
         self.assertTrue(torch.allclose(gqa, rep, atol=1e-4, rtol=1e-4))
+
+    def test_masked_gqa_matches_repeated_kv(self) -> None:
+        torch.manual_seed(0)
+        q = torch.randn(1, 4, 8, 8)
+        k = torch.randn(1, 2, 8, 8)
+        v = torch.randn(1, 2, 8, 8)
+        bias = _window_causal_bias(8, 8, 4, q.device, torch.float32)
+        gqa = _sdpa(q, k, v, bias)
+        k_rep = k.repeat_interleave(2, dim=1)
+        v_rep = v.repeat_interleave(2, dim=1)
+        rep = _sdpa(q, k_rep, v_rep, bias)
+        self.assertTrue(torch.allclose(gqa, rep, atol=1e-4, rtol=1e-4))
+
+    def test_window_bias_is_cached_without_doc_ids(self) -> None:
+        from cat_yoko.attention import reset_window_bias_cache
+
+        reset_window_bias_cache()
+        a = _window_causal_bias(8, 8, 4, torch.device("cpu"), torch.float32)
+        b = _window_causal_bias(8, 8, 4, torch.device("cpu"), torch.float32)
+        self.assertIs(a, b)
+        doc = torch.zeros(2, 8, dtype=torch.long)
+        c = _window_causal_bias(8, 8, 4, torch.device("cpu"), torch.float32, doc)
+        self.assertIsNot(a, c)
 
     def test_attention_module_has_no_csa_kernel(self) -> None:
         import cat_yoko.attention as attn_mod

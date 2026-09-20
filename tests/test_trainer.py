@@ -568,6 +568,7 @@ class LoopTests(unittest.TestCase):
         src = inspect.getsource(configure_cuda)
         self.assertIn("enable_flash_sdp", src)
         self.assertIn("enable_cudnn_sdp", src)
+        self.assertIn("set_float32_matmul_precision", src)
 
     def test_runtime_flags_drop_logits_without_teacher(self) -> None:
         from cat_yoko.model import CATYokoForCausalLM

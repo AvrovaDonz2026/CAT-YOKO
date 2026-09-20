@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 from cat_yoko.config import CATYokoConfig, encoder_layer_kind
-from cat_yoko.plan_verify import PHASES_RUN, run, static_ledger
+from cat_yoko.plan_verify import PHASES_RUN, graph_config, run, static_ledger
 
 import torch
 
@@ -25,6 +25,7 @@ FORBIDDEN = (
     "31jEePeb",
     "vDw8xU9c",
     "XNn7kkf",
+    "FvqYrAif",
 )
 
 
@@ -40,6 +41,21 @@ class PlanProbeConfigTests(unittest.TestCase):
         self.assertFalse(cfg.use_nvfp4)
         self.assertEqual(cfg.seq_len, 32)
         self.assertEqual(cfg.n_win, 8)
+
+    def test_bf16_probe_is_flash_shaped_with_theorem_b_hole(self) -> None:
+        cfg = CATYokoConfig.bf16_probe()
+        kinds = [encoder_layer_kind(i, cfg.encoder_layers, use_kda=cfg.use_kda) for i in range(cfg.encoder_layers)]
+        self.assertEqual(kinds, ["sliding", "csa", "hca"])
+        self.assertGreaterEqual(cfg.head_dim, 32)
+        self.assertGreaterEqual(cfg.seq_len, 64)
+        self.assertLess(cfg.n_win, cfg.seq_len)
+        self.assertGreaterEqual(cfg.n_win, cfg.compress_m)
+        self.assertGreaterEqual(cfg.n_win, cfg.compress_m_hca)
+        self.assertFalse(cfg.use_kda)
+        self.assertFalse(cfg.use_nvfp4)
+        self.assertFalse(cfg.use_fp8)
+        self.assertEqual(graph_config("bf16").name, "bf16-probe")
+        self.assertEqual(graph_config("plan").name, "plan-probe")
 
     def test_published_split_untouched(self) -> None:
         c12 = CATYokoConfig.middle_12b()
@@ -70,6 +86,20 @@ class StaticLedgerTests(unittest.TestCase):
         self.assertIn("theorem_b.indexer_deletes_only", names)
         self.assertIn("attention.no_csa_cuda_kernel", names)
         self.assertIn("plan.mini_train_is_a_through_e", names)
+        self.assertIn("ops.dense_sdpa_prefers_flash", names)
+        self.assertIn("ops.masked_sdpa_skips_flash", names)
+        self.assertIn("ops.compute_is_bf16", names)
+        self.assertIn("ops.masked_isolates_one_backend", names)
+        self.assertIn("ops.grouped_mm_sm90_gate", names)
+
+    def test_bf16_static_claims_keep_theorem_b(self) -> None:
+        ledger = static_ledger("bf16")
+        failed = [c for c in ledger if not c.ok]
+        self.assertEqual(failed, [], msg=[(c.name, c.observed, c.expected) for c in failed])
+        names = {c.name for c in ledger}
+        self.assertIn("ops.flash_shaped", names)
+        self.assertIn("ops.theorem_b_hole_kept", names)
+        self.assertIn("theorem_b.compression_reaches_beyond_window", names)
 
 
 class MiniTrainTests(unittest.TestCase):
@@ -112,6 +142,12 @@ class SecretScanTests(unittest.TestCase):
             ROOT / "cat_yoko" / "config.py",
             ROOT / "scripts" / "run_plan_verify.sh",
             ROOT / "docs" / "PLAN_VERIFY.md",
+            ROOT / "cat_yoko" / "ops.py",
+            ROOT / "cat_yoko" / "attention.py",
+            ROOT / "cat_yoko" / "ampere_mfu.py",
+            ROOT / "cat_yoko" / "moe.py",
+            ROOT / "docs" / "AMPERE_OPS_MFU.md",
+            ROOT / "scripts" / "run_ampere_mfu.sh",
         ]
         for path in paths:
             self.assertTrue(path.is_file(), msg=str(path))
@@ -126,11 +162,22 @@ class SecretScanTests(unittest.TestCase):
 
     def test_shell_is_dedicated_dir_dummy_only(self) -> None:
         text = (ROOT / "scripts" / "run_plan_verify.sh").read_text(encoding="utf-8")
-        self.assertIn("/root/autodl-tmp/plan-verify", text)
+        self.assertIn("/root/autodl-tmp/bf16-verify", text)
+        self.assertIn("--graph", text)
+        self.assertIn("GRAPH=\"${GRAPH:-bf16}\"", text)
         self.assertIn("cat_yoko.plan_verify", text)
         self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertNotIn("/root/autodl-tmp/plan-verify", text)
         self.assertNotRegex(text, r"plan_verify[^\n]*--save-full")
         self.assertTrue((ROOT / "scripts" / "run_plan_verify.sh").stat().st_mode & 0o111)
+
+    def test_ampere_mfu_shell_is_dedicated_dir(self) -> None:
+        text = (ROOT / "scripts" / "run_ampere_mfu.sh").read_text(encoding="utf-8")
+        self.assertIn("/root/autodl-tmp/bf16-verify/mfu", text)
+        self.assertIn("cat_yoko.ampere_mfu", text)
+        self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertNotIn("save-full", text)
+        self.assertTrue((ROOT / "scripts" / "run_ampere_mfu.sh").stat().st_mode & 0o111)
 
 
 if __name__ == "__main__":

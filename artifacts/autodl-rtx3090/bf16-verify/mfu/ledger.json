@@ -1,0 +1,285 @@
+{
+  "theory": {
+    "peak": {
+      "gpu": "RTX 3090 GA102",
+      "bf16_dense_tflops": 71.16,
+      "fp32_tflops": 35.58,
+      "hbm_gb_s": 936.2,
+      "ridge_flop_per_byte": 76.0093997009186
+    },
+    "bf16_probe": [
+      {
+        "name": "fused_qkv",
+        "phase": "A\u2013E",
+        "flops": 16777216.0,
+        "nbytes": 262144.0,
+        "theo_mfu": 0.8420011242270938,
+        "note": "probe: one GEMM [256,128]\u00d7[128,256]"
+      },
+      {
+        "name": "dense_cross_flash",
+        "phase": "A/B YOCO cross",
+        "flops": 8388608.0,
+        "nbytes": 196608.0,
+        "theo_mfu": 0.5613340828180625,
+        "note": "probe: Flash GQA causal; IO-aware bytes"
+      },
+      {
+        "name": "masked_window",
+        "phase": "A/B encoder window (n_win<seq)",
+        "flops": 8388608.0,
+        "nbytes": 294912.0,
+        "theo_mfu": 0.37422272187870836,
+        "note": "probe: n_win=32 still materializes S\u00d7S mask; not Flash"
+      },
+      {
+        "name": "masked_csa_union",
+        "phase": "C-topk",
+        "flops": 16777216.0,
+        "nbytes": 294912.0,
+        "theo_mfu": 0.7484454437574167,
+        "note": "probe: union mask, equal heads, cuDNN/Efficient bf16"
+      },
+      {
+        "name": "masked_hca_concat",
+        "phase": "C-hca+",
+        "flops": 18874368.0,
+        "nbytes": 315392.0,
+        "theo_mfu": 0.7873257265500099,
+        "note": "probe: concat window+slots k_len=144"
+      },
+      {
+        "name": "moe_bmm",
+        "phase": "B2+ (Ampere; grouped_mm is SM90+)",
+        "flops": 11796480.0,
+        "nbytes": 1198080.0,
+        "theo_mfu": 0.12953863449647599,
+        "note": "probe: padded bmm, E=20 tokens/expert=12"
+      },
+      {
+        "name": "indexer_fp32",
+        "phase": "C-index",
+        "flops": 6291456.0,
+        "nbytes": 557056.0,
+        "theo_mfu": 0.29717686737426846,
+        "note": "probe: fp32 scores, d_idx=32; peak is FP32/TF32 not BF16 TC"
+      }
+    ],
+    "published_12b": [
+      {
+        "name": "fused_qkv",
+        "phase": "A\u2013E",
+        "flops": 85899345920.0,
+        "nbytes": 85983232.0,
+        "theo_mfu": 1.0,
+        "note": "12b: one GEMM [8192,2048]\u00d7[2048,2560]"
+      },
+      {
+        "name": "dense_cross_flash",
+        "phase": "A/B YOCO cross",
+        "flops": 137438953472.0,
+        "nbytes": 75497472.0,
+        "theo_mfu": 1.0,
+        "note": "12b: Flash GQA causal; IO-aware bytes"
+      },
+      {
+        "name": "masked_window",
+        "phase": "A/B encoder window (n_win<seq)",
+        "flops": 137438953472.0,
+        "nbytes": 167772160.0,
+        "theo_mfu": 1.0,
+        "note": "12b: n_win=8192 covers seq so B0 window is Flash; this row is C/probe hole"
+      },
+      {
+        "name": "masked_csa_union",
+        "phase": "C-topk",
+        "flops": 274877906944.0,
+        "nbytes": 167772160.0,
+        "theo_mfu": 1.0,
+        "note": "12b: union mask, equal heads, cuDNN/Efficient bf16"
+      },
+      {
+        "name": "masked_hca_concat",
+        "phase": "C-hca+",
+        "flops": 309237645312.0,
+        "nbytes": 180355072.0,
+        "theo_mfu": 1.0,
+        "note": "12b: concat window+slots k_len=4608"
+      },
+      {
+        "name": "moe_bmm",
+        "phase": "B2+ (Ampere; grouped_mm is SM90+)",
+        "flops": 205856440320.0,
+        "nbytes": 670842880.0,
+        "theo_mfu": 1.0,
+        "note": "12b: padded bmm, E=20 tokens/expert=409"
+      },
+      {
+        "name": "indexer_fp32",
+        "phase": "C-index",
+        "flops": 8589934592.0,
+        "nbytes": 277872640.0,
+        "theo_mfu": 0.813404859630702,
+        "note": "12b: fp32 scores, d_idx=64; peak is FP32/TF32 not BF16 TC"
+      }
+    ]
+  },
+  "measure": {
+    "ok": true,
+    "device": "NVIDIA GeForce RTX 3090",
+    "capability": [
+      8,
+      6
+    ],
+    "grouped_mm_available": false,
+    "masked_switch_seq": 320,
+    "ops": [
+      {
+        "name": "gemm_8192",
+        "tflops": 72.11954690322074,
+        "ms": 15.24568130262196,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 1.013484357830533,
+        "frac_of_roofline": 1.013484357830533,
+        "note": "cuBLAS bf16 peak probe"
+      },
+      {
+        "name": "fused_qkv_probe",
+        "tflops": 0.5759201552510278,
+        "ms": 0.029131149252255756,
+        "theo_mfu": 0.8420011242270938,
+        "achieved_mfu": 0.008093313030509103,
+        "frac_of_roofline": 0.009611997891259678,
+        "note": "frozen cached cat"
+      },
+      {
+        "name": "fused_qkv_12b",
+        "tflops": 74.66330447703885,
+        "ms": 1.1504894743363063,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 1.049231372639669,
+        "frac_of_roofline": 1.049231372639669,
+        "note": "frozen cached cat"
+      },
+      {
+        "name": "dense_flash_gqa_probe",
+        "tflops": 0.16325600074858285,
+        "ms": 0.05138315260410309,
+        "theo_mfu": 0.5613340828180625,
+        "achieved_mfu": 0.0022942102409862684,
+        "frac_of_roofline": 0.004087067418868736,
+        "note": "YOCO cross / covering window"
+      },
+      {
+        "name": "dense_flash_gqa_12b",
+        "tflops": 60.451643564632384,
+        "ms": 1.136767715215683,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.8495171945563854,
+        "frac_of_roofline": 0.8495171945563854,
+        "note": "YOCO cross / covering window"
+      },
+      {
+        "name": "masked_window_probe",
+        "tflops": 0.16974986157109836,
+        "ms": 0.049417465925216675,
+        "theo_mfu": 0.37422272187870836,
+        "achieved_mfu": 0.0023854674194926694,
+        "frac_of_roofline": 0.006374459058811073,
+        "note": "seq=128 switch=320"
+      },
+      {
+        "name": "masked_window_mid",
+        "tflops": 17.987641892167385,
+        "ms": 0.05969330668449402,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.2527774296257362,
+        "frac_of_roofline": 0.2527774296257362,
+        "note": "seq=512 switch=320"
+      },
+      {
+        "name": "masked_csa_probe",
+        "tflops": 0.3691944162881756,
+        "ms": 0.045442767441272736,
+        "theo_mfu": 0.7484454437574167,
+        "achieved_mfu": 0.005188229571222254,
+        "frac_of_roofline": 0.00693200768939926,
+        "note": "seq=128 equal-head union"
+      },
+      {
+        "name": "masked_csa_mid",
+        "tflops": 36.729410524723065,
+        "ms": 0.05846768617630005,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.5161524806734551,
+        "frac_of_roofline": 0.5161524806734551,
+        "note": "seq=512 equal-head union"
+      },
+      {
+        "name": "masked_hca_probe",
+        "tflops": 0.4195005686813626,
+        "ms": 0.04499247297644615,
+        "theo_mfu": 0.7873257265500099,
+        "achieved_mfu": 0.005895173815083791,
+        "frac_of_roofline": 0.0074875920045390995,
+        "note": "k_len=144"
+      },
+      {
+        "name": "masked_hca_mid",
+        "tflops": 40.33889600456258,
+        "ms": 0.05989056080579758,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.566875997815663,
+        "frac_of_roofline": 0.566875997815663,
+        "note": "k_len=576"
+      },
+      {
+        "name": "masked_gqa_probe",
+        "tflops": 0.14903427290093324,
+        "ms": 0.11257287114858627,
+        "theo_mfu": 0.3962358231656912,
+        "achieved_mfu": 0.0020943545938860767,
+        "frac_of_roofline": 0.005285626567414867,
+        "note": "repeat KV then fused; {'kind': 'masked_bf16', 'dtype': 'bfloat16'}"
+      },
+      {
+        "name": "indexer_fp32_probe",
+        "tflops": 0.08890215867545255,
+        "ms": 0.0707683153450489,
+        "theo_mfu": 0.29717686737426846,
+        "achieved_mfu": 0.0024986553871684247,
+        "frac_of_roofline": 0.008407974043355082,
+        "note": "d_idx=32"
+      },
+      {
+        "name": "indexer_fp32_12b",
+        "tflops": 14.28301629535333,
+        "ms": 0.3007045015692711,
+        "theo_mfu": 0.8103469466245715,
+        "achieved_mfu": 0.40143384753663097,
+        "frac_of_roofline": 0.49538515472757455,
+        "note": "d_idx=64"
+      },
+      {
+        "name": "moe_bmm_even",
+        "tflops": 57.656131136261486,
+        "ms": 1.1901390552520752,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.8102323093909708,
+        "frac_of_roofline": 0.8102323093909708,
+        "note": "Ampere path after SM90 gate"
+      },
+      {
+        "name": "grouped_mm",
+        "tflops": 0.0,
+        "ms": 0.0,
+        "theo_mfu": 0.0,
+        "achieved_mfu": 0.0,
+        "frac_of_roofline": 0.0,
+        "note": "SM90+ only; Ampere capability gate skips the RuntimeError tax",
+        "available": false
+      }
+    ],
+    "measured_bf16_peak_tflops": 72.11954690322074
+  }
+}

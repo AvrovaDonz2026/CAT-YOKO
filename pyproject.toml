@@ -26,6 +26,7 @@ cat-yoko-prepare = "cat_yoko.prepare:main"
 cat-yoko-gpu-smoke = "cat_yoko.gpu_smoke:main"
 cat-yoko-hw-recipe = "cat_yoko.hw_recipe:main"
 cat-yoko-plan-verify = "cat_yoko.plan_verify:main"
+cat-yoko-ampere-mfu = "cat_yoko.ampere_mfu:main"
 
 [project.urls]
 Megatron-LM = "https://github.com/NVIDIA/Megatron-LM"

@@ -61,6 +61,7 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`docs/THEORY_VERIFICATION.md`](docs/THEORY_VERIFICATION.md) — 参数 / FLOPs / KV / μP 账本
 - [`docs/ARCHITECTURE_THEORY.md`](docs/ARCHITECTURE_THEORY.md) — 因果、残差切、M1/M2/M3
 - [`docs/PLAN_VERIFY.md`](docs/PLAN_VERIFY.md) — 单独目录最小化训练，证明注意力 / YOCO / PDSA 进图与 C1 计划
+- [`docs/AMPERE_OPS_MFU.md`](docs/AMPERE_OPS_MFU.md) — RTX 3090 上各算子理论 MFU 与调算子
 - [`docs/CURRICULUM_THEORY.md`](docs/CURRICULUM_THEORY.md) — 冻课程 C1
 - [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) — C1+NVFP4 墙钟（571 H100-h）
 - [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md) — C1+FP8 回退（729 H100-h）
@@ -76,7 +77,9 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 - [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) — B200 释放前日志
 - [`artifacts/autodl-rtx6000d/`](artifacts/autodl-rtx6000d/README.md) — 6000D 日志（已释放）
 - [`artifacts/autodl-rtx4080-super/`](artifacts/autodl-rtx4080-super/README.md) — 4080 SUPER 烟测（已释放）
-- [`artifacts/autodl-rtx3090/plan-verify/`](artifacts/autodl-rtx3090/plan-verify/README.md) — 3090 上 Phase A→E 计划探针
+- [`artifacts/autodl-rtx3090/plan-verify/`](artifacts/autodl-rtx3090/plan-verify/README.md) — 3090 上旧 plan-probe A→E（128 claims）
+- [`artifacts/autodl-rtx3090/bf16-verify/`](artifacts/autodl-rtx3090/bf16-verify/README.md) — 3090 上 BF16 Flash 形探针 A→E（142 claims）
+- [`artifacts/autodl-rtx3090/bf16-verify/mfu/`](artifacts/autodl-rtx3090/bf16-verify/mfu/README.md) — 各算子理论 vs 实测 MFU
 
 ## 本地测试
 
@@ -90,8 +93,8 @@ python3 -m unittest tests.test_train tests.test_trainer tests.test_phases tests.
   tests.test_hw_recipe tests.test_kda tests.test_deepspeed_zero
 python3 scripts/param_budget.py --verify
 python3 scripts/arch_verify.py --verify
-python3 -m cat_yoko.plan_verify --out /tmp/plan-verify --device cpu --steps 1
-python3 -m unittest tests.test_plan_verify
+python3 -m cat_yoko.plan_verify --out /tmp/plan-verify --device cpu --steps 1 --graph plan
+python3 -m unittest tests.test_plan_verify tests.test_attention_plan tests.test_ampere_mfu
 ```
 
 有 CUDA：
