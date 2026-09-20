@@ -56,7 +56,7 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 5. DummyStream `doc_ids` 留 host；下一批 H2D 和 backward 重叠。MoE `counts.max()` 侧流藏进共享专家。
 6. **ZeRO 预热**：wrap 之后、计时循环之前跑一次合成 batch 的 fwd+bwd（**不** `engine.step()`，RNG 复原）。把 allgather 轨迹记录和 kernel JIT 从第一步 404 tok/s 挪走。中间那长段 ~647 tok/s 不是冷启动，是预取被 live cap 掐掉 + torch CPU Adam；预热补不回那一段，occupancy v2 已经拉回 ~719。
 
-不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 只 gather 132 个可训练张量；不要走 DeepSpeed 的全图 `_zero3_consolidated_16bit_state_dict`（`exclude_frozen` 仍会按层 allgather 冻结 12B，PCIe 空 6s、SM 0%）。步进里仍会闪 **约 1s** SM 0% 的，是冻结专家 H2D 没和 GEMM 重叠（功耗仍 260–300W）。整层 leaf + `LOG_EVERY=40` 是为了把这种闪的**次数**压下去，不是把 PCIe 关掉。不要关 param offload。实测：leaf 前 ~**1.08/min**；MoE+Block leaf cap=2 约 **0.67/min** / 754 tok/s；只 leaf MoE+cap=8 约 **0.69/min** / 722 tok/s；Block leaf+cap=8 约 **1.38/min** / 763 tok/s（更快但更密，弃用 cap=8）。
+不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 只 gather 132 个可训练张量；不要走 DeepSpeed 的全图 `_zero3_consolidated_16bit_state_dict`（`exclude_frozen` 仍会按层 allgather 冻结 12B，PCIe 空 6s、SM 0%）。步进里仍会闪 **约 1s** SM 0% 的，是冻结专家 H2D 没和 GEMM 重叠（功耗仍 260–300W）。整层 leaf + `LOG_EVERY=40` 是为了把这种闪的**次数**压下去，不是把 PCIe 关掉。不要关 param offload。实测：leaf 前 ~**1.08/min**；MoE+Block leaf cap=2 约 **0.67/min** / 754 tok/s；只 leaf MoE+cap=8 约 **0.69/min** / 722 tok/s；Block leaf+cap=8 约 **1.38/min** / 763 tok/s（更快但更密，弃用 cap=8）。现配方（整层 leaf、inflight=2、`LOG_EVERY=40`、`gc.freeze`）6.5 min：**0.46/min** / ~750 tok/s。
 
 ## 滑窗交叉（3090，2026-09-20T01:06Z，H=16 hd=128 equal-head）
 
