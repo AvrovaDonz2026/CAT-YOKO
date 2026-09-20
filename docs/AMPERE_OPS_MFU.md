@@ -45,6 +45,18 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 
 3090 上续训 B0：**resume Hub overlay，写到独立目录**，不要覆盖 `checkpoints/b0-full` / Hub step **26940**。Ampere 没有 FP4 tensor core，续训加 `--no-nvfp4`（C1+NVFP4 发布墙钟结论不变，只是这张卡跑 BF16）。ZeRO-3 只解决装得下。
 
+## GPU 持续吃满（3090 ZeRO-3）
+
+算子本身（Flash GQA / fused QKV / MoE TN bmm）已经在算力墙上。占用掉到 **0%** 来自步进空窗，不是 kernel 太慢：
+
+1. **ZeRO 预取太小**（旧 50e6 ≈100MiB）——下一层冻结 MoE ~1.5GiB 专家权重，GPU 等 PCIe。现 `stage3_prefetch_bucket_size=5e8`（~1GiB bf16）+ `offload_param.buffer_count=8`。`CUDA_DEVICE_MAX_CONNECTIONS=8`，H2D 才能和 GEMM 叠。
+2. **每步 D2H**（nll `.cpu()` + `get_global_grad_norm` + `moe_utilization` + `cuda.get_rng_state_all`）。3090 脚本 `LOG_EVERY=20`；非 log 步不搬 host；CUDA RNG 只在存盘时拍。
+3. **torch inductor 32 workers** 抢 CPU，ZeRO `pin_memory` 拷贝变慢。`TORCH_COMPILE_DISABLE=1`。
+4. **DummyStream `doc_ids`** 不再上 GPU，避免每步 `collapse_doc_ids` 同步。下一批 H2D 在 backward 还在跑时预取。
+5. **MoE `counts.max()`** 走侧流 D2H，和共享专家 SwiGLU 重叠。不要把 padded bmm 垫到 `n_tok`（约 20× GEMM）。
+
+不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 的 gather 空窗仍在，约 18 分钟一次。
+
 ## 滑窗交叉（3090，2026-09-20T01:06Z，H=16 hd=128 equal-head）
 
 | seq | n_win | S×S | fat 256 | 相对 S×S |

@@ -199,8 +199,12 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("unlimited", text)
         self.assertIn("STEPS=0", text)
         self.assertIn('SAVE_EVERY="${SAVE_EVERY:-200}"', text)
+        self.assertIn('LOG_EVERY="${LOG_EVERY:-20}"', text)
+        self.assertIn("TORCH_COMPILE_DISABLE", text)
+        self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", text)
         self.assertIn("5% hashed code", text)
         self.assertNotIn("push_to_hf", text)
+        self.assertNotRegex(text, r"--log-every 1$")
         self.assertNotRegex(text, r"--save-full")
         self.assertTrue((ROOT / "scripts" / "run_b0_ampere_3090.sh").stat().st_mode & 0o111)
 

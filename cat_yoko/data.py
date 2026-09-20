@@ -182,6 +182,7 @@ class DummyStream:
         self.code_frac = float(code_frac)
         if not 0.0 <= self.code_frac <= 1.0:
             raise ValueError(f"code_frac must be in [0, 1], got {self.code_frac}")
+        self._snippet_table: torch.Tensor | None = None
 
     def state_dict(self) -> dict:
         return {"kind": "dummy", "gen": self.gen.get_state(), "code_frac": self.code_frac}
@@ -192,11 +193,13 @@ class DummyStream:
         if st.get("gen") is not None:
             self.gen.set_state(st["gen"].cpu())
 
-    def _code_row(self, u: float) -> torch.Tensor:
-        n = len(THINK_CODE_SNIPPETS)
-        idx = min(int(float(u) * n), n - 1)
-        ids = utf8_tile_ids(THINK_CODE_SNIPPETS[idx], self.vocab_size, self.seq_len)
-        return torch.tensor(ids, dtype=torch.long)
+    def _code_table(self) -> torch.Tensor:
+        if self._snippet_table is None or int(self._snippet_table.size(1)) != self.seq_len:
+            rows = [
+                utf8_tile_ids(s, self.vocab_size, self.seq_len) for s in THINK_CODE_SNIPPETS
+            ]
+            self._snippet_table = torch.tensor(rows, dtype=torch.long)
+        return self._snippet_table
 
     def batch(self, micro_batch: int, device: str) -> dict[str, torch.Tensor]:
         ids = torch.randint(
@@ -206,11 +209,13 @@ class DummyStream:
             generator=self.gen,
         )
         if self.code_frac > 0:
+            table = self._code_table()
+            n = int(table.size(0))
             gate = torch.rand((micro_batch,), generator=self.gen)
             pick = torch.rand((micro_batch,), generator=self.gen)
-            for i in range(micro_batch):
-                if float(gate[i]) < self.code_frac:
-                    ids[i] = self._code_row(float(pick[i]))
+            idx = (pick * n).to(dtype=torch.long).clamp(max=n - 1)
+            mask = (gate < self.code_frac).unsqueeze(1)
+            ids = torch.where(mask, table.index_select(0, idx), ids)
         if self.needle and self.seq_len >= 2:
             mid = self.seq_len // 2
             ids[:, mid] = self.vocab_size - 1
@@ -219,14 +224,15 @@ class DummyStream:
         if self.response_only:
             cut = max(int(self.seq_len * self.prompt_frac), 1)
             labels[:, :cut] = -100
-        return to_device(
-            {
-                "input_ids": ids,
-                "labels": labels,
-                "doc_ids": docs,
-            },
-            device,
-        )
+        payload = {
+            "input_ids": ids,
+            "labels": labels,
+        }
+        out = to_device(payload, device)
+        # Constant-per-row packing ids. Keep them on the host so
+        # collapse_doc_ids does not .item() a CUDA tensor every step.
+        out["doc_ids"] = docs
+        return out
 
 
 def _ids_and_sft_labels(messages: list) -> tuple[list[int], list[int]] | None:

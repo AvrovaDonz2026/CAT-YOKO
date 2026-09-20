@@ -89,6 +89,14 @@ class DummyStreamTests(unittest.TestCase):
         self.assertTrue((batch["doc_ids"][0] == 0).all())
         self.assertNotIn(2, batch["input_ids"][0].tolist())
 
+    def test_dummy_doc_ids_stay_off_to_device_payload(self) -> None:
+        import inspect
+
+        src = inspect.getsource(DummyStream.batch)
+        self.assertIn('out["doc_ids"]', src)
+        self.assertIn("to_device", src)
+        self.assertLess(src.index("to_device"), src.index('out["doc_ids"]'))
+
     def test_modest_code_frac_is_not_all_or_nothing(self) -> None:
         allowed = {tuple(utf8_tile_ids(s, 32, 8)) for s in THINK_CODE_SNIPPETS}
         stream = DummyStream(32, 8, seed=0)

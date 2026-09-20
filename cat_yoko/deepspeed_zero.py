@@ -101,17 +101,30 @@ def zero_config(
         "overlap_comm": bool(overlap_comm),
         "contiguous_gradients": True,
         "reduce_scatter": True,
+        "round_robin_gradients": True,
     }
     if offload_optimizer:
-        zero["offload_optimizer"] = {"device": "cpu", "pin_memory": True}
+        zero["offload_optimizer"] = {
+            "device": "cpu",
+            "pin_memory": True,
+            "buffer_count": 4,
+        }
     if offload_param:
-        zero["offload_param"] = {"device": "cpu", "pin_memory": True}
+        # Extra pinned buffers so the next MoE layer can H2D while GEMM runs.
+        zero["offload_param"] = {
+            "device": "cpu",
+            "pin_memory": True,
+            "buffer_count": 8,
+        }
     if stage_i == 3:
         zero["stage3_gather_16bit_weights_on_model_save"] = True
         zero["stage3_param_persistence_threshold"] = 1_000_000
-        # Modest buckets so a 48GiB card is not pinned by prefetch.
-        zero["stage3_prefetch_bucket_size"] = 50_000_000
-        zero["reduce_bucket_size"] = 50_000_000
+        # 50e6 (~100MiB bf16) starved Ampere: a frozen MoE layer is ~1.5GiB
+        # experts and GPU util dropped to 0 waiting on PCIe. DeepSpeed default
+        # is 5e8 (~1GiB bf16). 3090 ZeRO-3+offload leaves ~3GiB headroom
+        # (measured ~45.6/49.1GiB with the old 50e6 bucket).
+        zero["stage3_prefetch_bucket_size"] = 500_000_000
+        zero["reduce_bucket_size"] = 500_000_000
     cfg: dict[str, Any] = {
         "train_micro_batch_size_per_gpu": int(max(train_micro_batch_size_per_gpu, 1)),
         "gradient_accumulation_steps": int(max(gradient_accumulation_steps, 1)),
@@ -204,6 +217,7 @@ def seed_single_process_rank_env() -> None:
     os.environ.setdefault("RANK", "0")
     os.environ.setdefault("WORLD_SIZE", "1")
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
+    os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "8")
     if "MASTER_PORT" not in os.environ:
         from cat_yoko.dist_util import free_tcp_port
 

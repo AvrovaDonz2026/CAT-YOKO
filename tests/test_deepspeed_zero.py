@@ -60,6 +60,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(z["offload_param"]["device"], "cpu")
         self.assertEqual(z["offload_optimizer"]["device"], "cpu")
         self.assertTrue(z["stage3_gather_16bit_weights_on_model_save"])
+        self.assertGreaterEqual(z["stage3_prefetch_bucket_size"], 400_000_000)
+        self.assertGreaterEqual(z["reduce_bucket_size"], 400_000_000)
+        self.assertEqual(z["offload_param"]["buffer_count"], 8)
+        self.assertTrue(z["round_robin_gradients"])
 
     def test_json_roundtrip(self) -> None:
         json.dumps(zero_config(stage=3, offload_optimizer=True, offload_param=True))
@@ -331,6 +335,21 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("Not Megatron EP/TP", text)
         self.assertIn("Not a CSA kernel", text)
         self.assertNotIn("class CSA", text)
+
+    def test_occupancy_hides_host_syncs(self) -> None:
+        import inspect
+
+        from cat_yoko.moe import _kick_max_count
+        from cat_yoko.trainer import Trainer, quiet_inductor
+
+        run_src = inspect.getsource(Trainer.run)
+        extra_src = inspect.getsource(Trainer._extra)
+        self.assertIn("will_save", run_src)
+        self.assertIn("_prefetch_batch", run_src)
+        self.assertIn("include_rng", extra_src)
+        self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", (ROOT / "cat_yoko" / "trainer.py").read_text(encoding="utf-8"))
+        self.assertIn("TORCH_COMPILE_DISABLE", inspect.getsource(quiet_inductor))
+        self.assertIn("copy_stream", inspect.getsource(_kick_max_count))
 
     def test_plain_module_is_not_engine(self) -> None:
         import torch

@@ -7,6 +7,14 @@ import math
 import os
 import random
 import time
+
+# Before importing torch: ZeRO param-offload H2D must share the GPU with GEMM.
+# DeepSpeed/NCCL often pins CUDA_DEVICE_MAX_CONNECTIONS=1, which serializes
+# memcpy behind compute and shows up as GPU util dropping to 0%.
+os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "8")
+os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
+os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
@@ -70,6 +78,28 @@ def enable_expandable_segments() -> str:
     return os.environ["PYTORCH_CUDA_ALLOC_CONF"]
 
 
+def quiet_inductor() -> None:
+    """Stop torch.compile from forking 32 inductor workers that steal CPU from ZeRO H2D.
+
+    3090 ZeRO-3 param offload needs the host to feed PCIe. An idle compile pool
+    still shows up as GPU util dropping to 0 between steps.
+    """
+    os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
+    os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
+    try:
+        import torch._dynamo as dynamo
+
+        dynamo.config.disable = True
+    except Exception:
+        pass
+    try:
+        import torch._inductor.config as inductor_cfg
+
+        inductor_cfg.compile_threads = 1
+    except Exception:
+        pass
+
+
 def _json_safe(obj):
     """Strict-JSON form: non-finite floats become null; nested dict/list walked."""
     if isinstance(obj, dict):
@@ -108,6 +138,7 @@ def _host_step_stats(
 
 
 enable_expandable_segments()
+quiet_inductor()
 
 
 def seed_all(seed: int) -> None:
@@ -119,6 +150,7 @@ def seed_all(seed: int) -> None:
 
 def configure_cuda() -> None:
     enable_expandable_segments()
+    quiet_inductor()
     if not torch.cuda.is_available():
         return
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -270,6 +302,7 @@ class Trainer:
             self.resume = resolve_resume_path(self.resume)
         self.log_every = max(log_every, 1)
         self.log_path = Path(log_path) if log_path else None
+        self._prefetch_batch: dict | None = None
         self.eval_every = eval_every
         self.eval_batches = max(int(eval_batches), 1)
         self.dtype = dtype
@@ -605,24 +638,51 @@ class Trainer:
         self.phase_sparse = ph.sparse
         self.phase_align = bool(ph.align_indexer)
 
-    def _extra(self, model: nn.Module, step: int, tokens_in_phase: float, tokens_seen: float, stream) -> dict:
-        return {
+    def _extra(
+        self,
+        model: nn.Module,
+        step: int,
+        tokens_in_phase: float,
+        tokens_seen: float,
+        stream,
+        *,
+        gate: float | None = None,
+        stream_state: dict | None = None,
+        include_rng: bool = True,
+    ) -> dict:
+        """Checkpoint / log metadata. CUDA RNG snapshot syncs the default stream.
+
+        Call on save steps (and the final latest.pt). Do not call every step:
+        ``get_rng_state_all`` plus ``float(gate)`` used to stall the GPU after
+        every optimizer step.
+        """
+        if gate is None:
+            gate = float(unwrap(model).decoder[0].gate)
+        extra = {
             "phase": self.phase,
             "step": step,
             "tokens_in_phase": tokens_in_phase,
             "tokens_seen": tokens_seen,
-            "gate": float(unwrap(model).decoder[0].gate),
+            "gate": float(gate),
             "name": self.cfg.name,
             "seq_len": self.seq_len,
             "seed": self.seed,
             "cfg": asdict(self.cfg),
             "use_kda": bool(getattr(self.cfg, "use_kda", False)),
             "sparse": self.phase_sparse,
-            "stream": stream.state_dict(),
-            "rng_py": random.getstate(),
-            "rng_torch": torch.get_rng_state(),
-            "rng_cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            "stream": stream_state if stream_state is not None else stream.state_dict(),
         }
+        if include_rng:
+            extra["rng_py"] = random.getstate()
+            extra["rng_torch"] = torch.get_rng_state()
+            extra["rng_cuda"] = (
+                torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+            )
+        else:
+            extra["rng_py"] = None
+            extra["rng_torch"] = None
+            extra["rng_cuda"] = None
+        return extra
 
     def _forward_loss(self, model: nn.Module, batch: dict) -> dict[str, torch.Tensor]:
         """CE / indexer KL / SFT / GRPO / DPO. Always returns loss, nll, n_valid, aux."""
@@ -929,7 +989,8 @@ class Trainer:
                     progress = min((tokens_in_phase + 1) / phase_budget, 1.0)
                 elif max_steps:
                     progress = (step + 1) / max_steps
-                set_gate(unwrap(model), gate_schedule(self.phase, progress))
+                gate_val = gate_schedule(self.phase, progress)
+                set_gate(unwrap(model), gate_val)
                 lr = wsd_lr(
                     tokens_seen,
                     self.cfg,
@@ -967,7 +1028,10 @@ class Trainer:
                 t0 = time.perf_counter()
                 stats_nll_w = stats_n_valid = stats_loss = stats_aux = None
                 for micro_i in range(self.accum):
-                    batch = stream.batch(self.micro_batch, self.device)
+                    batch = self._prefetch_batch
+                    self._prefetch_batch = None
+                    if batch is None:
+                        batch = stream.batch(self.micro_batch, self.device)
                     step_tokens += int(batch["input_ids"].numel())
                     last_micro = micro_i == self.accum - 1
                     with backward_sync_ctx(model, last_micro=last_micro, world=self.world):
@@ -1023,41 +1087,61 @@ class Trainer:
                 will_log = next_step == 1 or next_step % self.log_every == 0 or (
                     max_steps is not None and next_step == max_steps
                 )
+                will_save = bool(self.save_every and next_step % self.save_every == 0)
+                tokens_after = tokens_in_phase + step_tokens * self.world
+                will_stop = (
+                    (max_steps is not None and next_step >= max_steps)
+                    or (phase_budget is not None and tokens_after >= phase_budget)
+                    or (max_steps is None and phase_budget is None)
+                )
+                # Snapshot the stream before prefetch so resume does not skip the
+                # already-copied next batch. H2D of the next DummyStream batch
+                # overlaps leftover backward kernels.
+                stream_snap = stream.state_dict() if will_save else None
+                if not will_stop:
+                    self._prefetch_batch = stream.batch(self.micro_batch, self.device)
                 if will_log:
                     moe_stats = moe_utilization(unwrap(model))
                 unwrap(model).step_router_bias()
-                if stats_nll_w is None:
-                    step_nll_w = step_n_valid = step_loss = step_aux = 0.0
-                else:
-                    step_nll_w, step_n_valid, step_loss, step_aux = _host_step_stats(
-                        stats_nll_w, stats_n_valid, stats_loss, stats_aux
-                    )
-                step_nll_w = reduce_sum(step_nll_w, device=str(self.device), world=self.world)
-                step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
-                step_nll = token_mean_nll(step_nll_w, step_n_valid)
-                step_loss = reduce_mean(step_loss, device=str(self.device), world=self.world)
-                step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
-                if not math.isfinite(step_nll):
-                    raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
-                spike = float(getattr(self.cfg, "nll_spike_factor", 0.0) or 0.0)
-                if spike > 0 and step >= 7 and getattr(self, "_nll_ema", None) is not None:
-                    ema = float(self._nll_ema)
-                    if step_nll > spike * max(ema, 1e-3):
-                        raise RuntimeError(
-                            f"nll spike {step_nll:.4f} > {spike:g}× ema {ema:.4f} "
-                            f"at {self.phase} step {step + 1}"
+                # Host D2H / DS grad-norm stall the CUDA pipeline. Only take them
+                # on log steps so ZeRO prefetch can keep feeding the GPU.
+                step_nll = last
+                step_nll_w = step_n_valid = step_loss = step_aux = 0.0
+                if will_log:
+                    if stats_nll_w is None:
+                        step_nll_w = step_n_valid = step_loss = step_aux = 0.0
+                    else:
+                        step_nll_w, step_n_valid, step_loss, step_aux = _host_step_stats(
+                            stats_nll_w, stats_n_valid, stats_loss, stats_aux
                         )
-                if getattr(self, "_nll_ema", None) is None:
-                    self._nll_ema = step_nll
-                else:
-                    self._nll_ema = 0.9 * float(self._nll_ema) + 0.1 * step_nll
+                    step_nll_w = reduce_sum(step_nll_w, device=str(self.device), world=self.world)
+                    step_n_valid = reduce_sum(step_n_valid, device=str(self.device), world=self.world)
+                    step_nll = token_mean_nll(step_nll_w, step_n_valid)
+                    step_loss = reduce_mean(step_loss, device=str(self.device), world=self.world)
+                    step_aux = reduce_mean(step_aux, device=str(self.device), world=self.world)
+                    if not math.isfinite(step_nll):
+                        raise FloatingPointError(f"non-finite nll at step {step + 1}: {step_nll}")
+                    spike = float(getattr(self.cfg, "nll_spike_factor", 0.0) or 0.0)
+                    if spike > 0 and step >= 7 and getattr(self, "_nll_ema", None) is not None:
+                        ema = float(self._nll_ema)
+                        if step_nll > spike * max(ema, 1e-3):
+                            raise RuntimeError(
+                                f"nll spike {step_nll:.4f} > {spike:g}× ema {ema:.4f} "
+                                f"at {self.phase} step {step + 1}"
+                            )
+                    if getattr(self, "_nll_ema", None) is None:
+                        self._nll_ema = step_nll
+                    else:
+                        self._nll_ema = 0.9 * float(self._nll_ema) + 0.1 * step_nll
+                grad_norm = 0.0
                 if self.deepspeed:
-                    gn_fn = getattr(model, "get_global_grad_norm", None)
-                    gn_val = gn_fn() if callable(gn_fn) else None
-                    try:
-                        grad_norm = float(gn_val) if gn_val is not None else 0.0
-                    except (TypeError, ValueError):
-                        grad_norm = 0.0
+                    if will_log:
+                        gn_fn = getattr(model, "get_global_grad_norm", None)
+                        gn_val = gn_fn() if callable(gn_fn) else None
+                        try:
+                            grad_norm = float(gn_val) if gn_val is not None else 0.0
+                        except (TypeError, ValueError):
+                            grad_norm = 0.0
                     model.step()
                 elif self.offload_blocks:
                     leftover = [p for p in trainable if p.grad is not None]
@@ -1072,11 +1156,21 @@ class Trainer:
                 step += 1
                 tokens_in_phase += step_tokens * self.world
                 tokens_seen += step_tokens * self.world
-                last = step_nll
-                extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
-                if step == 1 or step % self.log_every == 0 or (
-                    max_steps is not None and step == max_steps
-                ):
+                if will_log:
+                    last = step_nll
+                extra = None
+                if will_save:
+                    extra = self._extra(
+                        model,
+                        step,
+                        tokens_in_phase,
+                        tokens_seen,
+                        stream,
+                        gate=gate_val,
+                        stream_state=stream_snap,
+                        include_rng=True,
+                    )
+                if will_log:
                     row = {
                         "name": self.cfg.name,
                         "phase": self.phase,
@@ -1086,7 +1180,7 @@ class Trainer:
                         "ppl": safe_ppl(last),
                         "loss": step_loss,
                         "aux": step_aux,
-                        "gate": extra["gate"],
+                        "gate": gate_val,
                         "grad_norm": grad_norm,
                         "trainable_m": n_train / 1e6,
                         "lr": lr,
@@ -1131,7 +1225,7 @@ class Trainer:
                     ev = self._allreduce_token_nll(*self._eval_nll_stats(model))
                     if is_rank0(self.rank):
                         print(f"eval nll={ev:.4f} ppl={safe_ppl(ev) or '-'}")
-                if self.save_every and step % self.save_every == 0:
+                if will_save:
                     barrier()
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                     barrier()

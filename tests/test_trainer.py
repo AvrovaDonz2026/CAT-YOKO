@@ -114,6 +114,25 @@ class LoopTests(unittest.TestCase):
             ).run()
             self.assertEqual(out.step, 2)
 
+    def test_save_keeps_rng_when_log_every_is_sparse(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                steps=4,
+                accum=1,
+                save_dir=save,
+                save_every=2,
+                log_every=3,
+                seed=1,
+            ).run()
+            ckpt = torch.load(save / "step_2.pt", map_location="cpu", weights_only=False)
+            self.assertIn("stream", ckpt["extra"])
+            self.assertIsNotNone(ckpt["extra"]["rng_torch"])
+            self.assertEqual(ckpt["extra"]["step"], 2)
+
     def test_latest_hardlinks_matching_step_ckpt(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             save = Path(td)

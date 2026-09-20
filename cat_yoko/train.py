@@ -9,6 +9,9 @@ from dataclasses import replace
 from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "8")
+os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
+os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
 
 from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos

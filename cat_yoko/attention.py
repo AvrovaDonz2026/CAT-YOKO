@@ -278,6 +278,8 @@ def collapse_doc_ids(doc_ids: torch.Tensor | None) -> torch.Tensor | None:
     DummyStream / single-doc rows are constant along the sequence. Passing
     those tensors into every attention layer used to ``.item()`` 60+ times
     per step and stall the CUDA pipeline. One check here, then ``None``.
+    Prefer host ``doc_ids`` (DummyStream keeps them on CPU) so this check
+    is not a CUDA sync.
     """
     if doc_ids is None or doc_ids.size(-1) <= 1:
         return None

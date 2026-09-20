@@ -233,6 +233,14 @@ class TrainableCacheTests(unittest.TestCase):
         self.assertTrue(torch.equal(got, ref))
         self.assertEqual(got.tolist(), [0, 0, 2, 2, 2])
 
+    def test_kick_wait_max_count_cpu(self) -> None:
+        from cat_yoko.moe import _kick_max_count, _wait_max_count
+
+        counts = torch.tensor([2, 0, 5, 1], dtype=torch.int64)
+        pinned, done = _kick_max_count(counts)
+        self.assertIsNone(done)
+        self.assertEqual(_wait_max_count(pinned, done), 5)
+
 
 if __name__ == "__main__":
     unittest.main()

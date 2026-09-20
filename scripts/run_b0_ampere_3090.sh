@@ -38,9 +38,16 @@ SEQ="${SEQ:-4096}"
 # 50 步约 4–5 分钟一次 ZeRO-3 gather，GPU 占用会掉到 0 约 6s。
 SAVE_EVERY="${SAVE_EVERY:-200}"
 KEEP_LAST="${KEEP_LAST:-2}"
+# 每步 D2H / DS grad-norm 会把 GPU 打到 0%。20 步打一行仍能看 tok/s。
+LOG_EVERY="${LOG_EVERY:-20}"
 # STEPS is extra optimizer steps after resume. 0 = run until the 8e9 envelope
 # (or the instance dies). --steps is an absolute cap; Hub is already 26940.
 STEPS="${STEPS:-8}"
+# Inductor 32 workers steal CPU from ZeRO pin_memory copies.
+export TORCH_COMPILE_DISABLE="${TORCH_COMPILE_DISABLE:-1}"
+export TORCHINDUCTOR_COMPILE_THREADS="${TORCHINDUCTOR_COMPILE_THREADS:-1}"
+# Multiple copy engines so ZeRO H2D overlaps GEMM. NCCL often sets this to 1.
+export CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS:-8}"
 
 hub_overlay_forbidden() {
   local p="$1"
@@ -140,10 +147,10 @@ cd "$ROOT"
   --save-dir "$SAVE" \
   --save-every "$SAVE_EVERY" \
   --keep-last "$KEEP_LAST" \
+  --log-every "$LOG_EVERY" \
   --resume "$RESUME" \
   --upcycle-hf "$LOCAL" \
-  --log "$SAVE/metrics.jsonl" \
-  --log-every 1
+  --log "$SAVE/metrics.jsonl"
 ec=$?
 echo "=== B0 Ampere 3090 exit ${ec} $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 ls -lh "$SAVE" || true

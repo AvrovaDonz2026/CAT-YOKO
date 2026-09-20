@@ -20,7 +20,7 @@ DeepSpeed ZeRO 的分工：
 
 所以 3090 的配方是 **ZeRO-3 + optimizer CPU offload + param CPU offload**，
 不是 ZeRO-1/2。ZeRO **能塞进显存**；它不能让 8e9 B0 在一张 3090 上变成合理墙钟
-（PCIe offload 会把 MFU 打到个位数）。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。
+（PCIe offload 会把 MFU 打到个位数）。**预取桶必须够大**：旧值 `stage3_prefetch_bucket_size=50e6`（~100MiB）喂不上下一层 MoE（~1.5GiB 专家），GPU 占用会掉到 0%。现在 ZeRO-3 用 **5e8**（~1GiB bf16）+ `offload_param.buffer_count=8` + `CUDA_DEVICE_MAX_CONNECTIONS=8`，让下一包专家权重和 GEMM 重叠。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。
 
 ## 安装
 
