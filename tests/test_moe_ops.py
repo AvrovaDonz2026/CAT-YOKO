@@ -30,6 +30,37 @@ class FusedSwiGLUTests(unittest.TestCase):
         y_ref = m.down_proj(ref)
         self.assertTrue(torch.allclose(y, y_ref, atol=1e-5, rtol=1e-5))
 
+    def test_silu_mul_matches_mul_and_grads(self) -> None:
+        from cat_yoko.moe import _silu_mul
+
+        torch.manual_seed(4)
+        g = torch.randn(6, 8, requires_grad=True)
+        u = torch.randn(6, 8, requires_grad=True)
+        y = _silu_mul(g, u)
+        ref = torch.nn.functional.silu(g) * u
+        self.assertTrue(torch.allclose(y, ref, atol=1e-6, rtol=1e-6))
+        y.sum().backward()
+        g2 = g.detach().clone().requires_grad_(True)
+        u2 = u.detach().clone().requires_grad_(True)
+        (torch.nn.functional.silu(g2) * u2).sum().backward()
+        self.assertTrue(torch.allclose(g.grad, g2.grad, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(u.grad, u2.grad, atol=1e-5, rtol=1e-5))
+
+    def test_silu_mul_not_inplace_on_chunk_views(self) -> None:
+        import inspect
+
+        from cat_yoko.moe import _SiluMulFn, _fused_gate_up, _silu_mul
+
+        self.assertIn("mul_(up)", inspect.getsource(_SiluMulFn.forward))
+        self.assertNotIn("inplace=True", inspect.getsource(_SiluMulFn.forward))
+        self.assertIn("_silu_mul", inspect.getsource(_fused_gate_up))
+        gu = torch.randn(4, 8)
+        g, u = gu.chunk(2, dim=-1)
+        before = gu.clone()
+        y = _silu_mul(g, u)
+        self.assertTrue(torch.equal(gu, before))
+        self.assertEqual(tuple(y.shape), tuple(g.shape))
+
 
 class BatchedMoETests(unittest.TestCase):
     def _compare(self, hash_route: bool) -> None:

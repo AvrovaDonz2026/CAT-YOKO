@@ -183,6 +183,38 @@ def _like(ref: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     return t
 
 
+class _SiluMulFn(torch.autograd.Function):
+    """``SiLU(g)*u`` with one buffer: silu writes, then ``mul_`` reuses it.
+
+    ``F.silu(g) * u`` allocates silu and the product. Do not
+    ``silu(..., inplace=True)`` on ``gu.chunk`` views — those alias ``gu``.
+    """
+
+    @staticmethod
+    def forward(ctx, gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(gate, up)
+        return F.silu(gate).mul_(up)
+
+    @staticmethod
+    def backward(ctx, dy: torch.Tensor):
+        gate, up = ctx.saved_tensors
+        need_g, need_u = ctx.needs_input_grad
+        if dy is None or not (need_g or need_u):
+            return None, None
+        sig = torch.sigmoid(gate)
+        dgate = dup = None
+        if need_g:
+            dgate = dy * up * (sig * (1.0 + gate * (1.0 - sig)))
+        if need_u:
+            dup = dy * (gate * sig)
+        return dgate, dup
+
+
+def _silu_mul(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+    """SwiGLU hidden: ``SiLU(gate)*up``. Same math as ``F.silu(gate) * up``."""
+    return _SiluMulFn.apply(gate, up)
+
+
 def _fused_gate_up(gate: nn.Module, up: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """One GEMM for gate and up; SiLU(gate)*up. Same math as two Linears."""
     from cat_yoko.nvfp4_linear import fused_cat_linear
@@ -190,8 +222,8 @@ def _fused_gate_up(gate: nn.Module, up: nn.Module, x: torch.Tensor) -> torch.Ten
     if isinstance(gate, nn.Linear) and isinstance(up, nn.Linear):
         gu = fused_cat_linear([gate, up], x)
         g, u = gu.chunk(2, dim=-1)
-        return F.silu(g) * u
-    return F.silu(gate(x)) * up(x)
+        return _silu_mul(g, u)
+    return _silu_mul(gate(x), up(x))
 
 
 class SwiGLU(nn.Module):
@@ -324,7 +356,7 @@ def _swiglu_experts_batched(
             gu_w = torch.cat((gate_w, up_w), dim=1) if gu_cached is None else gu_cached
             gu = torch.bmm(x_q, gu_w.transpose(1, 2))
             g, u = gu.chunk(2, dim=-1)
-            hidden = F.silu(g) * u
+            hidden = _silu_mul(g, u)
             h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
             y_pad = torch.bmm(h_q, down_w.transpose(1, 2))
     else:
@@ -336,7 +368,7 @@ def _swiglu_experts_batched(
         # (cuBLAS OP_T). Do not ``.contiguous()`` that into NN.
         gu = torch.bmm(x_pad, gu_w.transpose(1, 2))
         g, u = gu.chunk(2, dim=-1)
-        y_pad = torch.bmm(F.silu(g) * u, down_w.transpose(1, 2))
+        y_pad = torch.bmm(_silu_mul(g, u), down_w.transpose(1, 2))
     return y_pad[expert_sorted, local]
 
 
@@ -362,14 +394,14 @@ def _swiglu_experts_grouped(
             x_q = quantize_nvfp4(x_sorted) + x_sorted - x_sorted.detach()
             gu = _grouped_linear(x_q, gu_w, offs)
             g, u = gu.chunk(2, dim=-1)
-            hidden = F.silu(g) * u
+            hidden = _silu_mul(g, u)
             h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
             return _grouped_linear(h_q, down_w, offs)
     gu_w = gu_w.to(dtype=x_sorted.dtype)
     down_w = down_w.to(dtype=x_sorted.dtype)
     gu = _grouped_linear(x_sorted, gu_w, offs)
     g, u = gu.chunk(2, dim=-1)
-    return _grouped_linear(F.silu(g) * u, down_w, offs)
+    return _grouped_linear(_silu_mul(g, u), down_w, offs)
 
 
 def _dispatch_experts(

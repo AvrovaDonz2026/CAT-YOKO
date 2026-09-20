@@ -14,8 +14,18 @@ class RMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(dim))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Must-high-prec: RMSNorm in fp32, then cast back (Llama-style).
+        # Must-high-prec: variance in fp32 (KEEP_HIGH_PREC rms_norm / qk_norm).
         orig = x.dtype
+        # CUDA fused rms_norm accumulates rstd in fp32 on fp16/bf16 input.
+        # Skip the full activation ``x.float()`` copy (one HBM round per ln).
+        # CPU keeps the explicit fp32 path so autocast probes match Llama math.
+        if (
+            x.is_cuda
+            and orig in (torch.float16, torch.bfloat16)
+            and hasattr(F, "rms_norm")
+        ):
+            w = self.weight if self.weight.dtype == orig else self.weight.to(dtype=orig)
+            return F.rms_norm(x, (x.shape[-1],), w, self.eps)
         x32 = x.float()
         w = self.weight.float()
         if hasattr(F, "rms_norm"):

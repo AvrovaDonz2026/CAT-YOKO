@@ -559,6 +559,15 @@ class LoopTests(unittest.TestCase):
         self.assertTrue(torch.allclose(h1.grad, h2.grad, atol=1e-5, rtol=1e-5))
         self.assertTrue(torch.allclose(lm1.weight.grad, lm2.weight.grad, atol=1e-5, rtol=1e-5))
 
+    def test_chunked_ce_cpu_still_upcasts_non_fp32(self) -> None:
+        import inspect
+
+        from cat_yoko.loss import linear_cross_entropy
+
+        src = inspect.getsource(linear_cross_entropy)
+        self.assertIn("is_cuda", src)
+        self.assertIn("logits.float()", src)
+
     def test_ce_chunk_auto_cpu_stays_small(self) -> None:
         from cat_yoko.loss import _ce_chunk_tokens
 

@@ -31,16 +31,37 @@ class LightningIndexer(nn.Module):
         nn.init.normal_(self.q_proj.weight, mean=0.0, std=0.02)
         nn.init.normal_(self.k_proj.weight, mean=0.0, std=0.02)
 
+    def _qk_weight_fp32(self) -> torch.Tensor:
+        """``[2*d_idx, D]`` fp32. Frozen indexer concatenates once; two Linears stay."""
+        wq, wk = self.q_proj.weight, self.k_proj.weight
+        frozen = (not bool(wq.requires_grad)) and (not bool(wk.requires_grad))
+        if frozen:
+            hit = getattr(self, "_qk_w_fp32", None)
+            if hit is not None:
+                return hit
+        w = torch.cat((wq.float(), wk.float()), dim=0)
+        if frozen:
+            try:
+                self._qk_w_fp32 = w
+            except Exception:
+                pass
+        elif getattr(self, "_qk_w_fp32", None) is not None:
+            self._qk_w_fp32 = None
+        return w
+
     def scores(self, x: torch.Tensor) -> torch.Tensor:
         """``[B, S, D] → [B, S, S]`` fp32 scores.
 
-        Weights stay on the module dtype (bf16 on CUDA C-index). GEMM is
-        explicit fp32 so eval / ``no_grad`` probes do not require autocast
-        to recast ``x.float()`` back onto bf16 ``Linear`` weights.
+        Weights stay on the module dtype (bf16 on CUDA C-index). One fp32
+        GEMM on ``cat(q,k)`` so ``x`` is read once (skinny d_idx=64). GEMM
+        is explicit fp32 so eval / ``no_grad`` probes do not require
+        autocast to recast ``x.float()`` back onto bf16 ``Linear`` weights.
+        Two Linear modules stay (overlay / C-index param names unchanged).
         """
         xf = x.float()
-        q = F.relu(F.linear(xf, self.q_proj.weight.float()))
-        k = F.linear(xf, self.k_proj.weight.float())
+        qk = F.linear(xf, self._qk_weight_fp32())
+        q, k = qk.chunk(2, dim=-1)
+        q = F.relu(q)
         scale = self.d_idx ** -0.5
         return torch.matmul(q, k.transpose(-1, -2)) * scale
 

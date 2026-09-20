@@ -23,9 +23,13 @@ FlexAttention 滑窗在这套 torch 2.8 / sm_86 上约 1.7 ms，对照 SDPA 0.02
 - `o_proj` 用 `reshape`；Flash 若写出同一 BSHD 内存，这步是 view
 - fat-tile 滑窗仍要 packed BHSD（`unfold` 沿 S），只在带状路径上 pack；B0 覆盖窗不走这条
 - 冻结 MoE `bmm(x, W.transpose(1,2))` 保持 **TN**（K stride-1）。不要把 `W.T` contiguous 成 NN
+- SwiGLU 走 `_silu_mul`：`SiLU(g)` 写进一块 buffer 再 `mul_(u)`，不 `silu inplace` 在 `gu.chunk` 视图上
+- CUDA RMSNorm 用 fused `F.rms_norm`（fp16/bf16 输入、rstd 仍 fp32），不再整段激活 `x.float()`；CPU 仍显式 fp32
+- Indexer 一次 fp32 GEMM `cat(Wq,Wk)`，`x` 只读一遍；两个 Linear 模块仍在（不改 overlay / C-index 参数名）
+- CUDA `linear_cross_entropy` 不再把 chunk×V logits 拷成 fp32（CE softmax 在核里累加 fp32）
 - **不**把 3 个 QKV Linear 收成一个 fused Linear 模块（Hub overlay 仍是 132 张量）
 
-3090 正在跑的 B0 进程不重测；Flash GQA seq=4096 上次 ~85% MFU 仍是对照。这是激活 layout，不改 step 26940 权重。
+3090 正在跑的 B0 进程不重测、不 SIGKILL；Flash GQA seq=4096 上次 ~85% MFU 仍是对照。这是激活 layout / 算子，不改 step 26940 权重。新的 `_silu_mul` / CUDA RMSNorm / fused indexer / CUDA CE 进 git；要吃到这轮优化需下次 sibling resume（不要为了算子去抢在训 GPU）。
 
 ## 各块（理论）
 
@@ -39,7 +43,7 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 | CSA union | C-topk | 74.8% | 100% 强度，但 fused mask 核到不了 Flash | 同上；**不要** `enable_gqa+attn_mask`（Ampere 静默掉 math 核），repeat KV 后走 Efficient/cuDNN |
 | HCA concat | C-hca+ | 78.7% | 同左，k 更长 | 静态槽 bias 缓存；不把 CSA/HCA 换上 FlexAttention |
 | MoE bmm | B2+ | 13.0%（每专家 12 token，带宽墙） | 100% 强度；均匀专家实测 ~84% 峰值 | Ampere 禁止 grouped_mm；冻专家缓存 `gate‖up` |
-| indexer fp32 | C-index | 29.7%（FP32 峰值） | 81.3% | 分数仍 fp32（KEEP_HIGH_PREC）；TF32 `high`；含 Q/K 投影 |
+| indexer fp32 | C-index | 38.9%（FP32 峰值） | 100% 算力墙 | 分数仍 fp32（KEEP_HIGH_PREC）；一次 `cat(Wq,Wk)` GEMM，`x` 读一遍 |
 
 12B B0 训练 `seq=4096`、`n_win=8192`：encoder 窗盖满，走 dense Flash，不是 masked 行。探针故意 `n_win<seq`，Theorem B 的压缩洞才露出来。滑窗在 `n_win<seq` 且 `seq≥2048` 时走 **256 宽 fat tiles**。按 `n_win` 切 32×64 是 launch 陷阱；256 宽在 seq=512 上仍是 0.14× S×S，seq=4096 / n_win=32 才到 2.93×。不是 FlexAttention，不是 CSA kernel。短序列仍走一张 S×S mask。CSA/HCA 的 union / concat 仍要付 S×S mask。
 
@@ -86,7 +90,7 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 | banded fat-tile seq=512 n_win=32（已禁用） | 2.02 T | 2.8%（0.14× S×S，故 `BANDED_SEQ_MIN=2048`） |
 | masked window seq=2048 | 31.78 T | 45% |
 | banded fat-tile seq=2048 n_win=32 | 32.50 T | 46%（1.17× S×S） |
-| indexer fp32 12B 形 | 14.28 T | 50% of FP32 roofline（d_idx=64 瘦 K） |
+| indexer fp32 12B 形 | 14.28 T | 50% of FP32 roofline（d_idx=64 瘦 K；上表理论已按 fused QK 重算，此行仍是旧两次 GEMM 实测） |
 | 全部 bf16-probe seq=128 | &lt;1 T | launch 墙，理论 30–84% 也够不着 |
 
 Ledger：[`artifacts/autodl-rtx3090/bf16-verify/mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/)。

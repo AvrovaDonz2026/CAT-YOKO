@@ -66,8 +66,12 @@ def linear_cross_entropy(
         logits = lm_head(h[i : i + step])
         if logit_scale != 1.0:
             logits = logits / logit_scale
+        # CUDA CE softmax-accum is fp32 on fp16/bf16 logits. Skip a V-wide
+        # ``.float()`` copy (chunk×130560×4). CPU non-fp32 still upcasts.
+        if logits.dtype != torch.float32 and not logits.is_cuda:
+            logits = logits.float()
         total = total + F.cross_entropy(
-            logits.float(),
+            logits,
             y[i : i + step],
             ignore_index=ignore_index,
             reduction="sum",

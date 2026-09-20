@@ -212,7 +212,8 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
 
     idx_d = 32 if d <= 128 else 64
     fl = 2 * gemm_flops(m, idx_d, d) + b * gemm_flops(s, s, idx_d)
-    nb = 2 * gemm_bytes_fp32(m, idx_d, d) + b * gemm_bytes_fp32(s, s, idx_d)
+    # One GEMM [m, 2*d_idx] reads x once; same FLOPs as two skinny projections.
+    nb = gemm_bytes_fp32(m, 2 * idx_d, d) + b * gemm_bytes_fp32(s, s, idx_d)
     rows.append(
         OpTheory(
             "indexer_fp32",
@@ -220,7 +221,7 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
             fl,
             nb,
             roofline_mfu(fl, nb, peak=RTX3090_FP32_PEAK),
-            f"{tag}: fp32 scores, d_idx={idx_d}; peak is FP32/TF32 not BF16 TC",
+            f"{tag}: fp32 scores, fused QK GEMM, d_idx={idx_d}; peak is FP32/TF32 not BF16 TC",
         )
     )
     return rows
@@ -408,14 +409,16 @@ def measure_cuda() -> dict[str, Any]:
         wq = torch.randn(DI, D, device=device, dtype=torch.float32)
         wk = torch.randn(DI, D, device=device, dtype=torch.float32)
 
-        def _idx(x=x, wq=wq, wk=wk):
-            qq = F.relu(F.linear(x, wq))
-            kk = F.linear(x, wk)
-            return torch.matmul(qq, kk.transpose(-1, -2))
+        wqk = torch.cat((wq, wk), dim=0)
+
+        def _idx(x=x, wqk=wqk):
+            qk = F.linear(x, wqk)
+            qq, kk = qk.chunk(2, dim=-1)
+            return torch.matmul(F.relu(qq), kk.transpose(-1, -2))
 
         dt = _bench(_idx, warmup=8, runs=20)
         fl = 2 * gemm_flops(B * S, DI, D) + B * gemm_flops(S, S, DI)
-        nb = 2 * gemm_bytes_fp32(B * S, DI, D) + B * gemm_bytes_fp32(S, S, DI)
+        nb = gemm_bytes_fp32(B * S, 2 * DI, D) + B * gemm_bytes_fp32(S, S, DI)
         out["ops"].append(
             _row(f"indexer_fp32_{tag}", fl, dt, nb, f"d_idx={DI}", peak=RTX3090_FP32_PEAK)
         )

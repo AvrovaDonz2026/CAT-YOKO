@@ -136,6 +136,27 @@ class IndexerDtypeTests(unittest.TestCase):
         self.assertEqual(scores.dtype, torch.float32)
         self.assertTrue(torch.isfinite(scores).all())
 
+    def test_fused_qk_matches_two_linears(self) -> None:
+        from cat_yoko.indexer import LightningIndexer
+
+        cfg = CATYokoConfig.tiny()
+        torch.manual_seed(0)
+        idx = LightningIndexer(cfg)
+        x = torch.randn(2, 8, cfg.hidden_size)
+        got = idx.scores(x)
+        xf = x.float()
+        q = torch.nn.functional.relu(torch.nn.functional.linear(xf, idx.q_proj.weight.float()))
+        k = torch.nn.functional.linear(xf, idx.k_proj.weight.float())
+        ref = torch.matmul(q, k.transpose(-1, -2)) * (idx.d_idx ** -0.5)
+        self.assertTrue(torch.allclose(got, ref, atol=1e-5, rtol=1e-5))
+        for p in idx.parameters():
+            p.requires_grad_(False)
+        a = idx.scores(x)
+        ptr = idx._qk_w_fp32.data_ptr()
+        b = idx.scores(x)
+        self.assertEqual(idx._qk_w_fp32.data_ptr(), ptr)
+        self.assertTrue(torch.equal(a, b))
+
 
 class SecretScanTests(unittest.TestCase):
     def test_suite_files_have_no_secrets_or_hosts(self) -> None:
