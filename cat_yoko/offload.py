@@ -75,7 +75,9 @@ def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[to
     Backward reloads the block, recomputes, then offloads again (activation
     checkpoint + parameter offload).
     """
-    need = any(t.requires_grad for t in tensors) or any(p.requires_grad for p in blk.parameters())
+    need = any(t is not None and t.requires_grad for t in tensors) or any(
+        p.requires_grad for p in blk.parameters()
+    )
     if (not need) or (not torch.is_grad_enabled()):
         move_module(blk, tensors[0].device)
         y = blk(*tensors)

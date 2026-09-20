@@ -377,5 +377,18 @@ class CliOffloadTests(unittest.TestCase):
             main(["--config", "tiny", "--c1-smoke", "--tokens", "64"])
 
 
+class GradCkptNoneDocTests(unittest.TestCase):
+    def test_b0_checkpoint_allows_collapsed_doc_ids(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        m = CATYokoForCausalLM(cfg)
+        apply_freeze(m, "B0")
+        m.grad_checkpoint = True
+        m.train()
+        ids = torch.randint(0, cfg.vocab_size, (2, 8))
+        out = m(ids, labels=ids.clone(), doc_ids=None)
+        self.assertIn("nll", out)
+        out["nll"].backward()
+
+
 if __name__ == "__main__":
     unittest.main()
