@@ -21,7 +21,7 @@ OVERLAYS = {
     },
     "b0-3090-bf16": {
         "filename": "checkpoints/b0-3090-bf16/trainable.pt",
-        "sha256": "17a2c495b31033d149ed2b95a42ecaa49dcd3d81acb25b0b19b64b33386d3393",
+        "sha256": "2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690",
     },
     "b0": {"filename": "checkpoints/b0/trainable.pt", "sha256": None},
     "b1": {"filename": "checkpoints/b1/trainable.pt", "sha256": None},

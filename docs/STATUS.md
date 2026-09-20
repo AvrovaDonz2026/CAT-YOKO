@@ -32,7 +32,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | RTX 4080 SUPER | 图 / `--try` 烟测 | 已释放；日志 [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
 | RTX 6000D sm_120 | 发布档 B0 开跑（NVFP4 **仿真**） | step **16020**，`tokens_in_phase=65,488,896`；日志 [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
 | Vast B200 SM 10.0 | 发布档 B0 续训（硬件 NVFP4 FPROP） | step **26940**；日志 [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
-| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline；B0 BF16 **sibling** 续训 | **142 claims ok**；Flash **85%** / MoE bmm **81%**。滑窗 `BANDED_SEQ_MIN=2048`。Hub **发布档**仍是 `b0-full` step **26940** / `7eebc9a4…`。3090 快照另存 Hub [`checkpoints/b0-3090-bf16/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) step **28800** / `17a2c495…`。`SAVE_EVERY=200`。occupancy v2 ~720 tok/s（`adam=ds-cpuadam`）。日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)、[`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md) |
+| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline；B0 BF16 **sibling** 续训 | **142 claims ok**；Flash **85%** / MoE bmm **81%**。滑窗 `BANDED_SEQ_MIN=2048`。Hub **发布档**仍是 `b0-full` step **26940** / `7eebc9a4…`。3090 快照另存 Hub [`checkpoints/b0-3090-bf16/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) step **33800** / `2dc31406…`（≈1.98% of 8e9）。`SAVE_EVERY=200`。~760 tok/s（`adam=ds-cpuadam`）。**机器待释放**（2026-09-20T13:53Z 拷盘）。日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)、[`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md)、[`occupancy/`](../artifacts/autodl-rtx3090/occupancy/README.md) |
 
 同阶段 resume：`tokens_in_phase` 按 8192/step 接着加。step **22100** 时是 90,392,576。
 
@@ -72,7 +72,7 @@ bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自�
 - 把 ZeRO 当成一张 3090 上重开 8e9 的理由（Hub overlay 已经 1.63%，同阶段 resume）
 - 覆盖 Hub `checkpoints/b0-full`（step **26940**，sha256 `7eebc9a4…`）。3090 BF16 续训写独立目录，见 [`scripts/run_b0_ampere_3090.sh`](../scripts/run_b0_ampere_3090.sh)
 - 把 50B Ultra-FineWeb 拉进仓库或小盘
-- 再连已释放的 AutoDL `westc` / `weste`
+- 再连已释放的 AutoDL `westc` / `weste`，以及即将释放的 3090 `westd`
 - 把 SSH 密码、deploy key 写进 git
 
 ## 产物放哪
