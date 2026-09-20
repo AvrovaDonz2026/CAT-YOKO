@@ -137,14 +137,14 @@ def zero_config(
         # (measured ~45.6/49.1GiB with the old 50e6 bucket).
         zero["stage3_prefetch_bucket_size"] = 500_000_000
         zero["reduce_bucket_size"] = 500_000_000
-        # Mixtral recipe: leaf the MoE block only. Top-k order changes every
-        # step; a leaf fetches every expert on entry so the trace stays
-        # stable. Do **not** leaf EncoderBlock/DecoderBlock — that waits on
-        # ~1.6GiB (attn+all experts) before any GEMM, and DeepSpeed's default
-        # 2 inflight H2D events then host-synchronize the oldest (~1s SM 0%).
+        # Mixtral: leaf MoE so top-k order does not invalidate the prefetch
+        # trace. Also leaf EncoderBlock/DecoderBlock so one H2D covers attn+
+        # all experts (~1.6GiB) and the previous layer's GEMM can hide it.
+        # DeepSpeed then host-syncs when inflight H2D events exceed 2 — that
+        # is the remaining ~1s SM 0%. wrap_deepspeed raises the cap to 8.
         # Do not persist experts. Class names match __class__.__name__.
         zero["leaf_module"] = {
-            "classes": ["MoE"],
+            "classes": ["MoE", "EncoderBlock", "DecoderBlock"],
         }
     cfg: dict[str, Any] = {
         "train_micro_batch_size_per_gpu": int(max(train_micro_batch_size_per_gpu, 1)),
