@@ -1,0 +1,165 @@
+=== B0 Ampere 3090 BF16 2026-09-20T01:10:21Z ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB, 0 MiB
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  274M   30G   1% /
+/dev/md0         50G  5.2G   45G  11% /root/autodl-tmp
+torch 2.8.0+cu128 cuda 12.8 cap (8, 6)
+Hub overlay copy ok sha256=7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955 (read-only; will not write this file)
+resume (read-only Hub copy) /root/autodl-tmp/hub-b0-full
+save (new overlay, not Hub) /root/autodl-tmp/b0-3090-bf16
+B0 Ampere argv seq=4096 steps=8 no-nvfp4 zero-3
+B0 argv: --config 12b --phase B0 --device cuda --dtype bf16 --seed 0 --save-dir /root/autodl-tmp/b0-3090-bf16 --keep-last 2 --no-save-full --save-trainable --no-save-optim --micro-batch 1 --accum 1 --grad-ckpt --no-offload-encoder --no-offload-blocks --no-optim-cpu --backend deepspeed --zero 3 --zero-offload --zero-offload-param --seq-len 4096 --steps 8 --save-every 2 --log-every 1 --log /root/autodl-tmp/b0-3090-bf16/metrics.jsonl --resume /root/autodl-tmp/hub-b0-full --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base --no-nvfp4 --dtype bf16
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 5123.71it/s]
+overlay resume /root/autodl-tmp/hub-b0-full/trainable.pt: 132 tensors ckpt_phase=B0 cli_phase=B0
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/b0.py", line 17, in <module>
+[rank0]:     raise SystemExit(main_b0(sys.argv[1:]))
+[rank0]:                      ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/phase_train.py", line 291, in main_b0
+[rank0]:     return run_phase("B0", argv)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/phase_train.py", line 287, in run_phase
+[rank0]:     return train_main(built)
+[rank0]:            ^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/train.py", line 515, in main
+[rank0]:     tr.run()
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/trainer.py", line 857, in run
+[rank0]:     model, opt, n_train, adam_state = self._wrap_and_optim(model)
+[rank0]:                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/trainer.py", line 760, in _wrap_and_optim
+[rank0]:     model, opt = wrap_deepspeed(raw, opt, cfg, dist_init_required=False)
+[rank0]:                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/deepspeed_zero.py", line 216, in wrap_deepspeed
+[rank0]:     engine, opt, _, _ = ds.initialize(
+[rank0]:                         ^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/deepspeed/__init__.py", line 244, in initialize
+[rank0]:     engine = DeepSpeedEngine(args=args,
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/deepspeed/runtime/engine.py", line 587, in __init__
+[rank0]:     self._do_args_sanity_check(args)
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/deepspeed/runtime/engine.py", line 1927, in _do_args_sanity_check
+[rank0]:     assert "LOCAL_RANK" in os.environ or "OMPI_COMM_WORLD_LOCAL_RANK" in os.environ, "DeepSpeed requires the LOCAL_RANK environment " \
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]: AssertionError: DeepSpeed requires the LOCAL_RANK environment variable, it is set by the deepspeed launcher, deepspeed.init_distributed, or the torch's launcher. If using a different launcher please ensure LOCAL_RANK is set prior to initializing deepspeed.
+=== B0 Ampere 3090 BF16 2026-09-20T01:14:03Z ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB, 0 MiB
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  274M   30G   1% /
+/dev/md0         50G  5.2G   45G  11% /root/autodl-tmp
+torch 2.8.0+cu128 cuda 12.8 cap (8, 6)
+Hub overlay copy ok sha256=7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955 (read-only; will not write this file)
+resume (read-only Hub copy) /root/autodl-tmp/hub-b0-full
+save (new overlay, not Hub) /root/autodl-tmp/b0-3090-bf16
+B0 Ampere argv seq=4096 steps=8 no-nvfp4 zero-3
+B0 argv: --config 12b --phase B0 --device cuda --dtype bf16 --seed 0 --save-dir /root/autodl-tmp/b0-3090-bf16 --keep-last 2 --no-save-full --save-trainable --no-save-optim --micro-batch 1 --accum 1 --grad-ckpt --no-offload-encoder --no-offload-blocks --no-optim-cpu --backend deepspeed --zero 3 --zero-offload --zero-offload-param --seq-len 4096 --steps 8 --save-every 2 --log-every 1 --log /root/autodl-tmp/b0-3090-bf16/metrics.jsonl --resume /root/autodl-tmp/hub-b0-full --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base --no-nvfp4 --dtype bf16
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 5607.32it/s]
+overlay resume /root/autodl-tmp/hub-b0-full/trainable.pt: 132 tensors ckpt_phase=B0 cli_phase=B0
+built CAT-YOKO-12B on cuda:0 dtype=bf16 params=0 alloc=0.09GiB grad_ckpt=True seq=4096 offload_enc=False offload_blocks=False optim_cpu=False adam=ds-cpu zero=3 ds=True zero_offload=True zero_offload_param=True trainable=219.21M reuse=False nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=False te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+=== B0 Ampere 3090 exit 0 2026-09-20T01:15:11Z ===
+total 419M
+-rw-r--r-- 1 root root 5.7K Sep 20 09:15 b0_3090.log
+-rw-r--r-- 1 root root 419M Sep 20 09:15 trainable.pt
+-r--r--r-- 1 root root 419M Sep 20 09:01 /root/autodl-tmp/hub-b0-full/trainable.pt
+=== B0 Ampere 3090 BF16 2026-09-20T01:19:07Z ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB, 0 MiB
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  274M   30G   1% /
+/dev/md0         50G  5.2G   45G  11% /root/autodl-tmp
+torch 2.8.0+cu128 cuda 12.8 cap (8, 6)
+Hub overlay copy ok sha256=7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955 (read-only; will not write this file)
+resume (read-only Hub copy) /root/autodl-tmp/hub-b0-full
+save (new overlay, not Hub) /root/autodl-tmp/b0-3090-bf16
+B0 Ampere argv seq=4096 more-steps=8 (absolute --steps would no-op at Hub 26940) no-nvfp4 zero-3
+B0 argv: --config 12b --phase B0 --device cuda --dtype bf16 --seed 0 --save-dir /root/autodl-tmp/b0-3090-bf16 --keep-last 2 --no-save-full --save-trainable --no-save-optim --micro-batch 1 --accum 1 --grad-ckpt --no-offload-encoder --no-offload-blocks --no-optim-cpu --backend deepspeed --zero 3 --zero-offload --zero-offload-param --seq-len 4096 --more-steps 8 --tokens 8000000000.0 --save-every 2 --log-every 1 --log /root/autodl-tmp/b0-3090-bf16/metrics.jsonl --resume /root/autodl-tmp/hub-b0-full --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base --no-nvfp4 --dtype bf16
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 5810.26it/s]
+overlay resume /root/autodl-tmp/hub-b0-full/trainable.pt: 132 tensors ckpt_phase=B0 cli_phase=B0
+built CAT-YOKO-12B on cuda:0 dtype=bf16 params=0 alloc=0.09GiB grad_ckpt=True seq=4096 offload_enc=False offload_blocks=False optim_cpu=False adam=ds-cpu zero=3 ds=True zero_offload=True zero_offload_param=True trainable=219.21M reuse=False nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=False te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+[2026-09-20 09:19:56,175] [WARNING] [torch_autocast.py:122:autocast_if_enabled] torch.autocast is enabled outside DeepSpeed but disabled within the DeepSpeed engine. If you are using DeepSpeed's built-in mixed precision, the engine will follow the settings in bf16/fp16 section. To use torch's native autocast instead, configure the `torch_autocast` section in the DeepSpeed config.
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
+[rank0]:   File "<frozen runpy>", line 88, in _run_code
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/b0.py", line 17, in <module>
+[rank0]:     raise SystemExit(main_b0(sys.argv[1:]))
+[rank0]:                      ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/phase_train.py", line 299, in main_b0
+[rank0]:     return run_phase("B0", argv)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/phase_train.py", line 295, in run_phase
+[rank0]:     return train_main(built)
+[rank0]:            ^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/train.py", line 522, in main
+[rank0]:     tr.run()
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/trainer.py", line 975, in run
+[rank0]:     out = self._forward_loss(model, batch)
+[rank0]:           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/trainer.py", line 691, in _forward_loss
+[rank0]:     return model(**batch)
+[rank0]:            ^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1784, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/deepspeed/utils/nvtx.py", line 33, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:               ^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/deepspeed/runtime/engine.py", line 3047, in forward
+[rank0]:     loss = self.module(*inputs, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1773, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1879, in _call_impl
+[rank0]:     return inner()
+[rank0]:            ^^^^^^^
+[rank0]:   File "/root/miniconda3/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1827, in inner
+[rank0]:     result = forward_call(*args, **kwargs)
+[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/model.py", line 111, in forward
+[rank0]:     x, a = self._run_block(blk, x, input_ids, doc_ids)
+[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/model.py", line 76, in _run_block
+[rank0]:     if ckpt and any(t.requires_grad for t in tensors):
+[rank0]:                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[rank0]:   File "/root/autodl-tmp/CAT-YOKO/cat_yoko/model.py", line 76, in <genexpr>
+[rank0]:     if ckpt and any(t.requires_grad for t in tensors):
+[rank0]:                     ^^^^^^^^^^^^^^^
+[rank0]: AttributeError: 'NoneType' object has no attribute 'requires_grad'
+=== B0 Ampere 3090 BF16 2026-09-20T01:22:23Z ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB, 0 MiB
+Filesystem      Size  Used Avail Use% Mounted on
+overlay          30G  274M   30G   1% /
+/dev/md0         50G  5.2G   45G  11% /root/autodl-tmp
+torch 2.8.0+cu128 cuda 12.8 cap (8, 6)
+Hub overlay copy ok sha256=7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955 (read-only; will not write this file)
+resume (read-only Hub copy) /root/autodl-tmp/hub-b0-full
+save (new overlay, not Hub) /root/autodl-tmp/b0-3090-bf16
+B0 Ampere argv seq=4096 more-steps=8 (absolute --steps would no-op at Hub 26940) no-nvfp4 zero-3
+B0 argv: --config 12b --phase B0 --device cuda --dtype bf16 --seed 0 --save-dir /root/autodl-tmp/b0-3090-bf16 --keep-last 2 --no-save-full --save-trainable --no-save-optim --micro-batch 1 --accum 1 --grad-ckpt --no-offload-encoder --no-offload-blocks --no-optim-cpu --backend deepspeed --zero 3 --zero-offload --zero-offload-param --seq-len 4096 --more-steps 8 --tokens 8000000000.0 --save-every 2 --log-every 1 --log /root/autodl-tmp/b0-3090-bf16/metrics.jsonl --resume /root/autodl-tmp/hub-b0-full --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base --no-nvfp4 --dtype bf16
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 6114.08it/s]
+overlay resume /root/autodl-tmp/hub-b0-full/trainable.pt: 132 tensors ckpt_phase=B0 cli_phase=B0
+built CAT-YOKO-12B on cuda:0 dtype=bf16 params=0 alloc=0.09GiB grad_ckpt=True seq=4096 offload_enc=False offload_blocks=False optim_cpu=False adam=ds-cpu zero=3 ds=True zero_offload=True zero_offload_param=True trainable=219.21M reuse=False nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=False te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+[2026-09-20 09:23:11,879] [WARNING] [torch_autocast.py:122:autocast_if_enabled] torch.autocast is enabled outside DeepSpeed but disabled within the DeepSpeed engine. If you are using DeepSpeed's built-in mixed precision, the engine will follow the settings in bf16/fp16 section. To use torch's native autocast instead, configure the `torch_autocast` section in the DeepSpeed config.
+CAT-YOKO-12B B0 step 26941/26948 nll=11.9765 ppl=158981.9 aux=0.0000 gate=0.005 gn=0.00 moe_cv=0.73 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130045952 tok/s=484 mem=39286MiB
+CAT-YOKO-12B B0 step 26942/26948 nll=12.0019 ppl=163066.2 aux=0.0000 gate=0.005 gn=0.20 moe_cv=0.66 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130050048 tok/s=719 mem=41292MiB
+CAT-YOKO-12B B0 step 26943/26948 nll=11.9974 ppl=162330.6 aux=0.0000 gate=0.005 gn=0.20 moe_cv=0.69 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130054144 tok/s=695 mem=41292MiB
+CAT-YOKO-12B B0 step 26944/26948 nll=11.9774 ppl=159118.2 aux=0.0000 gate=0.005 gn=0.30 moe_cv=0.65 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130058240 tok/s=729 mem=41292MiB
+CAT-YOKO-12B B0 step 26945/26948 nll=11.9603 ppl=156426.0 aux=0.0000 gate=0.005 gn=0.24 moe_cv=0.65 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130062336 tok/s=728 mem=41292MiB
+CAT-YOKO-12B B0 step 26946/26948 nll=12.0093 ppl=164276.5 aux=0.0000 gate=0.005 gn=0.26 moe_cv=0.71 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130066432 tok/s=731 mem=41292MiB
+CAT-YOKO-12B B0 step 26947/26948 nll=12.0659 ppl=173843.6 aux=0.0000 gate=0.005 gn=0.33 moe_cv=0.65 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130070528 tok/s=730 mem=41292MiB
+CAT-YOKO-12B B0 step 26948/26948 nll=11.9634 ppl=156908.4 aux=0.0000 gate=0.005 gn=0.78 moe_cv=0.68 trainable=219.21M lr=2.60e-05 fp8=False nvfp4=False tok=130074624 tok/s=730 mem=41292MiB
+=== B0 Ampere 3090 exit 0 2026-09-20T01:24:35Z ===
+total 1.3G
+-rw-r--r-- 1 root root  16K Sep 20 09:24 b0_3090.log
+-rw-r--r-- 1 root root 7.0K Sep 20 09:24 metrics.jsonl
+-rw-r--r-- 2 root root 419M Sep 20 09:24 trainable.pt
+-rw-r--r-- 1 root root 419M Sep 20 09:24 trainable_step_26946.pt
+-rw-r--r-- 2 root root 419M Sep 20 09:24 trainable_step_26948.pt
+-r--r--r-- 1 root root 419M Sep 20 09:01 /root/autodl-tmp/hub-b0-full/trainable.pt
