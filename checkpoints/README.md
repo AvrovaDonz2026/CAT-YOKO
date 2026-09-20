@@ -7,6 +7,7 @@
 | [`b0/`](b0/) | 6000D `--try` 32 步新模块 overlay | ~419MiB | Hub `checkpoints/b0/` |
 | [`b0-nvfp4-try/`](b0-nvfp4-try/README.md) | 6000D NVFP4 wrap `--try` 2 步 | ~419MiB | Hub |
 | [`b0-full/`](b0-full/README.md) | **发布信封 B0**（8e9，进行中） | ~419MiB | Hub `checkpoints/b0-full/` |
+| [`b0-3090-bf16/`](b0-3090-bf16/README.md) | 3090 BF16 **sibling** 快照（不覆盖发布档） | ~419MiB | Hub `checkpoints/b0-3090-bf16/` |
 | [`b1/`](b1/README.md) | decoder + `lm_head` + 最终 RMSNorm | `--try` 后再上 Hub | Hub `checkpoints/b1/` |
 | [`b2/`](b2/README.md) | 全模型 overlay | `--try` 后再上 Hub | Hub `checkpoints/b2/` |
 

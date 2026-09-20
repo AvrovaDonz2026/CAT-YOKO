@@ -406,7 +406,7 @@ CSA/HCA **实现不后移、不删除**；后移的是**点亮**。KDA 也一样
 
 | 阶段 | 主要数据 | 量级（token） |
 | --- | --- | --- |
-| B 恢复 | **OpenBMB**：Ultra-FineWeb en 60% / zh 30% + UltraData-Math L2 10% | 50B 信封（prepare 按 `--max-tokens` 切片） |
+| B 恢复（思考） | Ultra-FineWeb en 55% / zh 30% + UltraData-Math L2 10% + StarCoder **5%** | 50B 信封（prepare 按 `--max-tokens` 切片；不拉 50B） |
 | C 稀疏化 | 与 B 同分布，偏长文档 | 20–50B |
 | D 长上下文 | 长文档、书籍、代码仓库级拼接、合成长依赖任务 | 20–60B |
 | E 退火 | 高质量精选 + 数学 + 代码 + 指令化 SFT 前体 | 20–50B |
@@ -416,7 +416,7 @@ CSA/HCA **实现不后移、不删除**；后移的是**点亮**。KDA 也一样
 要点：
 
 - **Tokenizer 必须是 MiniCPM5-2B**（`openbmb/MiniCPM5-2B`，`V=130560`）。不要用 MiniCPM3 / MiniCPM4 tokenizer，也不要用 MiniCPM-2B-sft-bf16 去喂 MiniCPM5 上采样图。Ultra-FineWeb 是 MiniCPM4 时代网页过滤集，**要重新 tokenize**。**本仓库不下载 Ultra-FineWeb 到小 VM / CI。**
-- 默认 mix `phase-b` 全是 OpenBMB。可选 `phase-b-code` 把 10% 换成 StarCoder（不是 OpenBMB；Ultra-FineWeb 论文评测 mix 用过 10% 代码）。
+- 默认 mix `phase-b`（思考 / B0–B2 / C）是 OpenBMB web+math **加 5% StarCoder**。模型要做代码工作，所以思考阶段不是 0% 代码；5% 是「不多加点」，不是 Phase D 的 25%。可选 `phase-b-code` 把代码提到 10%（Ultra-FineWeb 论文评测 mix）。StarCoder 不是 OpenBMB；**不在 CI / 小 VM 下载**。当前 3090 B0 仍走 DummyStream：同一 5% 用仓库内短 snippet 哈希铺行，不是 StarCoder 本体。
 - UltraChat / 指令对话留给 Phase F/G，不进 Phase B。
 - 实现：`python3 -m cat_yoko.prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8` → int32 packed mmap；`cat_yoko.train --data data/phaseb.bin --upcycle-hf openbmb/MiniCPM5-2B-Base`。sidecar `*.bin.meta.json` 带 `eos_id`。仓库 **不检入语料**。
 - 长上下文样本用文档拼接 + 合成"大海捞针/多跳"；严格去重与评测集去污。Ultra-FineWeb 许可证标 Apache 2.0，源网页版权仍按各站条款。

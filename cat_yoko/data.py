@@ -8,6 +8,7 @@ from typing import Iterator
 
 import torch
 
+from cat_yoko.recipe import THINK_CODE_FRAC, THINK_CODE_SNIPPETS
 from cat_yoko.sft import pack_sft_pairs
 
 
@@ -132,8 +133,27 @@ def pack_documents(
     return out
 
 
+def utf8_tile_ids(text: str, vocab_size: int, seq_len: int, eos_id: int = 2) -> list[int]:
+    """Byte-hash a snippet and tile to ``seq_len``. Skip ``eos_id`` so the row stays one doc."""
+    n = max(int(vocab_size), 1)
+    eos = int(eos_id) % n
+    body: list[int] = []
+    for b in text.encode("utf-8") or b"\x00":
+        t = int(b) % n
+        if t == eos:
+            t = (t + 1) % n
+        body.append(t)
+    if not body:
+        body = [(eos + 1) % n]
+    return (body * ((int(seq_len) // len(body)) + 1))[: int(seq_len)]
+
+
 class DummyStream:
-    """Infinite random single-document sequences (smoke / L0)."""
+    """Infinite single-document sequences for smoke / thinking DummyStream.
+
+    Default thinking mix matches ``THINK_CODE_FRAC`` (modest hashed code snippets).
+    Needle / SFT dummy rows stay uniform random unless ``code_frac`` is set.
+    """
 
     def __init__(
         self,
@@ -146,6 +166,7 @@ class DummyStream:
         response_only: bool = False,
         prompt_frac: float = 0.5,
         needle: bool = False,
+        code_frac: float | None = None,
     ) -> None:
         self.vocab_size = vocab_size
         self.seq_len = seq_len
@@ -156,15 +177,26 @@ class DummyStream:
         self.response_only = bool(response_only)
         self.prompt_frac = float(prompt_frac)
         self.needle = bool(needle)
+        if code_frac is None:
+            code_frac = 0.0 if (self.needle or self.response_only) else float(THINK_CODE_FRAC)
+        self.code_frac = float(code_frac)
+        if not 0.0 <= self.code_frac <= 1.0:
+            raise ValueError(f"code_frac must be in [0, 1], got {self.code_frac}")
 
     def state_dict(self) -> dict:
-        return {"kind": "dummy", "gen": self.gen.get_state()}
+        return {"kind": "dummy", "gen": self.gen.get_state(), "code_frac": self.code_frac}
 
     def load_state_dict(self, st: dict) -> None:
         if st.get("kind") not in (None, "dummy"):
             return
         if st.get("gen") is not None:
             self.gen.set_state(st["gen"].cpu())
+
+    def _code_row(self, u: float) -> torch.Tensor:
+        n = len(THINK_CODE_SNIPPETS)
+        idx = min(int(float(u) * n), n - 1)
+        ids = utf8_tile_ids(THINK_CODE_SNIPPETS[idx], self.vocab_size, self.seq_len)
+        return torch.tensor(ids, dtype=torch.long)
 
     def batch(self, micro_batch: int, device: str) -> dict[str, torch.Tensor]:
         ids = torch.randint(
@@ -173,6 +205,12 @@ class DummyStream:
             (micro_batch, self.seq_len),
             generator=self.gen,
         )
+        if self.code_frac > 0:
+            gate = torch.rand((micro_batch,), generator=self.gen)
+            pick = torch.rand((micro_batch,), generator=self.gen)
+            for i in range(micro_batch):
+                if float(gate[i]) < self.code_frac:
+                    ids[i] = self._code_row(float(pick[i]))
         if self.needle and self.seq_len >= 2:
             mid = self.seq_len // 2
             ids[:, mid] = self.vocab_size - 1
@@ -448,6 +486,7 @@ def open_stream(
     response_only: bool = False,
     prompt_frac: float = 0.5,
     needle: bool = False,
+    code_frac: float | None = None,
 ) -> DummyStream | FileStream | PackedBinStream:
     world = max(int(world), 1)
     rank = int(rank) % world
@@ -461,6 +500,7 @@ def open_stream(
             response_only=response_only,
             prompt_frac=prompt_frac,
             needle=needle,
+            code_frac=code_frac,
         )
     path = Path(data)
     eos = resolve_eos(path, eos_id)

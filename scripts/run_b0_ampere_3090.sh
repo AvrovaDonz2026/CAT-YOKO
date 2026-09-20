@@ -4,7 +4,8 @@
 # Does not overwrite Hub checkpoints/b0-full (step 26940 / sha256 7eebc9a4…).
 # Hub copy is always verified read-only. SAVE is a sibling. Same-dir resume is
 # allowed on that sibling (STEPS=0 keeps going toward 8e9).
-# DummyStream only. Does not download Ultra-FineWeb. Does not persist a full-graph checkpoint.
+# DummyStream only (thinking mix: 5% hashed code snippets). Does not download Ultra-FineWeb.
+# Does not persist a full-graph checkpoint.
 # Ampere has no FP4 tensor core: --no-nvfp4 (published C1+NVFP4 wall-clock is unchanged).
 # ZeRO-3 + CPU offload to fit 24.5GiB weights. Not Megatron. Not a CSA kernel.
 set -euo pipefail
@@ -34,7 +35,8 @@ SAVE="${SAVE:-$WORK/b0-3090-bf16}"
 LOG="${LOG:-$WORK/b0-3090-bf16/b0_3090.log}"
 LOCAL="${LOCAL:-$WORK/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
-SAVE_EVERY="${SAVE_EVERY:-2}"
+# 50 步约 4–5 分钟一次 ZeRO-3 gather，GPU 占用会掉到 0 约 6s。
+SAVE_EVERY="${SAVE_EVERY:-200}"
 KEEP_LAST="${KEEP_LAST:-2}"
 # STEPS is extra optimizer steps after resume. 0 = run until the 8e9 envelope
 # (or the instance dies). --steps is an absolute cap; Hub is already 26940.

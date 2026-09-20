@@ -39,6 +39,7 @@ Vast B200 **已回收**。下表是 2026-09-19T06:44Z 释放前快照，不是�
 
 - `checkpoints/b0/` — 6000D `--try` 32 步，**不是** 8e9 信封
 - `checkpoints/b0-nvfp4-try/` — 6000D NVFP4 wrap 2 步
+- `checkpoints/b0-3090-bf16/` — RTX 3090 BF16 sibling 快照（step **27400**）。**不是**发布口径，不覆盖 `b0-full`
 - `checkpoints/b1/`、`checkpoints/b2/` — 尚未上传（等 GPU）
 
 日志：GitHub [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md)、[`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md)。

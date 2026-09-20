@@ -26,7 +26,17 @@ from cat_yoko.data import (
 )
 from cat_yoko.hf_minicpm import _unwrap_state, load_minicpm_state
 from cat_yoko.prepare import iter_hf_texts, iter_local_jsonl, main as prepare_main, mix_documents, prepare
-from cat_yoko.recipe import MIXES, PHASE_B, PHASE_B_WITH_CODE, PHASE_D, PHASE_E, default_mix, mix_named
+from cat_yoko.recipe import (
+    MIXES,
+    PHASE_B,
+    PHASE_B_WITH_CODE,
+    PHASE_D,
+    PHASE_E,
+    THINK_CODE_FRAC,
+    default_mix,
+    mix_code_weight,
+    mix_named,
+)
 from cat_yoko.tokenizer import HashTokenizer, load_tokenizer
 from cat_yoko.train import main as train_main
 from cat_yoko.trainer import Trainer
@@ -42,14 +52,23 @@ def _long_text(n: int = 8) -> str:
 
 
 class RecipeTests(unittest.TestCase):
-    def test_phase_b_is_all_openbmb_and_sums_to_one(self) -> None:
+    def test_phase_b_thinking_mix_has_modest_code(self) -> None:
         self.assertAlmostEqual(sum(s.weight for s in PHASE_B), 1.0)
-        self.assertTrue(all(s.repo.startswith("openbmb/") for s in PHASE_B))
+        self.assertAlmostEqual(mix_code_weight(PHASE_B), THINK_CODE_FRAC)
+        self.assertAlmostEqual(THINK_CODE_FRAC, 0.05)
         keys = {s.key for s in PHASE_B}
-        self.assertEqual(keys, {"ultrafineweb-en", "ultrafineweb-zh", "ultradata-math"})
+        self.assertEqual(keys, {"ultrafineweb-en", "ultrafineweb-zh", "ultradata-math", "starcoder"})
+        openbmb = [s for s in PHASE_B if s.repo.startswith("openbmb/")]
+        self.assertAlmostEqual(sum(s.weight for s in openbmb), 1.0 - THINK_CODE_FRAC)
+        by_key = {s.key: s.weight for s in PHASE_B}
+        self.assertAlmostEqual(by_key["ultrafineweb-en"], 0.55)
+        self.assertAlmostEqual(by_key["ultrafineweb-zh"], 0.30)
+        self.assertAlmostEqual(by_key["ultradata-math"], 0.10)
 
     def test_code_mix_is_optional_extra(self) -> None:
         self.assertAlmostEqual(sum(s.weight for s in PHASE_B_WITH_CODE), 1.0)
+        self.assertAlmostEqual(mix_code_weight(PHASE_B_WITH_CODE), 0.10)
+        self.assertGreater(mix_code_weight(PHASE_B_WITH_CODE), mix_code_weight(PHASE_B))
         self.assertTrue(any(s.repo == "bigcode/starcoderdata" for s in PHASE_B_WITH_CODE))
         self.assertIn("phase-b", MIXES)
         self.assertIn("phase-b-code", MIXES)
@@ -58,6 +77,7 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(MIXES["phase-c"], PHASE_B)
         self.assertEqual(MIXES["phase-d"], PHASE_D)
         self.assertAlmostEqual(sum(s.weight for s in PHASE_D), 1.0)
+        self.assertAlmostEqual(mix_code_weight(PHASE_D), 0.25)
         self.assertTrue(any(s.key == "starcoder" for s in PHASE_D))
         self.assertIn("phase-e", MIXES)
         self.assertIn("phase-g", MIXES)

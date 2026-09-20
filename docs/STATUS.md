@@ -11,7 +11,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | 项 | 值 |
 | --- | --- |
 | 阶段 | C1 **B0**（encoder 冻结，只训新模块 ≈219.21M / 132 张量） |
-| 信封 | 8e9 tokens，`seq=4096`，DummyStream（未拉 50B Ultra-FineWeb） |
+| 信封 | 8e9 tokens，`seq=4096`，DummyStream（思考 mix 5% 短代码 snippet；未拉 50B Ultra-FineWeb / StarCoder） |
 | Hub overlay | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
 | step | **26940** |
 | tokens_in_phase | 130,041,856（≈1.63% of 8e9） |
@@ -32,7 +32,7 @@ CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 Dumm
 | RTX 4080 SUPER | 图 / `--try` 烟测 | 已释放；日志 [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
 | RTX 6000D sm_120 | 发布档 B0 开跑（NVFP4 **仿真**） | step **16020**，`tokens_in_phase=65,488,896`；日志 [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
 | Vast B200 SM 10.0 | 发布档 B0 续训（硬件 NVFP4 FPROP） | step **26940**；日志 [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
-| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline；B0 BF16 **sibling** 续训 8 步 | **142 claims ok**；Flash **85%** / MoE bmm **81%**。滑窗 `BANDED_SEQ_MIN=2048`。Hub `b0-full` step **26940** / sha256 `7eebc9a4…` **未改、未上传**。本地 SAVE 到过 step 26948（未发布）。日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)、[`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md) |
+| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline；B0 BF16 **sibling** 续训 | **142 claims ok**；Flash **85%** / MoE bmm **81%**。滑窗 `BANDED_SEQ_MIN=2048`。Hub **发布档**仍是 `b0-full` step **26940** / `7eebc9a4…`。3090 快照另存 Hub [`checkpoints/b0-3090-bf16/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) step **27400** / `4951c637…`。`SAVE_EVERY=200`。日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)、[`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md) |
 
 同阶段 resume：`tokens_in_phase` 按 8192/step 接着加。step **22100** 时是 90,392,576。
 
