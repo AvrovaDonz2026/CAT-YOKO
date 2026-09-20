@@ -742,7 +742,7 @@ def _ops_source_claims() -> list[Claim]:
             "attention",
             "_banded_window_sdpa" in inspect.getsource(attn)
             and "_window_sdpa" in inspect.getsource(attn.WindowAttention.forward),
-            "covering Flash; else w×2w tiles; CSA union still S×S",
+            "covering Flash; else fat tiles 256 (seq>=512); CSA union still S×S",
             "do not materialize S×S for a static sliding window",
         ),
     ]

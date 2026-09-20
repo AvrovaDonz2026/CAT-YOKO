@@ -13,10 +13,12 @@ WORK="${WORK:-/root/autodl-tmp}"
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
-export HF_ENDPOINT="${HF_ENDPOINT:-https://huggingface.co}"
+# MiniCPM5: leave HF_ENDPOINT unset so download_minicpm5.py can pick
+# hf-mirror on AutoDL. Hub overlay is a user repo on huggingface.co.
 export HF_HOME="${HF_HOME:-$WORK/.hf_home}"
 export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$HF_HOME/hub}"
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
+HUB_SHA="${HUB_SHA:-7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955}"
 if [[ -z "${PY:-}" ]]; then
   if [[ -x /root/miniconda3/bin/python3 ]]; then
     PY=/root/miniconda3/bin/python3
@@ -80,12 +82,22 @@ fi
 
 if [[ ! -f "$RESUME/trainable.pt" ]]; then
   echo "pull Hub b0-full overlay into read copy $RESUME"
-  "$PY" "$ROOT/scripts/download_hub_overlay.py" --name b0-full --out-dir "$RESUME" || {
+  HF_ENDPOINT="${HUB_ENDPOINT:-https://huggingface.co}" \
+    "$PY" "$ROOT/scripts/download_hub_overlay.py" --name b0-full --out-dir "$RESUME" || {
     echo "Hub overlay download failed; refusing a fresh upcycle that would drop step 26940" >&2
     exit 2
   }
 fi
+got=$("$PY" -c "import hashlib,sys; h=hashlib.sha256();
+f=open(sys.argv[1],'rb');
+[h.update(c) for c in iter(lambda:f.read(1<<20), b'')];
+print(h.hexdigest())" "$RESUME/trainable.pt")
+if [[ "$got" != "$HUB_SHA" ]]; then
+  echo "Hub copy sha256 $got != $HUB_SHA; refusing to train on a mutated overlay" >&2
+  exit 2
+fi
 chmod a-w "$RESUME/trainable.pt" 2>/dev/null || true
+echo "Hub overlay copy ok sha256=$got (read-only; will not write this file)"
 
 echo "resume (read-only Hub copy) $RESUME"
 echo "save (new overlay, not Hub) $SAVE"

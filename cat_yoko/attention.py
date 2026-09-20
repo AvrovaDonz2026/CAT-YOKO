@@ -41,8 +41,13 @@ _LAST_SDPA = {"kind": "uninit", "dtype": ""}
 _SDPA_COUNTS = {"dense": 0, "masked_bf16": 0, "math_fp32": 0}
 # Ampere 3090: Efficient SDPA wins below this seq; cuDNN wins at 384+.
 MASKED_SDPA_SWITCH_SEQ = 320
-# Below this width, w×2w tiles are launch-bound; keep the S×S mask.
+# Below this width, tiles are launch-bound; keep the S×S mask.
 BANDED_WINDOW_MIN = 16
+# Ampere fused SDPA wants fat tiles. Tiling by ``n_win`` itself (e.g. 32)
+# launches dozens of 32×64 kernels and loses to one S×S mask.
+BANDED_TILE = 256
+# S×S mask is cheaper than many tiles until the sequence is long enough.
+BANDED_SEQ_MIN = 512
 _WINDOW_BIAS_CACHE: dict[tuple, torch.Tensor] = {}
 _WINDOW_BIAS_BYTES = 0
 _WINDOW_BIAS_BUDGET = 256 << 20
@@ -273,9 +278,11 @@ def _use_banded_window(q_len: int, k_len: int, window: int) -> bool:
 
     CSA/HCA union masks are not a band — those stay on ``_sdpa(..., bias)``.
     Published B0 ``n_win=8192 >= seq=4096`` never takes this path (dense Flash).
+    Short seq stays on one S×S fused kernel (tile-by-window was a launch trap).
     """
+    s = int(q_len)
     w = int(window)
-    return k_len == q_len and w >= BANDED_WINDOW_MIN and w < int(q_len)
+    return k_len == s and w >= BANDED_WINDOW_MIN and w < s and s >= BANDED_SEQ_MIN
 
 
 def _window_causal_bias(
@@ -321,30 +328,22 @@ def _window_causal_bias(
     return bias.unsqueeze(1)
 
 
-def _banded_window_bias(window: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-    """Static ``[w, 2w]`` keep-set for tiled sliding window (prev block | curr block).
-
-    Query local ``i`` sees previous-block key ``j`` iff ``j >= i+1`` (the token
-    one window behind is just outside), and current-block key ``j`` iff ``j <= i``.
-    """
-    global _WINDOW_BIAS_BYTES
-    w = int(window)
-    dev = torch.device(device)
-    key = ("banded", w, dev.type, dev.index, str(dtype))
-    hit = _WINDOW_BIAS_CACHE.get(key)
-    if hit is not None:
-        return hit
-    i = torch.arange(w, device=device)[:, None]
-    j = torch.arange(w, device=device)[None, :]
-    keep = torch.cat((j >= (i + 1), j <= i), dim=-1)
-    bias = torch.zeros(w, 2 * w, device=device, dtype=dtype)
-    bias = bias.masked_fill(~keep, torch.finfo(dtype).min)
-    nbytes = int(bias.numel() * bias.element_size())
-    if _WINDOW_BIAS_BYTES + nbytes > _WINDOW_BIAS_BUDGET:
-        reset_window_bias_cache()
-    _WINDOW_BIAS_CACHE[key] = bias
-    _WINDOW_BIAS_BYTES += nbytes
-    return bias
+def _tile_keep(
+    n: int,
+    tile: int,
+    lookback: int,
+    window: int,
+    seq: int,
+    device: torch.device,
+) -> torch.Tensor:
+    """``[n, tile, lookback+tile]`` bool: padded-left keys for each query tile."""
+    k_width = lookback + tile
+    i = torch.arange(tile, device=device)[None, :, None]
+    j = torch.arange(k_width, device=device)[None, None, :]
+    q0 = (torch.arange(n, device=device) * tile)[:, None, None]
+    gq = q0 + i
+    gk = q0 - lookback + j
+    return (gk >= 0) & (gk <= gq) & ((gq - gk) < int(window)) & (gq < int(seq))
 
 
 def _banded_window_sdpa(
@@ -353,40 +352,42 @@ def _banded_window_sdpa(
     v: torch.Tensor,
     window: int,
 ) -> torch.Tensor:
-    """Causal sliding window as first-block Flash + batched ``w×2w`` SDPA.
+    """Causal sliding window as batched fat tiles, not ``n_win×2 n_win`` crumbs.
 
-    Same keep-set as ``_window_causal_bias`` without materializing ``S×S``.
-    Not a CSA kernel; extra_bias / packed docs stay on the full mask path.
+    Query tiles of ``BANDED_TILE`` (or ``n_win`` if larger) attend to
+    ``lookback + tile`` keys with a static keep-set. Same keep-set as
+    ``_window_causal_bias``. Left-padded dummy keys on tile 0 are masked out.
     """
     b, hq, s, d = q.shape
     hk = k.size(-3)
     w = int(window)
-    pad = (w - (s % w)) % w
-    if pad:
-        q = F.pad(q, (0, 0, 0, pad))
-        k = F.pad(k, (0, 0, 0, pad))
-        v = F.pad(v, (0, 0, 0, pad))
+    tile = min(s, max(w, BANDED_TILE))
+    if tile >= s:
+        bias = _window_causal_bias(s, s, w, q.device, q.dtype, None)
+        return _sdpa(q, k, v, bias)
+    lookback = w - 1
+    k_width = lookback + tile
+    pad = (tile - (s % tile)) % tile
+    q_pad = F.pad(q, (0, 0, 0, pad))
+    k_pad = F.pad(k, (0, 0, lookback, pad))
+    v_pad = F.pad(v, (0, 0, lookback, pad))
     s_pad = s + pad
-    n = s_pad // w
-    y0 = _sdpa(q[:, :, :w], k[:, :, :w], v[:, :, :w], causal=True)
-    if n == 1:
-        return y0[:, :, :s]
-    n_rest = n - 1
-    q_b = q[:, :, w:].reshape(b, hq, n_rest, w, d)
-    k_curr = k[:, :, w:].reshape(b, hk, n_rest, w, d)
-    v_curr = v[:, :, w:].reshape(b, hk, n_rest, w, d)
-    k_prev = k[:, :, : s_pad - w].reshape(b, hk, n_rest, w, d)
-    v_prev = v[:, :, : s_pad - w].reshape(b, hk, n_rest, w, d)
-    k_cat = torch.cat((k_prev, k_curr), dim=3)
-    v_cat = torch.cat((v_prev, v_curr), dim=3)
-    q_flat = q_b.permute(0, 2, 1, 3, 4).reshape(b * n_rest, hq, w, d)
-    k_flat = k_cat.permute(0, 2, 1, 3, 4).reshape(b * n_rest, hk, 2 * w, d)
-    v_flat = v_cat.permute(0, 2, 1, 3, 4).reshape(b * n_rest, hk, 2 * w, d)
-    y_rest = _sdpa(q_flat, k_flat, v_flat, _banded_window_bias(w, q.device, q.dtype))
-    y_rest = y_rest.reshape(b, n_rest, hq, w, d).permute(0, 2, 1, 3, 4).reshape(
-        b, hq, n_rest * w, d
-    )
-    return torch.cat((y0, y_rest), dim=2)[:, :, :s]
+    n = s_pad // tile
+    q_b = q_pad.reshape(b, hq, n, tile, d)
+    k_unf = k_pad.unfold(2, k_width, tile).permute(0, 1, 2, 4, 3).contiguous()
+    v_unf = v_pad.unfold(2, k_width, tile).permute(0, 1, 2, 4, 3).contiguous()
+    q_flat = q_b.permute(0, 2, 1, 3, 4).reshape(b * n, hq, tile, d)
+    k_flat = k_unf.permute(0, 2, 1, 3, 4).reshape(b * n, hk, k_width, d)
+    v_flat = v_unf.permute(0, 2, 1, 3, 4).reshape(b * n, hk, k_width, d)
+    keep = _tile_keep(n, tile, lookback, w, s, q.device)
+    bias = torch.zeros(n, tile, k_width, device=q.device, dtype=q.dtype)
+    bias = bias.masked_fill(~keep, torch.finfo(q.dtype).min)
+    bias = bias.unsqueeze(1).expand(n, 1, tile, k_width)
+    # One row of tiles per original batch item; repeat bias across batch.
+    bias = bias.repeat(b, 1, 1, 1)
+    y = _sdpa(q_flat, k_flat, v_flat, bias)
+    y = y.reshape(b, n, hq, tile, d).permute(0, 2, 1, 3, 4).reshape(b, hq, n * tile, d)
+    return y[:, :, :s]
 
 
 def _window_sdpa(

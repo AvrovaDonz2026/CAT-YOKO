@@ -190,6 +190,8 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("--resume", text)
         self.assertIn("Does not overwrite Hub", text)
         self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertIn("7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955", text)
+        self.assertIn("mutated overlay", text)
         self.assertNotIn("push_to_hf", text)
         self.assertNotRegex(text, r"--save-full")
         self.assertTrue((ROOT / "scripts" / "run_b0_ampere_3090.sh").stat().st_mode & 0o111)

@@ -18,7 +18,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import torch
 
 import cat_yoko.attention as attn_mod
-from cat_yoko.attention import CrossAttention, WindowAttention, _fused_qkv, _sdpa, _window_causal_bias, _window_sdpa
+from cat_yoko.attention import (
+    BANDED_SEQ_MIN,
+    BANDED_TILE,
+    CrossAttention,
+    WindowAttention,
+    _banded_window_sdpa,
+    _fused_qkv,
+    _sdpa,
+    _use_banded_window,
+    _window_causal_bias,
+    _window_sdpa,
+)
 from cat_yoko.config import CATYokoConfig, KEEP_HIGH_PREC, NVFP4_GEMM_SLOTS
 from cat_yoko.freeze import apply_freeze
 from cat_yoko.model import CATYokoForCausalLM
@@ -318,16 +329,48 @@ class SdpaNumericTests(unittest.TestCase):
 
 
 class BandedWindowTests(unittest.TestCase):
-    def test_banded_matches_sxs_mask_gqa(self) -> None:
+    def test_use_banded_window_gates(self) -> None:
+        self.assertEqual(BANDED_TILE, 256)
+        self.assertEqual(BANDED_SEQ_MIN, 512)
+        self.assertFalse(_use_banded_window(64, 64, 16))
+        self.assertFalse(_use_banded_window(4096, 4096, 8192))
+        self.assertTrue(_use_banded_window(BANDED_SEQ_MIN, BANDED_SEQ_MIN, 32))
+        self.assertFalse(_use_banded_window(BANDED_SEQ_MIN, BANDED_SEQ_MIN + 8, 32))
+
+    def test_short_seq_stays_sxs_mask_gqa(self) -> None:
         torch.manual_seed(0)
-        b, h, kv, s, w, hd = 2, 4, 2, 40, 16, 8
+        b, h, kv, s, w, hd = 1, 2, 1, 64, 16, 8
         q = torch.randn(b, h, s, hd)
         k = torch.randn(b, kv, s, hd)
         v = torch.randn(b, kv, s, hd)
         bias = _window_causal_bias(s, s, w, q.device, torch.float32)
         ref = _sdpa(q, k, v, bias)
-        got = _window_sdpa(q, k, v, w)
+        with patch.object(attn_mod, "_banded_window_sdpa") as spy:
+            got = _window_sdpa(q, k, v, w)
+        spy.assert_not_called()
         self.assertTrue(torch.allclose(got, ref, atol=2e-4, rtol=2e-4))
+
+    def test_fat_tile_banded_matches_mask(self) -> None:
+        torch.manual_seed(0)
+        b, h, kv, s, w, hd = 1, 2, 1, BANDED_SEQ_MIN, 32, 8
+        q = torch.randn(b, h, s, hd)
+        k = torch.randn(b, kv, s, hd)
+        v = torch.randn(b, kv, s, hd)
+        bias = _window_causal_bias(s, s, w, q.device, torch.float32)
+        ref = _sdpa(q, k, v, bias)
+        got = _banded_window_sdpa(q, k, v, w)
+        self.assertTrue(torch.allclose(got, ref, atol=3e-4, rtol=3e-4))
+
+    def test_fat_tile_handles_remainder_seq(self) -> None:
+        torch.manual_seed(1)
+        b, h, kv, s, w, hd = 2, 2, 1, BANDED_SEQ_MIN + 8, 32, 8
+        q = torch.randn(b, h, s, hd)
+        k = torch.randn(b, kv, s, hd)
+        v = torch.randn(b, kv, s, hd)
+        bias = _window_causal_bias(s, s, w, q.device, torch.float32)
+        ref = _sdpa(q, k, v, bias)
+        got = _banded_window_sdpa(q, k, v, w)
+        self.assertTrue(torch.allclose(got, ref, atol=3e-4, rtol=3e-4))
 
     def test_covering_window_stays_causal_flash(self) -> None:
         torch.manual_seed(1)
