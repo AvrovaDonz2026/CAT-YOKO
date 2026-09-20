@@ -10,14 +10,14 @@ https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16
 | --- | --- |
 | 文件 | `trainable.pt`（weights-only overlay，约 419MiB） |
 | 阶段 | B0 |
-| step | 27400 |
-| tokens_in_phase | 131,926,016（信封 8e9 的 ≈1.65%） |
+| step | 28600 |
+| tokens_in_phase | 136,841,216（信封 8e9 的 ≈1.71%） |
 | seq | 4096 |
-| sha256 | `4951c6373f3438cc29a735c2ffcbfb57dd4c315c9cc3f8a515abe33ec7b14143` |
+| sha256 | `46ef6f99df2a94e5a1a1b98a4c7a675b2f7e45aaa1563631f134f3d33613a728` |
 | 可训练张量 | 132（无 Adam） |
 | 机器 | AutoDL RTX 3090 sm_86 |
 | 运行时 | BF16，`--backend deepspeed --zero 3 --zero-offload --zero-offload-param` |
-| 吞吐 / 显存 | ~730 tok/s，Trainer ~41GiB |
+| 吞吐 / 显存 | occupancy v2 ~720 tok/s（`adam=ds-cpuadam`），Trainer ~44GiB |
 | 说明 | DummyStream（思考 5% 哈希代码行）；student bf16。从 Hub `b0-full` 26940 接到 sibling。同阶段 resume 保留 `tokens_in_phase`。 |
 
 ```bash

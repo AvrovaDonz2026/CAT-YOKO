@@ -148,7 +148,7 @@ class B200LauncherTests(unittest.TestCase):
         src = overlay.read_text()
         self.assertIn("7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955", src)
         self.assertIn("b0-3090-bf16", src)
-        self.assertIn("4951c6373f3438cc29a735c2ffcbfb57dd4c315c9cc3f8a515abe33ec7b14143", src)
+        self.assertIn("46ef6f99df2a94e5a1a1b98a4c7a675b2f7e45aaa1563631f134f3d33613a728", src)
         self.assertIn("AvrovaDonz/CAT-YOKO", src)
 
     def test_pull_vast_overlay_script(self) -> None:
@@ -173,7 +173,7 @@ class B200LauncherTests(unittest.TestCase):
         self.assertIn("8e9", status)
         self.assertIn("b0-full", status)
         self.assertIn("b0-3090-bf16", status)
-        self.assertIn("27400", status)
+        self.assertIn("28600", status)
         self.assertNotIn("137.175.", status)
         self.assertNotIn("westc.seetacloud", status)
         root = (ROOT / "README.md").read_text()
