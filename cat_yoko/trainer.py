@@ -11,7 +11,7 @@ import time
 # Before importing torch: ZeRO param-offload H2D must share the GPU with GEMM.
 # DeepSpeed/NCCL often pins CUDA_DEVICE_MAX_CONNECTIONS=1, which serializes
 # memcpy behind compute and shows up as GPU util dropping to 0%.
-os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "8")
+os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "32")
 os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
 os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")

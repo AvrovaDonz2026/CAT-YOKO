@@ -136,6 +136,14 @@ def zero_config(
         # (measured ~45.6/49.1GiB with the old 50e6 bucket).
         zero["stage3_prefetch_bucket_size"] = 500_000_000
         zero["reduce_bucket_size"] = 500_000_000
+        # MoE top-k order changes every step. ZeRO-3 traces the last forward
+        # and prefetches the wrong expert, so SM sits at 0% ~1s while PCIe
+        # catches up. Leaf modules prefetch all children on entry (DeepSpeed
+        # Mixtral recipe). Do not persist experts; this only changes fetch
+        # granularity. Class names match __class__.__name__.
+        zero["leaf_module"] = {
+            "classes": ["MoE", "EncoderBlock", "DecoderBlock"],
+        }
     cfg: dict[str, Any] = {
         "train_micro_batch_size_per_gpu": int(max(train_micro_batch_size_per_gpu, 1)),
         "gradient_accumulation_steps": int(max(gradient_accumulation_steps, 1)),
@@ -229,7 +237,7 @@ def seed_single_process_rank_env() -> None:
     os.environ.setdefault("RANK", "0")
     os.environ.setdefault("WORLD_SIZE", "1")
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
-    os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "8")
+    os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "32")
     if "MASTER_PORT" not in os.environ:
         from cat_yoko.dist_util import free_tcp_port
 

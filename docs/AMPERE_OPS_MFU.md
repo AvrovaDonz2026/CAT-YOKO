@@ -52,11 +52,11 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 1. **ZeRO 预取被 live cap 掐掉**（默认 `stage3_max_live_parameters=1e9`）——一层冻结 MoE ~0.75e9，再加 0.5e9 预取桶就超了，预取静默不跑，每步 GPU 空约 1s。现 `max_live/reuse=2e9`，预取桶 **5e8**。`persistence` 留 **1e6**：5e6 会把全部 2048×2048 Q/O 钉在卡上，3090 第一步 `persistent all_gather` 在 47.34/47.41 GiB OOM。专家 12.6e6 仍 offload。
 2. **CPU Adam 太慢**——ZeRO-3 把 student 切成碎片，torch AdamW 每步 ~1s，nvidia-smi 打成 0%。走 **DeepSpeedCPUAdam**（仍是两组 decay / no-decay，不 `zero_force` 压扁）。算子要 JIT：3090 脚本把 miniconda `ninja` 放进 PATH，并用系统 `libstdc++`（GLIBCXX_3.4.30）preload。装不上就回退 torch AdamW，banner 仍是 `adam=ds-cpu`。
 3. **每步 D2H**（nll / DS grad-norm / moe_utilization / `cuda.get_rng_state_all`）。`LOG_EVERY=20`；CUDA RNG 只在存盘时拍。
-4. **torch inductor 32 workers** 抢 CPU。`TORCH_COMPILE_DISABLE=1`。`CUDA_DEVICE_MAX_CONNECTIONS=8`。
+4. **torch inductor 32 workers** 抢 CPU。`TORCH_COMPILE_DISABLE=1`。`CUDA_DEVICE_MAX_CONNECTIONS=32`。MoE top-k 顺序每步都变，ZeRO 按上次 trace 预取会 miss、SM 空约 1s。`leaf_module` 把 `MoE` / `EncoderBlock` / `DecoderBlock` 当整块 prefetch（进模块一次拉齐子层），不 persist 专家。
 5. DummyStream `doc_ids` 留 host；下一批 H2D 和 backward 重叠。MoE `counts.max()` 侧流藏进共享专家。
 6. **ZeRO 预热**：wrap 之后、计时循环之前跑一次合成 batch 的 fwd+bwd（**不** `engine.step()`，RNG 复原）。把 allgather 轨迹记录和 kernel JIT 从第一步 404 tok/s 挪走。中间那长段 ~647 tok/s 不是冷启动，是预取被 live cap 掐掉 + torch CPU Adam；预热补不回那一段，occupancy v2 已经拉回 ~719。
 
-不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 只 gather 132 个可训练张量；不要走 DeepSpeed 的全图 `_zero3_consolidated_16bit_state_dict`（`exclude_frozen` 仍会按层 allgather 冻结 12B，PCIe 空 6s、SM 0%）。步进里仍会闪 **约 1s** SM 0%：功耗还在 260–300W，是冻结专家 H2D，不是 kernel 停了。
+不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 只 gather 132 个可训练张量；不要走 DeepSpeed 的全图 `_zero3_consolidated_16bit_state_dict`（`exclude_frozen` 仍会按层 allgather 冻结 12B，PCIe 空 6s、SM 0%）。步进里仍会闪 **约 1s** SM 0% 的，是冻结专家 H2D 没和 GEMM 重叠（功耗仍 260–300W）。leaf 块预取是为了把这种闪的**次数**压下去，不是把 PCIe 关掉。不要关 param offload。
 
 ## 滑窗交叉（3090，2026-09-20T01:06Z，H=16 hd=128 equal-head）
 
