@@ -107,7 +107,7 @@ def zero_config(
         zero["offload_optimizer"] = {
             "device": "cpu",
             "pin_memory": True,
-            "buffer_count": 4,
+            "buffer_count": 8,
         }
     if offload_param:
         # Extra pinned buffers so the next MoE layer can H2D while GEMM runs.
@@ -118,7 +118,14 @@ def zero_config(
         }
     if stage_i == 3:
         zero["stage3_gather_16bit_weights_on_model_save"] = True
-        zero["stage3_param_persistence_threshold"] = 1_000_000
+        # 2048×2048 attn / student Q,O stay on GPU. Experts are 2048×6144
+        # (12.6e6) and stay offloaded. Default 1e6 streamed every Q/O.
+        zero["stage3_param_persistence_threshold"] = 5_000_000
+        # Default max_live=1e9 (~2GiB). One frozen MoE layer is ~0.75e9 plus
+        # a 0.5e9 prefetch bucket, so the default silently dropped prefetch
+        # and GPU util fell to 0% for ~1s every step.
+        zero["stage3_max_live_parameters"] = 2_000_000_000
+        zero["stage3_max_reuse_distance"] = 2_000_000_000
         # 50e6 (~100MiB bf16) starved Ampere: a frozen MoE layer is ~1.5GiB
         # experts and GPU util dropped to 0 waiting on PCIe. DeepSpeed default
         # is 5e8 (~1GiB bf16). 3090 ZeRO-3+offload leaves ~3GiB headroom
@@ -131,7 +138,8 @@ def zero_config(
         "gradient_clipping": float(gradient_clipping),
         "zero_optimization": zero,
         "zero_allow_untested_optimizer": True,
-        # Keep torch AdamW + router no-decay groups; do not swap DeepSpeedCPUAdam.
+        # Trainer passes DeepSpeedCPUAdam (two param groups) when available.
+        # Do not let ZeRO flatten them into a single decay group.
         "zero_force_ds_cpu_optimizer": False,
         "steps_per_print": 2_147_483_647,
         "wall_clock_breakdown": False,

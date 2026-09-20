@@ -49,11 +49,11 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 
 算子本身（Flash GQA / fused QKV / MoE TN bmm）已经在算力墙上。占用掉到 **0%** 来自步进空窗，不是 kernel 太慢：
 
-1. **ZeRO 预取太小**（旧 50e6 ≈100MiB）——下一层冻结 MoE ~1.5GiB 专家权重，GPU 等 PCIe。现 `stage3_prefetch_bucket_size=5e8`（~1GiB bf16）+ `offload_param.buffer_count=8`。`CUDA_DEVICE_MAX_CONNECTIONS=8`，H2D 才能和 GEMM 叠。
-2. **每步 D2H**（nll `.cpu()` + `get_global_grad_norm` + `moe_utilization` + `cuda.get_rng_state_all`）。3090 脚本 `LOG_EVERY=20`；非 log 步不搬 host；CUDA RNG 只在存盘时拍。
-3. **torch inductor 32 workers** 抢 CPU，ZeRO `pin_memory` 拷贝变慢。`TORCH_COMPILE_DISABLE=1`。
-4. **DummyStream `doc_ids`** 不再上 GPU，避免每步 `collapse_doc_ids` 同步。下一批 H2D 在 backward 还在跑时预取。
-5. **MoE `counts.max()`** 走侧流 D2H，和共享专家 SwiGLU 重叠。不要把 padded bmm 垫到 `n_tok`（约 20× GEMM）。
+1. **ZeRO 预取被 live cap 掐掉**（默认 `stage3_max_live_parameters=1e9`）——一层冻结 MoE ~0.75e9，再加 0.5e9 预取桶就超了，预取静默不跑，每步 GPU 空约 1s。现 `max_live/reuse=2e9`，预取桶 **5e8**，`persistence=5e6`（2048×2048 留卡上；专家 12.6e6 仍 offload）。
+2. **CPU Adam 太慢**——ZeRO-3 把 student 切成碎片，torch AdamW 每步 ~1s，nvidia-smi 打成 0%。走 **DeepSpeedCPUAdam**（仍是两组 decay / no-decay，不 `zero_force` 压扁）。
+3. **每步 D2H**（nll / DS grad-norm / moe_utilization / `cuda.get_rng_state_all`）。`LOG_EVERY=20`；CUDA RNG 只在存盘时拍。
+4. **torch inductor 32 workers** 抢 CPU。`TORCH_COMPILE_DISABLE=1`。`CUDA_DEVICE_MAX_CONNECTIONS=8`。
+5. DummyStream `doc_ids` 留 host；下一批 H2D 和 backward 重叠。MoE `counts.max()` 侧流藏进共享专家。
 
 不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 的 gather 空窗仍在，约 18 分钟一次。
 

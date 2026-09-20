@@ -20,7 +20,7 @@ DeepSpeed ZeRO 的分工：
 
 所以 3090 的配方是 **ZeRO-3 + optimizer CPU offload + param CPU offload**，
 不是 ZeRO-1/2。ZeRO **能塞进显存**；它不能让 8e9 B0 在一张 3090 上变成合理墙钟
-（PCIe offload 会把 MFU 打到个位数）。**预取桶必须够大**：旧值 `stage3_prefetch_bucket_size=50e6`（~100MiB）喂不上下一层 MoE（~1.5GiB 专家），GPU 占用会掉到 0%。现在 ZeRO-3 用 **5e8**（~1GiB bf16）+ `offload_param.buffer_count=8` + `CUDA_DEVICE_MAX_CONNECTIONS=8`，让下一包专家权重和 GEMM 重叠。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。
+（PCIe offload 会把 MFU 打到个位数）。**预取必须真的能跑**：DeepSpeed 默认 `stage3_max_live_parameters=1e9`，一层冻结 MoE 已经 ~0.75e9，5e8 预取桶会被 live cap 静默丢掉，GPU 每步空约 1s。现在 **max_live/reuse=2e9**、预取 **5e8**、`persistence=5e6`（attn 2048×2048 留卡；专家仍 offload）+ **DeepSpeedCPUAdam**（仍两组 decay）。`CUDA_DEVICE_MAX_CONNECTIONS=8`。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。不要覆盖 `b0-full`。
 
 ## 安装
 
@@ -52,7 +52,9 @@ offload 抢同一份参数。
 1. **先** ``apply_freeze`` + NVFP4 wrap，**再** ``deepspeed.initialize``。
 2. 不要外包 DDP / FSDP。``--backend deepspeed --fsdp`` 直接拒。
 3. 关掉 native ``--offload-encoder`` / ``--offload-blocks`` / ``--optim-cpu``。
-   Adam 仍走仓库的 param groups（router 不 decay），``zero_force_ds_cpu_optimizer=false``。
+   Adam 仍走仓库的 param groups（router 不 decay）。CPU offload 时优先
+   ``DeepSpeedCPUAdam``（两组都留着）；``zero_force_ds_cpu_optimizer=false``
+   以免 ZeRO 压成一组。
 4. 微步循环仍在 trainer 里。运行时 DeepSpeed ``gradient_accumulation_steps=1``，
    loss 仍除以 ``accum``，和 torch 路径同一套缩放。JSON dump 里的 GAS 是映射，不是运行时值。
 5. clip 交给 DeepSpeed ``gradient_clipping``（默认 1.0）。不要再 ``clip_grad_norm_`` 一遍。

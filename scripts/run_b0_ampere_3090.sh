@@ -48,6 +48,9 @@ export TORCH_COMPILE_DISABLE="${TORCH_COMPILE_DISABLE:-1}"
 export TORCHINDUCTOR_COMPILE_THREADS="${TORCHINDUCTOR_COMPILE_THREADS:-1}"
 # Multiple copy engines so ZeRO H2D overlaps GEMM. NCCL often sets this to 1.
 export CUDA_DEVICE_MAX_CONNECTIONS="${CUDA_DEVICE_MAX_CONNECTIONS:-8}"
+# DeepSpeedCPUAdam / pin_memory copies. Too many OpenMP threads steal from PCIe.
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
+export MKL_NUM_THREADS="${MKL_NUM_THREADS:-8}"
 
 hub_overlay_forbidden() {
   local p="$1"

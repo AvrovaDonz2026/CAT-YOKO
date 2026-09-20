@@ -808,7 +808,14 @@ class Trainer:
                 raise RuntimeError("DeepSpeed ZeRO needs --device cuda")
             adam_state = "ds-cpu" if self.zero_offload else "ds"
             self.adam_state = adam_state
-            opt = build_optimizer(raw, self.cfg, cpu_offload=False)
+            # Fused DeepSpeedCPUAdam keeps the two decay groups. Torch AdamW on
+            # ZeRO-3 CPU shards is ~1s/step and shows up as GPU util 0%.
+            opt = build_optimizer(
+                raw, self.cfg, cpu_offload=False, cpu_adam_fast=self.zero_offload
+            )
+            if type(opt).__name__ == "DeepSpeedCPUAdam":
+                adam_state = "ds-cpuadam"
+                self.adam_state = adam_state
             cfg = zero_config(
                 stage=self.zero_stage,
                 offload_optimizer=self.zero_offload,

@@ -240,6 +240,25 @@ def _adamw_kwargs(cfg: CATYokoConfig) -> dict:
     return kw
 
 
+def _deepspeed_cpu_adam(groups: list[dict], cfg) -> Optimizer | None:
+    """Fused CPU AdamW. Keeps decay / no-decay groups. None if the op is missing."""
+    try:
+        from deepspeed.ops.adam import DeepSpeedCPUAdam
+    except Exception:
+        return None
+    kw = {
+        "lr": cfg.lr,
+        "betas": (cfg.adam_beta1, cfg.adam_beta2),
+        "eps": 1e-8,
+        "weight_decay": cfg.weight_decay,
+        "adamw_mode": True,
+    }
+    try:
+        return DeepSpeedCPUAdam(groups, **kw)
+    except Exception:
+        return None
+
+
 def build_optimizer(
     model: nn.Module,
     cfg: CATYokoConfig,
@@ -247,6 +266,7 @@ def build_optimizer(
     cpu_offload: bool = False,
     state_dtype: torch.dtype = torch.float32,
     retain_state: bool = True,
+    cpu_adam_fast: bool = False,
 ) -> Optimizer:
     if getattr(cfg, "use_muon", False):
         raise NotImplementedError(
@@ -263,6 +283,10 @@ def build_optimizer(
             state_dtype=state_dtype,
             retain_state=retain_state,
         )
+    if cpu_adam_fast:
+        fast = _deepspeed_cpu_adam(groups, cfg)
+        if fast is not None:
+            return fast
     return AdamW(groups, **_adamw_kwargs(cfg))
 
 

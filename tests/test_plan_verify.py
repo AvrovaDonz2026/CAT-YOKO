@@ -202,6 +202,7 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn('LOG_EVERY="${LOG_EVERY:-20}"', text)
         self.assertIn("TORCH_COMPILE_DISABLE", text)
         self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", text)
+        self.assertIn("OMP_NUM_THREADS", text)
         self.assertIn("5% hashed code", text)
         self.assertNotIn("push_to_hf", text)
         self.assertNotRegex(text, r"--log-every 1$")
