@@ -2,7 +2,8 @@
 # RTX 3090 Ampere BF16: resume published B0 overlay, write a NEW overlay dir.
 #
 # Does not overwrite Hub checkpoints/b0-full (step 26940 / sha256 7eebc9a4…).
-# Resume dir is read-only after download. Save dir is a sibling, not the Hub pointer.
+# Hub copy is always verified read-only. SAVE is a sibling. Same-dir resume is
+# allowed on that sibling (STEPS=0 keeps going toward 8e9).
 # DummyStream only. Does not download Ultra-FineWeb. Does not persist a full-graph checkpoint.
 # Ampere has no FP4 tensor core: --no-nvfp4 (published C1+NVFP4 wall-clock is unchanged).
 # ZeRO-3 + CPU offload to fit 24.5GiB weights. Not Megatron. Not a CSA kernel.
@@ -27,33 +28,36 @@ if [[ -z "${PY:-}" ]]; then
   fi
 fi
 
-RESUME="${RESUME:-$WORK/hub-b0-full}"
+HUB_COPY="${HUB_COPY:-$WORK/hub-b0-full}"
+RESUME="${RESUME:-$HUB_COPY}"
 SAVE="${SAVE:-$WORK/b0-3090-bf16}"
 LOG="${LOG:-$WORK/b0-3090-bf16/b0_3090.log}"
 LOCAL="${LOCAL:-$WORK/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
 SAVE_EVERY="${SAVE_EVERY:-2}"
 KEEP_LAST="${KEEP_LAST:-2}"
-# STEPS is extra optimizer steps after resume. --steps is an absolute cap;
-# Hub overlay is already step 26940, so --steps 8 would no-op and rewrite SAVE.
+# STEPS is extra optimizer steps after resume. 0 = run until the 8e9 envelope
+# (or the instance dies). --steps is an absolute cap; Hub is already 26940.
 STEPS="${STEPS:-8}"
 
 hub_overlay_forbidden() {
   local p="$1"
   case "$p" in
-    *checkpoints/b0-full*|*checkpoints/b0/*)
+    *checkpoints/b0-full*|*checkpoints/b0/*|*hub-b0-full*)
       return 0
       ;;
   esac
   return 1
 }
 
-if [[ "$(readlink -f "$SAVE" 2>/dev/null || echo "$SAVE")" == "$(readlink -f "$RESUME" 2>/dev/null || echo "$RESUME")" ]]; then
-  echo "SAVE must not be RESUME; refusing to overwrite the Hub overlay copy" >&2
+save_abs="$(readlink -f "$SAVE" 2>/dev/null || echo "$SAVE")"
+resume_abs="$(readlink -f "$RESUME" 2>/dev/null || echo "$RESUME")"
+if hub_overlay_forbidden "$SAVE" || hub_overlay_forbidden "$save_abs"; then
+  echo "SAVE=$SAVE would clobber the published B0 overlay; pick a sibling dir" >&2
   exit 2
 fi
-if hub_overlay_forbidden "$SAVE"; then
-  echo "SAVE=$SAVE would clobber the published B0 overlay; pick a sibling dir" >&2
+if [[ "$save_abs" == "$resume_abs" ]] && hub_overlay_forbidden "$RESUME"; then
+  echo "SAVE must not be the Hub overlay copy; refusing to overwrite B0 26940" >&2
   exit 2
 fi
 
@@ -82,28 +86,47 @@ if [[ ! -d "$LOCAL" ]] || [[ ! -f "$LOCAL/model.safetensors" ]]; then
   }
 fi
 
-if [[ ! -f "$RESUME/trainable.pt" ]]; then
-  echo "pull Hub b0-full overlay into read copy $RESUME"
+sha256_file() {
+  "$PY" -c "import hashlib,sys; h=hashlib.sha256();
+f=open(sys.argv[1],'rb');
+[h.update(c) for c in iter(lambda:f.read(1<<20), b'')];
+print(h.hexdigest())" "$1"
+}
+
+if [[ ! -f "$HUB_COPY/trainable.pt" ]]; then
+  echo "pull Hub b0-full overlay into read copy $HUB_COPY"
   HF_ENDPOINT="${HUB_ENDPOINT:-https://huggingface.co}" \
-    "$PY" "$ROOT/scripts/download_hub_overlay.py" --name b0-full --out-dir "$RESUME" || {
+    "$PY" "$ROOT/scripts/download_hub_overlay.py" --name b0-full --out-dir "$HUB_COPY" || {
     echo "Hub overlay download failed; refusing a fresh upcycle that would drop step 26940" >&2
     exit 2
   }
 fi
-got=$("$PY" -c "import hashlib,sys; h=hashlib.sha256();
-f=open(sys.argv[1],'rb');
-[h.update(c) for c in iter(lambda:f.read(1<<20), b'')];
-print(h.hexdigest())" "$RESUME/trainable.pt")
-if [[ "$got" != "$HUB_SHA" ]]; then
-  echo "Hub copy sha256 $got != $HUB_SHA; refusing to train on a mutated overlay" >&2
+hub_got="$(sha256_file "$HUB_COPY/trainable.pt")"
+if [[ "$hub_got" != "$HUB_SHA" ]]; then
+  echo "Hub copy sha256 $hub_got != $HUB_SHA; refusing to train on a mutated overlay" >&2
   exit 2
 fi
-chmod a-w "$RESUME/trainable.pt" 2>/dev/null || true
-echo "Hub overlay copy ok sha256=$got (read-only; will not write this file)"
+chmod a-w "$HUB_COPY/trainable.pt" 2>/dev/null || true
+echo "Hub overlay copy ok sha256=$hub_got (read-only; will not write this file)"
 
-echo "resume (read-only Hub copy) $RESUME"
+if [[ ! -f "$RESUME/trainable.pt" ]]; then
+  echo "resume overlay missing at $RESUME" >&2
+  exit 2
+fi
+if hub_overlay_forbidden "$RESUME"; then
+  echo "resume (read-only Hub copy) $RESUME"
+else
+  echo "resume (sibling overlay, not Hub) $RESUME"
+fi
 echo "save (new overlay, not Hub) $SAVE"
-echo "B0 Ampere argv seq=$SEQ more-steps=$STEPS (absolute --steps would no-op at Hub 26940) no-nvfp4 zero-3"
+
+MORE_ARGS=()
+if [[ "$STEPS" != "0" ]]; then
+  MORE_ARGS+=(--more-steps "$STEPS")
+  echo "B0 Ampere argv seq=$SEQ more-steps=$STEPS save-every=$SAVE_EVERY no-nvfp4 zero-3"
+else
+  echo "B0 Ampere argv seq=$SEQ more-steps=unlimited (8e9 envelope) save-every=$SAVE_EVERY no-nvfp4 zero-3"
+fi
 
 cd "$ROOT"
 "$PY" -m cat_yoko.b0 \
@@ -111,7 +134,7 @@ cd "$ROOT"
   --no-nvfp4 \
   --device cuda --dtype bf16 \
   --seq-len "$SEQ" --micro-batch 1 --grad-ckpt \
-  --more-steps "$STEPS" \
+  "${MORE_ARGS[@]}" \
   --save-dir "$SAVE" \
   --save-every "$SAVE_EVERY" \
   --keep-last "$KEEP_LAST" \
