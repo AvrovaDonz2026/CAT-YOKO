@@ -58,8 +58,9 @@ offload 抢同一份参数。
 4. 微步循环仍在 trainer 里。运行时 DeepSpeed ``gradient_accumulation_steps=1``，
    loss 仍除以 ``accum``，和 torch 路径同一套缩放。JSON dump 里的 GAS 是映射，不是运行时值。
 5. clip 交给 DeepSpeed ``gradient_clipping``（默认 1.0）。不要再 ``clip_grad_norm_`` 一遍。
-6. Overlay：ZeRO-3 全 rank 走 ``_zero3_consolidated_16bit_state_dict``，rank0 只写
-   ``requires_grad`` 张量。不要 ``--save-full``。
+6. Overlay：ZeRO-3 全 rank 对 ``requires_grad`` 走 ``GatheredParameters``（B0 132
+   张量），不要 ``_zero3_consolidated_16bit_state_dict``（那条仍会按层 gather 冻结
+   12B，3090 上 ``SAVE_EVERY`` 会空 6s）。不要 ``--save-full``。
 7. ``--c1`` / ``--c1-smoke`` 不能和 DeepSpeed 同进程重包（ZeRO-3 参数已经是 partitioned）。
    B0 → B1 → B2 分开进程，``--resume`` overlay。
 8. 模型自己的 ``--grad-ckpt`` 留着。不要开 DeepSpeed activation checkpointing。

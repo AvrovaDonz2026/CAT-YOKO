@@ -56,7 +56,7 @@ CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOP
 5. DummyStream `doc_ids` 留 host；下一批 H2D 和 backward 重叠。MoE `counts.max()` 侧流藏进共享专家。
 6. **ZeRO 预热**：wrap 之后、计时循环之前跑一次合成 batch 的 fwd+bwd（**不** `engine.step()`，RNG 复原）。把 allgather 轨迹记录和 kernel JIT 从第一步 404 tok/s 挪走。中间那长段 ~647 tok/s 不是冷启动，是预取被 live cap 掐掉 + torch CPU Adam；预热补不回那一段，occupancy v2 已经拉回 ~719。
 
-不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 的 gather 空窗仍在，约 18 分钟一次。
+不要为了吃满去关 param offload（49GiB 卡塞不下 12B+激活）。不要 FlexAttention / CSA kernel。`SAVE_EVERY=200` 只 gather 132 个可训练张量；不要走 DeepSpeed 的全图 `_zero3_consolidated_16bit_state_dict`（`exclude_frozen` 仍会按层 allgather 冻结 12B，PCIe 空 6s、SM 0%）。
 
 ## 滑窗交叉（3090，2026-09-20T01:06Z，H=16 hd=128 equal-head）
 

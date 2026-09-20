@@ -1,7 +1,7 @@
 """DeepSpeed ZeRO backend. Optional extra; CI does not install DeepSpeed.
 
 Not Megatron EP/TP. Not a CSA kernel. Overlay save gathers ZeRO-3 16-bit
-weights; do not ``--save-full``. Native encoder/block/Adam CPU offload stays
+trainable weights only (not frozen 12B); do not ``--save-full``. Native encoder/block/Adam CPU offload stays
 on the torch path — ZeRO owns partitioning when this backend is on.
 
 Single-GPU ZeRO-1/2 does **not** shard frozen 12B weights. A 48GiB Ampere
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from contextlib import nullcontext
 from typing import Any
 
 from torch import nn
@@ -45,7 +46,7 @@ NOTES = (
     "Freeze + NVFP4 wrap before deepspeed.initialize.",
     "Do not wrap DDP/FSDP around the engine.",
     "Disable native --offload-encoder/--offload-blocks/--optim-cpu.",
-    "ZeRO-3 overlay: gather 16-bit trainable weights. Do not --save-full.",
+    "ZeRO-3 overlay: GatheredParameters on requires_grad only. Do not --save-full.",
     "Single-GPU ZeRO-1/2 does not shard 12B frozen weights; 48GiB needs ZeRO-3 + param CPU offload.",
     "Not Megatron EP/TP. Not a CSA kernel. Not a 50B download.",
     "C1 chain: run B0/B1/B2 as separate processes with --resume; do not --c1 in-process.",
@@ -281,6 +282,14 @@ def warmup_zero3(engine: nn.Module, loss) -> bool:
     return True
 
 
+def _dist_rank() -> int:
+    import torch.distributed as dist
+
+    if dist.is_available() and dist.is_initialized():
+        return int(dist.get_rank())
+    return 0
+
+
 def _cpu_sd(state: dict[str, Any] | None) -> dict[str, Any] | None:
     if state is None:
         return None
@@ -324,21 +333,27 @@ def gathered_trainable_state_dict(
 
     ``None`` means “not ZeRO-3; use ``trainable_state_dict`` on rank 0”.
     An empty dict is the non-rank-0 ZeRO-3 result (still participated).
+
+    Do **not** call the full-model ZeRO consolidate helper. That walk still
+    ``GatheredParameters`` every layer (frozen 12B included) and only skips the
+    CPU copy. On 3090 that is ~6s of SM 0% every ``SAVE_EVERY`` while PCIe
+    streams experts that the overlay never stores.
     """
     if not is_deepspeed_engine(model) or zero_stage_of(model) < 3:
         return None
-    fn = getattr(model, "_zero3_consolidated_16bit_state_dict", None)
-    if not callable(fn):
-        raise DeepSpeedBackendError(
-            "ZeRO-3 overlay gather needs consolidate 16-bit weights"
-        )
-    if names is None:
-        names = {n for n, p in unwrap(model).named_parameters() if p.requires_grad}
-    try:
-        state = fn(exclude_frozen_parameters=True)
-    except TypeError:
-        state = fn()
-    if not isinstance(state, dict):
-        return {} if state is None else None
-    cpu = _cpu_sd(state) or {}
-    return {k: v for k, v in cpu.items() if k in names}
+    ds = import_deepspeed()
+    gp = getattr(getattr(ds, "zero", None), "GatheredParameters", None)
+    if not callable(gp):
+        raise DeepSpeedBackendError("ZeRO-3 overlay gather needs GatheredParameters")
+    named = [(n, p) for n, p in unwrap(model).named_parameters() if p.requires_grad]
+    if names is not None:
+        want = set(names)
+        named = [(n, p) for n, p in named if n in want]
+    params = [p for _, p in named]
+    out: dict[str, Any] = {}
+    ctx = gp(params, modifier_rank=0) if params else nullcontext()
+    with ctx:
+        if _dist_rank() == 0:
+            for key, param in named:
+                out[key] = param.detach().contiguous().cpu()
+    return out

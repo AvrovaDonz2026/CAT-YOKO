@@ -336,6 +336,23 @@ class SourceContractTests(unittest.TestCase):
         )
         self.assertIn("stage3", inspect.getsource(zero_config))
 
+    def test_overlay_gather_skips_frozen_12b(self) -> None:
+        import torch
+
+        from cat_yoko.deepspeed_zero import (
+            gathered_state_dict,
+            gathered_trainable_state_dict,
+        )
+
+        overlay = inspect.getsource(gathered_trainable_state_dict)
+        full = inspect.getsource(gathered_state_dict)
+        self.assertIn("GatheredParameters", overlay)
+        self.assertIn("requires_grad", overlay)
+        self.assertNotIn("_zero3_consolidated_16bit_state_dict", overlay)
+        self.assertIn("_zero3_consolidated_16bit_state_dict", full)
+        self.assertIn("exclude_frozen_parameters=False", full)
+        self.assertIsNone(gathered_trainable_state_dict(torch.nn.Linear(4, 4)))
+
     def test_not_a_megatron_loop_or_csa_kernel(self) -> None:
         text = (ROOT / "cat_yoko" / "deepspeed_zero.py").read_text(encoding="utf-8")
         self.assertIn("Not Megatron EP/TP", text)
@@ -361,6 +378,11 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("cpu_adam_fast", wrap_src)
         self.assertIn("ninja", wrap_src)
         self.assertIn("stage3_max_live_parameters", inspect.getsource(zero_config))
+        from cat_yoko.deepspeed_zero import gathered_trainable_state_dict
+
+        overlay = inspect.getsource(gathered_trainable_state_dict)
+        self.assertIn("GatheredParameters", overlay)
+        self.assertNotIn("_zero3_consolidated_16bit_state_dict", overlay)
         self.assertIn("DeepSpeedCPUAdam", inspect.getsource(_deepspeed_cpu_adam))
         self.assertIn("_warmup_zero", run_src)
         self.assertIn("warmup_zero3", inspect.getsource(Trainer._warmup_zero))
