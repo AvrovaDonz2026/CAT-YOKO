@@ -1,7 +1,7 @@
 """Published Phase B data mix: OpenBMB Ultra-FineWeb + UltraData-Math.
 
 Code (StarCoder) is an optional extra — not OpenBMB. Default mix is 100% OpenBMB.
-UltraChat / 指令对话是 Phase F/G，不进这张表。
+UltraChat / instruction dialogue is Phase F/G and does not enter this table.
 """
 
 from __future__ import annotations

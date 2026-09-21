@@ -1,53 +1,53 @@
-# Ampere BF16 算子理论 MFU（RTX 3090）
+# Ampere BF16 operator theoretical MFU (RTX 3090)
 
-3090 的 **dense BF16 tensor** 峰值是 **71.16 TFLOPS**（无 2:4 稀疏；大 GEMM 实测约 72.3）。HBM 936 GB/s，ridge ≈ **76 FLOP/byte**。某个算子的**理论 MFU** 是 roofline：
+The 3090 **dense BF16 tensor** peak is **71.16 TFLOPS** (no 2:4 sparsity; large GEMMs measure ~72.3). HBM 936 GB/s, ridge ≈ **76 FLOP/byte**. An operator's **theoretical MFU** is the roofline:
 
 \[
 \mathrm{MFU}_{\mathrm{theo}} = \min\bigl(1,\; I / r\bigr),\quad I=\mathrm{FLOPs}/\mathrm{bytes},\quad r=\mathrm{peak}/\mathrm{BW}.
 \]
 
-逼近理论 MFU 是逼近这条 roofline，不是在 seq=128 的探针图上硬凑 40% Kaplan 或 100% 峰值。Flash 在 seq=4096、hd=128 时 IO-aware 强度 \(I \approx S/4 = 1024\)，已经算力墙，理论 ~100%；seq=128 时 \(I=32\)，理论约 42%，再被 kernel launch 打到 1% 量级。
+Approaching theoretical MFU means approaching this roofline, not forcing 40% Kaplan or 100% peak on a seq=128 probe graph. Flash at seq=4096, hd=128 has IO-aware intensity \(I \approx S/4 = 1024\), already compute-bound, theory ~100%; at seq=128, \(I=32\), theory ~42%, then kernel launch knocks it to the 1% range.
 
-`torch._grouped_mm` **只在 SM90+ 能跑**。Ampere 上 API 在、一调就 `RuntimeError`，以前每层 try/except 比直接 padded bmm 贵 2–3×。现在 `grouped_mm_available()` 按 compute capability 关门，3090 走 bmm。
+`torch._grouped_mm` **only runs on SM90+**. On Ampere the API exists and then raises `RuntimeError`; a per-layer try/except used to cost 2–3× more than padded bmm. `grouped_mm_available()` now gates on compute capability, so 3090 uses bmm.
 
-FlexAttention 滑窗在这套 torch 2.8 / sm_86 上约 1.7 ms，对照 SDPA 0.02 ms，是速度陷阱。CSA/HCA 不换上去。不是 CSA CUDA kernel。
+FlexAttention sliding window is about 1.7 ms on this torch 2.8 / sm_86 stack versus SDPA 0.02 ms: a speed trap. CSA/HCA do not switch to it. Not a CSA CUDA kernel.
 
-## 各块（理论）
+## Per-block (theory)
 
-CPU 上 `python3 -m cat_yoko.ampere_mfu` 打出的 roofline（相对 71.16 TFLOPS；indexer 相对 35.58 TFLOPS FP32/TF32）：
+Roofline from `python3 -m cat_yoko.ampere_mfu` on CPU (relative to 71.16 TFLOPS; indexer relative to 35.58 TFLOPS FP32/TF32):
 
-| 算子 | 阶段 | bf16-probe 理论 MFU | 12B 形理论 MFU | 调整（逼近 roofline） |
+| Operator | Phase | bf16-probe theoretical MFU | 12B-shape theoretical MFU | Tuning (approach the roofline) |
 | --- | --- | ---: | ---: | --- |
-| fused QKV | A–E | 84.2% | 100% 算力墙 | 冻结权重 concat 一次，不再每步 `torch.cat` |
-| dense Flash GQA | YOCO cross；窗盖满 seq | 56.1%（再被 launch 打到 ~1%） | 100%；实测可到 ~87% 峰值 | Flash + `enable_gqa`，不 repeat KV |
-| masked window | encoder `n_win<seq` | 37.4%（付 S×S mask） | B0 `n_win=8192≥seq` 走 Flash；此行是 C/探针洞 | seq&lt;320 只用 Efficient；更长只用 cuDNN；静态窗 mask 缓存 |
-| CSA union | C-topk | 74.8% | 100% 强度，但 fused mask 核到不了 Flash | 同上；**不要** `enable_gqa+attn_mask`（Ampere 静默掉 math 核），repeat KV 后走 Efficient/cuDNN |
-| HCA concat | C-hca+ | 78.7% | 同左，k 更长 | 静态槽 bias 缓存；不把 CSA/HCA 换上 FlexAttention |
-| MoE bmm | B2+ | 13.0%（每专家 12 token，带宽墙） | 100% 强度；均匀专家实测 ~84% 峰值 | Ampere 禁止 grouped_mm；冻专家缓存 `gate‖up` |
-| indexer fp32 | C-index | 29.7%（FP32 峰值） | 81.3% | 分数仍 fp32（KEEP_HIGH_PREC）；TF32 `high`；含 Q/K 投影 |
+| fused QKV | A–E | 84.2% | 100% compute-bound | concat frozen weights once; no per-step `torch.cat` |
+| dense Flash GQA | YOCO cross; window covers seq | 56.1% (then launch knocks it to ~1%) | 100%; measured ~87% of peak | Flash + `enable_gqa`, do not repeat KV |
+| masked window | encoder `n_win<seq` | 37.4% (pays S×S mask) | B0 `n_win=8192≥seq` uses Flash; this row is the C/probe hole | seq&lt;320 uses Efficient only; longer uses cuDNN only; cache the static window mask |
+| CSA union | C-topk | 74.8% | 100% intensity, but the fused mask kernel cannot reach Flash | same; **do not** `enable_gqa+attn_mask` (Ampere silently drops to the math kernel); repeat KV then Efficient/cuDNN |
+| HCA concat | C-hca+ | 78.7% | same, longer k | cache static slot bias; do not move CSA/HCA onto FlexAttention |
+| MoE bmm | B2+ | 13.0% (12 tokens/expert, bandwidth-bound) | 100% intensity; uniform experts measure ~84% of peak | forbid grouped_mm on Ampere; cache frozen expert `gate‖up` |
+| indexer fp32 | C-index | 29.7% (FP32 peak) | 81.3% | scores stay fp32 (KEEP_HIGH_PREC); TF32 `high`; includes Q/K projections |
 
-12B B0 训练 `seq=4096`、`n_win=8192`：encoder 窗盖满，走 dense Flash，不是 masked 行。探针故意 `n_win<seq`，Theorem B 的压缩洞才露出来。
+12B B0 training at `seq=4096`, `n_win=8192`: the encoder window covers the sequence, so it uses dense Flash, not the masked row. The probe sets `n_win<seq` on purpose so Theorem B's compression hole is visible.
 
-## 实测（3090，2026-09-19T17:28Z）
+## Measured (3090, 2026-09-19T17:28Z)
 
-校准 GEMM **72.12 TFLOPS**。`grouped_mm=False`。
+Calibrated GEMM **72.12 TFLOPS**. `grouped_mm=False`.
 
-| 算子 | 实测 | 相对 roofline |
+| Operator | Measured | vs roofline |
 | --- | --- | --- |
-| fused QKV 12B 形 | 74.66 T | ~105%（boost；冻结 concat-once） |
+| fused QKV 12B shape | 74.66 T | ~105% (boost; frozen concat-once) |
 | Flash GQA seq=4096 | 60.45 T | **85%** |
-| MoE 均匀 bmm E=20 n=409 | 57.66 T | **81%** |
-| CSA union seq=512 | 36.73 T | 52%（mask 核，非 Flash） |
+| MoE uniform bmm E=20 n=409 | 57.66 T | **81%** |
+| CSA union seq=512 | 36.73 T | 52% (mask kernel, not Flash) |
 | HCA concat seq=512 | 40.34 T | 57% |
 | masked window seq=512 | 17.99 T | 25% |
-| indexer fp32 12B 形 | 14.28 T | 50% of FP32 roofline（d_idx=64 瘦 K） |
-| 全部 bf16-probe seq=128 | &lt;1 T | launch 墙，理论 30–84% 也够不着 |
+| indexer fp32 12B shape | 14.28 T | 50% of FP32 roofline (d_idx=64 skinny K) |
+| all bf16-probe seq=128 | &lt;1 T | launch-bound; even 30–84% theory is unreachable |
 
-Ledger：[`artifacts/autodl-rtx3090/bf16-verify/mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/)。
+Ledger: [`artifacts/autodl-rtx3090/bf16-verify/mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/).
 
-先前同卡、调算子前：大 GEMM 72.3T；Flash s=4096 62.9T；fused QKV 每步 cat 更慢；MoE 若走 grouped_mm try/except 贵 2–3×。FlexAttention 滑窗 ~1.7 ms vs SDPA 0.02 ms，不用。
+Earlier on the same GPU, before kernel tuning: large GEMM 72.3T; Flash s=4096 62.9T; fused QKV slower with per-step cat; MoE 2–3× more expensive if it took the grouped_mm try/except path. FlexAttention sliding window ~1.7 ms vs SDPA 0.02 ms; unused.
 
-## 怎么跑
+## How to run
 
 ```bash
 python3 -m cat_yoko.ampere_mfu
@@ -55,4 +55,4 @@ bash scripts/run_ampere_mfu.sh
 # OUT=/root/autodl-tmp/bf16-verify/mfu/ledger.json
 ```
 
-CPU 只打理论表。不要拉 Ultra-FineWeb。不要写完整图 checkpoint。不要 `--save-full`。
+CPU prints the theory table only. Do not pull Ultra-FineWeb. Do not write a full-graph checkpoint. Do not `--save-full`.

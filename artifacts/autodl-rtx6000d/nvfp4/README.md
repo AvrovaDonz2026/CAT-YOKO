@@ -1,16 +1,16 @@
-# NVFP4 wrap 烟测（RTX 6000D sm_120）
+# NVFP4 wrap smoke test (RTX 6000D sm_120)
 
-2026-09-18。注意力仍是因果 YOCO `WindowAttention` + fp32 SDPA；只 wrap 允许的 Linear。
+2026-09-18. Attention is still causal YOCO `WindowAttention` + fp32 SDPA; only allowed Linear layers are wrapped.
 
-| 项 | 值 |
+| Item | Value |
 | --- | --- |
-| tiny CUDA wrap | ok；B0 77 个冻结 GEMM；B1 `nvfp4_n=83` |
-| 因果 window | wrap 后改未来 token 不泄漏 |
-| 12B B0 `--try` | 2 步；`nvfp4=True`；wrap **2815** 个 Linear |
-| gate / nll_last | 0.301 / 18.06（DummyStream，不是评估） |
+| tiny CUDA wrap | ok; B0 77 frozen GEMMs; B1 `nvfp4_n=83` |
+| causal window | after wrap, changing a future token does not leak |
+| 12B B0 `--try` | 2 steps; `nvfp4=True`; wrap **2815** Linears |
+| gate / nll_last | 0.301 / 18.06 (DummyStream, not an evaluation) |
 | peak | 34442 MiB |
-| tok/s | ≈7–8（E2M1/16 仿真，不是 TE kernel） |
-| TE（2.8 miniconda） | 2.19 cu12 装上了；`transformer_engine.pytorch` 因 `ncclCommWindowRegister` 导不进。走仿真。 |
-| TE（nightly cu130） | torch `2.15.0.dev20260918+cu130` 上 `transformer_engine.pytorch` **可以 import**。`float4` `copy_` 仍失败；TE NVFP4 Linear 需 leading dim % 16 == 0。探活：[`NVFP4_PROBE_nightly.json`](NVFP4_PROBE_nightly.json)。 |
+| tok/s | ≈7–8 (E2M1/16 emulation, not a TE kernel) |
+| TE (2.8 miniconda) | 2.19 cu12 installed; `transformer_engine.pytorch` cannot import because of `ncclCommWindowRegister`. Uses emulation. |
+| TE (nightly cu130) | On torch `2.15.0.dev20260918+cu130`, `transformer_engine.pytorch` **can import**. `float4` `copy_` still fails; TE NVFP4 Linear requires leading dim % 16 == 0. Probe: [`NVFP4_PROBE_nightly.json`](NVFP4_PROBE_nightly.json). |
 
-**大文件不进 GitHub。** overlay `trainable.pt`（419MiB，sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e`）在 HuggingFace [`checkpoints/b0-nvfp4-try/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-nvfp4-try)。不覆盖原来的 32 步 `checkpoints/b0/trainable.pt`。
+**Large files do not go into GitHub.** Overlay `trainable.pt` (419MiB, sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e`) is on HuggingFace [`checkpoints/b0-nvfp4-try/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-nvfp4-try). Does not overwrite the original 32-step `checkpoints/b0/trainable.pt`.
