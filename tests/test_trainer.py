@@ -575,6 +575,14 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(_ce_chunk_tokens(4096, 130560, None, torch.device("cpu")), 512)
         self.assertEqual(_ce_chunk_tokens(4096, 130560, 3, torch.device("cpu")), 3)
 
+    def test_ce_logit_budget_is_bf16_on_cuda(self) -> None:
+        from cat_yoko.loss import _ce_logit_budget_bytes
+
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cpu"), torch.bfloat16), 32)
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda"), torch.float32), 32)
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda"), torch.bfloat16), 16)
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda:0"), torch.float16), 16)
+
     def test_host_step_stats_match_python_floats(self) -> None:
         from cat_yoko.trainer import _host_step_stats
 

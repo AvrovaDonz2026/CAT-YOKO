@@ -254,6 +254,39 @@ class TrainableCacheTests(unittest.TestCase):
         self.assertIsNotNone(moe.last_load)
         self.assertEqual(int(moe._load_n), 1)
 
+    def test_frozen_moe_skips_load_histogram_when_not_logging(self) -> None:
+        from cat_yoko.moe import arm_moe_load_tracking
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B0")
+        arm_moe_load_tracking(model, log_step=False)
+        moe = model.encoder[0].mlp
+        moe.train()
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        moe(x)
+        self.assertIsNone(moe.last_load)
+        self.assertEqual(int(moe._load_n), 0)
+        arm_moe_load_tracking(model, log_step=True)
+        moe(x)
+        self.assertIsNotNone(moe.last_load)
+        self.assertEqual(int(moe._load_n), 1)
+
+    def test_trainable_moe_keeps_load_when_not_logging(self) -> None:
+        from cat_yoko.moe import arm_moe_load_tracking
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B1")
+        arm_moe_load_tracking(model, log_step=False)
+        moe = model.decoder[-1].mlp
+        self.assertTrue(moe.track_load)
+        moe.train()
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        moe(x)
+        self.assertIsNotNone(moe.last_load)
+        self.assertIsNotNone(moe.last_aux)
+
     def test_repeat_by_counts_matches_repeat_interleave(self) -> None:
         from cat_yoko.moe import _repeat_by_counts
 

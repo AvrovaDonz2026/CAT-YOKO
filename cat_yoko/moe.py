@@ -488,6 +488,9 @@ class MoE(nn.Module):
         self.last_aux: torch.Tensor | None = None
         self.last_load: torch.Tensor | None = None
         self._load_n = 0
+        # Trainer clears this on non-log steps for frozen MoE. Direct callers
+        # keep the histogram (tests, bias updates).
+        self.track_load = True
 
     def mean_pending_load(self) -> torch.Tensor | None:
         """Average expert load over micro-batches since the last bias step."""
@@ -593,12 +596,18 @@ class MoE(nn.Module):
             max_n=max_n,
         )
 
+        # Frozen MoE (B0 encoder+decoder backbone) does not enter the loss or
+        # aux-loss-free bias. The load histogram is only for logs; skip the
+        # scatter on steps the trainer will not read.
+        trainable = module_has_trainable(self)
+        track = bool(self.track_load) or trainable
+        if not track:
+            self.last_aux = None
+            return (shared_out + _like(shared_out, routed)).view(b, s, d)
         ones = torch.zeros(self.n_routed, device=x.device, dtype=x.dtype)
         ones.scatter_add_(0, topi.reshape(-1), _like(ones, gates.reshape(-1)))
         load = ones / n_tok
-        # Frozen MoE (B0 encoder+decoder backbone) does not enter the loss or
-        # aux-loss-free bias. Skip z-loss / balance; keep ``last_load`` for logs.
-        if module_has_trainable(self):
+        if trainable:
             z_loss = logits.float().pow(2).mean()
             balance = self.n_routed * (load * load).sum()
             self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
@@ -616,6 +625,21 @@ class MoE(nn.Module):
             self.last_load = None
             self._load_n = 0
         return (shared_out + _like(shared_out, routed)).view(b, s, d)
+
+
+def arm_moe_load_tracking(model: nn.Module, *, log_step: bool) -> None:
+    """Record frozen expert load only on log steps.
+
+    Trainable routers still record every step (aux-loss-free bias). Default
+    ``MoE.track_load`` stays True so a bare ``forward`` still fills
+    ``last_load``.
+    """
+    blocks = list(getattr(model, "encoder", []) or []) + list(getattr(model, "decoder", []) or [])
+    for blk in blocks:
+        mlp = getattr(blk, "mlp", None)
+        if mlp is None or not hasattr(mlp, "track_load"):
+            continue
+        mlp.track_load = bool(log_step) or module_has_trainable(mlp)
 
 
 def moe_utilization(model: nn.Module) -> dict[str, float]:

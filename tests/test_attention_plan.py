@@ -428,6 +428,18 @@ class QkvLayoutTests(unittest.TestCase):
         self.assertTrue(torch.allclose(q1, q2.transpose(1, 2), atol=1e-5, rtol=1e-5))
         self.assertTrue(torch.allclose(k1, k2.transpose(1, 2), atol=1e-5, rtol=1e-5))
 
+    def test_apply_rope_matches_rotate_half_formula(self) -> None:
+        torch.manual_seed(1)
+        q = torch.randn(1, 32, 4, 16, dtype=torch.bfloat16)
+        rope = RotaryEmbedding(16, 10_000.0)
+        cos, sin = rope(32, q.device, q.dtype)
+        got, _ = apply_rope(q, q, cos, sin, seq_dim=1)
+        shape = [1, 32, 1, 16]
+        cos_b = cos.reshape(*shape)
+        sin_b = sin.reshape(*shape)
+        ref = q * cos_b + rotate_half(q) * sin_b
+        self.assertTrue(torch.equal(got, ref))
+
     def test_sdpa_q_keeps_bshd_memory_with_qk_norm(self) -> None:
         cfg = CATYokoConfig.tiny()
         self.assertTrue(cfg.qk_norm)

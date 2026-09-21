@@ -81,9 +81,21 @@ def apply_rope(
     shape[-1] = int(cos.size(-1))
     cos_b = cos.reshape(*shape)
     sin_b = sin.reshape(*shape)
-    q = q * cos_b + rotate_half(q) * sin_b
-    k = k * cos_b + rotate_half(k) * sin_b
-    return q, k
+    # One output buffer. Same values as ``x * cos + rotate_half(x) * sin``
+    # (bf16 matches bitwise) without the extra rotate tensor.
+    half = int(cos.size(-1)) // 2
+    return _rope_one(q, cos_b, sin_b, half), _rope_one(k, cos_b, sin_b, half)
+
+
+def _rope_one(
+    x: torch.Tensor, cos_b: torch.Tensor, sin_b: torch.Tensor, half: int
+) -> torch.Tensor:
+    x1 = x[..., :half]
+    x2 = x[..., half:]
+    out = torch.empty_like(x)
+    out[..., :half] = x1 * cos_b[..., :half] - x2 * sin_b[..., :half]
+    out[..., half:] = x2 * cos_b[..., half:] + x1 * sin_b[..., half:]
+    return out
 
 
 class RotaryEmbedding(nn.Module):

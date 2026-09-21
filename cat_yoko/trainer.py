@@ -60,7 +60,7 @@ from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.indexer import ensure_indexers, phase_needs_indexer, set_align_indexer, set_sparse_mode
 from cat_yoko.loss import kd_kl, kd_weight, safe_ppl
 from cat_yoko.model import CATYokoForCausalLM
-from cat_yoko.moe import grouped_mm_available, moe_utilization
+from cat_yoko.moe import arm_moe_load_tracking, grouped_mm_available, moe_utilization
 from cat_yoko.offload import (
     auto_offload_flags,
     clip_grad_norm_mixed,
@@ -1111,6 +1111,11 @@ class Trainer:
                     )
                 t0 = time.perf_counter()
                 stats_nll_w = stats_n_valid = stats_loss = stats_aux = None
+                next_step = step + 1
+                will_log = next_step == 1 or next_step % self.log_every == 0 or (
+                    max_steps is not None and next_step == max_steps
+                )
+                arm_moe_load_tracking(unwrap(model), log_step=will_log)
                 for micro_i in range(self.accum):
                     batch = self._prefetch_batch
                     self._prefetch_batch = None
@@ -1167,10 +1172,6 @@ class Trainer:
                     if torch.is_tensor(rew):
                         step_reward = rew.detach().float().reshape(())
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
-                next_step = step + 1
-                will_log = next_step == 1 or next_step % self.log_every == 0 or (
-                    max_steps is not None and next_step == max_steps
-                )
                 will_save = bool(self.save_every and next_step % self.save_every == 0)
                 tokens_after = tokens_in_phase + step_tokens * self.world
                 will_stop = (
