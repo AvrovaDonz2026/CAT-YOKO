@@ -45,10 +45,10 @@ SAVE="${SAVE:-$WORK/b0-3090-bf16}"
 LOG="${LOG:-$WORK/b0-3090-bf16/b0_3090.log}"
 LOCAL="${LOCAL:-$WORK/hf/MiniCPM5-2B-Base}"
 SEQ="${SEQ:-4096}"
-# 50 步约 4–5 分钟一次 ZeRO-3 gather，GPU 占用会掉到 0 约 6s。
+# SAVE_EVERY=50 used to ZeRO-3-gather about every 4–5 minutes and drop SM util to 0% for ~6s.
 SAVE_EVERY="${SAVE_EVERY:-200}"
 KEEP_LAST="${KEEP_LAST:-2}"
-# 每步 D2H / DS grad-norm 会把 GPU 打到 0%。40 步一行：看 tok/s，少一半 log 同步。
+# Per-step D2H / DeepSpeed grad-norm can flash GPU util to 0%. Log every 40 steps: tok/s without half the host sync.
 LOG_EVERY="${LOG_EVERY:-40}"
 # STEPS is extra optimizer steps after resume. 0 = run until the 8e9 envelope
 # (or the instance dies). --steps is an absolute cap; Hub is already 26940.

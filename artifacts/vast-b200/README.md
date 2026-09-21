@@ -1,23 +1,23 @@
-# Vast B200 释放前快照
+# Vast B200 pre-release snapshot
 
-SSH Host 曾是 `vast-b200`（不要把机器 IP 写进脚本）。**2026-09-19T06:47Z 起 SSH 拒绝**，按回收处理。destroy 会清盘。本目录只留日志和探针，**权重不进 GitHub**。
+SSH Host used to be `vast-b200` (do not write the machine IP into scripts). **SSH was refused from 2026-09-19T06:47Z**; treat the instance as recycled. destroy wipes the disk. This directory keeps logs and probes only; **weights do not go on GitHub**.
 
-权重：https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
+Weights: https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 
-进度：[`docs/STATUS.md`](../../docs/STATUS.md)。
+Progress: [`docs/STATUS.md`](../../docs/STATUS.md). This Hub `b0-full` overlay is the published pin. The RTX 3090 BF16 run is a sibling, not a replacement.
 
-| 项 | 值 |
+| Item | Value |
 | --- | --- |
-| 时间 | 2026-09-19T06:44Z 拷盘 |
-| 机器 | Vast NVIDIA B200 SM 10.0，183359 MiB（已回收） |
-| 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 |
-| 当时训练 | tmux `b0-full`，`--seq-len 4096`，`--micro-batch 2` |
-| overlay | step **26940**，`tokens_in_phase=130,041,856`（8e9 的 ≈1.63%） |
+| time | 2026-09-19T06:44Z disk copy |
+| machine | Vast NVIDIA B200 SM 10.0, 183359 MiB (recycled) |
+| runtime | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 |
+| then training | tmux `b0-full`, `--seq-len 4096`, `--micro-batch 2` |
+| overlay | step **26940**, `tokens_in_phase=130,041,856` (≈1.63% of 8e9) |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| 吞吐 / 显存 | ~15.6k tok/s，Trainer 137952 MiB，nvidia-smi ~141/183 GiB |
-| 许可 | Apache-2.0 |
+| throughput / VRAM | ~15.6k tok/s, Trainer 137952 MiB, nvidia-smi ~141/183 GiB |
+| license | Apache-2.0 |
 
-不要 resume `checkpoints/b0/` 那份 32 步 `--try`。下一台：
+Do not resume the 32-step `--try` under `checkpoints/b0/`. Next machine:
 
 ```bash
 python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
@@ -25,4 +25,4 @@ python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/
 bash scripts/run_b0_full_b200.sh
 ```
 
-日志：[`b0-full/`](b0-full/)（`metrics.jsonl`、tmux 尾）。TE 探针：[`te/`](te/)。
+Logs: [`b0-full/`](b0-full/) (`metrics.jsonl`, tmux tail). TE probes: [`te/`](te/).

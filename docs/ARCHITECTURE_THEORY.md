@@ -1,38 +1,38 @@
-# CAT-YOKO 架构理论验证
+# CAT-YOKO Architecture Theory Verification
 
-> 与 [`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 分工：那篇核**中间档参数 / FLOPs / KV**；这篇核**数据流、因果、感受野、全局 cache 接口**。规格仍是中间档：Encoder 16L / Decoder 26L，CSA+HCA+8K 滑窗，主目标 128K–256K。底座 MiniCPM5-2B（Llama GQA，untied）。
-> 可执行断言：`python3 scripts/arch_verify.py --verify` 与 `python3 -m unittest tests.test_arch_verify`。
-> 理论能证明的是**自洽、因果、复杂度与信息流**；不能证明 12B 上采样后的质量。质量仍走 L0→L1 实验。
+> Division of labor with [`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md): that document checks **middle-tier parameters / FLOPs / KV**; this one checks **data flow, causality, receptive field, and the global-cache interface**. Spec remains the middle tier: Encoder 16L / Decoder 26L, CSA+HCA+8K sliding window, primary target 128K–256K. Base MiniCPM5-2B (Llama GQA, untied).
+> Executable assertions: `python3 scripts/arch_verify.py --verify` and `python3 -m unittest tests.test_arch_verify`.
+> Theory can prove **consistency, causality, complexity, and information flow**; it cannot prove quality after 12B upsampling. Quality still goes through L0→L1 experiments.
 
 ---
 
-## 0. 结论（先看这个）
+## 0. Conclusions (read this first)
 
-架构在因果与残差切分上是自洽的，但计划文本把**三件不同的机制**收成了一句话「CSA/HCA 压缩全局 cache」。必须拆开，否则实现会在错误的位置做 top-k。
+The architecture is consistent on causality and residual split, but the plan text collapsed **three different mechanisms** into one sentence, “CSA/HCA compress the global cache”. They must be separated, or the implementation will do top-k in the wrong place.
 
-| 机制 | 发生位置 | query 是谁 | 作用 |
+| Mechanism | Where it happens | Whose query | Role |
 | --- | --- | --- | --- |
-| **M1** Encoder CSA/HCA | self-decoder 每一层 | **当前输入 token** | 更便宜地写每 token 表示 |
-| **M2** 全局 cache 再池化 | Encoder 顶 → \(\hat K,\hat V\) | 无（write-first） | 把 \(N\) 槽压成 \(N/m\)；**可选** |
-| **M3** Decoder 侧 indexer / 校准回退 | cross-attn | **生成 query** | 真正的 query-aware 检索 |
+| **M1** Encoder CSA/HCA | every self-decoder layer | **the current input token** | cheaper per-token representations |
+| **M2** global-cache re-pooling | Encoder top → \(\hat K,\hat V\) | none (write-first) | compress \(N\) slots to \(N/m\); **optional** |
+| **M3** Decoder-side indexer / calibrated fallback | cross-attn | **the generation query** | the actual query-aware retrieval |
 
-YOCO 的全局性来自 **M3 读全部（或所选）cache 槽**，不来自 encoder 滑窗感受野。16 层 × 8K 窗堆叠感受野只有 **131072**，盖不住 256K；这**不妨碍** 256K 检索，因为 token 0 的 cache 槽仍然在，decoder 可以直接读。
+YOCO globality comes from **M3 reading all (or selected) cache slots**, not from the encoder sliding-window receptive field. 16 layers × 8K window stacked RF is only **131072**, which does not cover 256K; that **does not block** 256K retrieval, because token 0’s cache slot is still there and the decoder can read it directly.
 
-还必须钉死的几条：
+These must also be nailed down:
 
-1. **gate≈0 时，16/26 切分 ≡ 原 42 层残差流**（差一个尚未打开的 cross-attn）。这是 MiniCPM5 热启合法的理由。
-2. **CSA/HCA 压缩支路必须排除自身块**，否则块内未来 token 泄漏；**滑窗补这个洞**。充分条件：\(n_{\mathrm{win}}\ge m'\)。8K ≥ 128，成立。
-3. **Early-exit 只属于推理 prefill**。训练是两条栈都跑全部 token；不要把 32% 激活份额误当成训练 FLOPs。
-4. **Decoder 自注意力在训练时也看到全长序列。** 「生成序列通常不长」只描述推理。长上下文训练里 decoder self-attn 必须是滑窗/KDA，全局混合交给 cross-attn。
-5. Encoder 16 层做不了「3 层 bootstrap + CSA:HCA=1:1」。冻结为 **2× sliding + 7 CSA + 7 HCA**（对齐 V4-Flash 的 2 层滑窗 bootstrap）。Decoder 加到 26 层**不改**这条 Encoder 调度。
+1. **At gate≈0, the 16/26 split ≡ the original 42-layer residual stream** (difference: a cross-attn that is not yet open). That is why MiniCPM5 warm-start is legitimate.
+2. **The CSA/HCA compression branch must exclude the query’s own block**, or future tokens inside the block leak; **the sliding window patches that hole**. Sufficient condition: \(n_{\mathrm{win}}\ge m'\). 8K ≥ 128, holds.
+3. **Early-exit belongs only to inference prefill.** Training runs every token through both stacks; do not mistake the 32% activation share for training FLOPs.
+4. **Decoder self-attention also sees the full-length sequence at training time.** “Generated sequences are usually not long” describes inference only. In long-context training, decoder self-attn must be windowed/KDA; global mixing is left to cross-attn.
+5. Encoder 16 layers cannot do “3-layer bootstrap + CSA:HCA=1:1”. Lock it as **2× sliding + 7 CSA + 7 HCA** (aligned with V4-Flash’s 2-layer sliding bootstrap). Adding Decoder layers to 26 **does not change** this Encoder schedule.
 
-Claim ledger：14/14 通过。
+Claim ledger: 14/14 PASS.
 
 ---
 
-## 1. 形式化数据流
+## 1. Formal data flow
 
-长度 \(n\) 的序列，隐状态 \(X^{0}\in\mathbb{R}^{n\times d}\) 为 embedding（MiniCPM5 `scale_emb=1`，无 μP）。
+Sequence of length \(n\), hidden state \(X^{0}\in\mathbb{R}^{n\times d}\) is the embedding (MiniCPM5 `scale_emb=1`, no μP).
 
 \[
 \begin{aligned}
@@ -42,7 +42,7 @@ X^{\ell} &= \mathrm{CrossDec}^{\ell}(X^{\ell-1},\hat K,\hat V), && \ell=L_e+1,\l
 \end{aligned}
 \]
 
-\(d_{\mathrm{kv}}=n_{\mathrm{kv}}d_h=256\)（GQA-2）。每个 CrossDec 块：
+\(d_{\mathrm{kv}}=n_{\mathrm{kv}}d_h=256\) (GQA-2). Each CrossDec block:
 
 \[
 \begin{aligned}
@@ -52,240 +52,240 @@ X' &= Z + \mathrm{MoE}(Z).
 \end{aligned}
 \]
 
-\(g\in[0,1]\) 是 Phase A/B 的 cross-attn gate。因果 mask：self-attn 与 cross-attn 的 query \(t\) 都不得看见位置 \(>t\)。
+\(g\in[0,1]\) is the Phase A/B cross-attn gate. Causal mask: neither self-attn nor cross-attn query \(t\) may see positions \(>t\).
 
-外部行为是因果 LM：logits 来自 \(X^{L_e+L_d}\) 的 **untied** head \(W_{\mathrm{head}}\)。这就是 YOCO 说的「看起来像 decoder-only，只缓存一次」。
-
----
-
-## 2. 定理 A — gate=0 时切分等价于原残差流
-
-**定理 A.** 若 (i) \(\mathrm{SelfDec}\) 与 \(\mathrm{CrossDec}\) 的 self-attn+FFN 就是原 MiniCPM5 第 \(1..16\) 与第 \(17..42\) 层，(ii) \(g=0\)，(iii) 尚未 MoE 化、尚未把注意力换成 CSA，则对任意输入，CAT-YOKO 的 \(X^{42}\) 等于原 MiniCPM5 的 \(X^{42}\)。
-
-**证明.** \(g=0\) 时 CrossDec 退化为 SelfAttn+FFN。残差输入为 \(X^{16}\)，正是 MiniCPM5 第 17 层的输入。按层归纳即得。□
-
-推论：
-
-- Phase A「cross-attn 旁路」不是启发式，是**切点合法**的充分条件。
-- MoE 上采样、CSA 替换各自打破等价，必须分步（Phase A 切分 → B 恢复 → C 稀疏化），与 §13 去风险阶梯一致。
-- Decoder 第 1 层（全局第 17 层）的残差已经是 \(X^{16}\)；打开 \(g\) 之后，cross-attn 读的也是 \(X^{16}\) 的投影。所以 \(g\) 从 0 升到 1 是在**同一份记忆上增加「按位置混合前缀」的通路**，不是突然接入一个外来 encoder。
-
-打开 \(g\) 之后多出来的能力：self-attn 若是滑窗，位置 \(t\) 的残差只含局部；cross-attn 允许 \(t\) 混合 \(\hat K_{1:t}\)，即 **\(X^{16}\) 的因果前缀**。这正是 YOCO 用一层记忆换全局感受野的机制。
+External behavior is a causal LM: logits come from the **untied** head \(W_{\mathrm{head}}\) on \(X^{L_e+L_d}\). This is YOCO’s “looks like decoder-only, cache once”.
 
 ---
 
-## 3. 三件机制：不要把 M1 当成 M3
+## 2. Theorem A — at gate=0 the split equals the original residual stream
 
-计划 §2.0 写「self-decoder 的 CSA/HCA 产出更紧凑的全局 cache」。字面会让人以为 Encoder 做完 CSA，cache 槽数已经是 \(N/m\)。**不是。**
+**Theorem A.** If (i) \(\mathrm{SelfDec}\) and \(\mathrm{CrossDec}\) self-attn+FFN are the original MiniCPM5 layers \(1..16\) and \(17..42\), (ii) \(g=0\), (iii) not yet MoE-ized and attention not yet swapped to CSA, then for any input, CAT-YOKO’s \(X^{42}\) equals original MiniCPM5’s \(X^{42}\).
 
-### M1 — Encoder 层内 CSA/HCA
+**Proof.** At \(g=0\), CrossDec degenerates to SelfAttn+FFN. Residual input is \(X^{16}\), which is exactly MiniCPM5 layer 17’s input. Layer-wise induction gives the result. □
 
-每一层把该层的 KV 沿序列压缩，再让**当前层的 query（输入 token）** 去选。输出仍是 \(n\) 条隐状态。顶层 \(X^{L_e}\) 仍是 \(n\times d\)。  
-对 decoder 而言，这是 **write-time 语境化**：写 cache 时用的 query 是「这段输入自己」，不是用户稍后的问题。PDSA 的「无写入时信号」直接打在这里——Encoder CSA 的 top-k 救不了「事后才被问到」的针。
+Corollaries:
 
-### M2 — 全局 cache 再池化（可选）
+- Phase A’s “cross-attn bypass” is not a heuristic; it is a sufficient condition for a **legitimate cut**.
+- MoE upsampling and CSA replacement each break the equivalence and must be staged (Phase A split → B recovery → C sparsify), matching the §13 derisking ladder.
+- Decoder layer 1 (global layer 17) already has residual \(X^{16}\); after opening \(g\), cross-attn also reads a projection of \(X^{16}\). So raising \(g\) from 0 to 1 **adds a “mix the prefix by position” path on the same memory**, rather than suddenly attaching a foreign encoder.
+
+Capability added after opening \(g\): if self-attn is windowed, position \(t\)’s residual is only local; cross-attn lets \(t\) mix \(\hat K_{1:t}\), i.e. **the causal prefix of \(X^{16}\)**. That is YOCO’s mechanism for trading one layer of memory for a global receptive field.
+
+---
+
+## 3. Three mechanisms: do not treat M1 as M3
+
+Plan §2.0 writes “self-decoder CSA/HCA produce a more compact global cache”. Read literally, that would mean Encoder CSA already leaves cache slots at \(N/m\). **It does not.**
+
+### M1 — Encoder in-layer CSA/HCA
+
+Each layer compresses that layer’s KV along the sequence, then lets **the current layer’s query (input token)** select. Output is still \(n\) hidden states. Top-layer \(X^{L_e}\) is still \(n\times d\).
+For the decoder this is **write-time contextualization**: the query used when writing the cache is “this input itself”, not the user’s later question. PDSA’s “no write-time signal” lands directly here — Encoder CSA top-k cannot save a needle that is only asked about after the fact.
+
+### M2 — global-cache re-pooling (optional)
 
 \[
 \hat K' = \mathrm{Pool}_m(\hat K)\in\mathbb{R}^{(n/m)\times d_{\mathrm{kv}}}.
 \]
 
-这才真正减少 **YOCO 那一份** cache 的槽数。预算篇 §7 的 0.29 GB（\(m=4\)）和 0.14 GB（÷8）属于 M2，不属于 M1。M2 是 write-first，没有 decoder query。
+This is what actually reduces slot count of **YOCO’s single** cache. The budget doc §7 figures 0.29 GB (\(m=4\)) and 0.14 GB (÷8) belong to M2, not M1. M2 is write-first; there is no decoder query.
 
-### M3 — Decoder 侧选择（真正的检索）
+### M3 — Decoder-side selection (the actual retrieval)
 
-生成 query \(q_t\) 对 \(\hat K_{1:t}\)（或 M2 后的槽）做 dense / top-k / 校准回退。这才是 query-aware。128K–256K 上未压缩 cross-attn 压过 decoder MLP（预算篇 §6），所以 **M3 或 M2 至少要有一个**；推荐 M3（可回退），M2 作省显存的加项。
+Generation query \(q_t\) does dense / top-k / calibrated fallback over \(\hat K_{1:t}\) (or the slots after M2). This is the query-aware step. At 128K–256K, uncompressed cross-attn overtakes decoder MLP (budget doc §6), so **at least one of M3 or M2 is required**; recommend M3 (with fallback), M2 as a memory-saving add-on.
 
-**架构约束.** 实现上 cross-attn 默认先做成因果 dense（合法、对应定理 A 的连续放松），再在 Phase C 加 M3。不要把 Encoder Lightning Indexer 的 top-k 权重复用到 decoder query 上——两个 query 分布不同。
+**Architecture constraint.** Implement cross-attn as causal dense first by default (legal; a continuous relaxation of Theorem A), then add M3 in Phase C. Do not reuse Encoder Lightning Indexer top-k weights on the decoder query — the two query distributions differ.
 
 ---
 
-## 4. 定理 B — CSA/HCA 因果 + 滑窗补洞
+## 4. Theorem B — CSA/HCA causality + window patches the hole
 
-记压缩率 \(m\)，query 位置 \(t\)（0-index）。自身块号 \(b=\lfloor t/m\rfloor\)。块 \(s\) 覆盖 token \([sm,(s+1)m)\)。
+Write compression ratio \(m\), query position \(t\) (0-index). Own-block index \(b=\lfloor t/m\rfloor\). Block \(s\) covers tokens \([sm,(s+1)m)\).
 
-**压缩支路可见性（V4 §2.3.1）**
+**Compression-branch visibility (V4 §2.3.1)**
 
 \[
 \mathcal{S}_{\mathrm{comp}}(t)=\{s:s < \lfloor t/m\rfloor\}.
 \]
 
-**引理 B1（压缩支路不泄漏未来）.** 若 \(s\in\mathcal{S}_{\mathrm{comp}}(t)\)，则块 \(s\) 内最大下标 \((s+1)m-1 \le m\lfloor t/m\rfloor-1 \le t-1\)。CSA 的重叠支路 \(C^b\) 用的是上一块，最新 token 不更晚。故压缩支路因果。
+**Lemma B1 (compression branch does not leak the future).** If \(s\in\mathcal{S}_{\mathrm{comp}}(t)\), then the largest index inside block \(s\) is \((s+1)m-1 \le m\lfloor t/m\rfloor-1 \le t-1\). CSA’s overlapping branch \(C^b\) uses the previous block; the newest token is no later. Hence the compression branch is causal.
 
-**引理 B2（自身块有洞）.** 自身块内 \(\le t\) 的 token（含自己）不在 \(\mathcal{S}_{\mathrm{comp}}\)。自身块内 \(>t\) 的 token 若被纳入压缩键，会泄漏未来——这就是必须整块排除的原因。
+**Lemma B2 (own block has a hole).** Tokens \(\le t\) inside the own block (including self) are not in \(\mathcal{S}_{\mathrm{comp}}\). Tokens \(>t\) inside the own block, if folded into the compressed key, would leak the future — that is why the whole block must be excluded.
 
-**滑窗**
+**Sliding window**
 
 \[
 \mathcal{W}(t)=\{p:\max(0,t-n_{\mathrm{win}}+1)\le p\le t\}.
 \]
 
-**定理 B（补洞）.** 若 \(n_{\mathrm{win}}\ge m\)，则自身块内所有 \(\le t\) 的 token 都在 \(\mathcal{W}(t)\) 里。因此
+**Theorem B (hole patch).** If \(n_{\mathrm{win}}\ge m\), then every token \(\le t\) inside the own block is in \(\mathcal{W}(t)\). Therefore
 
 \[
 \mathcal{V}(t)=\mathcal{W}(t)\;\cup\;\bigcup_{s\in\mathcal{S}_{\mathrm{comp}}(t)}[sm,(s+1)m)
 \]
 
-因果，且自身块过去对 query 可见。
+is causal, and the own-block past is visible to the query.
 
-CAT-YOKO：\(n_{\mathrm{win}}=8192\)，\(m=4\)，\(m'=128\)，\(8192\ge 128\)。HCA 同样适用。若有人把窗降到 \(<128\) 还保留 HCA \(m'=128\)，补洞失败——这是消融 `n_win∈{2K,4K,8K}` 的**下限不是 0、至少 128** 的理由。2K/4K/8K 都安全。
+CAT-YOKO: \(n_{\mathrm{win}}=8192\), \(m=4\), \(m'=128\), \(8192\ge 128\). The same applies to HCA. If someone drops the window below \(<128\) while keeping HCA \(m'=128\), the hole patch fails — that is why the ablation `n_win∈{2K,4K,8K}` has a **floor that is not 0, at least 128**. 2K/4K/8K are all safe.
 
-**Indexer.** top-\(k\) 只允许从 \(\mathcal{S}_{\mathrm{comp}}(t)\) 里删，不许加。稀疏化掉点是召回问题，不是因果问题；所以 Phase C 要先做 indexer 对齐。
+**Indexer.** top-\(k\) may only delete from \(\mathcal{S}_{\mathrm{comp}}(t)\), never add. Dropped points under sparsification are a recall issue, not a causality issue; that is why Phase C does indexer alignment first.
 
-有限 \(n=64\) 上的穷举见 `scripts/arch_verify.py`（CSA/HCA/YOCO 零泄漏，top-k 是子集）。
-
----
-
-## 5. 定理 C — YOCO cross-attn 因果与 early-exit
-
-**因果.** query \(t\) 可读 cache 槽 \(\{0,\ldots,t\}\)。Encoder 是因果的，\(\hat K_j\) 只依赖 token \(\le j\)，故 \(j\le t\) 时 \(\hat K_j\) 不含未来。
-
-**推理 prefill early-exit.** 提示 \(x_{0:n-1}\) 的全局 cache 在 \(X^{L_e}_{0:n-1}\) 算完后就闭合。要出第一个生成 token，只需 **decoder 在位置 \(n-1\) 上跑一次**（读已写好的 cache），不必对 \(n\) 个提示位置跑 \(L_d\) 层。这是 YOCO Table 1 的 early-exit：省的是 \(O(L_d n)\) 的 decoder prefill，不是 decoder 的最后一位。
-
-**训练没有 early-exit.** 每个位置都有 CE，decoder 必须在全部 \(t=0..n-1\) 上前向。训练 FLOPs 用 \(N_{\mathrm{fwd}}^{\mathrm{act}}\)（预算篇），不能用 32% 的 encoder 份额去估 Phase B。
+Exhaustive check on finite \(n=64\) is in `scripts/arch_verify.py` (CSA/HCA/YOCO zero leak; top-k is a subset).
 
 ---
 
-## 6. 感受野：全局从哪来
+## 5. Theorem C — YOCO cross-attn causality and early-exit
 
-| 路径 | 感受野 |
+**Causality.** Query \(t\) may read cache slots \(\{0,\ldots,t\}\). The Encoder is causal, \(\hat K_j\) depends only on tokens \(\le j\), so for \(j\le t\), \(\hat K_j\) contains no future.
+
+**Inference prefill early-exit.** The prompt \(x_{0:n-1}\) global cache closes once \(X^{L_e}_{0:n-1}\) is computed. To emit the first generated token, **the decoder only needs to run once at position \(n-1\)** (reading the already-written cache); it need not run \(L_d\) layers at all \(n\) prompt positions. This is YOCO Table 1 early-exit: what is saved is \(O(L_d n)\) decoder prefill, not the decoder’s last position.
+
+**Training has no early-exit.** Every position has CE, so the decoder must forward at all \(t=0..n-1\). Training FLOPs use \(N_{\mathrm{fwd}}^{\mathrm{act}}\) (budget doc); do not estimate Phase B from the 32% encoder share.
+
+---
+
+## 6. Receptive field: where globality comes from
+
+| Path | Receptive field |
 | --- | --- |
-| Encoder 纯滑窗堆叠 | \(L_e\cdot n_{\mathrm{win}}=16\cdot 8192=131072\) |
-| Encoder CSA/HCA | 写时即可看压缩长程（有损） |
-| Decoder 自注意力 | \(n_{\mathrm{win}}=8192\)（**不能**跨 YOCO 切点与 encoder 窗相加） |
-| Decoder cross-attn | 因果前缀长度 \(t+1\)（或 M3 的 \(k\)） |
+| Encoder pure sliding-window stack | \(L_e\cdot n_{\mathrm{win}}=16\cdot 8192=131072\) |
+| Encoder CSA/HCA | can see compressed long range at write time (lossy) |
+| Decoder self-attention | \(n_{\mathrm{win}}=8192\) (**cannot** add to encoder windows across the YOCO cut) |
+| Decoder cross-attn | causal prefix length \(t+1\) (or M3’s \(k\)) |
 
-YOCO 原文 self-decoder 就是滑窗或 retention：encoder **不必**全局混合。token 0 的槽仍在，decoder 在 \(t=256\mathrm{K}\) 也能读它。256K 主目标**不依赖** encoder RF ≥ 256K。
+Original YOCO self-decoder is windowed or retention: the encoder **need not** mix globally. Token 0’s slot is still there; the decoder at \(t=256\mathrm{K}\) can still read it. The 256K primary target **does not depend** on encoder RF ≥ 256K.
 
-CSA/HCA 在 encoder 里的真正作用是：(a) 训练/prefill 时降低 encoder 注意力二次项（只在 \(n\gg 8K\) 时发生，预算篇 §5）；(b) 可选地让写入的表示带一点长程语境。它不是 256K 能检索的充分条件——充分条件是 **M3 的全局读**。
+What CSA/HCA actually do in the encoder: (a) cut the encoder’s quadratic attention term at train/prefill (only when \(n\gg 8K\), budget doc §5); (b) optionally give written representations a little long-range context. It is not a sufficient condition for 256K retrieval — the sufficient condition is **M3’s global read**.
 
-Decoder 窗不能和 encoder 窗叠感受野：切点之后 decoder 的 self-attn 只看 decoder 残差流的局部，远距必须走 \(\hat K\)。
-
----
-
-## 7. 共享全局 cache 的信息瓶颈
-
-Decoder-only：第 \(\ell\) 层的键来自该层隐状态，共 \(L_d\) 份彼此不同的记忆。  
-YOCO：\(L_d\) 层读**同一份** \(\hat K(X^{L_e})\)，每层只有 \(W_Q^{\ell}\) 不同。
-
-记忆张量从 \(O(L_d n d_{\mathrm{kv}})\) 降到 \(O(n d_{\mathrm{kv}})\)，因子 \(L_d=26\)。这是显存定理，也是表达力赌注：多层不能再「改写」键，只能换查询。YOCO 在 1M needle 上近似满分，说明对检索型任务这份记忆够用；它**不**证明多层推理/改写（agent 状态、版本化）够用——那是计划 §14 Tier 3 可训练 lifecycle 的动机，不是 CSA 的动机。
-
-M2 再沿序列池化，瓶颈从 \(n\) 降到 \(n/m\)。PDSA 已经量过 write-first 选择会丢「无写入时信号」的针，所以 M2 默认不要比 \(m=4\) 更狠；÷8 只作 stretch。
+Decoder windows cannot stack RF with encoder windows: after the cut, decoder self-attn only sees a local piece of the decoder residual stream; long range must go through \(\hat K\).
 
 ---
 
-## 8. 16/26 非对称
+## 7. Information bottleneck of the shared global cache
 
-YOCO 原文 \(L/2+L/2\)。CAT-YOKO 取 16/26（MiniCPM5 的 \(L_0=42\)），对应「更轻的 writer、更重的 reader」：
+Decoder-only: layer \(\ell\)’s keys come from that layer’s hidden state, \(L_d\) mutually different memories.
+YOCO: \(L_d\) layers read **the same** \(\hat K(X^{L_e})\); only \(W_Q^{\ell}\) differs per layer.
 
-- Prefill / 长输入绑定 writer（2.03B，32% 计划口径激活）。
-- 生成期把算力留给 reader（4.33B）在记忆上做更多层的 \(W_Q\) 查询。
-- MiniCPM5 前 16 层作 writer、后 26 层作 reader，与定理 A 的切点一致（前低层特征、后高层处理）。
+The memory tensor drops from \(O(L_d n d_{\mathrm{kv}})\) to \(O(n d_{\mathrm{kv}})\), factor \(L_d=26\). That is a memory theorem and an expressivity bet: later layers can no longer “rewrite” keys, only change the query. YOCO scoring near-full on 1M needle shows this memory is enough for retrieval-style tasks; it does **not** prove it is enough for multi-layer reasoning/rewrite (agent state, versioning) — that is the motivation for plan §14 Tier 3 trainable lifecycle, not for CSA.
 
-理论**不唯一决定** 16/26。12/30 会更便宜 prefill、更弱记忆；21/21 更接近 YOCO 原文。这是 §7 消融项，不是错误。16/26 与「输入轻、输出重」的中间档叙事一致即可。Encoder 仍是 16 层，CSA 调度 2/7/7 不变。
+M2 pools further along the sequence, shrinking the bottleneck from \(n\) to \(n/m\). PDSA already measured that write-first selection drops needles with no write-time signal, so M2 should not default more aggressive than \(m=4\); ÷8 is stretch only.
 
 ---
 
-## 9. Encoder 层调度：为什么是 2/7/7 而不是「前 3 层 bootstrap」
+## 8. 16/26 asymmetry
 
-16 层要同时满足：(i) 前几层接近 MiniCPM5 稠密注意力以便热启，(ii) CSA:HCA=1:1。
+Original YOCO is \(L/2+L/2\). CAT-YOKO takes 16/26 (MiniCPM5 \(L_0=42\)), matching “lighter writer, heavier reader”:
 
-- 2 层 sliding bootstrap → 余 14 层 → **7 CSA + 7 HCA**。
-- 3 层 bootstrap → 余 13 层 → **无法 1:1**。
+- Prefill / long input bound to the writer (2.03B, 32% plan-accounting activation).
+- Generation leaves compute for the reader (4.33B) to do more layers of \(W_Q\) queries on the memory.
+- MiniCPM5 first 16 layers as writer, last 26 as reader, matching Theorem A’s cut (lower-layer features first, higher-layer processing after).
 
-V4-Flash 的 `compress_ratios` 以两个 `0`（sliding）开头；V4-Pro 文本是 2× HCA bootstrap。对 MiniCPM5 上采样，**sliding bootstrap 更近原 GQA**（只是加窗），优于一上来 HCA \(m'=128\)。
+Theory **does not uniquely determine** 16/26. 12/30 would be cheaper prefill and weaker memory; 21/21 is closer to original YOCO. That is a §7 ablation item, not an error. 16/26 only needs to match the middle-tier story of “light input, heavy output”. The Encoder is still 16 layers; CSA schedule 2/7/7 is unchanged.
 
-**冻结：** Encoder `layer_types` =
+---
+
+## 9. Encoder layer schedule: why 2/7/7, not “first 3 layers bootstrap”
+
+16 layers must satisfy both: (i) the first few layers stay close to MiniCPM5 dense attention for warm-start, (ii) CSA:HCA=1:1.
+
+- 2-layer sliding bootstrap → 14 remaining → **7 CSA + 7 HCA**.
+- 3-layer bootstrap → 13 remaining → **cannot 1:1**.
+
+V4-Flash `compress_ratios` starts with two `0`s (sliding); V4-Pro text is 2× HCA bootstrap. For MiniCPM5 upsampling, **sliding bootstrap is closer to original GQA** (just add a window) than starting with HCA \(m'=128\).
+
+**Locked:** Encoder `layer_types` =
 
 ```
 sliding, sliding, csa, hca, csa, hca, csa, hca, csa, hca, csa, hca, csa, hca, csa, hca
 ```
 
-Decoder self-attn：全部 sliding（或以后的 KDA 混合），**不要**默认在 decoder self-attn 上再铺 CSA——全局已经在 cross-attn。Decoder 上的 CSA 是额外复杂度，且与 YOCO「decoder self 用高效局部注意力」重复。
+Decoder self-attn: all sliding (or later KDA mix). **Do not** default to laying CSA on decoder self-attn — globality is already in cross-attn. CSA on the Decoder is extra complexity and duplicates YOCO’s “decoder self uses efficient local attention”.
 
-计划原文「前 3 层 sliding/HCA」与「2× HCA bootstrap」并列表述，已在本节冻结为上面这一条。Decoder 26 层不改变 Encoder 这条 16 层调度。
-
----
-
-## 10. MoE、Hash-MoE、无 μP（架构侧）
-
-- 非对称激活来自**两个栈的层数与 top-k**，不是同一层上按 token 改 k。与定理 A 兼容：FFN 被换成 MoE 后等价被打破，所以 virtual-group 上采样要单独恢复（Phase B）。
-- 每栈首层 dense：路由在第 1 层不稳定（DeepSeekMoE 惯例），与注意力 bootstrap 同构——都是「先别上最险的归纳偏置」。预算篇：首层 dense 后 Enc/Dec routed 20→21 补回 12.30B。
-- Hash-MoE：冻结 `token_id→expert_id`，无学习路由，不进入注意力因果。Encoder 的 Hash-MoE 放到 B2 解冻之后（课程篇 §5）。
-- **无 μP**：`scale_emb=1`，残差恒等 1，logits 不除以 9。不要搬 MiniCPM-2B 的 \(1.4/\sqrt{40}\)。与 YOCO 切分正交：切的是层，不是尺度。
-
-mHC / Muon / MTP 不进入本篇因果核验。mHC 是残差谱约束，关了不影响 YOCO/CSA 合法性。
+The plan originally listed “first 3 layers sliding/HCA” alongside “2× HCA bootstrap”; this section locks that to the schedule above. Decoder 26 layers do not change this Encoder 16-layer schedule.
 
 ---
 
-## 11. KDA 与 PDSA 放在哪
+## 10. MoE, Hash-MoE, no μP (architecture side)
 
-KDA 是**每层一个固定大小的循环状态**，与 YOCO 的 KV 槽正交。它不能提供 M3：状态对所有未来 query 是同一份 gist，正是 PDSA 说的 write-first。计划 §2.5 的定位（效率 + 粗覆盖，不是中段精确检索）与本篇一致。
+- Asymmetric activation comes from **layer counts and top-k on the two stacks**, not from changing k per token inside one layer. Compatible with Theorem A: replacing FFN with MoE breaks equivalence, so virtual-group upsampling is recovered separately (Phase B).
+- First layer of each stack dense: routing is unstable at layer 1 (DeepSeekMoE convention), isomorphic to the attention bootstrap — both are “do not apply the riskiest inductive bias first”. Budget doc: after first-layer dense, Enc/Dec routed 20→21 restores 12.30B.
+- Hash-MoE: frozen `token_id→expert_id`, no learned routing, does not enter attention causality. Encoder Hash-MoE is placed after the B2 unfreeze (curriculum doc §5).
+- **No μP**: `scale_emb=1`, residual identity 1, logits not divided by 9. Do not copy MiniCPM-2B’s \(1.4/\sqrt{40}\). Orthogonal to the YOCO split: the cut is layers, not scale.
 
-若在 Encoder 上做 3:1 KDA:CSA，是在 **M1** 里用线性层换 CSA 层，减少的是 encoder 二次项与每层 KV；**不**减少 YOCO 全局 cache 槽数（那是 M2），也**不**给出 decoder 侧 query-aware（那是 M3）。混合比例仍用 §7 消融，本篇只禁止「上了 KDA 就等于保中段」。
-
-PDSA 校准回退是 M3 的门控，不是第四种注意力。阈值必须在目标长度上校准（计划 §14），短上下文校准会让回退永不触发——与预算篇「128K 起 cross-attn 才成为瓶颈」同一长度尺度。
+mHC / Muon / MTP do not enter this document’s causality check. mHC is a residual spectral constraint; turning it off does not affect YOCO/CSA legality.
 
 ---
 
-## 12. 从理论推出的失败模式（实现前先避开）
+## 11. Where KDA and PDSA sit
 
-| 失败 | 来源 | 避免 |
+KDA is **one fixed-size recurrent state per layer**, orthogonal to YOCO KV slots. It cannot provide M3: the state is the same gist for all future queries, exactly PDSA’s write-first. Plan §2.5’s placement (efficiency + coarse coverage, not precise mid-context retrieval) matches this document.
+
+A 3:1 KDA:CSA mix on the Encoder swaps linear layers for CSA layers **inside M1**, cutting encoder quadratic terms and per-layer KV; it does **not** reduce YOCO global-cache slot count (that is M2), and does **not** give decoder-side query-awareness (that is M3). Mix ratios still use the §7 ablation; this document only forbids “turning on KDA equals preserving the mid-context”.
+
+PDSA calibrated fallback is M3’s gate, not a fourth attention. The threshold must be calibrated at the target length (plan §14); calibrating on short context makes the fallback never fire — the same length scale as the budget doc’s “cross-attn becomes the bottleneck from 128K”.
+
+---
+
+## 12. Failure modes implied by the theory (avoid these before implementing)
+
+| Failure | Source | Avoid |
 | --- | --- | --- |
-| 块内未来泄漏 | 压缩支路看见自身块 | 定理 B：排除自身块 + \(n_{\mathrm{win}}\ge m'\) |
-| 256K 检索为 0 | 误以为必须靠 encoder RF | 保证 M3 能读到 token 0 的槽 |
-| Decode 被 cross-attn 打死 | 只有 M1、没有 M2/M3 | 128K 起开 M3 或 \(m=4\) 的 M2 |
-| 训练 FLOPs 少算 3× | 把 early-exit 用到训练 | 训练两条栈全长 |
-| Decoder 长训 \(O(n^2)\) | 以为「生成短」所以 decoder 全注意力 | 训练时 decoder self 也是窗 |
-| 热启崩 | \(g=1\) 或一上来 CSA top-k | 定理 A：\(g=0\)；Phase C 再稀疏 |
-| 16 层 1:1 排不下 | 3 层 bootstrap | 冻结 2/7/7 |
-| Indexer 复用错 query | 把 M1 的 indexer 接到 M3 | 两套 query，两套（或后加的）indexer |
+| In-block future leak | Compression branch sees own block | Theorem B: exclude own block + \(n_{\mathrm{win}}\ge m'\) |
+| 256K retrieval is 0 | Mistakenly require encoder RF | Guarantee M3 can read token 0’s slot |
+| Decode killed by cross-attn | Only M1, no M2/M3 | From 128K, turn on M3 or M2 with \(m=4\) |
+| Training FLOPs undercounted 3× | Apply early-exit to training | Train both stacks full length |
+| Decoder long-train \(O(n^2)\) | Think “generation is short” so decoder is full attention | Decoder self is windowed at train time too |
+| Warm-start collapse | \(g=1\) or CSA top-k from the start | Theorem A: \(g=0\); sparsify in Phase C |
+| 16 layers cannot schedule 1:1 | 3-layer bootstrap | Lock 2/7/7 |
+| Indexer reused on the wrong query | Wire M1’s indexer into M3 | Two queries, two (or later-added) indexers |
 
-理论**不能**排除的：MoE 负载坍塌、indexer 对不齐、lost-in-the-middle（位置偏置，IN2/FILM + RoPE/NoPE）、12B 恢复不到 MiniCPM5 95%。那些是实验。
+Theory **cannot** rule out: MoE load collapse, indexer misalignment, lost-in-the-middle (position bias, IN2/FILM + RoPE/NoPE), 12B recovery missing MiniCPM5 95%. Those are experiments.
 
 ---
 
 ## 13. Claim ledger
 
-`python3 scripts/arch_verify.py --verify`：
+`python3 scripts/arch_verify.py --verify`:
 
-| Claim | 结果 |
+| Claim | Result |
 | --- | --- |
 | 16+26=42 | PASS |
-| \(n_{\mathrm{win}}\ge m,m'\) | PASS（8192≥128） |
-| Encoder 调度 2 sliding + 7 CSA + 7 HCA | PASS |
-| 窗-only encoder RF = 131072 < 256K | PASS（且不需要 ≥256K） |
-| 共享 cache = 1 writer × 26 readers | PASS |
-| Early-exit 仅推理 | PASS（条文） |
-| n=64 CSA/HCA/YOCO 因果、自身块不走压缩、窗补洞、top-k 子集 | PASS |
-| M1 ≠ M2 ≠ M3 | PASS（条文；测试检查槽数与 query 集不同） |
+| \(n_{\mathrm{win}}\ge m,m'\) | PASS (8192≥128) |
+| Encoder schedule 2 sliding + 7 CSA + 7 HCA | PASS |
+| Window-only encoder RF = 131072 < 256K | PASS (and need not be ≥256K) |
+| Shared cache = 1 writer × 26 readers | PASS |
+| Early-exit inference only | PASS (prose) |
+| n=64 CSA/HCA/YOCO causal, own block not compressed, window patches hole, top-k subset | PASS |
+| M1 ≠ M2 ≠ M3 | PASS (prose; tests check slot count and query sets differ) |
 
 ---
 
-## 14. 对计划的修订（本 PR）
+## 14. Plan revisions (this PR)
 
-1. §2.0：CSA/HCA 不自动压 YOCO 槽数；全局性来自 cross-attn。
-2. §2.3：Encoder `layer_types` 冻结为 2/7/7 sliding→CSA/HCA；Decoder self 默认全滑窗。
-3. §2.0「生成序列通常不长」：标明仅推理；训练 decoder self 仍是窗。
-4. 与预算篇衔接：128K–256K 必须有 M2 或 M3；默认推 M3。切分 **16/26**，不是 16/24。
+1. §2.0: CSA/HCA do not automatically compress YOCO slot count; globality comes from cross-attn.
+2. §2.3: Encoder `layer_types` locked to 2/7/7 sliding→CSA/HCA; Decoder self defaults to all windowed.
+3. §2.0 “generated sequences are usually not long”: mark as inference-only; train-time decoder self is still windowed.
+4. Tie-in with the budget doc: 128K–256K must have M2 or M3; default push M3. Split **16/26**, not 16/24.
 
 ---
 
-## 15. 分训再合并（算力，不是因果）
+## 15. Train separately then merge (compute, not causality)
 
-两栈**独立当 LM 训再拼接**会破坏定理 A 的表示对齐，且 50B+50B+拼接比联合 50B **更贵**（约 1.46×）。能省的是同一套切开权重上的**解冻课程**。
+Training the two stacks **independently as LMs and then stitching** breaks Theorem A’s representation alignment, and 50B+50B+stitch is **more expensive** than joint 50B (about 1.46×). What can be saved is an **unfreeze curriculum** on the same split weights.
 
-定理 D：B0/B1 在 \(X^{16}\) 上 `.detach()`，Encoder 无权重/激活梯度；\(W_K,W_V\) 挂在 detach 之后，是新模块。  
-定理 E：输入 \(E_{\mathrm{in}}\) 必须随 Encoder 冻结；B0 冻 lm_head，B1 **可以训** untied head。禁止在 Encoder 冻结时训输入表，否则冻结 Encoder 的输入分布会漂。
+Theorem D: B0/B1 `.detach()` at \(X^{16}\); Encoder has no weight/activation gradients; \(W_K,W_V\) attach after detach and are new modules.
+Theorem E: input \(E_{\mathrm{in}}\) must freeze with the Encoder; B0 freezes lm_head, B1 **may train** the untied head. Training the input table while the Encoder is frozen is forbidden, or the frozen Encoder’s input distribution drifts.
 
-定稿 **C1**：Phase A 两栈都 MoE，B0/B1 冻 Encoder（virtual-group 冻结 ⇒ Encoder ≈ MiniCPM5-16；B2 才让 Encoder 专家特化）。
+Locked-in **C1**: Phase A MoE both stacks, B0/B1 freeze Encoder (virtual-group freeze ⇒ Encoder ≈ MiniCPM5-16; Encoder experts specialize only at B2).
 
-数字：C1 约 **79%** 联合 50B；独立拼接 **146%**。B1 Adam 状态约联合的 **62%**。冻结边界见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) 与训练计划 §4.0。**发布墙钟 C1+NVFP4 = 571 H100-h**（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)）。`python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4`。
+Numbers: C1 about **79%** of joint 50B; independent stitch **146%**. B1 Adam state about **62%** of joint. Freeze boundaries in [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md) and training plan §4.0. **Published wall-clock C1+NVFP4 = 571 H100-h** ([`NVFP4_THEORY.md`](NVFP4_THEORY.md)). `python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4`.
 
-复算：
+Recompute:
 
 ```bash
 python3 scripts/arch_verify.py --verify
 python3 -m unittest tests.test_arch_verify
-python3 scripts/param_budget.py --verify                 # 中间档 + 解冻课程 + FP8 回退 + NVFP4 账本
+python3 scripts/param_budget.py --verify                 # middle-tier + unfreeze curriculum + FP8 fallback + NVFP4 ledger
 python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4
 ```

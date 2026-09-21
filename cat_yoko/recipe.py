@@ -3,7 +3,7 @@
 The model is meant to do coding work, so default Phase B/C is not 0% code.
 StarCoder is not OpenBMB; do not download it in CI / this VM. Optional
 ``phase-b-code`` raises the slice to 10% (Ultra-FineWeb paper eval mix).
-UltraChat / 指令对话是 Phase F/G，不进这张表。
+UltraChat / instruction chat belongs in Phase F/G, not this table.
 """
 
 from __future__ import annotations

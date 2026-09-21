@@ -1,89 +1,89 @@
-# B200 开训
+# B200 training
 
-目标卡 **NVIDIA B200 / SM 10.0**（同族 B100/B300 为 SM 10.3）。Transformer Engine：NVFP4 **训练** kernel 只在 SM 10.0 / 10.3。默认 `NVFP4BlockScaling()` = 权重 2D scaling + WGRAD 上 RHT + 梯度随机舍入。不要把 6000D 的 `disable_rht` / `disable_2d` 套到这张卡上。
+Target GPU: **NVIDIA B200 / SM 10.0** (same-family B100/B300 is SM 10.3). Transformer Engine: NVFP4 **training** kernels exist only on SM 10.0 / 10.3. Default `NVFP4BlockScaling()` is 2D weight scaling + RHT on WGRAD + stochastic rounding on gradients. Do not apply the 6000D `disable_rht` / `disable_2d` knobs on this card.
 
-sm_120（RTX PRO 6000D）走 `Nvfp4Linear` E2M1/16 仿真，没有 SM100 TMEM/UMMA 训练 kernel。
+sm_120 (RTX PRO 6000D) uses `Nvfp4Linear` E2M1/16 emulation. There is no SM100 TMEM/UMMA training kernel.
 
-**上次 Vast B200 已回收**（2026-09-19，SSH 拒绝）。进度见 [`STATUS.md`](STATUS.md)。下一台从 Hub overlay 接，不要假设旧 SSH Host 还在。
+**The last Vast B200 instance was recycled** (2026-09-19, SSH refused). Progress is in [`STATUS.md`](STATUS.md). The next machine should pick up from the Hub overlay. Do not assume the old SSH Host still exists.
 
-## 未知下一张卡
+## Next GPU is unknown
 
-卡还没定的时候，适配的是 **SM / 显存 / TE FPROP**，不是 Megatron EP/TP。`run_b0_full_b200.sh` 在非 10.0/10.3 上会 exit 4。下一台入口：
+Until the card is chosen, the adaptation surface is **SM / VRAM / TE FPROP**, not Megatron EP/TP. `run_b0_full_b200.sh` exits 4 on anything other than 10.0/10.3. Next-machine entrypoint:
 
 ```bash
 python3 -m cat_yoko.hw_recipe --json
 bash scripts/run_b0_next.sh
 ```
 
-`cat_yoko.hw_recipe` 按 family+GiB 选出 profile（`sm100_b200` / `sm120_6000d` / `hopper_h100` / `ada_tight` / `cpu`），再生成 `cat_yoko.b0` 的 seq / micro-batch / offload / grad-ckpt / `--try`。CPU 只打 JSON，不建 12B。`<40GiB` 拒绝 8e9 信封。Ampere/Ada 卸 encoder 的发布信封会在 JSON 里附 `deepspeed_zero` 提示（默认 argv 仍是 torch）。Megatron 适配面（`ParallelPlan`、`--dump-megatron`）继续留着，等真有多卡节点再填。
+`cat_yoko.hw_recipe` picks a profile from family+GiB (`sm100_b200` / `sm120_6000d` / `hopper_h100` / `ada_tight` / `cpu`) and then emits `cat_yoko.b0` seq / micro-batch / offload / grad-ckpt / `--try`. CPU only prints JSON; it does not build 12B. `<40GiB` refuses the 8e9 envelope. Ampere/Ada published envelopes that offload the encoder attach a `deepspeed_zero` hint in the JSON (default argv is still torch). The Megatron adaptation surface (`ParallelPlan`, `--dump-megatron`) stays in place until a real multi-GPU node exists.
 
-下面仍是 **已知 B200 / SM100** 的算子与快捷脚本。
+The rest of this file is **known B200 / SM100** operators and shortcut scripts.
 
-## 从 Hub overlay 接 B0
+## Resume B0 from the Hub overlay
 
-6000D 停在 step **16020**。B200 释放前钉：
+6000D stopped at step **16020**. Pin at B200 release:
 
-| 项 | 值 |
+| Item | Value |
 | --- | --- |
 | Hub | https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full |
 | step | **26940** |
-| tokens_in_phase | 130,041,856（8e9 的 ≈1.63%） |
+| tokens_in_phase | 130,041,856 (≈1.63% of 8e9) |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| micro-batch | 2（`MICRO_BATCH=1` 回退） |
-| 日志 | [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
+| micro-batch | 2 (`MICRO_BATCH=1` fallback) |
+| logs | [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
 
-文件夹说明与 GitHub [`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md) 同步。
+Folder notes stay in sync with GitHub [`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md). This Hub `b0-full` step **26940** overlay is the published pin. The RTX 3090 BF16 run is a sibling, not a replacement.
 
 ```bash
 bash scripts/run_b0_next.sh
-# 已知 B200：
+# Known B200:
 bash scripts/run_b200.sh
-# 或分步：
+# Or step by step:
 bash scripts/upgrade_torch_te_b200.sh
 python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
 python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
 bash scripts/run_b0_full_b200.sh
 ```
 
-启动参数：**seq=4096**，`--micro-batch 2`，`--no-offload-encoder`，`--no-grad-ckpt`，`--no-save-full`，DummyStream，不拉 50B Ultra-FineWeb。
+Launch args: **seq=4096**, `--micro-batch 2`, `--no-offload-encoder`, `--no-grad-ckpt`, `--no-save-full`, DummyStream. Do not pull 50B Ultra-FineWeb.
 
-Trainer：MiniCPM5 上采样 → overlay `trainable.pt` → 恢复 `step` / `tokens_in_phase` / stream / RNG。同阶段不要 resume `checkpoints/b0/` 的 32 步 `--try`。
+Trainer: MiniCPM5 upcycle → overlay `trainable.pt` → restore `step` / `tokens_in_phase` / stream / RNG. Do not resume the 32-step `--try` under `checkpoints/b0/` in the same phase.
 
-## 上次实测（B200，已回收）
+## Last measured run (B200, recycled)
 
-nvcc 12.9 cubin，**micro-batch=2**：中位约 **15.7k tok/s**（~520ms/step，8192 tok/step），Trainer **~138GiB**，nvidia-smi ~141/183GiB。相对 micro-batch=1 的 12.4k tok/s / 96GiB，吞吐 **+27%**（步时约 1.57×，不是 2×）。step **22100** 时 `tokens_in_phase=90,392,576`，之后每步 +8192。
+nvcc 12.9 cubin, **micro-batch=2**: median about **15.7k tok/s** (~520ms/step, 8192 tok/step), Trainer **~138GiB**, nvidia-smi ~141/183GiB. Versus micro-batch=1 at 12.4k tok/s / 96GiB, throughput is **+27%** (step time about 1.57×, not 2×). At step **22100**, `tokens_in_phase=90,392,576`; every later step adds +8192.
 
-Decoder 按 C1 仍是 bf16；encoder NVFP4 FPROP。相对 B200 BF16 2.25 PFLOPS，Kaplan B0 账大约 **14.5% MFU**：Encoder 前向只占 B0 FLOPs 的 **17%**。不要把冻结 Decoder 也套 NVFP4——激活会量化进 bf16 student，动定理 A。
+Decoder stays bf16 per C1; encoder uses NVFP4 FPROP. Relative to B200 BF16 2.25 PFLOPS, the Kaplan B0 ledger is about **14.5% MFU**: encoder forward is only **17%** of B0 FLOPs. Do not wrap the frozen decoder in NVFP4 either — activations would quantize into the bf16 student and move Theorem A.
 
-热路径：`collapse_doc_ids`、向量化 `pad_packed_counts`、`repeat_interleave(..., output_size=)`、CE chunk 缓存、一步一次 D2H 的 nll/aux、CUDA SDPA 优先 Flash/cuDNN（`sdpa_kernel` 传 **list**）、冻结 MoE 不算 z-loss。
+Hot path: `collapse_doc_ids`, vectorized `pad_packed_counts`, `repeat_interleave(..., output_size=)`, CE chunk cache, one D2H per step for nll/aux, CUDA SDPA preferring Flash/cuDNN (`sdpa_kernel` takes a **list**), frozen MoE skips z-loss.
 
-`CAT_YOKO_TE_NVFP4=0` 强制仿真。`FORCE_SM120=1` 才允许把 B200 启动脚本跑在 sm_120 上。
+`CAT_YOKO_TE_NVFP4=0` forces emulation. `FORCE_SM120=1` is required before the B200 launch scripts are allowed to run on sm_120.
 
-## 算子
+## Operators
 
-| 槽 | B200（SM100） | 6000D（sm_120） |
+| Slot | B200 (SM100) | 6000D (sm_120) |
 | --- | --- | --- |
-| attn QKV/O、cross Q/O、cache KV、lm_head、shared SwiGLU | `TeNvfp4Linear`：wrap 时 `copy_` 一次进 `te.Linear`，`te.autocast(recipe=NVFP4BlockScaling())` | `Nvfp4Linear` 仿真 |
-| fused QKV / gate+up / cache KV | 冻住：一次 fused `te.Linear`。可训练：顺序 native TE；`cache_k`/`cache_v` 一次 cat GEMM | 仿真 fused cat |
-| MoE routed experts | `te.GroupedLinear`；SM100 默认 RHT 把 expert token 数补到 **64**。冻住 gate+up 合成一次 GroupedLinear，且 `weight{i}.requires_grad=False`。禁止 stack TE master 进 bf16 `grouped_mm` | permute + `grouped_mm` 仿真 |
-| router / embed / RMSNorm / qk_norm / SDPA | 高精度 | 同左 |
-| 注意力拓扑 | 因果 YOCO window + GQA 16/2/128；不实现 CSA | 同左 |
+| attn QKV/O, cross Q/O, cache KV, lm_head, shared SwiGLU | `TeNvfp4Linear`: one `copy_` into `te.Linear` at wrap time, then `te.autocast(recipe=NVFP4BlockScaling())` | `Nvfp4Linear` emulation |
+| fused QKV / gate+up / cache KV | Frozen: one fused `te.Linear`. Trainable: sequential native TE; `cache_k`/`cache_v` one cat GEMM | emulated fused cat |
+| MoE routed experts | `te.GroupedLinear`; SM100 default RHT pads expert token counts to **64**. Frozen gate+up fuse into one GroupedLinear with `weight{i}.requires_grad=False`. Do not stack TE masters into bf16 `grouped_mm` | permute + `grouped_mm` emulation |
+| router / embed / RMSNorm / qk_norm / SDPA | high precision | same as left |
+| attention topology | causal YOCO window + GQA 16/2/128; CSA is not implemented | same as left |
 
-leading dim 不是 16 的倍数时 **pad 零行再切回**，仍走 SM100 kernel。单次 TE 异常只记那一发 shape，不关整进程 NVFP4。B0/B1 `detach_cache` 时 encoder 整段 `torch.no_grad()`，冻住的 `TeNvfp4Linear` 不建 WGRAD 图。
+When the leading dim is not a multiple of 16, **pad zero rows then slice back**, still using the SM100 kernel. A single TE exception records that one shape; it does not disable NVFP4 for the whole process. On B0/B1 `detach_cache`, the encoder runs entirely under `torch.no_grad()`, so frozen `TeNvfp4Linear` does not build a WGRAD graph.
 
-Master 仍是 bf16 Parameter。`state_dict` 键仍是 `q_proj.weight`。
+Master weights remain bf16 Parameters. `state_dict` keys remain `q_proj.weight`.
 
-实测：torch 2.11.0+cu128，源码编 TE 2.19 `@stable` SM100。**FPROP** 可用。**WGRAD** 在 cuBLAS 12.8.4.1 上 `CUBLAS_STATUS_NOT_SUPPORTED`。B0 冻 encoder 只需要 FPROP。
+Measured: torch 2.11.0+cu128, TE 2.19 `@stable` built from source for SM100. **FPROP** works. **WGRAD** on cuBLAS 12.8.4.1 returns `CUBLAS_STATUS_NOT_SUPPORTED`. B0 freezes the encoder and only needs FPROP.
 
-## TE 安装
+## TE install
 
-PyPI `transformer-engine-torch` 预编译 `.so` 在 torch 2.11 上会 `undefined symbol: CUDAErrorLogCapture`。必须 `scripts/build_te_from_source.sh`（`--no-build-isolation --no-deps`，`NVTE_CUDA_ARCHS=100`）。
+PyPI `transformer-engine-torch` prebuilt `.so` hits `undefined symbol: CUDAErrorLogCapture` on torch 2.11. Must use `scripts/build_te_from_source.sh` (`--no-build-isolation --no-deps`, `NVTE_CUDA_ARCHS=100`).
 
-CUTLASS SM100A `stg.256` 需要 **nvcc ≥ 12.9**。CUDA 12.8 编出来的 core 会在 B0 尺寸（4096×2048）quantize 时把 GPU 打挂。装 `cuda-nvcc-12-9 libcublas-dev-12-9 cuda-nvtx-12-9`。`MAX_JOBS` 默认 `nproc`。`te_linear_ready` 用 **4096×2048**。CUDA 12.9 `lib64` 进 `LD_LIBRARY_PATH`。源码安装后先改 dist-info，再从 `/tmp` import。
+CUTLASS SM100A `stg.256` needs **nvcc ≥ 12.9**. A CUDA 12.8-built core hangs the GPU when quantizing at B0 size (4096×2048). Install `cuda-nvcc-12-9 libcublas-dev-12-9 cuda-nvtx-12-9`. `MAX_JOBS` defaults to `nproc`. `te_linear_ready` uses **4096×2048**. Put CUDA 12.9 `lib64` on `LD_LIBRARY_PATH`. After the source install, rewrite dist-info first, then import from `/tmp`.
 
 ## B1 / B2
 
-等 B0 信封走完，或另有空闲 GPU 做 `--try`（不要和正在占卡的 B0 抢）：
+Wait until the B0 envelope finishes, or use a free GPU for `--try` (do not contend with a B0 job that already owns the card):
 
 ```bash
 bash scripts/run_b1_try_b200.sh
@@ -92,10 +92,10 @@ bash scripts/run_b2_try_b200.sh
 bash scripts/run_b2_full_b200.sh
 ```
 
-B200 上默认 **不** CPU offload Encoder / 逐层 offload / CPU Adam。
+On B200, the default is **no** CPU offload of the Encoder / per-layer offload / CPU Adam.
 
-## 磁盘
+## Disk
 
-Vast 基础镜像容器盘经常只有 **32GiB overlay**。`/workspace` 不一定是持久卷。stop/start 保容器盘；recycle/destroy 会清。不要写 23GiB `latest.pt`。MiniCPM5 ≈5GiB + torch/TE + overlay 必须挤进这 32GiB。
+Vast base-image container disks often have only a **32GiB overlay**. `/workspace` is not necessarily a persistent volume. stop/start keeps the container disk; recycle/destroy wipes it. Do not write a 23GiB `latest.pt`. MiniCPM5 ≈5GiB + torch/TE + overlay must fit in those 32GiB.
 
-不要把 SSH 密码、deploy key 写进仓库。
+Do not write SSH passwords or deploy keys into the repo.

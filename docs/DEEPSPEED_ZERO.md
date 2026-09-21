@@ -1,35 +1,37 @@
-"""DeepSpeed ZeRO：可选训练后端。CI 不强装 DeepSpeed。
+# DeepSpeed ZeRO
 
-不是 Megatron EP/TP，不是 CSA kernel，不拉 50B，不写 ``--save-full``。
-C1 冻结边界不变。Hub overlay 仍是 ``{kind, trainable, extra, n_tensors, nbytes}``；
-ZeRO-3 存盘前必须 **全 rank gather** 16-bit 可训练权重，否则本地 shard 对不上 132 张量。
+Optional training backend. CI does not require DeepSpeed to be installed.
 
-## 为什么先做 ZeRO
+This is not Megatron EP/TP, not a CSA kernel, does not pull 50B, and does not write `--save-full`.
+The C1 freeze boundary is unchanged. Hub overlays remain `{kind, trainable, extra, n_tensors, nbytes}`.
+Before a ZeRO-3 save, **all ranks must gather** the 16-bit trainable weights; otherwise local shards will not match the 132 tensors.
 
-单卡 3090 48GiB 塞不下完整 12B bf16 权重 + Adam。仓库里的 native
-``--offload-encoder`` / ``--offload-blocks`` / ``--optim-cpu`` 是 **torch 单卡**
-路径：冻住的 encoder 整块拷 CPU，B2 还逐层来回搬。
+## Why ZeRO first
 
-DeepSpeed ZeRO 的分工：
+A single 3090 48GiB card cannot hold a full 12B bf16 weight set plus Adam. The in-repo native
+`--offload-encoder` / `--offload-blocks` / `--optim-cpu` path is **torch single-GPU**:
+the frozen encoder is copied to CPU as a block, and B2 also shuttles layer by layer.
 
-| 档 | 切什么 | 单卡 12B 有没有用 |
+DeepSpeed ZeRO splits the work as follows:
+
+| Stage | What it shards | Useful for single-GPU 12B? |
 | --- | --- | --- |
-| ZeRO-1 | Adam 状态 | 只帮可训练参数。B0 只有 ~219M，冻住的 12B **不切** |
-| ZeRO-2 | + 梯度 | 同上，冻权重仍整份在 GPU |
-| ZeRO-3 + ``offload_param`` | 参数本身切到 CPU | **这才是 24.5GiB 权重的路** |
+| ZeRO-1 | Adam state | Helps trainable params only. B0 has ~219M trainable; the frozen 12B is **not** sharded |
+| ZeRO-2 | + gradients | Same: frozen weights still sit in full on the GPU |
+| ZeRO-3 + `offload_param` | the parameters themselves, to CPU | **This is the path that fits 24.5GiB of weights** |
 
-所以 3090 的配方是 **ZeRO-3 + optimizer CPU offload + param CPU offload**，
-不是 ZeRO-1/2。ZeRO **能塞进显存**；它不能让 8e9 B0 在一张 3090 上变成合理墙钟
-（PCIe offload 会把 MFU 打到个位数）。**预取必须真的能跑**：DeepSpeed 默认 `stage3_max_live_parameters=1e9`，一层冻结 MoE 已经 ~0.75e9，5e8 预取桶会被 live cap 静默丢掉，GPU 每步空约 1s。现在 **max_live/reuse=2e9**、预取 **5e8**、`persistence=1e6`（5e6 把 2048×2048 全留卡，3090 会 OOM）+ **DeepSpeedCPUAdam**（仍两组 decay；需要 ninja 才能 JIT）。`CUDA_DEVICE_MAX_CONNECTIONS=32`。MoE 专家顺序每步都变，ZeRO 按旧 trace 预取会 miss：`leaf_module` 把 `MoE` / `EncoderBlock` / `DecoderBlock` 当整块 prefetch。DeepSpeed inflight H2D 默认 2；提到 8 后 8 min 样例变成 **1.38/min**（更密），所以保持默认 2。`LOG_EVERY=40`、warmup 后 `gc.freeze()`。现配方 6.5 min 1Hz：**0.46/min** / ~750 tok/s。wrap 后做一次 **ZeRO 预热**（合成 batch fwd+bwd，不 Adam）。中间 ~647 tok/s 不是冷启动。Hub overlay 已经是 B0 的 1.63%，同阶段 resume，不要重开。不要覆盖 `b0-full`。
+So the 3090 recipe is **ZeRO-3 + optimizer CPU offload + param CPU offload**,
+not ZeRO-1/2. ZeRO **fits the model in memory**; it does not make 8e9 B0 a reasonable wall-clock
+on one 3090 (PCIe offload drives MFU into the single digits). **Prefetch has to actually run**: DeepSpeed defaults `stage3_max_live_parameters=1e9`. One frozen MoE layer is already ~0.75e9, so a 5e8 prefetch bucket is silently dropped by the live cap and the GPU sits idle ~1s per step. Current knobs are **max_live/reuse=2e9**, prefetch **5e8**, `persistence=1e6` (5e6 keeps every 2048×2048 tensor on-device and OOMs the 3090) plus **DeepSpeedCPUAdam** (still two decay groups; needs ninja to JIT). `CUDA_DEVICE_MAX_CONNECTIONS=32`. MoE expert order changes every step, so ZeRO prefetch that follows an old trace misses: `leaf_module` treats `MoE` / `EncoderBlock` / `DecoderBlock` as whole-block prefetch units. DeepSpeed inflight H2D defaults to 2; raising it to 8 made an 8 min sample **1.38/min** (denser idle flashes), so keep the default of 2. `LOG_EVERY=40`, then `gc.freeze()` after warmup. Current recipe over 6.5 min at 1 Hz: **0.46/min** / ~750 tok/s. After wrap, run one **ZeRO warmup** (synthetic batch fwd+bwd, no Adam). The middle stretch at ~647 tok/s is not a cold start. The Hub overlay is already 1.63% of B0; same-phase resume, do not restart the phase. Do not overwrite `b0-full`. The published pin remains Hub `b0-full` step **26940**; the 3090 BF16 run is a sibling.
 
-## 安装
+## Install
 
 ```bash
-pip install 'cat-yoko[deepspeed]'   # 或 pip install deepspeed
+pip install 'cat-yoko[deepspeed]'   # or pip install deepspeed
 python3 -m cat_yoko.train --config 12b --dump-deepspeed --zero 3 --zero-offload-param
 ```
 
-``--dump-deepspeed`` **不 import DeepSpeed**，CPU / CI 都能打 JSON。
+`--dump-deepspeed` **does not import DeepSpeed**, so CPU / CI can still print JSON.
 
 ## 3090 48GiB
 
@@ -40,41 +42,41 @@ python3 -m cat_yoko.b0 \
   --resume /path/to/b0-full --upcycle-hf /path/to/MiniCPM5-2B-Base
 ```
 
-phase CLI 看到 ``--backend deepspeed`` 会自动改成
-``--no-offload-encoder --no-offload-blocks --no-optim-cpu``，避免和 native
-offload 抢同一份参数。
+When the phase CLI sees `--backend deepspeed`, it rewrites to
+`--no-offload-encoder --no-offload-blocks --no-optim-cpu` so native
+offload does not fight ZeRO for the same parameters.
 
-等价格的 JSON 里，Ampere / Ada 且还在卸 encoder 的发布信封会带
-``recipe.deepspeed_zero.argv``；**默认 launch argv 仍是 torch**，不会偷偷改成 ZeRO。
+Price-quote JSON for Ampere / Ada published envelopes that still offload the encoder
+includes `recipe.deepspeed_zero.argv`; **default launch argv is still torch** and is not silently switched to ZeRO.
 
-## 接入约定
+## Integration rules
 
-1. **先** ``apply_freeze`` + NVFP4 wrap，**再** ``deepspeed.initialize``。
-2. 不要外包 DDP / FSDP。``--backend deepspeed --fsdp`` 直接拒。
-3. 关掉 native ``--offload-encoder`` / ``--offload-blocks`` / ``--optim-cpu``。
-   Adam 仍走仓库的 param groups（router 不 decay）。CPU offload 时优先
-   ``DeepSpeedCPUAdam``（两组都留着）；``zero_force_ds_cpu_optimizer=false``
-   以免 ZeRO 压成一组。
-4. 微步循环仍在 trainer 里。运行时 DeepSpeed ``gradient_accumulation_steps=1``，
-   loss 仍除以 ``accum``，和 torch 路径同一套缩放。JSON dump 里的 GAS 是映射，不是运行时值。
-5. clip 交给 DeepSpeed ``gradient_clipping``（默认 1.0）。不要再 ``clip_grad_norm_`` 一遍。
-6. Overlay：ZeRO-3 全 rank 对 ``requires_grad`` 走 ``GatheredParameters``（B0 132
-   张量），不要 ``_zero3_consolidated_16bit_state_dict``（那条仍会按层 gather 冻结
-   12B，3090 上 ``SAVE_EVERY`` 会空 6s）。不要 ``--save-full``。
-7. ``--c1`` / ``--c1-smoke`` 不能和 DeepSpeed 同进程重包（ZeRO-3 参数已经是 partitioned）。
-   B0 → B1 → B2 分开进程，``--resume`` overlay。
-8. 模型自己的 ``--grad-ckpt`` 留着。不要开 DeepSpeed activation checkpointing。
-9. 不是 Megatron EP/TP loop，不是 CSA CUDA kernel，不拉 50B Ultra-FineWeb。
-10. 单卡 ``python -m cat_yoko.b0 --backend deepspeed`` 不需要 deepspeed launcher；
-    ``wrap_deepspeed`` 会 ``setdefault LOCAL_RANK=0``。不要覆盖 Hub B0 overlay。
+1. **First** `apply_freeze` + NVFP4 wrap, **then** `deepspeed.initialize`.
+2. Do not outsource DDP / FSDP. `--backend deepspeed --fsdp` is refused.
+3. Turn off native `--offload-encoder` / `--offload-blocks` / `--optim-cpu`.
+   Adam still uses the repo param groups (router does not decay). On CPU offload prefer
+   `DeepSpeedCPUAdam` (keep both groups); `zero_force_ds_cpu_optimizer=false`
+   so ZeRO does not collapse them into one group.
+4. The micro-step loop stays in the trainer. At runtime DeepSpeed `gradient_accumulation_steps=1`;
+   loss is still divided by `accum`, the same scaling as the torch path. GAS in the JSON dump is a mapping, not the runtime value.
+5. Clipping is DeepSpeed `gradient_clipping` (default 1.0). Do not also call `clip_grad_norm_`.
+6. Overlay: ZeRO-3 all-rank `GatheredParameters` on `requires_grad` (B0 132
+   tensors). Do not use `_zero3_consolidated_16bit_state_dict` (that path still gathers the frozen
+   12B layer by layer, and `SAVE_EVERY` idles ~6s on a 3090). Do not `--save-full`.
+7. `--c1` / `--c1-smoke` cannot re-wrap in the same process as DeepSpeed (ZeRO-3 parameters are already partitioned).
+   Run B0 → B1 → B2 in separate processes and `--resume` the overlay.
+8. Keep the model's own `--grad-ckpt`. Do not enable DeepSpeed activation checkpointing.
+9. This is not a Megatron EP/TP loop, not a CSA CUDA kernel, and it does not pull 50B Ultra-FineWeb.
+10. Single-GPU `python -m cat_yoko.b0 --backend deepspeed` does not need the deepspeed launcher;
+    `wrap_deepspeed` will `setdefault LOCAL_RANK=0`. Do not overwrite the Hub B0 overlay.
 
-## 和 torch / Megatron 的边界
+## Boundary versus torch / Megatron
 
-| 后端 | 现在能做什么 |
+| Backend | What it can do now |
 | --- | --- |
-| ``--backend torch`` | 参考图 + DDP/FSDP + native CPU offload |
-| ``--backend deepspeed`` | ZeRO-1/2/3（含 CPU offload）。训练循环就是本仓库 trainer |
-| ``--backend megatron`` | 只有 mapping / stub，**没有**训练循环 |
+| `--backend torch` | reference graph + DDP/FSDP + native CPU offload |
+| `--backend deepspeed` | ZeRO-1/2/3 (including CPU offload). The training loop is this repo's trainer |
+| `--backend megatron` | mapping / stub only; **no** training loop |
 
-单卡 32GB 继续 ``--try`` seq=64；``hw_recipe`` 对 ``<40GiB`` 仍拒绝 8e9 信封。
-48GiB ≥ 40，recipe 会标 published，但 Ampere 上 NVFP4 仿真是速度陷阱；ZeRO 只解决装得下。
+Single-GPU 32GB still uses `--try` seq=64; `hw_recipe` still refuses the 8e9 envelope for `<40GiB`.
+48GiB is ≥ 40, so the recipe is marked published, but Ampere NVFP4 emulation is a speed trap; ZeRO only solves fitting in memory. See also `docs/DEEPSPEED_ZERO.md`.
