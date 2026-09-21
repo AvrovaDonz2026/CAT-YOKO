@@ -391,7 +391,7 @@ class B1ScriptTests(unittest.TestCase):
         self.assertIn("huggingface.co/AvrovaDonz/CAT-YOKO", body)
         self.assertIn("checkpoints/b1", body)
         self.assertIn("trainable.pt", body)
-        self.assertIn("不进 GitHub", body)
+        self.assertIn("Weights do not live on GitHub", body)
         self.assertNotIn("BEGIN OPENSSH", body)
         art_body = art.read_text(encoding="utf-8")
         self.assertIn("--try", art_body)

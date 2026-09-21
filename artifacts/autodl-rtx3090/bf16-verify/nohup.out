@@ -1,0 +1,49 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
+=== plan-verify graph=bf16 2026-09-19T17:05:16Z device=cuda steps=2 ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB
+/dev/md0         50G   40M   50G   1% /root/autodl-tmp
+built bf16-probe on cuda dtype=bf16 params=979,520 alloc=0.01GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.08M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe B0 step 1/2 nll=4.8762 ppl=131.1 aux=0.0000 gate=0.150 gn=0.01 moe_cv=0.28 trainable=0.08M lr=3.00e-07 fp8=False nvfp4=False tok=256 tok/s=1662 mem=24MiB
+bf16-probe B0 step 2/2 nll=4.8977 ppl=134.0 aux=0.0000 gate=0.301 gn=0.01 moe_cv=0.30 trainable=0.08M lr=3.00e-07 fp8=False nvfp4=False tok=512 tok/s=6964 mem=24MiB
+built bf16-probe on cuda dtype=bf16 params=979,520 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.44M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe B1 step 1/2 nll=4.8769 ppl=131.2 aux=0.0012 gate=0.648 gn=1.30 moe_cv=0.28 trainable=0.44M lr=3.00e-07 fp8=False nvfp4=False tok=256 tok/s=5550 mem=27MiB
+bf16-probe B1 step 2/2 nll=4.8974 ppl=133.9 aux=0.0012 gate=1.000 gn=1.20 moe_cv=0.30 trainable=0.44M lr=3.00e-07 fp8=False nvfp4=False tok=512 tok/s=6775 mem=28MiB
+built bf16-probe on cuda dtype=bf16 params=979,520 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.98M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe B2 step 1/2 nll=4.8775 ppl=131.3 aux=0.0044 gate=1.000 gn=2.66 moe_cv=0.28 trainable=0.98M lr=3.00e-08 fp8=False nvfp4=False tok=256 tok/s=3436 mem=34MiB
+bf16-probe B2 step 2/2 nll=4.8973 ppl=133.9 aux=0.0044 gate=1.000 gn=2.42 moe_cv=0.30 trainable=0.98M lr=3.00e-08 fp8=False nvfp4=False tok=512 tok/s=3768 mem=38MiB
+built bf16-probe on cuda dtype=bf16 params=987,712 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.01M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=window loss=indexer_kl PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe C-index step 1/2 nll=0.1230 ppl=1.1 aux=0.0000 gate=1.000 gn=0.03 moe_cv=0.28 trainable=0.01M lr=3.00e-07 fp8=False nvfp4=False tok=256 tok/s=3873 mem=23MiB rec=0.609
+bf16-probe C-index step 2/2 nll=0.1239 ppl=1.1 aux=0.0000 gate=1.000 gn=0.03 moe_cv=0.30 trainable=0.01M lr=3.00e-07 fp8=False nvfp4=False tok=512 tok/s=12091 mem=23MiB rec=0.585
+built bf16-probe on cuda dtype=bf16 params=987,712 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.99M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=topk loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe C-topk step 1/2 nll=4.8790 ppl=131.5 aux=0.0045 gate=1.000 gn=2.64 moe_cv=0.31 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=256 tok/s=3585 mem=34MiB
+bf16-probe C-topk step 2/2 nll=4.8985 ppl=134.1 aux=0.0045 gate=1.000 gn=2.41 moe_cv=0.32 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=512 tok/s=3736 mem=38MiB
+built bf16-probe on cuda dtype=bf16 params=987,712 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.99M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe C-hca step 1/2 nll=4.8788 ppl=131.5 aux=0.0045 gate=1.000 gn=2.67 moe_cv=0.31 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=256 tok/s=3495 mem=35MiB
+bf16-probe C-hca step 2/2 nll=4.8968 ppl=133.9 aux=0.0045 gate=1.000 gn=2.42 moe_cv=0.32 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=512 tok/s=3760 mem=38MiB
+built bf16-probe on cuda dtype=bf16 params=987,712 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.99M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe C-win step 1/2 nll=4.8788 ppl=131.5 aux=0.0045 gate=1.000 gn=2.67 moe_cv=0.31 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=256 tok/s=3595 mem=35MiB
+bf16-probe C-win step 2/2 nll=4.8968 ppl=133.9 aux=0.0045 gate=1.000 gn=2.42 moe_cv=0.32 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=512 tok/s=3776 mem=38MiB
+built bf16-probe on cuda dtype=bf16 params=987,712 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.99M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe D-8k step 1/2 nll=4.8798 ppl=131.6 aux=0.0044 gate=1.000 gn=2.73 moe_cv=0.28 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=256 tok/s=3591 mem=34MiB
+bf16-probe D-8k step 2/2 nll=4.8963 ppl=133.8 aux=0.0044 gate=1.000 gn=2.44 moe_cv=0.29 trainable=0.99M lr=3.00e-08 fp8=False nvfp4=False tok=512 tok/s=3828 mem=38MiB
+built bf16-probe on cuda dtype=bf16 params=987,712 alloc=0.02GiB grad_ckpt=False seq=128 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu trainable=0.99M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=True te=False te_nvfp4=False return_logits=False sparse=hca loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+bf16-probe E step 1/2 nll=4.8788 ppl=131.5 aux=0.0045 gate=1.000 gn=2.67 moe_cv=0.31 trainable=0.99M lr=3.00e-06 fp8=False nvfp4=False tok=256 tok/s=3668 mem=35MiB
+bf16-probe E step 2/2 nll=4.8968 ppl=133.9 aux=0.0045 gate=1.000 gn=2.42 moe_cv=0.31 trainable=0.99M lr=3.00e-06 fp8=False nvfp4=False tok=512 tok/s=3854 mem=38MiB
+plan-verify graph=bf16 dtype=bf16 ok=True claims=142 fail=0 deferred=2 3.1s
+  ops dense_gqa=flash masked=cudnn hca=cudnn
+  A nll=4.8438 ok=True sdpa=dense
+  B0 nll=4.8977 ok=True sdpa=dense
+  B1 nll=4.8974 ok=True sdpa=dense
+  B2 nll=4.8973 ok=True sdpa=dense
+  C-index nll=0.1239 ok=True sdpa=dense
+  C-topk nll=4.8985 ok=True sdpa=dense
+  C-hca nll=4.8968 ok=True sdpa=dense
+  C-win nll=4.8968 ok=True sdpa=dense
+  D-8k nll=4.8963 ok=True sdpa=dense
+  E nll=4.8968 ok=True sdpa=dense
+DEFER pdsa.tier1_calibrated_fallback: Tier 1 confidence-gated expand/fallback is planned, not C1 B0
+DEFER pdsa.tier3_editable_memory: 
+=== exit 0 2026-09-19T17:05:23Z ===
+ledger graph=bf16 dtype=bf16 ok=True claims=142 fail=0 deferred=2
+ops dense_gqa=flash masked=cudnn hca=cudnn
+drwxr-xr-x 11 root root 175 Sep 20 01:05 /root/autodl-tmp/bf16-verify/runs

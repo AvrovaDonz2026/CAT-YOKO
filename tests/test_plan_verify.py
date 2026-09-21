@@ -91,6 +91,8 @@ class StaticLedgerTests(unittest.TestCase):
         self.assertIn("ops.compute_is_bf16", names)
         self.assertIn("ops.masked_isolates_one_backend", names)
         self.assertIn("ops.grouped_mm_sm90_gate", names)
+        self.assertIn("ops.banded_sliding_window", names)
+        self.assertIn("ops.bshd_qk_rope", names)
 
     def test_bf16_static_claims_keep_theorem_b(self) -> None:
         ledger = static_ledger("bf16")
@@ -134,6 +136,27 @@ class IndexerDtypeTests(unittest.TestCase):
         self.assertEqual(scores.dtype, torch.float32)
         self.assertTrue(torch.isfinite(scores).all())
 
+    def test_fused_qk_matches_two_linears(self) -> None:
+        from cat_yoko.indexer import LightningIndexer
+
+        cfg = CATYokoConfig.tiny()
+        torch.manual_seed(0)
+        idx = LightningIndexer(cfg)
+        x = torch.randn(2, 8, cfg.hidden_size)
+        got = idx.scores(x)
+        xf = x.float()
+        q = torch.nn.functional.relu(torch.nn.functional.linear(xf, idx.q_proj.weight.float()))
+        k = torch.nn.functional.linear(xf, idx.k_proj.weight.float())
+        ref = torch.matmul(q, k.transpose(-1, -2)) * (idx.d_idx ** -0.5)
+        self.assertTrue(torch.allclose(got, ref, atol=1e-5, rtol=1e-5))
+        for p in idx.parameters():
+            p.requires_grad_(False)
+        a = idx.scores(x)
+        ptr = idx._qk_w_fp32.data_ptr()
+        b = idx.scores(x)
+        self.assertEqual(idx._qk_w_fp32.data_ptr(), ptr)
+        self.assertTrue(torch.equal(a, b))
+
 
 class SecretScanTests(unittest.TestCase):
     def test_suite_files_have_no_secrets_or_hosts(self) -> None:
@@ -148,6 +171,7 @@ class SecretScanTests(unittest.TestCase):
             ROOT / "cat_yoko" / "moe.py",
             ROOT / "docs" / "AMPERE_OPS_MFU.md",
             ROOT / "scripts" / "run_ampere_mfu.sh",
+            ROOT / "scripts" / "run_b0_ampere_3090.sh",
         ]
         for path in paths:
             self.assertTrue(path.is_file(), msg=str(path))
@@ -178,6 +202,37 @@ class SecretScanTests(unittest.TestCase):
         self.assertIn("Does not download Ultra-FineWeb", text)
         self.assertNotIn("save-full", text)
         self.assertTrue((ROOT / "scripts" / "run_ampere_mfu.sh").stat().st_mode & 0o111)
+
+    def test_ampere_b0_shell_does_not_clobber_hub(self) -> None:
+        text = (ROOT / "scripts" / "run_b0_ampere_3090.sh").read_text(encoding="utf-8")
+        self.assertIn("WORK:-/root/autodl-tmp", text)
+        self.assertIn("b0-3090-bf16", text)
+        self.assertIn("hub-b0-full", text)
+        self.assertIn("--no-nvfp4", text)
+        self.assertIn("--resume", text)
+        self.assertIn("--more-steps", text)
+        self.assertNotRegex(text, r"--steps \"\$STEPS\"")
+        self.assertIn("Does not overwrite Hub", text)
+        self.assertIn("Does not download Ultra-FineWeb", text)
+        self.assertIn("7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955", text)
+        self.assertIn("mutated overlay", text)
+        self.assertIn("HUB_COPY", text)
+        self.assertIn("unlimited", text)
+        self.assertIn("STEPS=0", text)
+        self.assertIn('SAVE_EVERY="${SAVE_EVERY:-200}"', text)
+        self.assertIn('LOG_EVERY="${LOG_EVERY:-40}"', text)
+        self.assertIn("TORCH_COMPILE_DISABLE", text)
+        self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", text)
+        self.assertIn("OMP_NUM_THREADS", text)
+        self.assertIn("ninja", text)
+        self.assertIn("DeepSpeedCPUAdam op ready", text)
+        self.assertIn('export PATH="$PY_BIN:$PATH"', text)
+        self.assertIn("libstdc++.so.6", text)
+        self.assertIn("5% hashed code", text)
+        self.assertNotIn("push_to_hf", text)
+        self.assertNotRegex(text, r"--log-every 1$")
+        self.assertNotRegex(text, r"--save-full")
+        self.assertTrue((ROOT / "scripts" / "run_b0_ampere_3090.sh").stat().st_mode & 0o111)
 
 
 if __name__ == "__main__":

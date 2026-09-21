@@ -1,43 +1,43 @@
-# CAT-YOKO 解冻课程理论验证
+# CAT-YOKO Unfreeze Curriculum Theory Verification
 
-> 与前两篇分工：[`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) 核中间档参数 / FLOPs / KV；[`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) 核因果与 M1/M2/M3；**这篇核 Phase B 的可训练子集**——冻结边界、梯度在 cache 处截断、untied embedding、**C1 定稿配方**、优化器/激活显存、token 切分。延迟 Encoder MoE 只作敏感性对照。
-> 规格仍是中间档：16/26，≈12.25B / 2.03B-in / 4.33B-out。底座 MiniCPM5-2B（Llama GQA，untied）。不引入新架构，不把两栈拆成两个独立 LM。
-> 可执行断言：`python3 scripts/param_budget.py --verify`（含课程 claim）、`--staged`、`--curriculum`、`--fp8`、`--nvfp4`；`python3 -m unittest tests.test_param_budget`。
-> 理论能证明的是 **FLOPs / 显存 / 梯度流 / 与定理 A 的兼容**；不能证明 12B 上采样后的质量。质量仍走 L0→L1 实验，B2 不够就加长 B2。
-> NVFP4 墙钟（不改 6NT；Phase B 定稿 **C1+NVFP4 = 571 H100-h**）见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。Hopper/Ada 回退 C1+FP8 = 729 见 [`FP8_THEORY.md`](FP8_THEORY.md)。
+> Division of labor with the previous two documents: [`THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md) checks middle-tier parameters / FLOPs / KV; [`ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md) checks causality and M1/M2/M3; **this document checks Phase B’s trainable subset** — freeze boundaries, gradient cutoff at the cache, untied embedding, **the locked-in C1 recipe**, optimizer/activation memory, and the token split. Delayed Encoder MoE is a sensitivity control only.
+> Spec remains the middle tier: 16/26, ≈12.25B / 2.03B-in / 4.33B-out. Base MiniCPM5-2B (Llama GQA, untied). No new architecture is introduced, and the two stacks are not split into two independent LMs.
+> Executable assertions: `python3 scripts/param_budget.py --verify` (including curriculum claims), `--staged`, `--curriculum`, `--fp8`, `--nvfp4`; `python3 -m unittest tests.test_param_budget`.
+> Theory can prove **FLOPs / memory / gradient flow / compatibility with Theorem A**; it cannot prove quality after 12B upsampling. Quality still goes through L0→L1 experiments. If B2 is not enough, lengthen B2.
+> NVFP4 wall-clock (does not change 6NT; Phase B is locked in as **C1+NVFP4 = 571 H100-h**) is in [`NVFP4_THEORY.md`](NVFP4_THEORY.md). Hopper/Ada fallback C1+FP8 = 729 is in [`FP8_THEORY.md`](FP8_THEORY.md).
 
 ---
 
-## 0. 结论（先看这个）
+## 0. Conclusions (read this first)
 
-「先分开训两个模型再焊在一起」**更贵且破坏定理 A**。能省的是同一套切开权重上的 **B0 → B1 → B2 解冻课程**。冻结边界按 **C1** 定稿；Phase B **墙钟按 C1+NVFP4 定稿（571 H100-h）**。
+“Train two models separately and then weld them together” is **more expensive and breaks Theorem A**. What can be saved is a **B0 → B1 → B2 unfreeze curriculum** on the same split weights. Freeze boundaries follow the locked-in **C1** recipe; Phase B **wall-clock is locked in as C1+NVFP4 (571 H100-h)**.
 
-| 做法 | 50B tok H100-h | vs 联合 | 角色 |
+| Approach | 50B tok H100-h | vs joint | Role |
 | --- | ---: | ---: | --- |
-| 两栈一起训（联合 bf16） | 1,325 | 100% | 对照 |
-| C1：两栈都先 MoE，B0/B1 冻 Encoder | 1,046 | 79% | 操作数账 |
-| **C1+FP8（Hopper/Ada 回退）** | 729 | 55% | 无 Blackwell |
-| **C1+NVFP4** | **571** | **43%** | **定稿墙钟** |
-| 独立 50B+50B+20B 拼接 | 1,940 | **146%（更贵）** | 不要做 |
+| Train both stacks together (joint bf16) | 1,325 | 100% | Control |
+| C1: MoE both stacks first, freeze Encoder in B0/B1 | 1,046 | 79% | Operand ledger |
+| **C1+FP8 (Hopper/Ada fallback)** | 729 | 55% | No Blackwell |
+| **C1+NVFP4** | **571** | **43%** | **Locked-in wall-clock** |
+| Independent 50B+50B+20B stitch | 1,940 | **146% (more expensive)** | Do not do this |
 
-还必须钉死的几条：
+These must also be nailed down:
 
-1. **梯度在全局 cache 处 `.detach()`。** Encoder 无权重梯度、无激活梯度；前向省不掉（YOCO 的 CE 在 Decoder 顶）。这是定理 D。
-2. **输入 embedding 必须随 Encoder 冻结；永远不要在 Encoder 冻结时训输入表。** MiniCPM5 **untied**：\(E_{\mathrm{in}}\) 与 lm_head 是两份矩阵。B0 冻输入表 **和** head；B1 **可以训 lm_head**（输入表仍冻）。这是定理 E。禁止 `train_embed_while_frozen`。
-3. **\(W_K,W_V\) 是新模块**，挂在 `encoder.detach()` **之后**，B0 就可训。它们不在已发布的 12.25B 栈合计里（\(2\cdot d\cdot 256=1.05\mathrm{M}\)）。
-4. **配方是 C1。** Phase A 对两栈都做 virtual-group MoE，B0/B1 冻 Encoder：一次离线手术、从 token 0 就是发布的 12.25B 中间档、B2 只解冻不改结构。冻结期间 Encoder ≈ MiniCPM5 1–16（命题 F）。B0/B1 付 MoE Encoder 前向（1.76B vs dense 0.75B），专家副本到 B2 才特化——所以 B2 默认 15B。推迟 Encoder 上采样（原 C2）不进配方，只留在 `--curriculum` 敏感性表。
-5. **C1 相对联合约省 21% FLOPs；Adam 状态在 B1 只有联合的 62%；detach 丢掉 Encoder 激活约 38%（留下 26/42 ≈ 62%）。** 塞进更少卡时，显存杠杆可能比 FLOPs 杠杆更有用。
-6. **B2 不能为 0**（write/read 永不共同适应，PDSA 已警告）。默认 B2 = 15B ≥ 10B。质量不稳加长 B2，不要改回两个独立 LM。
-7. Phase C「冻主干、只训 indexer」叠在 B2 **之后**；indexer 对齐是层内 KL，不是穿过 cache 的 LM 反传。
-8. **墙钟敲死为 C1+NVFP4。** 不必须 bf16 的线性 GEMM 走 NVFP4，B0 student / L0 / indexer 保持 bf16。发布 **571 H100-h（联合 bf16 的 43%）**。见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)。
+1. **Gradients `.detach()` at the global cache.** The Encoder has no weight gradients and no activation gradients; the forward pass cannot be skipped (YOCO’s CE is at the Decoder top). This is Theorem D.
+2. **The input embedding must freeze with the Encoder; never train the input table while the Encoder is frozen.** MiniCPM5 is **untied**: \(E_{\mathrm{in}}\) and lm_head are two matrices. B0 freezes the input table **and** the head; B1 **may train lm_head** (input table still frozen). This is Theorem E. `train_embed_while_frozen` is forbidden.
+3. **\(W_K,W_V\) are new modules**, attached **after** `encoder.detach()`, and trainable from B0. They are not in the published 12.25B stack total (\(2\cdot d\cdot 256=1.05\mathrm{M}\)).
+4. **The recipe is C1.** Phase A does virtual-group MoE on both stacks; B0/B1 freeze the Encoder: one offline surgery, the published 12.25B middle tier from token 0, B2 only unfreezes and does not change structure. While frozen, the Encoder ≈ MiniCPM5 1–16 (Proposition F). B0/B1 pay the MoE Encoder forward (1.76B vs dense 0.75B); expert copies specialize only at B2 — that is why B2 defaults to 15B. Delayed Encoder upsampling (the old C2) is not in the recipe; it stays in the `--curriculum` sensitivity table.
+5. **C1 saves about 21% FLOPs versus joint; Adam state in B1 is only 62% of joint; detach drops Encoder activations, about 38% (leaving 26/42 ≈ 62%).** When packing onto fewer GPUs, the memory lever may be more useful than the FLOPs lever.
+6. **B2 cannot be 0** (write/read never co-adapt; PDSA already warns). Default B2 = 15B ≥ 10B. If quality is unstable, lengthen B2; do not revert to two independent LMs.
+7. Phase C “freeze the trunk, train only the indexer” stacks **after** B2; indexer alignment is in-layer KL, not LM backprop through the cache.
+8. **Wall-clock is locked as C1+NVFP4.** Linear GEMMs that need not be bf16 go NVFP4; B0 student / L0 / indexer stay bf16. Publish **571 H100-h (43% of joint bf16)**. See [`NVFP4_THEORY.md`](NVFP4_THEORY.md).
 
-Claim ledger：中间档 22 条 + 课程 12 条 + FP8 回退 13 条 + NVFP4 16 条，`--verify` **63/63** 通过。
+Claim ledger: middle-tier 22 + curriculum 12 + FP8 fallback 13 + NVFP4 16, `--verify` **63/63** PASS.
 
 ---
 
-## 1. 形式化：一条计算图，三个可训练子集
+## 1. Formalization: one compute graph, three trainable subsets
 
-长度 \(n\) 的因果 LM，记号与架构篇 §1 相同：
+Causal LM of length \(n\), notation the same as architecture doc §1:
 
 \[
 X^{0}=s_{\mathrm{emb}}\,\mathrm{onehot}(x)E_{\mathrm{in}},\quad
@@ -46,7 +46,7 @@ X^{\ell}=\mathrm{SelfDec}^{\ell}(X^{\ell-1}),\ \ell=1..L_e,
 
 \[
 (\hat K,\hat V)=\big(\mathrm{sg}(X^{L_e})W_K,\;\mathrm{sg}(X^{L_e})W_V\big)
-\quad\text{（B0/B1；}\mathrm{sg}=\texttt{.detach()}\text{）},
+\quad\text{(B0/B1; }\mathrm{sg}=\texttt{.detach()}\text{)},
 \]
 
 \[
@@ -55,17 +55,17 @@ X^{\ell}=\mathrm{CrossDec}^{\ell}(X^{\ell-1},\hat K,\hat V),\ \ell=L_e+1..L_e+L_
 z=X^{L_e+L_d}W_{\mathrm{head}}^{\top}/\alpha,\quad \alpha=1.
 \]
 
-B2 去掉 \(\mathrm{sg}\)，\(E_{\mathrm{in}}\) 与 \(W_{\mathrm{head}}\) 都解冻。MiniCPM5 没有 μP，\(s_{\mathrm{emb}}=1\)，\(\alpha=1\)。
+B2 drops \(\mathrm{sg}\); both \(E_{\mathrm{in}}\) and \(W_{\mathrm{head}}\) unfreeze. MiniCPM5 has no μP, \(s_{\mathrm{emb}}=1\), \(\alpha=1\).
 
-Kaplan 口径（与预算篇相同：前向 \(2NT\) + 反向激活 \(2NT\) + 反向权重 \(2NT\)）：
+Kaplan accounting (same as the budget doc: forward \(2NT\) + backward activations \(2NT\) + backward weights \(2NT\)):
 
-| 子集 | 前向 | 反向激活 | 反向权重 |
+| Subset | Forward | Backward activations | Backward weights |
 | --- | --- | --- | --- |
-| 冻结、且 \(\mathrm{sg}\) 截断 | \(2N\) | 0 | 0 |
-| 冻结、但仍在 Decoder 残差链上（B0 的 Decoder 骨干） | \(2N\) | \(2N\) | 0 |
-| 可训练 | \(2N\) | \(2N\) | \(2N\) |
+| Frozen, and \(\mathrm{sg}\) cut | \(2N\) | 0 | 0 |
+| Frozen, but still on the Decoder residual chain (B0 Decoder backbone) | \(2N\) | \(2N\) | 0 |
+| Trainable | \(2N\) | \(2N\) | \(2N\) |
 
-所以：
+Therefore:
 
 \[
 \begin{aligned}
@@ -75,245 +75,245 @@ F_{\mathrm{new\text{-}mod}}&=\big(2N_{\mathrm{fwd}}+2N_{\mathrm{new}}+2N_{\mathr
 \end{aligned}
 \]
 
-\(N_{\mathrm{new}}=L_d A_{\times}+2d\cdot 256\)（26 层 cross-attn Q/O + cache 投影 \(1.05\mathrm{M}\)）。定稿 C1 的 \(N_{\mathrm{enc}}\) 是 MoE 激活 \(1.76\mathrm{B}\)（不含 emb）。
+\(N_{\mathrm{new}}=L_d A_{\times}+2d\cdot 256\) (26 layers of cross-attn Q/O + cache projections \(1.05\mathrm{M}\)). Locked-in C1’s \(N_{\mathrm{enc}}\) is MoE activation \(1.76\mathrm{B}\) (excluding emb).
 
-课程
+Curriculum
 
 \[
 F_{\mathrm{C}}=F_{\mathrm{new\text{-}mod}}(T_0)+F_{\mathrm{freeze\text{-}enc}}(T_1)+F_{\mathrm{joint}}(T_2),\quad T_0+T_1+T_2=50\mathrm{B}.
 \]
 
-C1 全程用 MoE Encoder（B0/B1 冻结，B2 解冻）。
+C1 uses a MoE Encoder throughout (frozen in B0/B1, unfrozen in B2).
 
 ---
 
-## 2. 定理 D — 梯度在 detached cache 处停止
+## 2. Theorem D — gradients stop at the detached cache
 
-**定理 D.** 设 \((\hat K,\hat V)\) 由 \(\mathrm{sg}(X^{L_e})\) 右乘 \(W_K,W_V\) 得到，损失函数 \(L\) 只通过 Decoder 与 \((\hat K,\hat V)\) 依赖输入。则
+**Theorem D.** Let \((\hat K,\hat V)\) be obtained by right-multiplying \(\mathrm{sg}(X^{L_e})\) by \(W_K,W_V\), and let the loss \(L\) depend on the input only through the Decoder and \((\hat K,\hat V)\). Then
 
 \[
 \frac{\partial L}{\partial\theta_{\mathrm{enc}}}=0,\qquad
 \frac{\partial L}{\partial X^{\ell}}=0\quad(\ell\le L_e).
 \]
 
-因而 Encoder 激活不必为反传保留。
+Hence Encoder activations need not be kept for backprop.
 
-**证明.** \(\mathrm{sg}\) 把 \(X^{L_e}\) 当作常数。链式法则在 cache 处断开。\(W_K,W_V\) 若在 \(\mathrm{sg}\) **之后**，仍可得到 \(\partial L/\partial W_K\)。□
+**Proof.** \(\mathrm{sg}\) treats \(X^{L_e}\) as a constant. The chain rule breaks at the cache. If \(W_K,W_V\) sit **after** \(\mathrm{sg}\), \(\partial L/\partial W_K\) is still obtained. □
 
-**实现约束（冻结边界，不是启发式）：**
+**Implementation constraint (freeze boundary, not a heuristic):**
 
 ```
 X_Le = encoder(embed(x))
 X_Le = X_Le.detach()          # B0/B1
-K, V = X_Le @ W_K, X_Le @ W_V # 新模块，可训练
+K, V = X_Le @ W_K, X_Le @ W_V # new modules, trainable
 ```
 
-若先投影再 detach，\(W_K,W_V\) 被冻进 Encoder，B0 训不到 YOCO 接口。若既不 detach 也不把 Encoder `requires_grad=False`，激活显存省不掉，还可能让某个漏标的 Encoder 参数吃到梯度。
+If you project first and then detach, \(W_K,W_V\) are frozen into the Encoder and B0 cannot train the YOCO interface. If you neither detach nor set Encoder `requires_grad=False`, activation memory is not saved, and a mis-tagged Encoder parameter may still receive a gradient.
 
-B2 必须**去掉** detach，否则 write/read 无法共同适应。
+B2 **must drop** detach, or write/read cannot co-adapt.
 
 ---
 
-## 3. 定理 E — 冻结 Encoder 时输入表泄漏（untied MiniCPM5）
+## 3. Theorem E — input-table leak while the Encoder is frozen (untied MiniCPM5)
 
-MiniCPM5 **不共享** 输入表与输出头：\(E_{\mathrm{in}},W_{\mathrm{head}}\in\mathbb{R}^{V\times d}\) 是两份矩阵。
+MiniCPM5 does **not share** the input table and the output head: \(E_{\mathrm{in}},W_{\mathrm{head}}\in\mathbb{R}^{V\times d}\) are two matrices.
 
 \[
 X^{0}=s_{\mathrm{emb}}\,\mathrm{onehot}(x)E_{\mathrm{in}},\qquad
 z=X^{42}W_{\mathrm{head}}^{\top}/\alpha,\quad \alpha=1,\ s_{\mathrm{emb}}=1.
 \]
 
-**定理 E.** 若 \(\theta_{\mathrm{enc}}\) 冻结而 \(E_{\mathrm{in}}\) 可训练，则 \(\partial L/\partial E_{\mathrm{in}}\) 经 \(X^{0}\) 非零（只要 Decoder 的 CE 还能通过 cache 依赖前缀，或 B2 之前某条没 detach 的路径），于是 \(X^{0}\) 漂移。即便梯度只通过 **head** 回来：在 YOCO 里 head 不直接更新 \(E_{\mathrm{in}}\)（untied），但 **任何** 在 Encoder 冻结期间对 \(E_{\mathrm{in}}\) 的更新都会让冻结栈吃到已经不是 MiniCPM5 输入分布的 \(X^{0}\)。定理 A 的「同一条残差流」对输入分布不再成立。
+**Theorem E.** If \(\theta_{\mathrm{enc}}\) is frozen while \(E_{\mathrm{in}}\) is trainable, then \(\partial L/\partial E_{\mathrm{in}}\) is nonzero through \(X^{0}\) (as long as Decoder CE can still depend on the prefix through the cache, or some path before B2 is not detached), so \(X^{0}\) drifts. Even if gradients come back only through the **head**: in YOCO the head does not directly update \(E_{\mathrm{in}}\) (untied), but **any** update to \(E_{\mathrm{in}}\) while the Encoder is frozen feeds the frozen stack an \(X^{0}\) that is no longer the MiniCPM5 input distribution. Theorem A’s “one residual stream” no longer holds for the input distribution.
 
-**推论 E1（冻结边界）。** 输入表在 B0/B1 **必须冻**。head 与输入表解绑，所以：
+**Corollary E1 (freeze boundary).** The input table **must be frozen** in B0/B1. The head is unbound from the input table, so:
 
-| 策略 | 做法 | 选用 |
+| Policy | Action | Use |
 | --- | --- | --- |
-| **freeze_embed_and_head（B0 默认）** | \(E_{\mathrm{in}}\) 与 \(W_{\mathrm{head}}\) 都冻 | 新模块热身；logits 仍走 MiniCPM5 head |
-| **freeze_embed_train_head（B1 默认）** | \(E_{\mathrm{in}}\) 冻，\(W_{\mathrm{head}}\) **可训** | LP-FT：先把头适配冻结特征，再动骨干 |
-| train_embed_while_frozen（禁止） | Encoder 冻、仍训 \(E_{\mathrm{in}}\) | 定理 E 泄漏 |
+| **freeze_embed_and_head (B0 default)** | Freeze both \(E_{\mathrm{in}}\) and \(W_{\mathrm{head}}\) | Warm up new modules; logits still go through the MiniCPM5 head |
+| **freeze_embed_train_head (B1 default)** | Freeze \(E_{\mathrm{in}}\), \(W_{\mathrm{head}}\) **trainable** | LP-FT: adapt the head to frozen features first, then move the backbone |
+| train_embed_while_frozen (forbidden) | Encoder frozen, still train \(E_{\mathrm{in}}\) | Theorem E leak |
 
-B0 冻 head：新模块随机、gate 还在 0→0.3，不要同时改分类面。B1 解冻 Decoder 时 **可以** 训 lm_head——head 已不与输入表绑定，不会把 \(X^{0}\) 拽偏。B2 才解冻 \(E_{\mathrm{in}}\)。**永远不要在 Encoder 冻结时训练输入 embedding。**
+B0 freezes the head: new modules are random, gate is still 0→0.3; do not change the classification surface at the same time. When B1 unfreezes the Decoder it **may** train lm_head — the head is no longer bound to the input table, so it will not pull \(X^{0}\) off-distribution. \(E_{\mathrm{in}}\) unfreezes only in B2. **Never train the input embedding while the Encoder is frozen.**
 
-ULMFiT（Howard & Ruder 2018）是「从顶向下解冻」：B0 新模块 → B1 解冻 Decoder + head → B2 解冻 Encoder+\(E_{\mathrm{in}}\)。LP-FT 是「先把头（或新接口）训到能用冻结特征，再动骨干」。YOCO 的新接口是 cross-attn + \(W_K,W_V\)，不是随机初始化的分类头——gate 从 0 升，B0 开始时前向仍是定理 A。两种文献都支持 **先动新接口、再动 reader（含 head）、最后动 writer + 输入表**，不支持 B0/B1 训练 \(E_{\mathrm{in}}\)。
+ULMFiT (Howard & Ruder 2018) is “unfreeze from the top down”: B0 new modules → B1 unfreeze Decoder + head → B2 unfreeze Encoder+\(E_{\mathrm{in}}\). LP-FT is “train the head (or new interface) until it can use frozen features, then move the backbone”. YOCO’s new interface is cross-attn + \(W_K,W_V\), not a randomly initialized classification head — the gate rises from 0, so at the start of B0 the forward pass is still Theorem A. Both literatures support **move the new interface first, then the reader (including the head), last the writer + input table**; neither supports training \(E_{\mathrm{in}}\) in B0/B1.
 
 ---
 
-## 4. 冻结边界（B0 / B1 / B2）
+## 4. Freeze boundaries (B0 / B1 / B2)
 
-`scripts/param_budget.py` 的 `FREEZE_BOUNDARIES`（C1 定稿）：
+`scripts/param_budget.py` `FREEZE_BOUNDARIES` (C1 locked-in recipe):
 
-| 子阶段 | token（默认） | 冻结 | 可训练 | detach | embedding | gate |
+| Substage | Tokens (default) | Frozen | Trainable | detach | embedding | gate |
 | --- | ---: | --- | --- | --- | --- | --- |
-| **B0** | 8B | Encoder、Decoder 骨干、\(E_{\mathrm{in}}\)、lm_head | cross-attn、\(W_K/W_V\)、新 LN、gate | 是 | freeze_embed_and_head | 0→0.3 |
-| **B1** | 27B | Encoder、\(E_{\mathrm{in}}\) | Decoder self-attn + MoE、cross-attn、\(W_K/W_V\)、**lm_head** | 是 | freeze_embed_train_head | →1 |
-| **B2** | 15B | — | 全部（含 \(E_{\mathrm{in}}\) 与 head） | **否** | train_untied | 1 |
+| **B0** | 8B | Encoder, Decoder backbone, \(E_{\mathrm{in}}\), lm_head | cross-attn, \(W_K/W_V\), new LN, gate | yes | freeze_embed_and_head | 0→0.3 |
+| **B1** | 27B | Encoder, \(E_{\mathrm{in}}\) | Decoder self-attn + MoE, cross-attn, \(W_K/W_V\), **lm_head** | yes | freeze_embed_train_head | →1 |
+| **B2** | 15B | — | all (including \(E_{\mathrm{in}}\) and head) | **no** | train_untied | 1 |
 
-B0 的 token 与已有 5–10B gate 爬坡对齐（此处取 8B，gate 只升到 0.3，避免在冻结骨干上把 \(g\) 拉到 1 而导致 cross-attn 过拟合冻结特征——这是 LP-FT「随机头逼骨干改特征」的对称失败：这里头是好的，新分支是随机的）。
+B0’s tokens align with the existing 5–10B gate ramp (8B here; gate only rises to 0.3, avoiding pulling \(g\) to 1 on a frozen backbone and overfitting cross-attn to frozen features — the symmetric failure of LP-FT “a random head forces the backbone to change features”: here the head is good and the new branch is random).
 
-B1 解冻 reader **和** lm_head。Writer 与输入表是 **冻结的 virtual-group MoE Encoder**（≈ MiniCPM5-16，命题 F）。
+B1 unfreezes the reader **and** lm_head. Writer and input table are a **frozen virtual-group MoE Encoder** (≈ MiniCPM5-16, Proposition F).
 
-B2 ≥ 10B：Encoder 专家从这一刻才开始特化，需要负载熵；write/read 需要共同适应。质量不稳加长 B2，而不是加长 B0。
+B2 ≥ 10B: Encoder experts start specializing only from this point and need load entropy; write/read need to co-adapt. If quality is unstable, lengthen B2, not B0.
 
-**不要做：** 贪心逐层加层（2 层→冻→再加 2 层）。LLM 上没有稳定省算力的证据，结尾仍要联合，还破坏 16/26 切点。
+**Do not:** greedily add layers (2 layers → freeze → add 2 more). There is no stable compute-saving evidence on LLMs; the end still needs a joint stage, and it also breaks the 16/26 cut.
 
-### C1 时间线（定稿）
+### C1 timeline (locked in)
 
 ```
-Phase A  离线：16/26 切开，gate=0，Encoder+Decoder 都 virtual-group MoE，
-         加 cross-attn 与 W_K/W_V。此后总参就是 12.25B。
-B0  8B   Encoder / Decoder 骨干 / E_in / lm_head 全冻。只训新模块。
-         cache = X^16.detach() @ W_{K,V}。g: 0→0.3。
-         Encoder 前向 = 冻结的 MoE 副本 ≈ MiniCPM5 1–16（命题 F）。
-B1  27B  解冻 Decoder + lm_head。Encoder + E_in 仍冻，仍 detach。g→1。
-         Reader 学会用冻结记忆；writer 与输入表不改。
-B2  15B  去掉 detach，解冻 Encoder + E_in，LR 更小。
-         Encoder 专家从这里才开始特化；write/read 共同适应。
+Phase A  Offline: 16/26 split, gate=0, Encoder+Decoder both virtual-group MoE,
+         add cross-attn and W_K/W_V. Total params are 12.25B from here on.
+B0  8B   Encoder / Decoder backbone / E_in / lm_head all frozen. Train only new modules.
+         cache = X^16.detach() @ W_{K,V}. g: 0→0.3.
+         Encoder forward = frozen MoE copy ≈ MiniCPM5 1–16 (Proposition F).
+B1  27B  Unfreeze Decoder + lm_head. Encoder + E_in still frozen, still detach. g→1.
+         Reader learns to use frozen memory; writer and input table do not change.
+B2  15B  Drop detach, unfreeze Encoder + E_in, smaller LR.
+         Encoder experts start specializing here; write/read co-adapt.
 ```
 
-C1 的 MoE 初始化与冻结兼容：virtual-group 保证转换瞬间等于 dense；冻住路由和专家，这个等式一直维持到 B2。Encoder 上的 Hash-MoE 在 B0/B1 是多余的（路由已经冻死），放到 B2 解冻时再用。
+C1’s MoE initialization is compatible with freezing: virtual-group guarantees equality with dense at the conversion instant; freezing routing and experts keeps that equality until B2. Hash-MoE on the Encoder is redundant in B0/B1 (routing is already frozen solid); use it when B2 unfreezes.
 
 ---
 
-## 5. Virtual-group 冻结 ⇒ 近似定理 A
+## 5. Virtual-group freeze ⇒ approximate Theorem A
 
-**命题 F.** Phase A 对某栈做 virtual-group 上采样后，转换瞬间 \(f_{\mathrm{MoE}}=f_{\mathrm{dense}}\)（每片一份副本被 top-\(k\) 命中）。若该栈的专家与路由随后冻结，等式在数值上保持。因此 C1 在 B0/B1 的 Encoder ≈ MiniCPM5 第 1–16 层。
+**Proposition F.** After Phase A virtual-group upsampling of a stack, at the conversion instant \(f_{\mathrm{MoE}}=f_{\mathrm{dense}}\) (one copy per shard is hit by top-\(k\)). If that stack’s experts and routing are then frozen, the equality holds numerically. Therefore C1’s Encoder in B0/B1 ≈ MiniCPM5 layers 1–16.
 
-Decoder 在 Phase A 同样上采样：B0 冻 Decoder 骨干 ⇒ Decoder 也保持 virtual-group 等式，直到 B1 解冻。B1 是 MoE 恢复段；B2 才让 writer 参与。
+The Decoder is upsampled the same way in Phase A: B0 freezes the Decoder backbone ⇒ the Decoder also keeps the virtual-group equality until B1 unfreezes. B1 is the MoE recovery segment; B2 is when the writer joins.
 
-**Hash-MoE.** Encoder 已冻，Encoder 上的哈希路由是多余的。放到 B2 解冻开头若干步。Decoder Hash-MoE 仍在 B1 有用。
-
----
-
-## 6. 敏感性：推迟 Encoder 上采样（不定稿）
-
-脚本仍计算「B0/B1 Encoder 保持 MiniCPM5 dense」的 FLOPs，作为对照，**不进配方**。
-
-每层 dense SwiGLU \(37.75\mathrm{M} < 8\times 12.58\mathrm{M}=100.7\mathrm{M}\) 激活专家，故 16 层 \(0.75\mathrm{B}<1.76\mathrm{B}\)。同一 8+27+15B split 下该对照是 997 H100-h（75%），比 C1 再省约 4pp，但要在 B2 做第二次 Encoder virtual-group。定稿不采用。
+**Hash-MoE.** The Encoder is already frozen, so hash routing on the Encoder is redundant. Put it in the first few steps of the B2 unfreeze. Decoder Hash-MoE is still useful in B1.
 
 ---
 
-## 7. FLOPs 账本（与 `--staged` 对齐）
+## 6. Sensitivity: delayed Encoder upsampling (not in the locked-in recipe)
 
-中间档、emb 与 head 各计一次、50B token 信封、40% MFU：
+The script still computes FLOPs for “B0/B1 Encoder stays MiniCPM5 dense” as a control. **It is not in the recipe.**
 
-| 做法 | H100-h | vs 联合 |
+Per-layer dense SwiGLU \(37.75\mathrm{M} < 8\times 12.58\mathrm{M}=100.7\mathrm{M}\) active experts, so 16 layers \(0.75\mathrm{B}<1.76\mathrm{B}\). On the same 8+27+15B split that control is 997 H100-h (75%), about 4pp cheaper than C1, but it requires a second Encoder virtual-group at B2. The locked-in recipe does not adopt it.
+
+---
+
+## 7. FLOPs ledger (aligned with `--staged`)
+
+Middle tier, emb and head each counted once, 50B token envelope, 40% MFU:
+
+| Approach | H100-h | vs joint |
 | --- | ---: | ---: |
-| 两栈一起训 | 1,325 | 100% |
-| 冻 Encoder、训 Decoder（全程；write/read 不共同适应） | 987 | 75% |
-| 只训新模块 | 720 | 54% |
-| **C1 解冻课程 8+27+15B（定稿）** | **1,046** | **79%** |
-| 独立 50B+50B+20B 拼接 | 1,940 | 146% |
-| Encoder 当 LM 25B 再联合 25B | 874 | 66%（质量赌博） |
+| Train both stacks together | 1,325 | 100% |
+| Freeze Encoder, train Decoder (full run; write/read do not co-adapt) | 987 | 75% |
+| Train only new modules | 720 | 54% |
+| **C1 unfreeze curriculum 8+27+15B (locked in)** | **1,046** | **79%** |
+| Independent 50B+50B+20B stitch | 1,940 | 146% |
+| Encoder as an LM for 25B then joint 25B | 874 | 66% (quality gamble) |
 
-独立拼接更贵的原因不变：两栈各付 50B 的 6NT，再加拼接恢复；定理 A 的表示对齐被扔掉。50B token × \(d\) × 2 bytes 的 Encoder 隐状态缓存 ≈ 205 TB，不能靠「存 Encoder 输出」逃掉前向。
+The independent stitch is more expensive for the same reason as before: each stack pays 6NT on 50B, plus stitch recovery; Theorem A’s representation alignment is thrown away. Caching Encoder hidden states for 50B tokens × \(d\) × 2 bytes ≈ 205 TB; you cannot skip the Encoder forward by “storing Encoder outputs”.
 
 ---
 
-## 8. 优化器与激活显存（可能比 FLOPs 更值）
+## 8. Optimizer and activation memory (may be worth more than FLOPs)
 
-记账：bf16 权重 2 B/参；可训练另加 bf16 梯度 2 B + Adam \(m,v\) fp32 共 8 B ⇒ 可训练 12 B/参，冻结 2 B/参。不含激活、不含 fp32 master。Cache 投影计入存储（12.248B 而非发布的 12.25B 栈合计）。数字为 **C1**。
+Accounting: bf16 weights 2 B/param; trainable adds bf16 gradients 2 B + Adam \(m,v\) fp32 totaling 8 B ⇒ trainable 12 B/param, frozen 2 B/param. Excludes activations, excludes fp32 master. Cache projections counted in storage (12.248B rather than the published 12.25B stack total). Numbers are **C1**.
 
-| 阶段 | 可训练 | 冻结 | Adam \(m,v\) | 权重+梯度+Adam | vs B2 Adam |
+| Stage | Trainable | Frozen | Adam \(m,v\) | Weights+grads+Adam | vs B2 Adam |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | B0 | 0.22B | 12.03B | 1.75 GB | 26.69 GB | 2% |
 | B1 | 7.60B | 4.65B | 60.82 GB | 100.52 GB | **62%** |
 | B2 | 12.25B | 0 | 97.99 GB | 146.98 GB | 100% |
 
-B1 的 Adam 状态是联合的 62%（Decoder 总参 + lm_head + cache 投影 / 全体总参）。
+B1 Adam state is 62% of joint (Decoder total params + lm_head + cache projections / all total params).
 
-**激活：** detach 之后 Encoder 16 层不必保留给反传。层数模型：留下 \(26/42\approx 62\%\)，约省 38% 激活显存。不是旧账本的 \(24/40=60\%\)。
+**Activations:** after detach, Encoder 16 layers need not be kept for backprop. Layer-count model: leave \(26/42\approx 62\%\), save about 38% activation memory. Not the old ledger’s \(24/40=60\%\).
 
-Muon 只在 2D 矩阵上存一份动量，B1/B2 的优化器差距会略小于 Adam 的 8 B/参，方向不变。
+Muon stores one momentum copy only on 2D matrices, so the B1/B2 optimizer gap is slightly smaller than Adam’s 8 B/param; the direction is unchanged.
 
-这就是 §15.3 把解冻课程排在 NVFP4 前面的原因：它同时砍反向 FLOPs、Adam 状态、激活。发布积是 **C1+NVFP4 = 571**（C1 bf16 1,046 只作操作数账；C1+FP8 729 为 Hopper/Ada 回退），不替代冻结。
+This is why §15.3 ranks the unfreeze curriculum ahead of NVFP4: it cuts backward FLOPs, Adam state, and activations at once. The published product is **C1+NVFP4 = 571** (C1 bf16 1,046 is operand ledger only; C1+FP8 729 is Hopper/Ada fallback). It does not replace freezing.
 
 ---
 
-## 9. Token 切分敏感性
+## 9. Token-split sensitivity
 
-信封固定 50B。脚本 `--curriculum`（C1 列是定稿；dense-enc 列是敏感性）：
+Envelope fixed at 50B. Script `--curriculum` (C1 column is locked in; dense-enc column is sensitivity):
 
-| split | C1 vs 联合 | 合法 |
+| split | C1 vs joint | Legal |
 | --- | ---: | --- |
-| **定稿 8+27+15** | **79%** | 是 |
-| 短 B2 5+35+10 | 78% | 是（B2 贴着 10B 下限） |
-| 长 B2 10+20+20 | 81% | 是（质量优先） |
-| 短 B0 5+25+20 | 83% | 是 |
-| 跳过 B0 0+35+15 | 82% | 是（少了新模块热身） |
-| **B2=0（8+42+0）** | 71% | **否** |
+| **Locked-in 8+27+15** | **79%** | yes |
+| Short B2 5+35+10 | 78% | yes (B2 on the 10B floor) |
+| Long B2 10+20+20 | 81% | yes (quality first) |
+| Short B0 5+25+20 | 83% | yes |
+| Skip B0 0+35+15 | 82% | yes (misses new-module warmup) |
+| **B2=0 (8+42+0)** | 71% | **no** |
 
-所有合法切分在 C1 下都 ≤85% 联合（最大 83%）。B2=0 最便宜，但 Encoder 从不对 Decoder 的 query 改写记忆——PDSA「无写入时信号」直接打在这条路上。定稿不采用短于 10B 的 B2。
-
----
-
-## 10. 与 Phase C / D 的复合
-
-Phase C 第 1 步（发布默认、无 KDA）：冻主干，只训 Lightning Indexer，目标是 **层内** indexer 分布对齐稠密注意力（KL/MSE），不是穿过 YOCO cache 的 CE。
-
-若 `use_kda`：B 已实现 3:1 图（仍滑窗）；C 第 0 步是 `C-kda`（只点亮多数 KDA 层，CSA/HCA 仍滑窗），indexer/CSA/HCA 靠后；C 合计仍 25e9。不要在 C 才把 KDA 焊进 `use_kda=False` overlay。
-
-- Encoder indexer 的监督在 Encoder 层内，不需要 CE 反传到 Encoder，也**不必**为了训 indexer 而撤掉 B0/B1 的 detach；C 发生在 B2 **之后**，那时 detach 已经关掉过一轮。
-- Decoder indexer 同理，监督在 cross-attn / CSA 层内。
-- C 的 FLOPs 形态与 B0 相同（新模块 + Decoder 激活反传 + Encoder 只前向），但 \(N_{\mathrm{new}}\) 是 indexer 而不是 26 层 cross-attn，更小。
-- **不要**把 C 的「冻主干」做成永远冻 Encoder：M1 的 Encoder CSA 在长上下文（Phase D）仍可能需要轻微适应。C 对齐完再小步联训。
-
-Phase D 长上下文：默认两栈都解冻、小 LR。若显存不够，可对 Encoder 再冻一段（C1 式 freeze-enc），但 128K 起 cross-attn 已是瓶颈（预算篇 §6），冻 writer 等于放弃写侧适应，只当权宜。
-
-Phase F/G 的分域专家蒸馏与这套预训练课程正交。
+All legal splits under C1 are ≤85% of joint (max 83%). B2=0 is cheapest, but the Encoder never rewrites memory for the Decoder’s queries — PDSA’s “no write-time signal” lands directly on that path. The locked-in recipe does not adopt a B2 shorter than 10B.
 
 ---
 
-## 11. 失败模式（实现前先避开）
+## 10. Composition with Phase C / D
 
-| 失败 | 来源 | 避免 |
+Phase C step 1 (published default, no KDA): freeze the trunk, train only the Lightning Indexer; the target is **in-layer** indexer-distribution alignment to dense attention (KL/MSE), not CE through the YOCO cache.
+
+If `use_kda`: B already implements the 3:1 graph (still windowed); C step 0 is `C-kda` (only light the majority KDA layers; CSA/HCA still windowed), indexer/CSA/HCA come later; C total is still 25e9. Do not weld KDA into a `use_kda=False` overlay only at C.
+
+- Encoder indexer supervision is inside Encoder layers; it does not need CE backprop into the Encoder, and **need not** drop B0/B1 detach just to train the indexer; C happens **after** B2, when detach has already been turned off for one round.
+- Decoder indexer likewise: supervision is inside cross-attn / CSA layers.
+- C’s FLOPs shape matches B0 (new modules + Decoder activation backprop + Encoder forward only), but \(N_{\mathrm{new}}\) is the indexer rather than 26 layers of cross-attn, so smaller.
+- **Do not** make C’s “freeze the trunk” into a permanent Encoder freeze: M1’s Encoder CSA may still need light adaptation at long context (Phase D). After C alignment, a small joint step.
+
+Phase D long context: default both stacks unfrozen, small LR. If memory is tight, the Encoder can be frozen again for a stretch (C1-style freeze-enc), but from 128K on cross-attn is already the bottleneck (budget doc §6); freezing the writer means giving up write-side adaptation — use only as a stopgap.
+
+Phase F/G domain-expert distillation is orthogonal to this pretraining curriculum.
+
+---
+
+## 11. Failure modes (avoid these before implementing)
+
+| Failure | Source | Avoid |
 | --- | --- | --- |
-| 独立拼接更贵、切点漂移 | 两栈当两个 LM | 只用 B0/B1/B2；定理 A |
-| Encoder 反传偷偷回来 | 没 detach，或 \(W_K\) 在 detach 前 | 定理 D 的代码顺序 |
-| 冻结 Encoder 但 \(X^0\) 在漂 | 训输入 \(E_{\mathrm{in}}\) | 定理 E：B0/B1 冻输入表；B1 只许训 head |
-| Encoder 专家占坑不特化 | Phase A 两栈都 MoE 再冻 Encoder | **接受**：B2≥15B 才让 Encoder 专家特化；不要因此改回独立 LM |
-| write/read 上限卡住 | B2=0 或 B2≪10B | 默认 15B；不稳加长 B2 |
-| B0 上 \(g\to1\) 过拟合冻结特征 | 新分支随机、骨干冻 | B0 只到 \(g=0.3\) |
-| 把 early-exit 算进课程 FLOPs | 训练没有 early-exit | 架构篇定理 C；课程用全长 6NT |
-| Encoder Hash-MoE 放在 B0 | Encoder 已冻 | Hash-MoE 跟 Encoder 解冻走（B2） |
-| 以为省掉 Encoder 前向 | CE 在 Decoder 顶 | 前向必跑；省的是反向与显存 |
+| Independent stitch more expensive, cut drifts | Treat two stacks as two LMs | B0/B1/B2 only; Theorem A |
+| Encoder backprop sneaks back | No detach, or \(W_K\) before detach | Theorem D code order |
+| Encoder frozen but \(X^0\) drifting | Train input \(E_{\mathrm{in}}\) | Theorem E: freeze input table in B0/B1; B1 may train only the head |
+| Encoder experts occupy slots without specializing | Phase A MoE both stacks then freeze Encoder | **Accept**: Encoder experts specialize only at B2≥15B; do not revert to independent LMs for this |
+| Write/read ceiling stuck | B2=0 or B2≪10B | Default 15B; if unstable, lengthen B2 |
+| B0 \(g\to1\) overfits frozen features | New branch random, backbone frozen | B0 only to \(g=0.3\) |
+| Count early-exit into curriculum FLOPs | Training has no early-exit | Architecture doc Theorem C; curriculum uses full-length 6NT |
+| Encoder Hash-MoE placed in B0 | Encoder already frozen | Hash-MoE follows Encoder unfreeze (B2) |
+| Think the Encoder forward is skipped | CE is at the Decoder top | Forward must run; what is saved is backward and memory |
 
-理论**不能**排除的：B2 太短导致 Encoder 负载坍塌、解冻瞬间 loss 尖峰、12B 恢复不到 MiniCPM5 95%。那些是实验；尖峰就回退该子阶段、降 LR，不要改回独立 LM。
+Theory **cannot** rule out: Encoder load collapse from too-short B2, a loss spike at the unfreeze instant, 12B recovery missing MiniCPM5 95%. Those are experiments; on a spike, roll back that substage and drop LR — do not revert to independent LMs.
 
 ---
 
 ## 12. Claim ledger
 
-`python3 scripts/param_budget.py --verify` 在中间档 22 条之外增加：
+`python3 scripts/param_budget.py --verify` adds, beyond the middle tier’s 22:
 
-| Claim | 结果 |
+| Claim | Result |
 | --- | --- |
-| **定稿配方是 C1** | PASS |
-| C1 课程 ≤85% 联合 | PASS（79%；中间档账本） |
-| B0/B1 detach，B2 不 detach | PASS |
-| B0/B1 冻输入表；B0 冻 head、B1 训 head | PASS |
-| B1 Adam ≈ Decoder/总参 ~62% | PASS |
-| detach 保留 26/42 层激活 | PASS（62%） |
-| 所有合法 50B split ≤85% 联合 | PASS（C1 max 83%） |
-| B2=0 更便宜但非法 | PASS |
-| cache 投影是 B0 新模块 | PASS（1.05M） |
-| 默认 B2 ≥10B | PASS（15B） |
-| Encoder dense FFN < MoE FFN（敏感性，不定稿） | PASS（0.75B < 1.76B） |
-| delayed-enc 对照更便宜（敏感性，不定稿） | PASS（75% < 79%） |
+| **Locked-in recipe is C1** | PASS |
+| C1 curriculum ≤85% joint | PASS (79%; middle-tier ledger) |
+| B0/B1 detach, B2 does not detach | PASS |
+| B0/B1 freeze input table; B0 freeze head, B1 train head | PASS |
+| B1 Adam ≈ Decoder/total params ~62% | PASS |
+| detach keeps 26/42 layer activations | PASS (62%) |
+| All legal 50B splits ≤85% joint | PASS (C1 max 83%) |
+| B2=0 cheaper but illegal | PASS |
+| Cache projections are B0 new modules | PASS (1.05M) |
+| Default B2 ≥10B | PASS (15B) |
+| Encoder dense FFN < MoE FFN (sensitivity, not in the locked-in recipe) | PASS (0.75B < 1.76B) |
+| delayed-enc control cheaper (sensitivity, not in the locked-in recipe) | PASS (75% < 79%) |
 
-C1 ≤85% 仍在中间档账本里（79%）。FP8 回退 13 条见 [`FP8_THEORY.md`](FP8_THEORY.md)；NVFP4 16 条见 [`NVFP4_THEORY.md`](NVFP4_THEORY.md)；合计 `--verify` **63/63**。墙钟定稿是 **C1+NVFP4 = 571**。
+C1 ≤85% is still in the middle-tier ledger (79%). FP8 fallback 13 claims in [`FP8_THEORY.md`](FP8_THEORY.md); NVFP4 16 claims in [`NVFP4_THEORY.md`](NVFP4_THEORY.md); combined `--verify` **63/63**. Wall-clock is locked in as **C1+NVFP4 = 571**.
 
 ---
 
-## 13. 对计划的修订（本 PR）
+## 13. Plan revisions (this PR)
 
-1. §4.0：**C1 定稿**（两栈都先 MoE，B0/B1 冻 Encoder；detach、冻 \(E_{\mathrm{in}}\)、B1 可训 lm_head、\(W_K/W_V\)）。推迟 Encoder 上采样不进配方。
-2. Phase A：对 Encoder、Decoder **各自** virtual-group。切分 **16/26**。
-3. §15.3 杠杆 #5：C1 约省 21% Phase B FLOPs、B1 Adam 62%、激活 ~38%。
-4. 不写训练代码骨架（按用户要求，理论先闭环）。
-5. **墙钟敲死为 C1+NVFP4**：571 H100-h（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)）。联合 bf16、C1+FP8 与全阶段 2.0× 不定稿。
+1. §4.0: **C1 locked in** (MoE both stacks first, freeze Encoder in B0/B1; detach, freeze \(E_{\mathrm{in}}\), B1 may train lm_head, \(W_K/W_V\)). Delayed Encoder upsampling is not in the recipe.
+2. Phase A: virtual-group **each** of Encoder and Decoder. Split **16/26**.
+3. §15.3 lever #5: C1 saves about 21% of Phase B FLOPs, B1 Adam 62%, activations ~38%.
+4. Do not write a training-code skeleton (per user request: close the theory loop first).
+5. **Wall-clock locked as C1+NVFP4**: 571 H100-h ([`NVFP4_THEORY.md`](NVFP4_THEORY.md)). Joint bf16, C1+FP8, and all-stage 2.0× are not locked in.
 
-复算：
+Recompute:
 
 ```bash
 python3 scripts/param_budget.py --verify

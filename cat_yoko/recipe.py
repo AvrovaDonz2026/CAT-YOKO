@@ -1,7 +1,9 @@
-"""Published Phase B data mix: OpenBMB Ultra-FineWeb + UltraData-Math.
+"""Published Phase B thinking mix: OpenBMB web/math plus a modest code slice.
 
-Code (StarCoder) is an optional extra — not OpenBMB. Default mix is 100% OpenBMB.
-UltraChat / 指令对话是 Phase F/G，不进这张表。
+The model is meant to do coding work, so default Phase B/C is not 0% code.
+StarCoder is not OpenBMB; do not download it in CI / this VM. Optional
+``phase-b-code`` raises the slice to 10% (Ultra-FineWeb paper eval mix).
+UltraChat / instruction chat belongs in Phase F/G, not this table.
 """
 
 from __future__ import annotations
@@ -33,10 +35,13 @@ class Source:
     notes: str = ""
 
 
-# Ultra-FineWeb paper mix was 60% en / 30% zh / 10% code. We keep en/zh and
-# give the last 10% to UltraData-Math so the default is all-OpenBMB.
+# Thinking (Phase B/C): keep math at 10%, shave 5% off English web for code.
+# Not the Ultra-FineWeb paper's 10% code slot (that is optional phase-b-code).
+# DummyStream uses the same fraction with builtin snippets — no Hub download.
+THINK_CODE_FRAC = 0.05
+
 PHASE_B = (
-    Source("ultrafineweb-en", "openbmb/Ultra-FineWeb", 0.60, config="en"),
+    Source("ultrafineweb-en", "openbmb/Ultra-FineWeb", 0.55, config="en"),
     Source("ultrafineweb-zh", "openbmb/Ultra-FineWeb", 0.30, config="zh"),
     Source(
         "ultradata-math",
@@ -45,6 +50,13 @@ PHASE_B = (
         config="l2",
         text_fields=("content", "text"),
         notes="L2 quality-selected math; fall back to default split if config missing",
+    ),
+    Source(
+        "starcoder",
+        "bigcode/starcoderdata",
+        THINK_CODE_FRAC,
+        text_fields=("content", "text"),
+        notes="modest thinking-mix code; not OpenBMB; not downloaded in CI / this VM",
     ),
 )
 
@@ -57,8 +69,22 @@ PHASE_B_WITH_CODE = (
         "bigcode/starcoderdata",
         0.10,
         text_fields=("content", "text"),
-        notes="not OpenBMB; MiniCPM5 / Ultra-FineWeb eval mix used 10% code",
+        notes="optional extra 10% code (Ultra-FineWeb paper eval mix); not OpenBMB",
     ),
+)
+
+# Original short snippets for DummyStream (no StarCoder download). Tile to seq.
+THINK_CODE_SNIPPETS = (
+    "def add(a, b):\n    return a + b\n\nassert add(2, 3) == 5\n",
+    "class Counter:\n    def __init__(self):\n        self.n = 0\n    def inc(self):\n        self.n += 1\n        return self.n\n",
+    "def qsort(xs):\n    if len(xs) < 2:\n        return xs\n    p = xs[0]\n    return qsort([x for x in xs[1:] if x < p]) + [p] + qsort([x for x in xs[1:] if x >= p])\n",
+    "function clamp(x, lo, hi) {\n  return Math.min(hi, Math.max(lo, x));\n}\n",
+    "int gcd(int a, int b) {\n  while (b) { int t = a % b; a = b; b = t; }\n  return a;\n}\n",
+    "set -euo pipefail\nsum=0\nfor n in 1 2 3 4; do\n  sum=$((sum + n))\ndone\necho \"$sum\"\n",
+    "SELECT id, name FROM users WHERE active = 1 ORDER BY id LIMIT 20;\n",
+    "fn fib(n: u32) -> u32 {\n    if n < 2 { return n; }\n    fib(n - 1) + fib(n - 2)\n}\n",
+    "from typing import Iterable\n\ndef uniq(xs: Iterable[str]) -> list[str]:\n    seen: set[str] = set()\n    out = []\n    for x in xs:\n        if x not in seen:\n            seen.add(x)\n            out.append(x)\n    return out\n",
+    "const merge = (a, b) => {\n  const out = [];\n  let i = 0, j = 0;\n  while (i < a.length && j < b.length) {\n    out.push(a[i] <= b[j] ? a[i++] : b[j++]);\n  }\n  return out.concat(a.slice(i), b.slice(j));\n};\n",
 )
 
 PHASE_F = (
@@ -157,6 +183,12 @@ def default_mix(phase: str) -> str:
 
 def is_sft_mix(name: str) -> bool:
     return str(name) in SFT_MIXES
+
+
+def mix_code_weight(sources: tuple[Source, ...] | None = None) -> float:
+    """StarCoder (or other non-OpenBMB code) weight in a mix. Default: thinking Phase B."""
+    src = PHASE_B if sources is None else sources
+    return float(sum(s.weight for s in src if s.key == "starcoder"))
 
 
 _LEGACY_MINICPM = ("minicpm2b", "minicpm3", "minicpm4")

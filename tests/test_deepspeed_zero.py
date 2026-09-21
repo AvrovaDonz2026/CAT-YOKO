@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from cat_yoko.config import CATYokoConfig
 from cat_yoko.deepspeed_zero import (
     AMPERE_48GIB_ARGV,
     DEEPSPEED,
@@ -21,6 +22,8 @@ from cat_yoko.deepspeed_zero import (
     is_deepspeed_engine,
     is_zero_partitioned,
     resolve_zero_stage,
+    seed_single_process_rank_env,
+    wrap_deepspeed,
     zero_config,
 )
 from cat_yoko.offload import auto_offload_flags
@@ -57,6 +60,20 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(z["offload_param"]["device"], "cpu")
         self.assertEqual(z["offload_optimizer"]["device"], "cpu")
         self.assertTrue(z["stage3_gather_16bit_weights_on_model_save"])
+        self.assertGreaterEqual(z["stage3_prefetch_bucket_size"], 400_000_000)
+        self.assertGreaterEqual(z["reduce_bucket_size"], 400_000_000)
+        # 2048×2048 = 4_194_304 must stay below the threshold (5e6 OOM'd).
+        self.assertGreaterEqual(z["stage3_param_persistence_threshold"], 1_000_000)
+        self.assertLess(z["stage3_param_persistence_threshold"], 4_194_304)
+        self.assertGreaterEqual(z["stage3_max_live_parameters"], 2_000_000_000)
+        self.assertGreaterEqual(z["stage3_max_reuse_distance"], 2_000_000_000)
+        self.assertEqual(z["offload_param"]["buffer_count"], 8)
+        self.assertEqual(z["offload_optimizer"]["buffer_count"], 8)
+        self.assertTrue(z["round_robin_gradients"])
+        self.assertEqual(
+            z["leaf_module"]["classes"],
+            ["MoE", "EncoderBlock", "DecoderBlock"],
+        )
 
     def test_json_roundtrip(self) -> None:
         json.dumps(zero_config(stage=3, offload_optimizer=True, offload_param=True))
@@ -268,8 +285,26 @@ class PhaseArgvTests(unittest.TestCase):
         self.assertIn("--no-save-full", argv)
         self.assertIn("--save-trainable", argv)
 
+    def test_phase_argv_forwards_no_nvfp4(self) -> None:
+        argv = build_phase_argv(
+            "B0",
+            ["--try", "--no-nvfp4", "--save-dir", "/tmp/b0-ds", "--device", "cpu"],
+        )
+        self.assertIn("--no-nvfp4", argv)
+        self.assertIn("--no-save-full", argv)
+        self.assertTrue(CATYokoConfig.middle_12b().use_nvfp4)
+
 
 class SourceContractTests(unittest.TestCase):
+    def test_phase_argv_forwards_more_steps(self) -> None:
+        argv = build_phase_argv(
+            "B0",
+            ["--more-steps", "8", "--save-dir", "/tmp/b0-ds", "--device", "cpu"],
+        )
+        self.assertIn("--more-steps", argv)
+        self.assertEqual(argv[argv.index("--more-steps") + 1], "8")
+        self.assertIn("--tokens", argv)
+
     def test_freeze_before_wrap_deepspeed(self) -> None:
         src = inspect.getsource(Trainer.run)
         wrap_src = inspect.getsource(Trainer._wrap_and_optim)
@@ -277,6 +312,26 @@ class SourceContractTests(unittest.TestCase):
         self.assertIn("wrap_deepspeed", wrap_src)
         self.assertIn("wrap_distributed", wrap_src)
         self.assertIn("gradient_accumulation_steps=1", wrap_src)
+        self.assertIn("seed_single_process_rank_env", inspect.getsource(wrap_deepspeed))
+
+    def test_single_process_seeds_local_rank(self) -> None:
+        import os
+
+        src = inspect.getsource(seed_single_process_rank_env)
+        self.assertIn('setdefault("LOCAL_RANK"', src)
+        old = {k: os.environ.get(k) for k in ("LOCAL_RANK", "RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT")}
+        for k in ("LOCAL_RANK", "RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT"):
+            os.environ.pop(k, None)
+        try:
+            seed_single_process_rank_env()
+            self.assertEqual(os.environ["LOCAL_RANK"], "0")
+            self.assertEqual(os.environ["WORLD_SIZE"], "1")
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
 
     def test_zero3_gather_before_rank0_save(self) -> None:
         src = inspect.getsource(Trainer._maybe_save)
@@ -285,18 +340,85 @@ class SourceContractTests(unittest.TestCase):
         )
         self.assertIn("stage3", inspect.getsource(zero_config))
 
+    def test_overlay_gather_skips_frozen_12b(self) -> None:
+        import torch
+
+        from cat_yoko.deepspeed_zero import (
+            gathered_state_dict,
+            gathered_trainable_state_dict,
+        )
+
+        overlay = inspect.getsource(gathered_trainable_state_dict)
+        full = inspect.getsource(gathered_state_dict)
+        self.assertIn("GatheredParameters", overlay)
+        self.assertIn("requires_grad", overlay)
+        self.assertNotIn("_zero3_consolidated_16bit_state_dict", overlay)
+        self.assertIn("_zero3_consolidated_16bit_state_dict", full)
+        self.assertIn("exclude_frozen_parameters=False", full)
+        self.assertIsNone(gathered_trainable_state_dict(torch.nn.Linear(4, 4)))
+
     def test_not_a_megatron_loop_or_csa_kernel(self) -> None:
         text = (ROOT / "cat_yoko" / "deepspeed_zero.py").read_text(encoding="utf-8")
         self.assertIn("Not Megatron EP/TP", text)
         self.assertIn("Not a CSA kernel", text)
         self.assertNotIn("class CSA", text)
 
+    def test_occupancy_hides_host_syncs(self) -> None:
+        import inspect
+
+        from cat_yoko.moe import _kick_max_count
+        from cat_yoko.optim import _deepspeed_cpu_adam, build_optimizer
+        from cat_yoko.trainer import Trainer, quiet_inductor
+
+        run_src = inspect.getsource(Trainer.run)
+        extra_src = inspect.getsource(Trainer._extra)
+        self.assertIn("will_save", run_src)
+        self.assertIn("_prefetch_batch", run_src)
+        self.assertIn("include_rng", extra_src)
+        self.assertIn("CUDA_DEVICE_MAX_CONNECTIONS", (ROOT / "cat_yoko" / "trainer.py").read_text(encoding="utf-8"))
+        self.assertIn("TORCH_COMPILE_DISABLE", inspect.getsource(quiet_inductor))
+        self.assertIn("copy_stream", inspect.getsource(_kick_max_count))
+        wrap_src = inspect.getsource(Trainer._wrap_and_optim)
+        self.assertIn("cpu_adam_fast", wrap_src)
+        self.assertIn("ninja", wrap_src)
+        self.assertIn("stage3_max_live_parameters", inspect.getsource(zero_config))
+        self.assertIn("leaf_module", inspect.getsource(zero_config))
+        z3 = zero_config(stage=3, offload_param=True)["zero_optimization"]
+        self.assertEqual(
+            z3["leaf_module"]["classes"],
+            ["MoE", "EncoderBlock", "DecoderBlock"],
+        )
+        from cat_yoko.deepspeed_zero import (
+            freeze_host_gc_after_zero_init,
+            gathered_trainable_state_dict,
+        )
+
+        freeze_host_gc_after_zero_init()
+        self.assertIn("freeze_host_gc_after_zero_init", inspect.getsource(Trainer.run))
+
+        overlay = inspect.getsource(gathered_trainable_state_dict)
+        self.assertIn("GatheredParameters", overlay)
+        self.assertNotIn("_zero3_consolidated_16bit_state_dict", overlay)
+        self.assertIn("DeepSpeedCPUAdam", inspect.getsource(_deepspeed_cpu_adam))
+        self.assertIn("_warmup_zero", run_src)
+        self.assertIn("warmup_zero3", inspect.getsource(Trainer._warmup_zero))
+        warm = inspect.getsource(Trainer._warmup_zero)
+        self.assertNotIn("model.step(", warm)
+        self.assertNotIn("engine.step", warm)
+        self.assertIn("set_rng_state", warm)
+        self.assertNotIn("stream.batch", inspect.getsource(Trainer._synthetic_lm_batch))
+        peak = inspect.getsource(Trainer._begin_step_peak)
+        self.assertIn("if not self.deepspeed", peak)
+
     def test_plain_module_is_not_engine(self) -> None:
         import torch
+
+        from cat_yoko.deepspeed_zero import warmup_zero3
 
         m = torch.nn.Linear(4, 4)
         self.assertFalse(is_deepspeed_engine(m))
         self.assertFalse(is_zero_partitioned(m))
+        self.assertFalse(warmup_zero3(m, torch.zeros(())))
 
 
 class SecretScanTests(unittest.TestCase):

@@ -1,230 +1,230 @@
-# CAT-YOKO 训练计划：基于 MiniCPM5-2B 上采样的 Causal Encoder-Decoder（YOCO 式）混合注意力 MoE
+# CAT-YOKO Training Plan: Causal Encoder-Decoder (YOCO-style) Hybrid-Attention MoE Upcycled from MiniCPM5-2B
 
-> 目标：以 OpenBMB **MiniCPM5-2B（Apache-2.0，Llama GQA）** 为底座，训练一个 **Causal Encoder-Decoder（YOCO / "You Only Cache Once" 式 decoder-decoder）** 模型：
-> **≈12.25B 总参数**（已按算力预算从 24B 下调）；非对称激活 **默认：Encoder 处理输入 ≈2.03B 激活/token、Decoder 生成输出 ≈4.33B 激活/token**
-> （更省算力档 ≈1.43B/3.02B、近-dense 档 ≈3.04B/6.29B 见 §3）；
-> 注意力用 **DeepSeek-V4-Flash 式 CSA + HCA 压缩注意力 + 8K 大滑动窗口**；原生长上下文（YOCO 单一全局 KV cache）。
-> 底座从 MiniCPM-2B-sft-bf16（GML）切到 MiniCPM5-2B，是为了 **Apache-2.0 许可证对齐**，不是换一套课程。CAT-YOKO 代码与派生权重同样是 **Apache-2.0**。
+> Goal: using OpenBMB **MiniCPM5-2B (Apache-2.0, Llama GQA)** as the base, train a **Causal Encoder-Decoder (YOCO / "You Only Cache Once" decoder-decoder)** model:
+> **≈12.25B total parameters** (already cut from 24B to fit the compute budget); asymmetric activation **default: Encoder processes the input at ≈2.03B active parameters/token, Decoder generates the output at ≈4.33B active parameters/token**
+> (cheaper-compute band ≈1.43B/3.02B, near-dense band ≈3.04B/6.29B: see §3);
+> attention is **DeepSeek-V4-Flash-style CSA + HCA compressed attention + an 8K large sliding window**; native long context (YOCO single global KV cache).
+> The base was switched from MiniCPM-2B-sft-bf16 (GML) to MiniCPM5-2B for **Apache-2.0 license alignment**, not to change the curriculum. CAT-YOKO code and derived weights are likewise **Apache-2.0**.
 >
-> ⚠️ **关键**：总参数主要影响**显存/存储**；**训练算力 ∝ 激活参数 × tokens**。要真正降训练成本必须降**激活**（选更省算力档），而不是只降总参。
+> ⚠️ **Key point**: total parameters mainly affect **VRAM / storage**; **training FLOPs ∝ active parameters × tokens**. To actually cut training cost you must cut **activation** (pick a cheaper-compute band), not only total parameter count.
 >
-> 本文是可执行的工程训练计划。**实现默认已敲死**在 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)
-> / `cat_yoko.config.CATYokoConfig.middle_12b()`：因果 16/26、C1 全 MoE、C1+NVFP4、Phase B 滑窗 + 门控
-> cross-attn、AdamW；**KDA / mHC / MTP / Muon / 首层 dense / M2 不是发布默认**。本文其余档位与消融是敏感性，不是训练代码的开关默认。
-> **当前训练进度**（Hub overlay step、哪台卡已回收）见 [`docs/STATUS.md`](STATUS.md)，不要在本文里找 step 钉。
+> This document is an executable engineering training plan. **Implementation defaults are frozen** in [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)
+> / `cat_yoko.config.CATYokoConfig.middle_12b()`: causal 16/26, C1 full MoE, C1+NVFP4, Phase B sliding window + gated
+> cross-attn, AdamW; **KDA / mHC / MTP / Muon / first-layer dense / M2 are not the release defaults**. Remaining bands and ablations in this document are sensitivity studies, not training-code switch defaults.
+> **Current training progress** (Hub overlay step, which GPUs have been reclaimed) lives in [`docs/STATUS.md`](STATUS.md). Do not look for step pins in this document.
 
 ---
 
-## 0. 需求澄清与关键假设
+## 0. Requirements clarification and key assumptions
 
-你的原始描述里有几处需要显式确认的点，本计划先按下面的解释推进，如与你的意图不符请指出：
+Your original brief had a few points that need an explicit reading. This plan proceeds under the interpretations below; say so if they miss your intent:
 
-| 你的表述 | 本计划的解释 | 备注 / 可调整项 |
+| Your wording | This plan's reading | Notes / adjustable |
 | --- | --- | --- |
-| `基于 openbmb 的 minicpm2b` | 底座 = **MiniCPM5-2B**（Apache-2.0，dense Llama GQA：42 层，hidden 2048，FFN 6144，16 Q / 2 KV，`head_dim=128`，vocab 130560，**untied** embedding） | 原生 128K 上下文（`rope_theta=5e6`），不必再换 MiniCPM-2B-128k |
-| `和 deepseekv4.1 flash 一样` | 对标 **DeepSeek-V4-Flash** 的架构范式（CSA/HCA 混合注意力 + DeepSeekMoE + mHC + Muon + MTP + Hash-MoE bootstrap） | V4-Flash 官方为 284B/13B decoder-only；我们做的是**同架构、缩小到 12B 且改造为 YOCO encoder-decoder（非对称激活）的复刻** |
-| `Causal-Encoder-Decoder，输入激活 3b，输出激活 6b`；后续 **`砍到12B`** | **YOCO 式 decoder-decoder**：**Encoder=self-decoder** 处理输入并产出**单一全局 KV cache**；**Decoder=cross-decoder** 生成输出并对该全局 cache 做 cross-attention。**总参数 ≈12.25B**（命名 `CAT-YOKO-12B`）；激活默认 **中间档（~2.03B-in/~4.33B-out）**，更省档 1.43/3.02、近-dense 档 3.04/6.29 见 §3 | 激活的非对称性来自**两个物理不同的栈**（encoder 较小、decoder 较大）；**三档只改 top-k，不改专家数**。见 §2、§3 |
-| `大滑窗注意力 8k` | 每个 CSA/HCA 层保留的**未压缩滑窗分支** `n_win = 8192` | DeepSeek-V4 默认 `n_win=128`，8K 是明显放大，成本更高但局部保真更好 |
-| `CSA HCA` | **Compressed Sparse Attention** + **Heavily Compressed Attention**（DeepSeek-V4 的两种压缩注意力，层间交错） | 见 §2 |
+| `based on openbmb minicpm2b` | Base = **MiniCPM5-2B** (Apache-2.0, dense Llama GQA: 42 layers, hidden 2048, FFN 6144, 16 Q / 2 KV, `head_dim=128`, vocab 130560, **untied** embedding) | Native 128K context (`rope_theta=5e6`); no need to switch to MiniCPM-2B-128k |
+| `same as deepseekv4.1 flash` | Match the **DeepSeek-V4-Flash** architectural paradigm (CSA/HCA hybrid attention + DeepSeekMoE + mHC + Muon + MTP + Hash-MoE bootstrap) | Official V4-Flash is 284B/13B decoder-only; we recast the same architecture, scaled down to 12B and rebuilt as a YOCO encoder-decoder (asymmetric activation) |
+| `Causal-Encoder-Decoder, input activation 3b, output activation 6b`; later **`cut to 12B`** | **YOCO-style decoder-decoder**: **Encoder = self-decoder** processes the input and emits a **single global KV cache**; **Decoder = cross-decoder** generates the output and cross-attends to that global cache. **Total parameters ≈12.25B** (named `CAT-YOKO-12B`); activation default is the **middle band (~2.03B-in / ~4.33B-out)**; cheaper band 1.43/3.02 and near-dense band 3.04/6.29: see §3 | Activation asymmetry comes from **two physically different stacks** (smaller encoder, larger decoder); **the three bands change top-k only, not expert count**. See §2, §3 |
+| `large sliding-window attention 8k` | The **uncompressed sliding-window branch** kept at every CSA/HCA layer, `n_win = 8192` | DeepSeek-V4 default `n_win=128`; 8K is a large upscale, more expensive, better local fidelity |
+| `CSA HCA` | **Compressed Sparse Attention** + **Heavily Compressed Attention** (DeepSeek-V4's two compressed-attention kinds, interleaved across layers) | See §2 |
 
-> ✅ **本轮已确认规格**：Causal Encoder-Decoder（YOCO 式）；**总参数 12.25B**（从 24B 下调）；激活默认 **≈2.03B-in / ≈4.33B-out**。
-> **发布配方已敲死**（[`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md) / `cat_yoko.config`）：因果 16/26、C1 全 MoE、C1+NVFP4 墙钟 571 H100-h（目标 RTX PRO 6000 / 6000D）、Phase B 滑窗+门控 cross-attn、M2/KDA/mHC/MTP/Muon 关。
-> Encoder **不是**双向。仓库名 **CAT-YOKO** 中的 "YOKO" 即对应 **YOCO**。
+> ✅ **This round's locked spec**: Causal Encoder-Decoder (YOCO-style); **12.25B total parameters** (cut from 24B); activation default **≈2.03B-in / ≈4.33B-out**.
+> **The release recipe is frozen** ([`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md) / `cat_yoko.config`): causal 16/26, C1 full MoE, C1+NVFP4 wall-clock 571 H100-h (target RTX PRO 6000 / 6000D), Phase B sliding window + gated cross-attn, M2/KDA/mHC/MTP/Muon off.
+> The Encoder is **not** bidirectional. The "YOKO" in the repo name **CAT-YOKO** maps to **YOCO**.
 
-> ⚠️ **重要现实提示（务必先读）**：完整复刻这一架构并从 32T 级别数据预训练是**前沿实验室量级**的工程。
-> 以 MiniCPM5-2B 为底座做**上采样（upcycling）+ 继续训练**能把成本降到几百 B token 量级，
-> 但仍需要几十~上百张 H100/H800 级 GPU 的持续算力。本计划按"**上采样改造 + 继续预训练**"路线设计，
-> 这是在可控预算内得到该架构可用模型的唯一现实路径（从零 32T 预训练不在推荐范围）。
+> ⚠️ **Important reality check (read this first)**: fully replicating this architecture and pretraining from 32T-scale data is **frontier-lab scale** engineering.
+> Upcycling MiniCPM5-2B and continuing training can bring cost down to a few hundred B tokens,
+> but it still needs tens to hundreds of H100/H800-class GPUs running continuously. This plan is designed as **upcycling surgery + continued pretraining**,
+> which is the only realistic path to a usable model of this architecture on a controllable budget (from-scratch 32T pretraining is not recommended).
 
 ---
 
-## 1. 底座与目标规格
+## 1. Base model and target spec
 
-### 1.1 MiniCPM5-2B（底座，来自官方 config；Apache-2.0）
+### 1.1 MiniCPM5-2B (base, from the official config; Apache-2.0)
 
-| 项 | 值 |
+| Item | Value |
 | --- | --- |
-| 层数 `num_hidden_layers` | 42 |
-| 隐藏维 `hidden_size` | 2048 |
-| FFN 中间维 `intermediate_size` | 6144（SwiGLU；`6144/2048=3`） |
-| 注意力头 | 16 Q / 2 KV **GQA**（Llama；`num_key_value_heads=2`） |
-| `head_dim` | 128（`d / n_q`） |
-| `d_kv` | 256（`n_kv · head_dim`） |
-| 词表 `vocab_size` | 130560 |
-| 激活 | SiLU / SwiGLU |
-| 位置编码 | RoPE，`rope_theta=5e6`（原生 128K 上下文） |
+| Layers `num_hidden_layers` | 42 |
+| Hidden size `hidden_size` | 2048 |
+| FFN intermediate `intermediate_size` | 6144 (SwiGLU; `6144/2048=3`) |
+| Attention heads | 16 Q / 2 KV **GQA** (Llama; `num_key_value_heads=2`) |
+| `head_dim` | 128 (`d / n_q`) |
+| `d_kv` | 256 (`n_kv · head_dim`) |
+| Vocab `vocab_size` | 130560 |
+| Activation | SiLU / SwiGLU |
+| Position encoding | RoPE, `rope_theta=5e6` (native 128K context) |
 | RMSNorm `rms_eps` | 1e-6 |
-| Embedding | **untied**（输入表与 `lm_head` 不共享） |
-| 许可证 | **Apache-2.0**（相对 MiniCPM-2B-sft-bf16 的 GML，发布可再分发） |
-| 特殊设计 | **无 μP**（Llama 残差恒等、logits 不除 9）；WSD 学习率调度沿用 MiniCPM 系经验 |
+| Embedding | **untied** (input table and `lm_head` are not shared) |
+| License | **Apache-2.0** (redistributable for a release, unlike MiniCPM-2B-sft-bf16's GML) |
+| Special design | **No μP** (Llama identity residuals; logits are not divided by 9); WSD learning-rate schedule follows MiniCPM-family practice |
 
-> MiniCPM5 是 Llama，**不要**把 MiniCPM-2B 的 μP 常量（`scale_emb`、`scale_depth/√L`、logits `/ (d/dim_model_base)`）套过来。
-> 42 层拆成 16+26 之后残差乘子仍是恒等（不要发明 √16 / √26）。核对见理论验证。
+> MiniCPM5 is Llama. **Do not** import MiniCPM-2B μP constants (`scale_emb`, `scale_depth/√L`, logits `/ (d/dim_model_base)`).
+> After the 42 layers are split 16+26, residual multipliers stay identity (do not invent √16 / √26). Cross-check in the theory verification.
 
-### 1.2 目标模型 `CAT-YOKO-12B`（Causal Encoder-Decoder / YOCO 式）
+### 1.2 Target model `CAT-YOKO-12B` (Causal Encoder-Decoder / YOCO-style)
 
-| 项 | 推荐值（默认中间档） | 说明 |
+| Item | Recommended value (default middle band) | Notes |
 | --- | --- | --- |
-| 架构 | **YOCO decoder-decoder**：Encoder(self-decoder) → 全局 KV cache → Decoder(cross-decoder) | 见 §2 |
-| 总参数 | **≈12.25B**（存储） | 见 §3 预算 |
-| **Encoder** 激活/输入 token | **≈2.03B**（档位可选 1.43/2.03/3.04） | 16 层，MoE，CSA/HCA+8K 滑窗，产出全局 cache |
-| **Decoder** 激活/输出 token | **≈4.33B**（档位可选 3.02/4.33/6.29） | 26 层，MoE，自注意力 + **cross-attn 到全局 cache** |
-| 隐藏维 | 2048（沿用底座，enc/dec 一致以便共享词表与热启） | |
-| FFN | **DeepSeekMoE** 细粒度专家，`moe_intermediate_size=2048` | Enc: 1 shared+20 routed, top-k 7；Dec: 1 shared+20 routed, top-k 10（默认档）；**首层 dense 关** |
-| 注意力 | **CSA/HCA 混合 + 8K 滑窗**；enc 内含长程压缩，dec 的 cross-attn 复用单一全局 cache；**可选叠加 KDA 线性注意力做 3:1 三路混合** | §2 / §2.5；Phase B 仍是滑窗 GQA |
-| KV cache | **单一全局 cache（You Only Cache Once）**，`d_kv=256` + 压缩 → O(N) 级显存 | 长上下文关键收益 |
-| 残差 | **mHC**（可选，先用普通残差跑通） | 稳定性增强 |
-| 训练目标 | 主 CE + **MTP** 辅助头（可选） | |
-| 优化器 | **Muon（2D 权重）+ AdamW（emb/norm/router/bias）** | 发布默认 AdamW |
-| 上下文 | **主交付目标 128K–256K 可用**；阶段式 4K → 8K → 32K → 128K → 256K；1M 为 stretch（推理支持 + needle） | MiniCPM5 原生 128K + 8K 滑窗 + 压缩长程 + YOCO |
+| Architecture | **YOCO decoder-decoder**: Encoder(self-decoder) → global KV cache → Decoder(cross-decoder) | See §2 |
+| Total parameters | **≈12.25B** (storage) | See §3 budget |
+| **Encoder** active / input token | **≈2.03B** (band options 1.43/2.03/3.04) | 16 layers, MoE, CSA/HCA+8K sliding window, emits the global cache |
+| **Decoder** active / output token | **≈4.33B** (band options 3.02/4.33/6.29) | 26 layers, MoE, self-attention + **cross-attn to the global cache** |
+| Hidden size | 2048 (keep the base; enc/dec match so the vocab and warm-start can be shared) | |
+| FFN | **DeepSeekMoE** fine-grained experts, `moe_intermediate_size=2048` | Enc: 1 shared+20 routed, top-k 7; Dec: 1 shared+20 routed, top-k 10 (default band); **first-layer dense off** |
+| Attention | **CSA/HCA hybrid + 8K sliding window**; encoder holds long-range compression; decoder cross-attn reuses the single global cache; **optional 3:1 three-way mix with KDA linear attention** | §2 / §2.5; Phase B is still sliding-window GQA |
+| KV cache | **Single global cache (You Only Cache Once)**, `d_kv=256` + compression → O(N)-class VRAM | The main long-context win |
+| Residual | **mHC** (optional; first ship ordinary residuals) | Stability extra |
+| Training objective | Main CE + **MTP** auxiliary head (optional) | |
+| Optimizer | **Muon (2D weights) + AdamW (emb/norm/router/bias)** | Release default is AdamW |
+| Context | **Primary delivery target: 128K–256K usable**; staged 4K → 8K → 32K → 128K → 256K; 1M is stretch (inference support + needle) | MiniCPM5 native 128K + 8K sliding window + compressed long-range + YOCO |
 
 ---
 
-## 2. 架构：YOCO 式 Causal Encoder-Decoder + CSA/HCA 压缩注意力
+## 2. Architecture: YOCO-style Causal Encoder-Decoder + CSA/HCA compressed attention
 
-### 2.0 总体骨架（decoder-decoder / YOCO）
+### 2.0 Overall skeleton (decoder-decoder / YOCO)
 
-CAT-YOKO 由两个因果栈组成，行为上等价于一个 decoder-only Transformer，但"只缓存一次"：
+CAT-YOKO is two causal stacks. Behaviorally it is equivalent to a decoder-only Transformer, except it "caches once":
 
 ```
-输入 tokens ─► [Encoder = Self-Decoder, 16 层, ≈2.03B 激活/token]
-                 │  高效因果注意力（CSA/HCA + 8K 滑窗），逐层压缩长程
+input tokens ─► [Encoder = Self-Decoder, 16 layers, ≈2.03B active/token]
+                 │  efficient causal attention (CSA/HCA + 8K sliding window), per-layer long-range compression
                  ▼
-          顶层隐状态  ──►  产出【单一全局 KV cache  K̂, V̂】(You Only Cache Once；d_kv=256)
+          top hidden state  ──►  emit [single global KV cache  K̂, V̂] (You Only Cache Once; d_kv=256)
                  │
                  ▼
-        [Decoder = Cross-Decoder, 26 层, ≈4.33B 激活/token]
-           每层 = 高效因果自注意力(生成序列, 滑窗)  +  Cross-Attn(→ K̂,V̂)  +  MoE-FFN
+        [Decoder = Cross-Decoder, 26 layers, ≈4.33B active/token]
+           each layer = efficient causal self-attn (generation sequence, sliding window)  +  Cross-Attn(→ K̂,V̂)  +  MoE-FFN
                  ▼
-             RMSNorm ─► LM Head（untied）─► 下一个 token
+             RMSNorm ─► LM Head (untied) ─► next token
 ```
 
-关键性质（来自 YOCO；形式化与因果证明见 [`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)）：
-- **只缓存一次**：只有 encoder 顶层产出的一个全局 cache 被所有 cross-decoder 层复用，KV cache 显存从 `O(N·L)` 降到约 `O(N)`。Encoder 层内 CSA/HCA（**M1**）**不**自动减少这份 cache 的槽数；沿序列再池化（**M2**）才把槽数从 \(N\) 降到 \(N/m\)。
-- **Prefill 可提前退出（仅推理）**：提示只需跑完 encoder 即可写出全局 cache，decoder 只在最后一位上跑一次出首 token。训练仍是两栈全长前向。这正是"**输入侧更轻（≈2.03B）**"的动机。中间档 encoder 激活份额约 32%（见 `docs/THEORY_VERIFICATION.md` §6）。
-- **非对称激活来自两个物理栈**：encoder 较小（16 层、专家/激活更少 → ≈2.03B），decoder 较大（26 层、含 cross-attn、专家/激活更多 → ≈4.33B）。**三档只改 top-k**（低 4/6、中 7/10、近 12/16），不改 1+20 专家实例。
-- **保留全局注意力能力**：全局性来自 decoder **cross-attn 读 cache（M3）**，不是来自 encoder 滑窗堆叠感受野（16×8K=131072，盖不住 256K，也不需要盖住）。
+Key properties (from YOCO; formalism and causality proofs are in [`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)):
+- **Cache once**: only the one global cache emitted at the encoder top is reused by every cross-decoder layer, so KV-cache VRAM drops from `O(N·L)` to about `O(N)`. Encoder-internal CSA/HCA (**M1**) does **not** automatically reduce this cache's slot count; pooling along the sequence (**M2**) is what cuts slots from \(N\) to \(N/m\).
+- **Prefill can exit early (inference only)**: the prompt only needs to finish the encoder to write the global cache; the decoder runs once on the last position to emit the first token. Training is still a full-length forward through both stacks. That is the motive for "**lighter on the input side (≈2.03B)**". Middle-band encoder activation share is about 32% (see `docs/THEORY_VERIFICATION.md` §6).
+- **Asymmetric activation comes from two physical stacks**: the encoder is smaller (16 layers, fewer experts/active params → ≈2.03B), the decoder is larger (26 layers, includes cross-attn, more experts/active params → ≈4.33B). **The three bands change top-k only** (low 4/6, middle 7/10, near 12/16), not the 1+20 expert instances.
+- **Global attention is retained**: globality comes from the decoder **cross-attn reading the cache (M3)**, not from stacking encoder sliding-window receptive fields (16×8K=131072, which does not cover 256K and does not need to).
 
-> 设计取舍：YOCO 原论文 self-decoder 用 sliding-window 或 gated retention。我们把 self-decoder 的
-> 层内注意力换成 **CSA/HCA + 8K 滑窗（M1）**，降低 encoder 在 \(n\gg 8K\) 时的二次项，并可选地对写入表示做长程混合。
-> **更紧凑的全局 cache 是 M2（可选池化），生成时的 query-aware 检索是 M3（decoder 侧 indexer / 校准回退）**——与 M1 不是同一件事。
-> Decoder **自注意力在训练时也看到全长序列**，必须用滑窗/KDA；「生成序列通常不长」只描述推理。长程一律走 cross-attn。
+> Design tradeoff: the original YOCO paper used sliding-window or gated retention in the self-decoder. We replace the self-decoder's
+> intra-layer attention with **CSA/HCA + 8K sliding window (M1)**, which cuts the encoder's quadratic term when \(n\gg 8K\), and optionally mixes long-range into the write representation.
+> **A tighter global cache is M2 (optional pooling). Query-aware retrieval at generation time is M3 (decoder-side indexer / calibrated fallback)** — not the same thing as M1.
+> Decoder **self-attention also sees the full-length sequence at train time**, so it must use a sliding window / KDA; "generation sequences are usually short" describes inference only. All long-range traffic goes through cross-attn.
 
-### 2.1 CSA / HCA / 8K 滑窗（注意力细节）
+### 2.1 CSA / HCA / 8K sliding window (attention details)
 
-DeepSeek-V4 用**逐层交错的两种压缩注意力**替换 V3 的 MLA 全量注意力，核心目标是把长上下文注意力成本从
-`O(L²)` 降到近似 `O(L·k)`，并大幅压缩 KV cache。这套压缩注意力用在 **Encoder(self-decoder)** 内，也用于其自注意力。三类层：
+DeepSeek-V4 replaces V3's full MLA attention with **two compressed-attention kinds interleaved layer by layer**. The point is to cut long-context attention cost from
+`O(L²)` down to roughly `O(L·k)`, and to compress the KV cache heavily. This compressed attention is used **inside the Encoder (self-decoder)**, and also for its self-attention. Three layer kinds:
 
-### 2.2 三种层类型（`layer_types`）
+### 2.2 Three layer types (`layer_types`)
 
-1. **Sliding-window（bootstrap 层）**：只做局部滑窗因果注意力，窗口 = `sliding_window`，无长程分支。Encoder **前 2 层**用它（冻结；16 层才能排下 7+7 CSA/HCA）。
-2. **CSA（Compressed Sparse Attention）**
-   - 把每 `m=4` 个 token 的 KV 压成 1 条（带可学习压缩权重 `Z` 与位置偏置，overlapping window）。
-   - 用 **Lightning Indexer** 给 query 对压缩条目打分，取 **top-`index_topk`**（默认 512）条参与注意力（即在压缩序列上做 **DSA**）。
-   - 额外拼接一条**未压缩滑窗 K/V 分支**（大小 `n_win`）保留局部细节。
-3. **HCA（Heavily Compressed Attention）**
-   - 把每 `m'=128` 个 token 压成 1 条（non-overlapping），**不做 indexer**，对全部压缩条目**稠密注意力**。
-   - 同样拼接一条未压缩滑窗分支。
+1. **Sliding-window (bootstrap layers)**: local sliding-window causal attention only, window = `sliding_window`, no long-range branch. The Encoder uses this on the **first 2 layers** (frozen; 16 layers is what still fits 7+7 CSA/HCA).
+2. **CSA (Compressed Sparse Attention)**
+   - Compress every `m=4` tokens of KV into 1 slot (learnable compression weights `Z` and a position bias, overlapping window).
+   - Use a **Lightning Indexer** to score the query against compressed entries and keep **top-`index_topk`** (default 512) for attention (that is **DSA** on the compressed sequence).
+   - Concatenate an extra **uncompressed sliding-window K/V branch** (size `n_win`) to keep local detail.
+3. **HCA (Heavily Compressed Attention)**
+   - Compress every `m'=128` tokens into 1 slot (non-overlapping), **no indexer**, **dense attention** over all compressed entries.
+   - Likewise concatenate an uncompressed sliding-window branch.
 
-> 实现要点（与官方参考一致）：CSA/HCA 都是把 **raw 滑窗 K/V** 与 **压缩 K/V** 沿序列轴 `concat`，
-> 构造一个组合 mask 后跑**一次**标准 masked attention；CSA 的 mask 经 `top_k` 过滤，HCA 的 mask 全可见。
-> 二者只差在"压缩率"和"是否 top-k"。
+> Implementation note (matches the official reference): both CSA and HCA **concat** **raw sliding-window K/V** with **compressed K/V** along the sequence axis,
+> build a combined mask, and run **one** standard masked attention; CSA's mask is filtered by `top_k`, HCA's mask is fully visible.
+> The only differences are "compression rate" and "whether top-k is used".
 
-### 2.3 本项目的注意力配置（推荐）
+### 2.3 Attention config for this project (recommended)
 
-| 参数 | 推荐值 | 对应 DeepSeek-V4 名 |
+| Parameter | Recommended value | Matching DeepSeek-V4 name |
 | --- | --- | --- |
-| `sliding_window` (`n_win`) | **8192** | 你要求的"8K 大滑窗"；且必须 \(\ge m'=128\) 才能补 HCA 自身块的洞 |
-| Encoder `layer_types` | **2× sliding bootstrap，其后 CSA:HCA=1:1** → 16 层为 **2 sliding + 7 CSA + 7 HCA** | V4-Flash 以 2 层 sliding 开头；16 层做不了「3 bootstrap + 1:1」 |
-| Decoder self-attn | **全部 sliding**（可选日后 KDA 混合）；**默认不再铺 CSA** | 全局混合已在 cross-attn（M3） |
-| CSA 压缩率 `m` | 4 | `compress_rate_csa` |
-| HCA 压缩率 `m'` | 128 | `compress_rate_hca` |
-| `index_topk` (CSA, **M1**) | 256～512 | Encoder 层内 Lightning Indexer；**不要**复用到 decoder query |
-| Decoder 侧选择（**M3**） | 128K 起需要：dense→top-k 或校准回退 | 真正的生成期检索；见架构理论 §3 |
-| 注意力底座 | Phase B = MiniCPM5 **GQA 16 Q / 2 KV**（`d_kv=256`）；CSA/HCA 可再压到 MQA-128。**不要**用 1.25×MHA 占位账 | V4 基于 MLA 的 MQA 模式实现 DSA；发布账本是 GQA |
+| `sliding_window` (`n_win`) | **8192** | The requested "8K large sliding window"; must also be \(\ge m'=128\) so HCA can fill holes in its own block |
+| Encoder `layer_types` | **2× sliding bootstrap, then CSA:HCA=1:1** → 16 layers are **2 sliding + 7 CSA + 7 HCA** | V4-Flash starts with 2 sliding layers; 16 layers cannot do "3 bootstrap + 1:1" |
+| Decoder self-attn | **all sliding** (optional later KDA mix); **CSA is not laid down by default** | Global mix already lives in cross-attn (M3) |
+| CSA compression rate `m` | 4 | `compress_rate_csa` |
+| HCA compression rate `m'` | 128 | `compress_rate_hca` |
+| `index_topk` (CSA, **M1**) | 256～512 | Encoder intra-layer Lightning Indexer; **do not** reuse on the decoder query |
+| Decoder-side selection (**M3**) | Needed from 128K: dense→top-k or calibrated fallback | The real generation-time retrieval; see architecture theory §3 |
+| Attention base | Phase B = MiniCPM5 **GQA 16 Q / 2 KV** (`d_kv=256`); CSA/HCA can compress further to MQA-128. **Do not** use 1.25×MHA placeholder accounting | V4 implements DSA in MLA's MQA mode; the release ledger is GQA |
 
-> **8K 滑窗的代价**：滑窗分支是未压缩的 `O(L·n_win)` 成本，`n_win=8192` 比默认 128 大 64×，
-> 局部注意力开销显著上升。若长上下文吞吐吃紧，可在长程能力足够时把 `n_win` 回调到 2K–4K，
-> 或仅在部分层用 8K 滑窗。建议在 §7 做 `n_win ∈ {2K,4K,8K}` 消融。
+> **Cost of the 8K window**: the sliding-window branch is uncompressed `O(L·n_win)` cost. `n_win=8192` is 64× the default 128,
+> so local-attention overhead rises sharply. If long-context throughput is tight, roll `n_win` back to 2K–4K once long-range capacity is enough,
+> or use an 8K window on only some layers. Ablate `n_win ∈ {2K,4K,8K}` in §7.
 
-### 2.4 从 MiniCPM5 GQA 迁移到 CSA/HCA + Encoder/Decoder 的初始化
+### 2.4 Initialization: MiniCPM5 GQA → CSA/HCA + Encoder/Decoder
 
-MiniCPM5 是 42 层 decoder-only **Llama GQA**（16 Q / 2 KV，`head_dim=128`），没有 MLA 潜在向量、压缩器/indexer，也没有 cross-attn。迁移思路：
+MiniCPM5 is a 42-layer decoder-only **Llama GQA** (16 Q / 2 KV, `head_dim=128`). It has no MLA latent, no compressor/indexer, and no cross-attn. Migration:
 
-- **拆成两个栈**：把 MiniCPM5 的 42 层权重切给 Encoder(16) + Decoder(26)。Encoder 保持 16 层，这样 **2+7+7 CSA/HCA** 仍排得下；多出来的 2 层全部给 Decoder（见 §4 Phase A）。
-- **注意力主干**：`q/k/v/o` 投影继承 **GQA** 权重（K/V 是 `(d_kv, d)=(256, 2048)`，不是满 MHA）。若切到 MLA，用 SVD 把 K/V 投影分解为低秩 `W^{DKV}·W^{UK/UV}` 初始化，`q_lora_rank` 同理。
-- **Decoder 的 cross-attn**：`q`/`o` 投影可从对应自注意力 `q`/`o` 初始化（**cross 只计 Q/O = \(2d^2\)**；K/V 来自 YOCO cache）。**先旁路 cross-attn（gate≈0）再逐步打开**以稳定训练。gate=0 时 16/26 切分与原 42 层残差流等价（架构理论定理 A）。
-- **新增模块**（压缩器 `W^{aKV}/W^{bKV}/W^{aZ}/W^{bZ}`、位置偏置 `B`、Lightning Indexer）：小尺度随机初始化，**先"稠密对齐"再"稀疏化"**（见 §4 Phase C）。
+- **Split into two stacks**: slice MiniCPM5's 42 layer weights onto Encoder(16) + Decoder(26). Keep the Encoder at 16 layers so **2+7+7 CSA/HCA** still fits; give both extra layers to the Decoder (see §4 Phase A).
+- **Attention backbone**: inherit **GQA** weights for the `q/k/v/o` projections (K/V is `(d_kv, d)=(256, 2048)`, not full MHA). If you later cut over to MLA, SVD-factor the K/V projections into low-rank `W^{DKV}·W^{UK/UV}` for init; same idea for `q_lora_rank`.
+- **Decoder cross-attn**: `q`/`o` projections may be initialized from the matching self-attention `q`/`o` (**cross counts only Q/O = \(2d^2\)**; K/V come from the YOCO cache). **Bypass cross-attn first (gate≈0) and open it gradually** to keep training stable. At gate=0, the 16/26 split is equivalent to the original 42-layer residual stream (architecture theory Theorem A).
+- **New modules** (compressors `W^{aKV}/W^{bKV}/W^{aZ}/W^{bZ}`, position bias `B`, Lightning Indexer): small-scale random init, **dense alignment first, then sparsify** (see §4 Phase C).
 
-### 2.5 可选增强：加入 KDA 线性注意力（三路混合）
+### 2.5 Optional extra: add KDA linear attention (three-way mix)
 
-**动机与一个必须澄清的误解**：直觉上会觉得"加 KDA 线性注意力能保证 CSA/HCA 在上下文**中段**不丢信息"。
-但文献结论其实相反——**线性注意力（含 KDA）恰恰是"中段精确召回"最弱的一环**：其固定大小 RNN 状态会发生
-记忆碰撞，落在局部窗口外的 needle 容易丢失（arXiv 2507.06457、LoLA）。混合模型能恢复召回，靠的是**保留
-full/稀疏注意力层**承载检索路径，而不是靠线性层。此外 **lost-in-the-middle 本质是位置偏置**（softmax 模型也有），
-主要靠 RoPE/NoPE 校准缓解，加线性注意力并不能直接修它。**因此保中段精确检索的是 CSA 的 top-k 与少量 full 锚点，不是 KDA。**
+**Motive, and a misconception that must be cleared up**: it is tempting to think "adding KDA linear attention will keep CSA/HCA from dropping information in the **middle** of the context".
+The literature actually says the opposite — **linear attention (including KDA) is the weakest link for exact mid-context recall**: its fixed-size RNN state collides,
+and needles that fall outside the local window are easy to lose (arXiv 2507.06457, LoLA). Hybrid models recover recall by **keeping
+full / sparse attention layers** as the retrieval path, not by relying on the linear layers. **Lost-in-the-middle is also a positional bias** (softmax models have it too),
+and is mainly relieved by RoPE/NoPE calibration; adding linear attention does not fix it directly. **So mid-context exact retrieval is carried by CSA top-k and a few full anchors, not by KDA.**
 
-**那为何仍推荐引入 KDA？** 两个互补收益：
-1. **效率杠杆（主）**：Kimi Linear 用 **3:1 KDA:MLA** 混合，1M 上下文 KV cache ↓~75%、解码 ↑~6×，且质量不降反升。
-   把多数层换成 KDA、少数层保留 CSA/HCA，可显著降低模型在长上下文的成本。
-2. **对 CSA 选择性失败的"兜底覆盖"（次）**：CSA 风险在于 Lightning Indexer 的 top-k **漏选**中段相关 block。
-   KDA 是**无 top-k、顺序敏感、每 token 都写入状态**的路径，提供 gist 级全序列覆盖，作为漏选时的安全网
-   （注意是粗覆盖，不替代精确检索）。
+**Why still recommend KDA?** Two complementary gains:
+1. **Efficiency leverage (primary)**: Kimi Linear's **3:1 KDA:MLA** mix cuts 1M-context KV cache by ~75% and raises decode by ~6×, with quality that holds or improves.
+   Replacing most layers with KDA and keeping a few CSA/HCA layers can cut long-context cost substantially.
+2. **"Fallback coverage" when CSA misses (secondary)**: CSA's risk is that the Lightning Indexer's top-k **drops** a relevant mid-context block.
+   KDA is a **no-top-k, order-sensitive path that writes every token into state**, giving gist-level full-sequence coverage as a safety net on misses
+   (coarse coverage; it does not replace exact retrieval).
 
-**推荐配置（作为可选项，用消融定夺）**：
-- **Encoder(self-decoder) 三路混合**：约 **3:1 的 KDA : (CSA/HCA)**，例如每 4 层 `[KDA, KDA, KDA, CSA]`，每隔几组插 1 层 HCA，
-  并保留 **1–2 层高 `index_topk` 的 CSA 或真·full 注意力作为"召回锚点"**（hybrid-linear：gated-delta 类在 3:1~6:1 即达 Transformer 级召回）。
-- **位置编码**：KDA 用学习衰减提供位置/近因信息；full/CSA 锚点层可考虑 **NoPE**（Kimi Linear 做法）。
-- **Decoder(cross-decoder)**：自注意力用滑窗/KDA（训练时序列可以很长，不能改回全注意力）；跨段检索交给 cross-attn → 全局 cache（M3）。
+**Recommended config (optional; settle with ablations)**:
+- **Encoder (self-decoder) three-way mix**: about **3:1 KDA : (CSA/HCA)**, e.g. every 4 layers `[KDA, KDA, KDA, CSA]`, insert 1 HCA every few groups,
+  and keep **1–2 high-`index_topk` CSA layers or true full attention as "recall anchors"** (hybrid-linear: gated-delta families reach Transformer-level recall at 3:1~6:1).
+- **Position encoding**: KDA uses learned decay for position / recency; full/CSA anchor layers may use **NoPE** (Kimi Linear's practice).
+- **Decoder (cross-decoder)**: self-attention uses sliding window / KDA (train sequences can be long; do not revert to full attention); cross-segment retrieval is cross-attn → global cache (M3).
 
-**代价 / 注意**：
-- KDA 需额外的 **DPLR chunked kernel** + **独立循环状态**管理（与 YOCO"只缓存一次"正交：YOCO 省 KV cache，KDA 状态是每层各自的小状态）。
-- 混合改造已知坑：**模型可能学会忽略线性路径**（若先训 CSA/HCA 强检索、再把多数层换成 KDA）。所以 **先实现 3:1 图（B，仍滑窗），再按 KDA→CSA→HCA 点亮（C）**。不要在 C 才改层类型。HCA 层最少且 write-first，点亮放最后。发布默认仍 `use_kda=False`。
-- 参数上，KDA 层通常比 GQA/CSA 更省参（无大 KV 投影），把部分 CSA/HCA 层替换为 KDA 会略降每栈参数，需在 §3 脚本里按实际 KDA 维度重算并用 routed 专家数补回 12.25B。
+**Cost / caveats**:
+- KDA needs an extra **DPLR chunked kernel** + **per-layer recurrent state** (orthogonal to YOCO "cache once": YOCO saves KV cache; KDA state is a small per-layer state).
+- Known mix pitfall: **the model can learn to ignore the linear path** (if you first train strong CSA/HCA retrieval, then swap most layers to KDA). So **implement the 3:1 graph first (B, still sliding window), then light up KDA→CSA→HCA (C)**. Do not change layer types only at C. HCA layers are fewest and write-first, so light them last. Release default remains `use_kda=False`.
+- Parameter-wise, KDA layers are usually cheaper than GQA/CSA (no large KV projections). Replacing some CSA/HCA layers with KDA slightly cuts per-stack parameters; recompute in the §3 script with the actual KDA dims and top the 12.25B back up with routed expert count.
 
-> 结论：**值得加，但定位是"效率 + 兜底覆盖"，不是"保中段精确检索"**。是否上、以及 KDA:CSA:HCA 的确切比例，用 §7 消融决定。
+> Bottom line: **worth adding, but the role is "efficiency + fallback coverage", not "protect exact mid-context retrieval"**. Whether to ship it, and the exact KDA:CSA:HCA ratio, is a §7 ablation.
 
 ---
 
-## 3. 参数预算推导（`CAT-YOKO-12B`，Encoder-Decoder 拆分）
+## 3. Parameter-budget derivation (`CAT-YOKO-12B`, Encoder-Decoder split)
 
-底座维度 `d=2048`、`vocab=130560`、**untied** embedding（输入表 + `lm_head` 各一份）。Encoder 16 层、Decoder 26 层（共 42，沿用 MiniCPM5 深度；多 2 层给 decoder）。
-`moe_intermediate_size=2048`（DeepSeek-V4 同量级、对硬件友好；dense FFN 6144 可被 2048 整除），单专家 SwiGLU ≈ `3·d·2048 ≈ 12.58M`。
-注意力按 **GQA 16/2** 记账（`2d² + 2d·d_kv`），**不是** 1.25×MHA。YOCO cache `d_kv=256`。Decoder cross 只计 Q/O = \(2d^2\)。
+Base dims `d=2048`, `vocab=130560`, **untied** embedding (one input table + one `lm_head`). Encoder 16 layers, Decoder 26 layers (42 total, MiniCPM5 depth; the extra 2 layers go to the decoder).
+`moe_intermediate_size=2048` (DeepSeek-V4 same order of magnitude, hardware-friendly; dense FFN 6144 is divisible by 2048), single-expert SwiGLU ≈ `3·d·2048 ≈ 12.58M`.
+Attention is booked as **GQA 16/2** (`2d² + 2d·d_kv`), **not** 1.25×MHA. YOCO cache `d_kv=256`. Decoder cross counts only Q/O = \(2d^2\).
 
-### 3.1 预算表（12.25B 总参，激活三档只改 top-k）
+### 3.1 Budget table (12.25B total params; the three activation bands change top-k only)
 
-单专家 SwiGLU ≈ `3·d·2048 ≈ 12.58M`；Embedding（untied）≈0.27B + lm_head ≈0.27B；三档总参数均 **12.25B**，仅激活/稀疏度不同。
+Single-expert SwiGLU ≈ `3·d·2048 ≈ 12.58M`; Embedding (untied) ≈0.27B + lm_head ≈0.27B; all three bands have **12.25B** total parameters and differ only in activation / sparsity.
 
-| 档位 | Enc 专家(shared+routed, top-k) | Dec 专家(shared+routed, top-k) | Enc 激活/输入 | Dec 激活/输出 | 稀疏度 enc/dec | 训练算力(×50B tok) |
+| Band | Enc experts (shared+routed, top-k) | Dec experts (shared+routed, top-k) | Enc active / input | Dec active / output | Sparsity enc/dec | Train compute (×50B tok) |
 | --- | --- | --- | --- | --- | --- | --- |
-| 省算力档 | 1+20，top-k **4** | 1+20，top-k **6** | 1.43B | 3.02B | 23.8% / 33.3% | 926 H100-h |
-| **默认（中间档）** | **1+20，top-k 7** | **1+20，top-k 10** | **2.03B** | **4.33B** | **38.1% / 52.4%** | **1,325 H100-h** |
-| 近-dense 档 | 1+20，top-k **12** | 1+20，top-k **16** | 3.04B | 6.29B | 61.9% / 81.0% | 1,943 H100-h |
+| Cheaper-compute | 1+20, top-k **4** | 1+20, top-k **6** | 1.43B | 3.02B | 23.8% / 33.3% | 926 H100-h |
+| **Default (middle)** | **1+20, top-k 7** | **1+20, top-k 10** | **2.03B** | **4.33B** | **38.1% / 52.4%** | **1,325 H100-h** |
+| Near-dense | 1+20, top-k **12** | 1+20, top-k **16** | 3.04B | 6.29B | 61.9% / 81.0% | 1,943 H100-h |
 
-固定部分（三档相同）：Enc 自注意力 ≈0.15B、Dec 自注意力 ≈0.25B、Dec cross-attn ≈0.22B（Q/O）、emb ≈0.27B、lm_head ≈0.27B。
-三档 **专家实例都是 882**（16×21 + 26×21；只改 top-k），所以总参同为 12.25B、训练成本只随激活变。untied 下计划口径 \(N_{\mathrm{enc}}+N_{\mathrm{dec}}\) 与一次前向（emb + lm_head 各计一次）同为 **6.36B → 1,325 H100-h**。
+Fixed pieces (same across bands): Enc self-attention ≈0.15B, Dec self-attention ≈0.25B, Dec cross-attn ≈0.22B (Q/O), emb ≈0.27B, lm_head ≈0.27B.
+All three bands have **882 expert instances** (16×21 + 26×21; only top-k changes), so total params stay 12.25B and training cost moves only with activation. Under untied accounting, the plan's \(N_{\mathrm{enc}}+N_{\mathrm{dec}}\) and one forward (emb + lm_head each counted once) are both **6.36B → 1,325 H100-h**.
 
-> 🔑 **总参数 ≈ 显存/存储；训练算力 ∝ 激活 × tokens。** 三档总参都是 12.25B，但训练成本随**激活**变（926 → 1,325 → 1,943 H100-h @ 50B tok）。
-> 默认取中间档（enc 2.03B / dec 4.33B）——"1.4 太少、3.0 太多"的折中。层数拆分（16/26）、`moe_intermediate_size`、
-> 每栈 shared/routed 固定 1+20；**档位旋钮只有 top-k**。注意力按 MiniCPM5 GQA 记账，不是 1.25×MHA。
-> 另注：12.25B 下 GQA 注意力占总参 **~5.0%**（MoE ~90.6%），**加 KDA 仍不改变总参预算**（见 §2.5）。逐项复算、KV/FLOPs 与 claim ledger 见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)。
+> 🔑 **Total parameters ≈ VRAM / storage; training FLOPs ∝ activation × tokens.** All three bands are 12.25B total params, but training cost moves with **activation** (926 → 1,325 → 1,943 H100-h @ 50B tok).
+> Default is the middle band (enc 2.03B / dec 4.33B) — a compromise between "1.4 is too little, 3.0 is too much". Layer split (16/26), `moe_intermediate_size`,
+> and per-stack shared/routed stay fixed at 1+20; **the only band knob is top-k**. Attention is booked as MiniCPM5 GQA, not 1.25×MHA.
+> Side note: at 12.25B, GQA attention is **~5.0%** of total params (MoE ~90.6%); **adding KDA still does not change the total-param budget** (see §2.5). Line-item recomputes, KV/FLOPs, and the claim ledger are in [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md).
 
-### 3.2 复算脚本（`scripts/param_budget.py`，默认中间档）
+### 3.2 Recompute script (`scripts/param_budget.py`, default middle band)
 
 ```python
 d, V, moe_int = 2048, 130560, 2048
 kv_dim = 256                   # n_kv * head_dim = 2 * 128
-emb    = V*d                   # untied 输入表
+emb    = V*d                   # untied input table
 lm_h   = V*d                   # untied lm_head
-expert = 3*d*moe_int           # SwiGLU 单专家
-attn   = 2*d*d + 2*d*kv_dim    # GQA 16Q/2KV，不是 1.25×MHA
-cross  = 2*d*d                 # 每层 cross Q/O；K/V 来自 YOCO cache（d_kv=256）
+expert = 3*d*moe_int           # SwiGLU single expert
+attn   = 2*d*d + 2*d*kv_dim    # GQA 16Q/2KV, not 1.25×MHA
+cross  = 2*d*d                 # per-layer cross Q/O; K/V from YOCO cache (d_kv=256)
 
-# 默认中间档（12.25B / ~2.03B-in / ~4.33B-out）；三档只改 top-k
+# default middle band (12.25B / ~2.03B-in / ~4.33B-out); all three bands change top-k only
 Le, ns_e, tk_e, Nr_e = 16, 1, 7, 20   # Encoder = self-decoder
 Ld, ns_d, tk_d, Nr_d = 26, 1, 10, 20  # Decoder = cross-decoder
-# 省算力档: top-k 4/6    近-dense 档: top-k 12/16
+# cheaper-compute band: top-k 4/6    near-dense band: top-k 12/16
 
 enc_act = emb + attn*Le          + Le*(ns_e+tk_e)*expert
 dec_act = lm_h + (attn+cross)*Ld + Ld*(ns_d+tk_d)*expert
@@ -234,7 +234,7 @@ print(f"enc_active(input)={enc_act/1e9:.2f}B "
       f"dec_active(output)={dec_act/1e9:.2f}B total={total/1e9:.2f}B")
 ```
 
-完整复算（KV / FLOPs / 三档对照 / 规格断言）以 `scripts/param_budget.py` 为准，推导见 [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md)：
+The full recompute (KV / FLOPs / three-band comparison / spec asserts) is `scripts/param_budget.py`; derivation is in [`docs/THEORY_VERIFICATION.md`](THEORY_VERIFICATION.md):
 
 ```bash
 python3 scripts/param_budget.py --full
@@ -245,478 +245,478 @@ python3 scripts/param_budget.py --nvfp4
 
 ---
 
-## 4. 分阶段训练配方（核心）
+## 4. Staged training recipe (core)
 
-整体思路：**上采样 + 手术式改造 + 分阶段继续训练**，用 MiniCPM5-2B 已有能力做"暖启动"，
-每次只引入一个大变化并让模型恢复，避免一次性改动太多导致坍塌。Token 预算是数量级建议，非日历时间。
+Overall idea: **upcycling + surgical conversion + staged continued training**. Use MiniCPM5-2B's existing skill as a warm start,
+introduce one large change at a time, and let the model recover, so a single giant edit does not collapse it. Token budgets are order-of-magnitude guidance, not calendar time.
 
 ```
-Phase A  架构手术与初始化        —— 0 token（离线权重变换）
-Phase B  上采样恢复性继续预训练   —— 50–150B token @ seq 4K（dense/滑窗注意力，先不稀疏）
-Phase C  注意力稀疏化对齐         —— 20–50B token（默认 Indexer→top-k→HCA；`use_kda` 时先 C-kda 再 CSA/HCA）
-Phase D  长上下文扩展            —— 20–60B token（8K→32K→128K，逐级 RoPE 缩放）
-Phase E  WSD 退火 / 高质量数据    —— 20–50B token（LR 衰减段，堆数学/代码/长文）
-Phase F  SFT                    —— 1–10B token（指令 + 长上下文 + 工具）
-Phase G  RL（GRPO/可选 DPO）      —— 按域分批
-（可选）  MTP 头联合训练           —— 从 Phase B 起挂一个 MTP 头，权重 0.1–0.3
+Phase A  Architecture surgery and initialization        —— 0 token (offline weight transform)
+Phase B  Upcycling recovery continued pretraining       —— 50–150B token @ seq 4K (dense/sliding-window attention, no sparsity yet)
+Phase C  Attention sparsification alignment             —— 20–50B token (default Indexer→top-k→HCA; with `use_kda`, C-kda first, then CSA/HCA)
+Phase D  Long-context extension                         —— 20–60B token (8K→32K→128K, stepwise RoPE scaling)
+Phase E  WSD anneal / high-quality data                 —— 20–50B token (LR decay stage, pile on math/code/long documents)
+Phase F  SFT                                            —— 1–10B token (instruction + long context + tools)
+Phase G  RL (GRPO / optional DPO)                       —— batched by domain
+(optional)  MTP head joint training                     —— attach an MTP head from Phase B, weight 0.1–0.3
 ```
 
-### 4.0 分栈 / 分层训再合并？——可行，但默认不要拆成两个独立 LM
+### 4.0 Train stacks / layers separately then merge? Feasible, but do not default to two independent LMs
 
-YOCO 不是 seq2seq：训练时 **同一条序列先后穿过 Encoder 和 Decoder**，loss 在 Decoder 顶。Encoder 与 Decoder 的表示在 MiniCPM5 42 层里已经联合训过；定理 A（[`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)）说 gate=0 的 16/26 切分 **就是** 那条残差流。把两栈当成两个独立 LM 分别训再拼接，等于扔掉这份对齐。**禁止 franken-merge。**
+YOCO is not seq2seq: at train time **the same sequence runs through Encoder then Decoder**, and the loss sits on the Decoder top. Encoder and Decoder representations were already jointly trained in MiniCPM5's 42 layers; Theorem A ([`docs/ARCHITECTURE_THEORY.md`](ARCHITECTURE_THEORY.md)) says a gate=0 16/26 split **is** that residual stream. Treating the two stacks as two independent LMs, training them apart, and splicing them throws that alignment away. **No franken-merge.**
 
-完整冻结边界、梯度截断、untied embedding、优化器/激活显存与 split 敏感性见 [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)。NVFP4 模块策略与墙钟见 [`docs/NVFP4_THEORY.md`](NVFP4_THEORY.md)；Hopper/Ada FP8 回退见 [`docs/FP8_THEORY.md`](FP8_THEORY.md)。数字：`python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4`。
+Full freeze boundaries, gradient cutoff, untied embedding, optimizer / activation memory, and split sensitivity are in [`docs/CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md). NVFP4 module policy and wall-clock are in [`docs/NVFP4_THEORY.md`](NVFP4_THEORY.md); Hopper/Ada FP8 fallback is in [`docs/FP8_THEORY.md`](FP8_THEORY.md). Numbers: `python3 scripts/param_budget.py --staged --curriculum --fp8 --nvfp4`.
 
-**Phase B 配方已按 C1+NVFP4 定稿**：C1 冻结边界（Phase A 两栈都 MoE → B0/B1 冻 Encoder → B2 短联合）× 混合 NVFP4。延迟 Encoder MoE、全阶段 2.0×、峰值 4× 只作敏感性，不进配方。联合 bf16 只作 100% 对照。C1+FP8 是无 Blackwell 时的回退。
+**The Phase B recipe is locked as C1+NVFP4**: C1 freeze boundary (Phase A MoE on both stacks → B0/B1 freeze the Encoder → B2 short joint) × mixed NVFP4. Delayed Encoder MoE, full-phase 2.0×, and peak 4× are sensitivity only; they are not in the recipe. Joint bf16 is the 100% control. C1+FP8 is the fallback when there is no Blackwell.
 
-中间档 50B token、untied 下 emb 与 lm_head 各计一次（与一次前向相同）：
+Middle band, 50B tokens, untied, emb and lm_head each counted once (same as one forward):
 
-| 做法 | H100-h | vs 联合 50B |
+| Approach | H100-h | vs joint 50B |
 | --- | ---: | ---: |
-| 两栈一起训（联合 bf16 对照） | 1,325 | 100% |
-| Encoder 冻结，只训 Decoder + cross-attn（全程；不共同适应） | 987 | 75% |
-| 只训新模块（cross-attn + \(W_K/W_V\)；骨干冻结） | 720 | 54% |
-| C1 解冻课程 8+27+15B（bf16 操作数账） | 1,046 | 79% |
-| **C1+FP8（Hopper/Ada 回退）** | 729 | 55% |
-| **C1+NVFP4（定稿）** | **571** | **43%** |
-| Encoder 当独立 LM 50B + 冻 Encoder 训 Decoder 50B + 20B 拼接恢复 | 1,940 | **146%（更贵）** |
-| Encoder 先当 LM 25B 再联合 25B | 874 | 66%（**质量赌博**：联合 token 减半是否够恢复） |
+| Train both stacks together (joint bf16 control) | 1,325 | 100% |
+| Encoder frozen, train only Decoder + cross-attn (entire run; no co-adaptation) | 987 | 75% |
+| Train only new modules (cross-attn + \(W_K/W_V\); backbone frozen) | 720 | 54% |
+| C1 unfreeze curriculum 8+27+15B (bf16 operand ledger) | 1,046 | 79% |
+| **C1+FP8 (Hopper/Ada fallback)** | 729 | 55% |
+| **C1+NVFP4 (locked)** | **571** | **43%** |
+| Encoder as an independent LM 50B + frozen-Encoder Decoder 50B + 20B splice recovery | 1,940 | **146% (more expensive)** |
+| Encoder as an LM 25B then joint 25B | 874 | 66% (**quality gamble**: is half the joint tokens enough to recover?) |
 
-**结论：**
+**Conclusions:**
 
-1. **「先分开训两个模型再焊在一起」不省算力。** 同样 50B/栈再加拼接恢复，是联合训练的 1.5×。把 Encoder 隐状态缓存下来给 Decoder 用也不现实（50B token × \(d\) × 2 bytes ≈ 205 TB）。
-2. **「同一套切开的权重上，按可训练子集分层解冻」才省。** 省的是 Encoder 的反向（以及新模块阶段 Decoder 骨干的权重梯度），不是少跑 Encoder 前向——YOCO 的 CE 在 Decoder 上，Encoder 前向省不掉。
-3. 冻结 Encoder 大约省 **25% FLOPs**，但 Encoder 不再为 Decoder 的 query 改写记忆（write/read 不共同适应）。PDSA 的「无写入时信号」也提示：只训 reader、永远冻 writer，检索上限会卡住。所以冻 Encoder 只能当 **Phase B 的中段**，结尾必须有一段短联合（B2 ≥ 10B，默认 15B）。
-4. 只训 cross-attn / indexer（Phase A 热身、Phase C 第 1 步）最省（约 54%），这是已经写进 Phase C 的做法，不是新发明。
-5. 贪心逐层加层（2 层 → 冻 → 再加 2 层）在 LLM 上没有稳定省算力的证据，还要最终联合微调，**不做**。
-6. DeepSeek 式「分域专家各自 SFT+RL 再蒸馏」只适用于 **Phase F/G 后训练**，不适用于这套 12B 预训练骨架。
-7. **C1 冻结边界已定稿；墙钟再敲死为 C1+NVFP4。** Phase A 对两栈都 virtual-group MoE，B0/B1 冻 Encoder：一次离线手术，token 0 就是 12.25B 中间档，B2 只解冻。B1/B2 所有非必须-bf16 线性 GEMM（MoE、attn QKV/O、lm_head）+ 冻结 Encoder 前向走 NVFP4，B0 student 保持 bf16。发布墙钟 **571 H100-h**（联合 bf16 **1,325** 的 **43%**；目标 RTX PRO 6000 / 6000D）。不把 Encoder 推迟到 B2 再上采样，也不把 2.0× 套到 B0 student 上（那是敏感性对照，不进配方）。
+1. **"Train two models apart and weld them" does not save compute.** The same 50B per stack plus splice recovery is 1.5× joint training. Caching Encoder hidden states for the Decoder is also unrealistic (50B tokens × \(d\) × 2 bytes ≈ 205 TB).
+2. **"On the same sliced weights, unfreeze trainable subsets by stage" is what saves.** What you save is Encoder backward (and, in the new-module stage, Decoder-backbone weight grads), not Encoder forward — YOCO's CE is on the Decoder, so Encoder forward cannot be skipped.
+3. Freezing the Encoder saves about **25% FLOPs**, but the Encoder no longer rewrites memory for the Decoder's queries (write/read do not co-adapt). PDSA's "no write-time signal" result also warns: train only the reader and freeze the writer forever, and retrieval hits a ceiling. So freeze the Encoder only as **the middle of Phase B**; the end must have a short joint (B2 ≥ 10B, default 15B).
+4. Training only cross-attn / indexer (Phase A warmup, Phase C step 1) is cheapest (~54%). That is already written into Phase C; it is not a new invention.
+5. Greedy layer-by-layer add (2 layers → freeze → add 2 more) has no stable compute-saving evidence on LLMs, and you still need a final joint finetune. **Do not do it.**
+6. DeepSeek-style "per-domain experts each SFT+RL then distill" applies only to **Phase F/G post-training**, not to this 12B pretrain skeleton.
+7. **The C1 freeze boundary is locked; wall-clock is further locked as C1+NVFP4.** Phase A virtual-group MoE on both stacks, B0/B1 freeze the Encoder: one offline surgery, token 0 is already the 12.25B middle band, B2 only unfreezes. B1/B2 all non-must-bf16 linear GEMMs (MoE, attn QKV/O, lm_head) + frozen Encoder forward run NVFP4; the B0 student stays bf16. Release wall-clock **571 H100-h** (**43%** of joint bf16 **1,325**; target RTX PRO 6000 / 6000D). Do not delay Encoder upcycling until B2, and do not put 2.0× on the B0 student (that is a sensitivity control, not in the recipe).
 
-**冻结规则（定理 D/E，C1 定稿；MiniCPM5 为 untied；实现时写进 trainer，不是口头约定）：**
+**Freeze rules (Theorems D/E, C1 locked; MiniCPM5 is untied; write these into the trainer, they are not a verbal convention):**
 
-| 项 | B0 | B1 | B2 |
+| Item | B0 | B1 | B2 |
 | --- | --- | --- | --- |
-| 全局 cache | `X^{16}.detach()` 再乘 \(W_K,W_V\) | 同左 | **去掉** detach |
-| \(W_K,W_V\) | 新模块，可训练（\(2\,d\,d_{\mathrm{kv}}=1.05\mathrm{M}\)，\(d_{\mathrm{kv}}=256\)） | 可训练 | 可训练 |
-| 输入 embedding \(E\) | **冻结** | **冻结** | 解冻 |
-| `lm_head` | **冻结** | **可训练**（untied，定理 E 不管 head） | 解冻 |
-| Encoder 权重 | 冻结（已是 virtual-group MoE） | 冻结 | 解冻；专家从此特化 |
-| Decoder | 冻骨干、只训 cross-attn | 解冻 self-attn+MoE | 解冻 |
+| Global cache | `X^{16}.detach()` then multiply \(W_K,W_V\) | same as left | **drop** detach |
+| \(W_K,W_V\) | new modules, trainable (\(2\,d\,d_{\mathrm{kv}}=1.05\mathrm{M}\), \(d_{\mathrm{kv}}=256\)) | trainable | trainable |
+| Input embedding \(E\) | **frozen** | **frozen** | unfrozen |
+| `lm_head` | **frozen** | **trainable** (untied; Theorem E does not govern the head) | unfrozen |
+| Encoder weights | frozen (already virtual-group MoE) | frozen | unfrozen; experts specialize from here |
+| Decoder | freeze backbone, train only cross-attn | unfreeze self-attn+MoE | unfreeze |
 
-禁止：Encoder 冻结时仍训练输入 embedding \(E\)（输入分布漂，定理 E）。**B1 可以训 `lm_head`**——MiniCPM5 不解绑也不共享。
+Forbidden: training input embedding \(E\) while the Encoder is frozen (input distribution drift, Theorem E). **B1 may train `lm_head`** — MiniCPM5 is untied; the head is not shared.
 
-**定稿配方（预算紧时，用 C1+NVFP4 替换「Phase B 50B 全程联合 bf16」）：**
+**Locked recipe (when the budget is tight, replace "Phase B 50B fully joint bf16" with C1+NVFP4):**
 
-| 子阶段 | token | 可训练 | Encoder FFN | gate |
+| Sub-stage | tokens | Trainable | Encoder FFN | gate |
 | --- | ---: | --- | --- | --- |
-| B0 | 8B（5–10B） | 新模块（cross-attn、\(W_K/W_V\)、gate、新 LN）；骨干 + embed + `lm_head` 冻结 | 冻结的 virtual-group MoE | 0 → 0.3 |
-| B1 | 27B（20–40B） | 解冻 Decoder + **`lm_head`**；**Encoder + 输入 \(E\) 仍冻**；cache 仍 detach | 同上 | → 1 |
-| B2 | 15B（10–20B） | 两栈都解冻（含 embed 与 `lm_head`），LR 更小 | 解冻；专家开始特化 | 1 |
+| B0 | 8B (5–10B) | new modules (cross-attn, \(W_K/W_V\), gate, new LN); backbone + embed + `lm_head` frozen | frozen virtual-group MoE | 0 → 0.3 |
+| B1 | 27B (20–40B) | unfreeze Decoder + **`lm_head`**; **Encoder + input \(E\) still frozen**; cache still detached | same as above | → 1 |
+| B2 | 15B (10–20B) | both stacks unfrozen (including embed and `lm_head`), smaller LR | unfrozen; experts start specializing | 1 |
 
-总 token 仍约 50B。C1 操作数约 **79% 联合**；发布墙钟是 **C1+NVFP4 = 571 H100-h（联合 bf16 1,325 的 43%）**。C1 bf16 **1,046 H100-h**。C1+FP8 **729** 为 Hopper/Ada 回退。Adam 状态在 B1 只有联合的 **62%**；detach 丢掉 Encoder 激活约 **38%**（保留 26/42）。质量不稳就把 B2 加长，而不是回去做两个独立 LM，也不是改回全程联合 bf16。Phase C 的「冻主干、只训 indexer」仍然叠在这套课程**后面**（层内 KL，不是穿过 cache 的 CE；indexer 保持 bf16）。
+Total tokens still about 50B. C1 operands are about **79% of joint**; release wall-clock is **C1+NVFP4 = 571 H100-h (43% of joint bf16 1,325)**. C1 bf16 **1,046 H100-h**. C1+FP8 **729** is the Hopper/Ada fallback. Adam state at B1 is only **62%** of joint; detach drops Encoder activations of about **38%** (keeps 26/42). If quality is unstable, lengthen B2; do not go back to two independent LMs, and do not revert to full-run joint bf16. Phase C's "freeze the trunk, train only the indexer" still stacks **after** this curriculum (intra-layer KL, not CE through the cache; indexer stays bf16).
 
-### Phase A — 架构手术与初始化（离线）
+### Phase A — Architecture surgery and initialization (offline)
 
-0. **切分为 Encoder / Decoder 两栈（YOCO 化）**：把 MiniCPM5-2B 的 42 个 dense 层映射到 **Encoder 16 层 + Decoder 26 层**。
-   Encoder 保持 16 层，这样 **2+7+7 CSA/HCA** 仍排得下；多出来的 2 层全部给 Decoder。
-   推荐方案：Encoder 取底座**前 16 层**权重、Decoder 取**后 26 层**权重（保持层深语义）；分别拷贝 **untied** 的 embed 与 `lm_head`。
-   Decoder 每层**新增 cross-attn 子层**（初始 gate≈0 旁路，见 §2.4；Q/O = \(2d^2\)），使初始前向≈原 decoder-only 行为，便于恢复。
-1. **MoE 上采样（dense FFN → 细粒度 MoE）**，对 Encoder、Decoder **各自**执行，采用 Megatron-LM `upcycling_utils.py`（C1 定稿：两栈都在本阶段完成；B0/B1 再冻 Encoder，见 §4.0）：
-   - 把 dense FFN 的中间维切成 G 段、每段复制成多个专家（**virtual-group 初始化**：保证转换瞬间 top-k 恰好选到每个分片的一份副本，等价于原 dense 函数）。
-   - MiniCPM5 dense SwiGLU **6144 可被 2048 整除（G=3）**。上采样仍是 **copy-and-scale 前 `moe_int` 行**（每专家复制 dense 的前 2048 行，再按 \((E G^2 / T)^{1/3}\) 缩放），不是手术瞬间精确恒等；恢复靠 Phase B。
-   - **权重缩放**：SwiGLU 专家投影按 `(E·G²/T)^(1/3)` 量级缩放（论文验证约降 1.5% loss）。
-   - **路由**：`softmax-then-topK`（优于 topK-then-softmax）；亲和度打分用 **Sqrt(Softplus(·))**（V4 做法）。
-   - 每栈**默认全 MoE**（C1：token 0 两栈都是 MoE）。DeepSeek 式「首层 dense」**关**，不进发布配方；需要时用 `--first-dense` 敏感性。
-   - **无 μP**：不要按 16/26 发明残差乘子，也不要把 MiniCPM-2B 的 `scale_depth/√40` 套过来。
-   - **Hash-MoE bootstrap**：Decoder 最前若干层 MoE 用冻结的 `token_id → expert_id` 哈希路由（V4 做法，稳定早期）。Encoder 在 B0/B1 已冻，Encoder 上的哈希路由多余，放到 B2 解冻时再用。
-2. **注意力改造**：继承 GQA 的 `q/k/v/o`（K/V 形状 `(256, 2048)`）；新增 CSA/HCA 压缩器、位置偏置、Lightning Indexer 用小尺度随机初始化。此阶段先把所有注意力层当作**稠密/滑窗**跑（不启用 top-k、不启用 HCA 压缩），等价于近似原注意力。**本仓库实现 Phase C indexer 层内 KL 与 C/D/E/F/G 训练入口；不实现 CSA CUDA kernel。**
-3. **不要引入 MiniCPM-2B μP 缩放常量**（emb 乘子、`scale_depth`、logits 缩放）。MiniCPM5 残差恒等。
-4. **可选 mHC**：先用普通残差跑通 Phase B/C，稳定后再切 mHC（把残差映射约束到 Birkhoff 多胞形/双随机矩阵，谱范数 ≤1）。
+0. **Split into Encoder / Decoder stacks (YOCO-ize)**: map MiniCPM5-2B's 42 dense layers onto **Encoder 16 layers + Decoder 26 layers**.
+   Keep the Encoder at 16 layers so **2+7+7 CSA/HCA** still fits; give both extra layers to the Decoder.
+   Recommended: Encoder takes the base's **first 16 layers**, Decoder takes the **last 26 layers** (keep depth semantics); copy the **untied** embed and `lm_head` separately.
+   Each Decoder layer **adds a cross-attn sublayer** (initial gate≈0 bypass, see §2.4; Q/O = \(2d^2\)), so the initial forward ≈ original decoder-only behavior and recovery is easier.
+1. **MoE upcycling (dense FFN → fine-grained MoE)**, run **separately** on Encoder and Decoder, using Megatron-LM `upcycling_utils.py` (C1 locked: both stacks finish in this phase; B0/B1 then freeze the Encoder, see §4.0):
+   - Slice the dense FFN intermediate into G groups and copy each group into several experts (**virtual-group init**: at the conversion instant, top-k exactly selects one copy of each shard, equivalent to the original dense function).
+   - MiniCPM5 dense SwiGLU **6144 is divisible by 2048 (G=3)**. Upcycling is still **copy-and-scale the first `moe_int` rows** (each expert copies the dense first 2048 rows, then scales by \((E G^2 / T)^{1/3}\)); it is not exact identity at the surgical instant. Recovery is Phase B.
+   - **Weight scaling**: SwiGLU expert projections scale on the order of `(E·G²/T)^(1/3)` (paper reports about 1.5% loss drop).
+   - **Routing**: `softmax-then-topK` (better than topK-then-softmax); affinity scores use **Sqrt(Softplus(·))** (V4 practice).
+   - Each stack is **full MoE by default** (C1: both stacks are MoE at token 0). DeepSeek-style "first-layer dense" is **off** and not in the release recipe; use `--first-dense` for sensitivity if needed.
+   - **No μP**: do not invent residual multipliers for 16/26, and do not import MiniCPM-2B's `scale_depth/√40`.
+   - **Hash-MoE bootstrap**: the Decoder's first few MoE layers use a frozen `token_id → expert_id` hash route (V4 practice, early stability). The Encoder is already frozen in B0/B1, so hash routing on the Encoder is redundant; apply it when B2 unfreezes.
+2. **Attention conversion**: inherit GQA `q/k/v/o` (K/V shape `(256, 2048)`); new CSA/HCA compressors, position bias, and Lightning Indexer get small-scale random init. In this phase treat every attention layer as **dense/sliding window** (no top-k, no HCA compression), approximately the original attention. **This repository implements the Phase C indexer intra-layer KL and the C/D/E/F/G training entry points; it does not implement a CSA CUDA kernel.**
+3. **Do not introduce MiniCPM-2B μP scale constants** (emb multiplier, `scale_depth`, logits scale). MiniCPM5 residuals are identity.
+4. **Optional mHC**: first ship ordinary residuals through Phase B/C; switch to mHC after that is stable (constrain residual maps to the Birkhoff polytope / doubly stochastic matrices, spectral norm ≤1).
 
-> Encoder/Decoder 交界：Encoder 顶层输出经一个（可学习的）投影 \(W_K,W_V\) 得到全局 `K̂,V̂` 供所有 cross-decoder 层复用（YOCO 单次缓存）。\(W_K,W_V\) 是新模块。B0/B1 必须 `X^{16}.detach()` **之后**再乘投影（定理 D）；B2 去掉 detach。
+> Encoder/Decoder boundary: the Encoder top output goes through a (learnable) projection \(W_K,W_V\) to produce global `K̂,V̂` reused by every cross-decoder layer (YOCO cache-once). \(W_K,W_V\) are new modules. B0/B1 must `X^{16}.detach()` **before** multiplying by the projection (Theorem D); B2 drops detach.
 
-### Phase B — 上采样恢复性继续预训练
+### Phase B — Upcycling recovery continued pretraining
 
-- **目的**：让 MoE 化 + 注意力改造 + encoder-decoder 化后的模型恢复语言建模能力（含 cross-attn 逐步打开）。
-- 序列长度 4K，注意力仍为 dense/滑窗（未稀疏），数据用通用预训练混合（见 §5）。
-- **逐步打开 cross-attn**：Decoder cross-attn 的 gate 从 0 线性升到 1。解冻课程下：B0（~8B）只升到 0.3，B1 升到 1，避免在冻结骨干上把 \(g\) 拉满。
-- **蒸馏加速**：以 **MiniCPM5-2B-Base（dense，teacher）** 做 logit KD（KL(teacher‖student)，温度 1–2，权重 0.5→0 线性衰减），大幅缩短恢复期。
-- **MoE 负载均衡**：aux-loss-free 偏置法（`e_score_correction_bias`，按各专家负载更新偏置，更新率如 1e-3）+ **轻量 sequence-wise balance loss**（权重 ~1e-3）防单序列极端不均衡。Encoder 专家从 B2 才开始更新，负载监控从 B2 起算 Encoder。
-- 学习率：**WSD**（Warmup-Stable-Decay）——短 warmup（0.5–1B token），进入 stable 段（LR ≈ MiniCPM 预训练峰值的 30–50%，因为是继续训练）。此阶段保持 stable 不衰减。B2 解冻 Encoder 时 LR 再降一档。
-- **Untied embedding**：B0/B1 **冻结输入 \(E\)**；B0 同时冻 `lm_head`，B1 **训 `lm_head`**；禁止 Encoder 冻着还训输入 \(E\)（定理 E）。
-- **预算紧时不要改成两个独立 LM**：用 §4.0 已定稿的 **C1+NVFP4**（B0 新模块 → B1 冻 Encoder → B2 短联合；B1/B2 允许的线性 GEMM 走 NVFP4），同样 ~50B token，墙钟 **571 H100-h（联合 bf16 1,325 的 43%）**。
+- **Goal**: after MoE conversion + attention conversion + encoder-decoder conversion, restore language-modeling skill (including gradually opening cross-attn).
+- Sequence length 4K, attention still dense/sliding window (not yet sparse), data is a general pretrain mix (see §5).
+- **Open cross-attn gradually**: Decoder cross-attn gate ramps linearly from 0 to 1. Under the unfreeze curriculum: B0 (~8B) only goes to 0.3, B1 goes to 1, so you do not slam \(g\) to 1 on a frozen backbone.
+- **Distillation to speed recovery**: use **MiniCPM5-2B-Base (dense, teacher)** for logit KD (KL(teacher‖student), temperature 1–2, weight 0.5→0 linear decay), which shortens recovery a lot.
+- **MoE load balance**: aux-loss-free bias method (`e_score_correction_bias`, update bias from per-expert load, rate e.g. 1e-3) + **light sequence-wise balance loss** (weight ~1e-3) against extreme per-sequence imbalance. Encoder experts update only from B2, so Encoder load monitoring starts at B2.
+- Learning rate: **WSD** (Warmup-Stable-Decay) — short warmup (0.5–1B tokens), then the stable segment (LR ≈ 30–50% of MiniCPM pretrain peak, because this is continued training). This phase stays stable with no decay. Drop LR another notch when B2 unfreezes the Encoder.
+- **Untied embedding**: B0/B1 **freeze input \(E\)**; B0 also freezes `lm_head`, B1 **trains `lm_head`**; forbidden to train input \(E\) while the Encoder is frozen (Theorem E).
+- **When the budget is tight, do not rewrite this as two independent LMs**: use the already locked **C1+NVFP4** in §4.0 (B0 new modules → B1 freeze Encoder → B2 short joint; B1/B2 allowed linear GEMMs run NVFP4), same ~50B tokens, wall-clock **571 H100-h (43% of joint bf16 1,325)**.
 
-### Phase C — 注意力稀疏化对齐（关键、易翻车）
+### Phase C — Attention sparsification alignment (critical, easy to blow up)
 
-**流程：先实现，后点亮。** 代码与层标签在 B 就进图；C 只改 `sparse_mode`，不在 C 才把模块焊上去。
+**Flow: implement first, then light up.** Code and layer labels enter the graph at B; C only changes `sparse_mode`. Do not weld the modules on only at C.
 
-| 步 | 何时 | 做什么 |
+| Step | When | What |
 | --- | --- | --- |
-| **实现** | Phase A 手术 + **B 建图** | 默认层标签 2 sliding+7 CSA+7 HCA；`--use-kda` 则 2+11 KDA+2 CSA+1 HCA，`KDAGates` 进图。**计算仍是滑窗 GQA**（`sparse_mode=window`）。KDA 参数在 B 冻结，不进 Adam。发布 B0 默认 `use_kda=False`（132 张量 overlay）。 |
-| **点亮** | Phase C | 无 KDA：indexer→topk→hca→win。有 KDA（B 已实现）：**C-kda → indexer → topk → hca（最后）→ win**。禁止把 KDA 模块补到 `use_kda=False` 的 B overlay 上。 |
+| **Implement** | Phase A surgery + **B graph build** | Default layer labels 2 sliding+7 CSA+7 HCA; `--use-kda` then 2+11 KDA+2 CSA+1 HCA, `KDAGates` enter the graph. **Compute is still sliding-window GQA** (`sparse_mode=window`). KDA parameters are frozen at B and do not enter Adam. Release B0 default `use_kda=False` (132-tensor overlay). |
+| **Light up** | Phase C | Without KDA: indexer→topk→hca→win. With KDA (already implemented at B): **C-kda → indexer → topk → hca (last) → win**. Do not patch KDA modules onto a `use_kda=False` B overlay. |
 
-遵循 DeepSeek-V3.2 "先稠密暖启、再稀疏"的思路引入 DSA/压缩。**发布默认**（2 sliding + 7 CSA + 7 HCA，`use_kda=False`）：
+Follow DeepSeek-V3.2 "dense warm-start, then sparse" to introduce DSA/compression. **Release default** (2 sliding + 7 CSA + 7 HCA, `use_kda=False`):
 
-1. **Indexer 稠密对齐**：冻结主干，仅训练 Encoder CSA 上的 Lightning Indexer，让其打分分布**对齐稠密注意力权重**（层内 KL）。此步不改变主输出，只教 indexer "该选谁"。监督叠在 B2 **之后**。Indexer top-k 只从压缩块集合 \(S_{\mathrm{comp}}\) 里删，不许加（定理 B）。
-2. **打开 CSA top-k**：CSA 层从稠密滑窗切到 **滑窗 ∪ indexer 选中的压缩块**（自身块排除，窗补洞），小步继续训练让主干适应稀疏。不是替换成「只留 top-k token」。
-3. **打开 HCA 压缩**：HCA 层 **滑窗 KV concat 均值池化槽**（\(m'=128\)，自身块排除）。
-4. **打开 8K 滑窗联训**：`C-win` 在 seq=8192 上同时开 CSA top-k + HCA concat，确认窗支路与压缩支路 mask 正确。
-- 每一步都监控 loss 尖峰；出现不稳定就回退该步、延长对齐或降低 LR。
+1. **Indexer dense alignment**: freeze the trunk, train only the Lightning Indexer on Encoder CSA so its score distribution **matches dense attention weights** (intra-layer KL). This step does not change the main output; it only teaches the indexer "whom to pick". Supervision stacks **after** B2. Indexer top-k may only delete from the compressed-block set \(S_{\mathrm{comp}}\), never add (Theorem B).
+2. **Turn on CSA top-k**: CSA layers switch from dense sliding window to **sliding window ∪ indexer-selected compressed blocks** (own block excluded, window fills holes), then take small steps so the trunk adapts to sparsity. This is not "keep only top-k tokens".
+3. **Turn on HCA compression**: HCA layers **concat sliding-window KV with mean-pooled slots** (\(m'=128\), own block excluded).
+4. **Joint-train the 8K sliding window**: `C-win` opens CSA top-k + HCA concat together at seq=8192, and confirms window-branch vs compressed-branch masks are correct.
+- Monitor loss spikes at every step; on instability, roll that step back, lengthen alignment, or lower LR.
 
-**若打开 3:1 KDA**（12B：2 sliding + 11 KDA + 2 CSA + 1 HCA），点亮顺序改成：
+**If you turn on 3:1 KDA** (12B: 2 sliding + 11 KDA + 2 CSA + 1 HCA), the light-up order becomes:
 
-0. **`C-kda`**：只把 KDA-kind 层切到 gated-delta；CSA/HCA-kind **仍走滑窗**。多数路径先学会被用，避免 hybrid-linear「先强检索、后换线性层被忽略」。
-1. **Indexer**：KDA 保持点亮；只在剩下的 CSA 锚点上做层内 KL（12B 仅 2 层，token 从 10e9 砍到 5e9，C 合计仍 25e9）。
-2. **CSA top-k**，然后 **HCA 最后**（1 层、write-first），再 `C-win`。
+0. **`C-kda`**: switch only KDA-kind layers to gated-delta; CSA/HCA-kind **still run sliding window**. Most paths learn to be used first, avoiding hybrid-linear "strong retrieval first, then swap in linear layers and get ignored".
+1. **Indexer**: KDA stays lit; intra-layer KL only on the remaining CSA anchors (12B has only 2 such layers; tokens cut from 10e9 to 5e9; C still totals 25e9).
+2. **CSA top-k**, then **HCA last** (1 layer, write-first), then `C-win`.
 
-CSA/HCA **实现不后移、不删除**；后移的是**点亮**。KDA 也一样：B `--use-kda` 实现，C 点亮。B0 默认仍 `use_kda=False`。
+CSA/HCA **implementation is not deferred or deleted**; what is deferred is **lighting up**. Same for KDA: B `--use-kda` implements, C lights up. B0 default remains `use_kda=False`.
 
-### Phase D — 长上下文扩展
+### Phase D — Long-context extension
 
-- 逐级提升训练序列长度：**8K → 32K → 128K**（如需更长可继续）。
-- RoPE：按目标长度做频率缩放（NTK/YaRN 类）或直接长序列继续训练；MiniCPM5-2B 原生 **128K 上下文 / `rope_theta=5e6`**，作为长上下文底座，不必再参考 MiniCPM-2B-128k 的 `rope_scaling`。
-- CSA/HCA 让长程注意力成本可控；8K 未压缩滑窗保证局部保真。
-- 数据切到长文档 / 拼接长样本；用 needle & RULER 做过程监控。
-- **实现**：`python3 -m cat_yoko.d --stage 8k|32k|128k` 或 `--chain`。Phase B 的 4K packed `.bin` **按目标 seq 重切窗**（扁平 int32 拼行）。`--try` DummyStream 在序列中点写入 needle。D/E/F **默认 `sparse=hca`**（C 点亮后不回到 window）；`--use-kda` 从 resume extra 继承，只让 KDA-kind 继续走 gated-delta。prepare `--mix phase-d`：en 45% / zh 20% / math 10% / StarCoder 25%。
+- Raise train sequence length in steps: **8K → 32K → 128K** (continue if you need longer).
+- RoPE: frequency-scale to the target length (NTK/YaRN class) or continue training on long sequences directly; MiniCPM5-2B is native **128K context / `rope_theta=5e6`**, so use it as the long-context base and do not consult MiniCPM-2B-128k `rope_scaling`.
+- CSA/HCA keep long-range attention cost under control; the 8K uncompressed window keeps local fidelity.
+- Switch data to long documents / concatenated long samples; monitor with needle & RULER.
+- **Implementation**: `python3 -m cat_yoko.d --stage 8k|32k|128k` or `--chain`. Phase B 4K packed `.bin` is **re-windowed to the target seq** (flat int32 concatenated rows). `--try` DummyStream writes a needle at mid-sequence. D/E/F **default `sparse=hca`** (after C lights up, do not go back to window); `--use-kda` is inherited from resume extra, and only KDA-kind layers keep running gated-delta. prepare `--mix phase-d`: en 45% / zh 20% / math 10% / StarCoder 25%.
 
-### Phase E — WSD 退火（高质量数据）
+### Phase E — WSD anneal (high-quality data)
 
-- 进入 WSD 的 **Decay** 段：LR 快速（指数/1-sqrt）衰减到峰值的 ~1/100。
-- 数据配比切向**高质量 + 数学 + 代码 + 长上下文 + 指令化**（MiniCPM 经验：退火段喂高质量数据收益最大）。
-- **实现**：`python3 -m cat_yoko.e`。`wsd_lr(..., lr_mode=decay)`。prepare `--mix phase-e`：en 30% / zh 15% / math 25% / StarCoder 15% / UltraChat 正文 15%。不在 CI 下载。
+- Enter WSD **Decay**: LR decays quickly (exponential / 1-sqrt) to ~1/100 of peak.
+- Mix shifts toward **high quality + math + code + long context + instruction-ized** (MiniCPM experience: the anneal stage benefits most from high-quality data).
+- **Implementation**: `python3 -m cat_yoko.e`. `wsd_lr(..., lr_mode=decay)`. prepare `--mix phase-e`: en 30% / zh 15% / math 25% / StarCoder 15% / UltraChat body 15%. Do not download in CI.
 
 ### Phase F — SFT
 
-- 指令/多轮对话/长上下文/工具调用/代码/数学；打包到目标长度，loss 只在 response。
-- 可按 DeepSeek-V4 的"**分域专家先各自 SFT+RL，再 on-policy 蒸馏成统一模型**"做，但本项目规模（12B）可先做单一混合 SFT。
-- **实现**：`python3 -m cat_yoko.f`。seq=8192。prepare `--mix phase-f` 写 jsonl（`tokens`+`labels=-100` on user；多段对话拼到目标长度）。解析 UltraChat `data` 列表、Chat `messages`、alpaca `instruction`/`output`，编码 `role: text`。Trainer `FileStream` 也吃已分词的 `prompt_ids`/`response_ids` 或 `messages[].ids` 并同样拼行。`--try` 仍用 DummyStream 掩 prompt 前缀。sparse 保持 `hca`。
+- Instruction / multi-turn / long context / tool use / code / math; pack to the target length; loss only on the response.
+- You can follow DeepSeek-V4 "**per-domain experts each SFT+RL, then on-policy distill into one model**", but at this project's scale (12B) start with a single mixed SFT.
+- **Implementation**: `python3 -m cat_yoko.f`. seq=8192. prepare `--mix phase-f` writes jsonl (`tokens`+`labels=-100` on user; multi-turn packed to target length). Parse UltraChat `data` lists, Chat `messages`, alpaca `instruction`/`output`, encode `role: text`. Trainer `FileStream` also accepts already-tokenized `prompt_ids`/`response_ids` or `messages[].ids` and concatenates the same way. `--try` still uses DummyStream and masks the prompt prefix. sparse stays `hca`.
 
 ### Phase G — RL
 
-- **GRPO**（DeepSeek 系）为主，reward 覆盖数学可验证、代码可执行、指令遵循；可加 DPO 作为轻量偏好对齐。
-- **长上下文可用度 RL（关键、且省算力）**：用**可验证的长上下文任务**做 RLVR，直接把"真读、真用长输入"奖励出来——比再喂海量长 token 便宜得多，专治 lost-in-the-middle / 长指令不遵循 / 多跳漏检：
-  - **奖励信号**：长文 QA（RULER 式、needle 变体、多跳 HotpotQA 扩展）用 exact-match/F1 可验证；**grounding/引用奖励**（答案必须引用正确 passage/行，契合 §14 PDSA 证据选择）；长指令遵循（约束可检查）。
-  - **课程**：在 128K→256K 逐级做 RL，把关键信息刻意放到**中段/长距**，强化中段召回（与 §12 的 IN2/FILM 训练互补）。
-  - **省算力**：长 trace RL 每 rollout 成本高 → 用 **PS-PPO（prefix-sampling PPO）** 只回传采样前缀、无偏截断，显著降长序列 RL 的算力/显存；或对超长上下文用 PDSA 选证据后再 RL（缩短有效 rollout 长度）。
-- RL 阶段注意 MoE 路由与稀疏注意力在长 rollout 下的稳定性。
+- **GRPO** (DeepSeek family) as primary; reward covers verifiable math, executable code, instruction following; DPO can be added as light preference alignment.
+- **Long-context usability RL (critical, and cheap in compute)**: run RLVR on **verifiable long-context tasks** so "actually read and use the long input" is rewarded directly — much cheaper than feeding another ocean of long tokens, and aimed at lost-in-the-middle / long-instruction non-compliance / multi-hop misses:
+  - **Reward signal**: long-doc QA (RULER-style, needle variants, multi-hop HotpotQA extensions) with exact-match/F1; **grounding / citation reward** (the answer must cite the right passage/line, matching §14 PDSA evidence selection); long-instruction following (checkable constraints).
+  - **Curriculum**: RL in 128K→256K steps, deliberately place key information in the **middle / long-range**, reinforcing mid-context recall (complements §12 IN2/FILM training).
+  - **Save compute**: long-trace RL is expensive per rollout → use **PS-PPO (prefix-sampling PPO)** to backprop only the sampled prefix with unbiased truncation, which cuts long-sequence RL compute/VRAM; or select evidence with PDSA on ultra-long context before RL (shorten effective rollout length).
+- Watch MoE routing and sparse-attention stability on long rollouts during RL.
 
 ---
 
-## 5. 数据
+## 5. Data
 
-| 阶段 | 主要数据 | 量级（token） |
+| Stage | Main data | Magnitude (tokens) |
 | --- | --- | --- |
-| B 恢复 | **OpenBMB**：Ultra-FineWeb en 60% / zh 30% + UltraData-Math L2 10% | 50B 信封（prepare 按 `--max-tokens` 切片） |
-| C 稀疏化 | 与 B 同分布，偏长文档 | 20–50B |
-| D 长上下文 | 长文档、书籍、代码仓库级拼接、合成长依赖任务 | 20–60B |
-| E 退火 | 高质量精选 + 数学 + 代码 + 指令化 SFT 前体 | 20–50B |
-| F SFT | **UltraChat** 等指令/多轮（不是 Phase B） | 1–10B |
-| G RL | 可验证任务 prompt 集（数学/代码/agent） | prompt 级 |
+| B recovery (think) | Ultra-FineWeb en 55% / zh 30% + UltraData-Math L2 10% + StarCoder **5%** | 50B envelope (prepare slices by `--max-tokens`; do not pull 50B) |
+| C sparsify | Same distribution as B, biased to long documents | 20–50B |
+| D long context | Long documents, books, repo-scale code concat, synthetic long-dependency tasks | 20–60B |
+| E anneal | High-quality curated + math + code + instruction-ized SFT precursor | 20–50B |
+| F SFT | **UltraChat** and similar instruction / multi-turn (not Phase B) | 1–10B |
+| G RL | Verifiable-task prompt sets (math/code/agent) | prompt-level |
 
-要点：
+Key points:
 
-- **Tokenizer 必须是 MiniCPM5-2B**（`openbmb/MiniCPM5-2B`，`V=130560`）。不要用 MiniCPM3 / MiniCPM4 tokenizer，也不要用 MiniCPM-2B-sft-bf16 去喂 MiniCPM5 上采样图。Ultra-FineWeb 是 MiniCPM4 时代网页过滤集，**要重新 tokenize**。**本仓库不下载 Ultra-FineWeb 到小 VM / CI。**
-- 默认 mix `phase-b` 全是 OpenBMB。可选 `phase-b-code` 把 10% 换成 StarCoder（不是 OpenBMB；Ultra-FineWeb 论文评测 mix 用过 10% 代码）。
-- UltraChat / 指令对话留给 Phase F/G，不进 Phase B。
-- 实现：`python3 -m cat_yoko.prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8` → int32 packed mmap；`cat_yoko.train --data data/phaseb.bin --upcycle-hf openbmb/MiniCPM5-2B-Base`。sidecar `*.bin.meta.json` 带 `eos_id`。仓库 **不检入语料**。
-- 长上下文样本用文档拼接 + 合成"大海捞针/多跳"；严格去重与评测集去污。Ultra-FineWeb 许可证标 Apache 2.0，源网页版权仍按各站条款。
+- **Tokenizer must be MiniCPM5-2B** (`openbmb/MiniCPM5-2B`, `V=130560`). Do not use MiniCPM3 / MiniCPM4 tokenizers, and do not feed MiniCPM-2B-sft-bf16 into a MiniCPM5 upcycled graph. Ultra-FineWeb is a MiniCPM4-era web filter set and **must be re-tokenized**. **This repository does not download Ultra-FineWeb onto a small VM / CI.**
+- Default mix `phase-b` (think / B0–B2 / C) is OpenBMB web+math **plus 5% StarCoder**. The model is meant to do code work, so the think stage is not 0% code; 5% is "a little, not none", not Phase D's 25%. Optional `phase-b-code` raises code to 10% (Ultra-FineWeb paper eval mix). StarCoder is not OpenBMB; **do not download it in CI / on a small VM**. Current 3090 B0 still uses DummyStream: the same 5% is hashed from in-repo short snippets into rows, not StarCoder itself.
+- UltraChat / instruction dialogue is reserved for Phase F/G, not Phase B.
+- Implementation: `python3 -m cat_yoko.prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8` → int32 packed mmap; `cat_yoko.train --data data/phaseb.bin --upcycle-hf openbmb/MiniCPM5-2B-Base`. Sidecar `*.bin.meta.json` carries `eos_id`. The repo **does not check in corpora**.
+- Long-context samples use document concat + synthetic "needle / multi-hop"; strict dedup and eval-set decontamination. Ultra-FineWeb is marked Apache 2.0; source-page copyright still follows each site's terms.
 
 ---
 
-## 6. 优化器 / 超参 / 稳定性
+## 6. Optimizer / hparams / stability
 
-| 项 | 推荐 |
+| Item | Recommended |
 | --- | --- |
-| 优化器 | **发布默认 AdamW**（\(\beta=(0.9,0.95)\)，wd=0.1）。Muon 开关留着、**默认关**（见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)） |
-| Muon | 对动量做 Newton-Schulz 正交化；配 **hybrid ZeRO** 实现（V4 做法）；lr 需单独调（通常比 Adam 大） |
-| LR 调度 | **WSD**：warmup(0.5–1B) → stable → decay；继续训练峰值取底座预训练峰值的 0.3–0.5× |
-| Batch | 全局 batch 随阶段增大（如 4M→16M token/step）；长上下文阶段用 seq packing |
-| 精度 | **混合精度定稿**（[`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)）：不必须 bf16 的线性 GEMM 全部 NVFP4（MoE 专家、attn QKV/O、lm_head、冻结 Encoder 前向）。B0 student、L0、Phase C indexer、**embed**、RMSNorm、router、gate、attn softmax 保持高精度。不改 6NT；墙钟按 2.0× vs bf16 计。C1+FP8 是 Hopper/Ada 回退。V4 式 FP4 专家存储是后期可选项，不进本配方 |
-| 正则/稳定 | zero-centered & weight-decayed RMSNorm、router z-loss（轻）、grad clip 1.0 |
-| MoE 均衡 | aux-loss-free 偏置更新 + 轻量 seq-balance loss；监控专家利用率/丢弃率 |
-| MTP | 辅助头权重 0.1–0.3；可只在 B–E 用，推理可丢弃或用于投机解码 |
-| μP | **无**。MiniCPM5 是 Llama，不要套 MiniCPM-2B 的 emb/residual/logits 缩放常量 |
+| Optimizer | **Release default AdamW** (\(\beta=(0.9,0.95)\), wd=0.1). Muon switch exists, **default off** (see [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)) |
+| Muon | Newton-Schulz orthogonalization of momentum; **hybrid ZeRO** implementation (V4 practice); lr needs its own sweep (usually larger than Adam) |
+| LR schedule | **WSD**: warmup(0.5–1B) → stable → decay; continued-training peak is 0.3–0.5× the base pretrain peak |
+| Batch | Global batch grows by stage (e.g. 4M→16M token/step); long-context stages use seq packing |
+| Precision | **Mixed precision locked** ([`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)): all linear GEMMs that are not must-bf16 are NVFP4 (MoE experts, attn QKV/O, lm_head, frozen Encoder forward). B0 student, L0, Phase C indexer, **embed**, RMSNorm, router, gate, attn softmax stay high precision. Do not change 6NT; wall-clock is booked at 2.0× vs bf16. C1+FP8 is the Hopper/Ada fallback. V4-style FP4 expert storage is a later option, not in this recipe |
+| Regularization / stability | zero-centered & weight-decayed RMSNorm, router z-loss (light), grad clip 1.0 |
+| MoE balance | aux-loss-free bias updates + light seq-balance loss; monitor expert utilization / drop rate |
+| MTP | Auxiliary-head weight 0.1–0.3; may be used only on B–E; at inference it can be dropped or used for speculative decoding |
+| μP | **None**. MiniCPM5 is Llama; do not import MiniCPM-2B emb/residual/logits scale constants |
 
-Muon 的 Newton-Schulz 正交化保持 fp32，与网络 NVFP4 GEMM 正交。不要在 L0 开 NVFP4。
-
----
-
-## 7. 评测与消融
-
-**能力评测**：MMLU / CMMLU / C-Eval（知识），GSM8K / MATH（数学），HumanEval / MBPP（代码），
-BBH（推理），IFEval（指令遵循）。
-**长上下文**：**RULER**、**Needle-in-a-Haystack**、LongBench；核对 8K 滑窗 + 压缩长程 + YOCO 全局 cache 在 32K/128K/1M 的检索保真（YOCO 报告 1M 近乎满分 needle）。
-**效率**：单 token 推理 FLOPs、**KV cache 大小（YOCO 只缓存一次，应显著低于 decoder-only 基线）**、prefill 延迟（encoder early-exit 收益）、decode 吞吐。
-**必做消融**：
-1. **Encoder/Decoder 层数拆分**（如 16/26 vs 20/22 vs 12/30）对 2.03B/4.33B 激活与质量的影响；发布默认仍是 **16 encoder**（2+7+7 CSA/HCA 排得下）；
-2. `n_win ∈ {2K, 4K, 8K}` 对质量/吞吐的权衡；
-3. CSA:HCA 层比例（1:1 vs 2:1 vs 3:1）；
-4. `index_topk ∈ {128,256,512}`；
-5. MoE 粒度/专家数（`moe_intermediate_size`、`n_routed`、`top_k`）对 12B 总量 / 各档激活目标的命中；
-6. **YOCO decoder-decoder vs 等参数 decoder-only**（验证 KV cache / prefill 收益且不掉点）；
-7. **是否引入 KDA 及 KDA:CSA:HCA 比例**（如纯 CSA/HCA vs 3:1 KDA混合 vs 6:1）——重点看 RULER/多跳中段召回是否**因加 KDA 而下降**（预期线性层会略降精确召回，需 full/CSA 锚点补偿）与长上下文吞吐/KV cache 收益；
-8. 上采样 vs 从底座 dense 直接继续训练（验证 upcycling 收益）；
-9. Muon vs AdamW；mHC vs 普通残差；cross-attn gate 渐开 vs 直接开；full 锚点层 NoPE vs RoPE。
-10. **解冻课程**：C1（定稿）vs 全程联合 vs **非法** B2=0（课程篇 §9；看恢复 PPL 与 RULER，不是只看 FLOPs）。延迟 Encoder MoE 只作敏感性，不进配方。
-11. **NVFP4**：B1 `nvfp4` vs 全程 bf16（看恢复 PPL / 溢出，不是只看墙钟）；B0 student 误开 NVFP4 作负对照。必须高精度集合不能进 4-bit。QKV/O 发散则退回高精度（MaxText 口径），不要改 C1。
+Muon's Newton-Schulz orthogonalization stays fp32, orthogonal to network NVFP4 GEMMs. Do not turn on NVFP4 at L0.
 
 ---
 
-## 8. 基础设施
+## 7. Eval and ablations
 
-| 组件 | 建议 |
+**Capability eval**: MMLU / CMMLU / C-Eval (knowledge), GSM8K / MATH (math), HumanEval / MBPP (code),
+BBH (reasoning), IFEval (instruction following).
+**Long context**: **RULER**, **Needle-in-a-Haystack**, LongBench; check retrieval fidelity of 8K sliding window + compressed long-range + YOCO global cache at 32K/128K/1M (YOCO reports near-perfect needle at 1M).
+**Efficiency**: per-token inference FLOPs, **KV cache size (YOCO caches once, should be well below a decoder-only baseline)**, prefill latency (encoder early-exit gain), decode throughput.
+**Required ablations**:
+1. **Encoder/Decoder layer split** (e.g. 16/26 vs 20/22 vs 12/30) on 2.03B/4.33B activation and quality; release default remains **16 encoder** (2+7+7 CSA/HCA still fits);
+2. `n_win ∈ {2K, 4K, 8K}` quality/throughput tradeoff;
+3. CSA:HCA layer ratio (1:1 vs 2:1 vs 3:1);
+4. `index_topk ∈ {128,256,512}`;
+5. MoE granularity / expert count (`moe_intermediate_size`, `n_routed`, `top_k`) vs hitting the 12B total / per-band activation targets;
+6. **YOCO decoder-decoder vs equal-param decoder-only** (confirm KV cache / prefill gains without dropping quality);
+7. **Whether to introduce KDA and the KDA:CSA:HCA ratio** (e.g. pure CSA/HCA vs 3:1 KDA mix vs 6:1) — watch whether RULER / multi-hop mid-context recall **drops because KDA was added** (linear layers are expected to slightly cut exact recall; full/CSA anchors must compensate) and long-context throughput / KV-cache gains;
+8. Upcycling vs continued training from the dense base (confirm the upcycling gain);
+9. Muon vs AdamW; mHC vs ordinary residual; cross-attn gate ramp vs open immediately; full-anchor NoPE vs RoPE.
+10. **Unfreeze curriculum**: C1 (locked) vs full joint vs **illegal** B2=0 (curriculum doc §9; look at recovery PPL and RULER, not FLOPs alone). Delayed Encoder MoE is sensitivity only, not in the recipe.
+11. **NVFP4**: B1 `nvfp4` vs full-run bf16 (look at recovery PPL / overflow, not wall-clock alone); B0 student wrongly on NVFP4 as a negative control. The must-high-precision set must not enter 4-bit. If QKV/O diverges, fall back to high precision (MaxText reading); do not change C1.
+
+---
+
+## 8. Infrastructure
+
+| Component | Suggestion |
 | --- | --- |
-| 训练框架 | 本仓库参考实现是 **PyTorch**（`cat_yoko.train --backend torch`）。单卡装不下 12B 时走 **DeepSpeed ZeRO**（`--backend deepspeed`，[`docs/DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md)；`--dump-deepspeed` 打 JSON，CI 不强装）。规模化 EP/TP 预留 **[Megatron-LM](https://github.com/NVIDIA/Megatron-LM)** / Megatron-Core。映射：`cat_yoko.megatron.mapping.megatron_blueprint`；`--dump-megatron` 打 JSON。YOCO **不是** `GPTModel`。 |
-| 并行 | `ParallelPlan`：TP/PP/EP/CP/SP。12B：TP ∈ {1,2,4,8,16}（整除 16 头与 \(d=2048\)）；**EP ∈ {1,2,4,5,10,20}**（整除 20 routed）。PP>1 时 encoder|decoder 切在第 16 层（`pipeline_split_rank`）。长上下文用 Context/Sequence Parallel。YOCO **不是** Megatron `GPTModel`。 |
-| 注意力 kernel | **FlashMLA** 稀疏 prefill/decode kernel（支撑 DSA，FP8 KV）；**NSA** 的 Triton kernel 可参考压缩+选择+滑窗三分支实现 |
-| MoE kernel | 融合的 MoE dispatch/combine kernel（计算/通信/访存 overlap） |
-| 精度 | bf16 master + 定稿 NVFP4 GEMM（§6 / [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)）；Hopper/Ada 回退 FP8；确定性/可复现 kernel（可选） |
-| 显存 | 张量级重计算（`--grad-ckpt`）、B0/B1 冻结 Encoder CPU offload、B2 逐层 offload、Adam 动量 CPU offload（`--optim-cpu`）；**DeepSpeed ZeRO-3 + CPU offload** 切冻权重（48GiB Ampere）。不是 Megatron EP/TP |
-| 推理 | vLLM / SGLang（已集成 DSA/FlashMLA 稀疏 kernel）用于评测与 RL rollout |
+| Training framework | This repo's reference implementation is **PyTorch** (`cat_yoko.train --backend torch`). When 12B does not fit one GPU, use **DeepSpeed ZeRO** (`--backend deepspeed`, [`docs/DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md); `--dump-deepspeed` writes JSON, CI does not hard-require the install). Scale-out EP/TP is reserved for **[Megatron-LM](https://github.com/NVIDIA/Megatron-LM)** / Megatron-Core. Mapping: `cat_yoko.megatron.mapping.megatron_blueprint`; `--dump-megatron` writes JSON. YOCO is **not** `GPTModel`. |
+| Parallelism | `ParallelPlan`: TP/PP/EP/CP/SP. 12B: TP ∈ {1,2,4,8,16} (divides 16 heads and \(d=2048\)); **EP ∈ {1,2,4,5,10,20}** (divides 20 routed). When PP>1, encoder|decoder cuts at layer 16 (`pipeline_split_rank`). Long context uses Context/Sequence Parallel. YOCO is **not** Megatron `GPTModel`. |
+| Attention kernel | **FlashMLA** sparse prefill/decode kernel (backs DSA, FP8 KV); **NSA** Triton kernels are a reference for the compress+select+window three-branch implementation |
+| MoE kernel | Fused MoE dispatch/combine kernel (compute/comm/memory overlap) |
+| Precision | bf16 master + locked NVFP4 GEMM (§6 / [`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md)); Hopper/Ada fallback FP8; deterministic/reproducible kernels (optional) |
+| VRAM | Tensor-level recompute (`--grad-ckpt`), B0/B1 frozen-Encoder CPU offload, B2 per-layer offload, Adam momentum CPU offload (`--optim-cpu`); **DeepSpeed ZeRO-3 + CPU offload** to shard frozen weights (48GiB Ampere). This is not a Megatron EP/TP loop |
+| Inference | vLLM / SGLang (already integrated DSA/FlashMLA sparse kernels) for eval and RL rollout |
 
-> 若无法自研 CSA/HCA kernel，**起步可用 HuggingFace `transformers` 的 `DeepseekV4` 参考实现**
-> （`layer_types`、`compress_rates`、`sliding_window`、`index_topk` 等已暴露）跑通正确性与小规模训练，
-> 再迁移到高性能 kernel 做规模化。
+> If you cannot write a CSA/HCA kernel in-house, **start from HuggingFace `transformers`' `DeepseekV4` reference implementation**
+> (`layer_types`, `compress_rates`, `sliding_window`, `index_topk`, etc. are already exposed) to prove correctness and small-scale training,
+> then migrate to high-performance kernels for scale-out.
 
 ---
 
-## 9. 风险与缓解
+## 9. Risks and mitigations
 
-| 风险 | 缓解 |
+| Risk | Mitigation |
 | --- | --- |
-| 稀疏注意力训练不稳定 / 掉点 | 严格走 Phase C"稠密对齐→逐步稀疏"；indexer 先单独对齐；出问题即回退单步 |
-| MoE 负载坍塌 / 专家闲置 | aux-loss-free 偏置 + seq-balance loss + Hash-MoE bootstrap + 监控利用率 |
-| 上采样后能力回退 | virtual-group 初始化 + 权重缩放 + teacher 蒸馏 + LR 重置到较高 stable 段 |
-| 8K 滑窗成本过高 | 消融回调 `n_win`；仅部分层用 8K；长程交给 CSA/HCA |
-| MiniCPM-2B μP 常量误植导致数值漂移 | MiniCPM5 是 Llama：`scale_emb=1`、残差恒等、logits 不除 9；手术后单测前向尺度，不要套 MiniCPM-2B μP |
-| Muon 不收敛/超参陌生 | 先用 AdamW 跑通基线，再切 Muon 并单独扫 lr；保留回退开关 |
-| kernel 缺失 | 先用 HF 参考实现验证正确性，再上高性能 kernel |
-| NVFP4 溢出 / loss 尖峰 | B0 student 保持 bf16；B1 切 `nvfp4` 时盯 NaN 与专家利用率；第一回退是 QKV/O 回高精度，再退 FP8/bf16；不改 C1 冻结边界 |
-| 长上下文外推差 | 分级 RoPE 缩放 + 长样本课程 + RULER 过程监控 |
+| Sparse-attention training unstable / quality drop | Strictly follow Phase C "dense align → gradual sparse"; align the indexer alone first; on failure, roll back one step |
+| MoE load collapse / idle experts | aux-loss-free bias + seq-balance loss + Hash-MoE bootstrap + utilization monitoring |
+| Capability regression after upcycling | virtual-group init + weight scaling + teacher distillation + LR reset to a relatively high stable segment |
+| 8K sliding window too expensive | Ablate `n_win` downward; 8K on only some layers; long-range goes to CSA/HCA |
+| MiniCPM-2B μP constants transplanted, causing numeric drift | MiniCPM5 is Llama: `scale_emb=1`, identity residuals, logits not divided by 9; unit-test forward scale after surgery; do not import MiniCPM-2B μP |
+| Muon does not converge / unfamiliar hparams | Ship an AdamW baseline first, then switch to Muon and sweep lr separately; keep a fallback switch |
+| Missing kernels | Prove correctness on the HF reference first, then bring up high-performance kernels |
+| NVFP4 overflow / loss spikes | B0 student stays bf16; when B1 switches to `nvfp4`, watch NaNs and expert utilization; first fallback is QKV/O back to high precision, then FP8/bf16; do not change the C1 freeze boundary |
+| Poor long-context extrapolation | Staged RoPE scaling + long-sample curriculum + RULER process monitoring |
 
 ---
 
-## 10. 里程碑（以能力/预算计，不以日历计）
+## 10. Milestones (by capability / budget, not by calendar)
 
-1. **M1 手术就绪**：离线得到 `CAT-YOKO-12B`（Encoder 16L / Decoder 26L）初始权重，前向数值尺度自检通过，cross-attn 旁路下短跑 loss 不发散。
-2. **M2 恢复达标**：Phase B 后（cross-attn 全开），通用 benchmark 恢复到 MiniCPM5-2B 的 ~95%+。
-3. **M3 稀疏化达标**：Phase C 后开启 CSA top-k + HCA + 8K 滑窗，短上下文质量与 M2 基本持平，效率明显改善。
-4. **M4 长上下文**：**128K–256K RULER/Needle 通过且质量可用（主目标）**；1M 作为 stretch（推理跑得起 + needle 能过即可，不追质量）；单 token FLOPs 与 **KV cache（YOCO 单缓存）** 显著低于 decoder-only 对照，prefill early-exit 收益兑现。
-5. **M5 后训练**：SFT + GRPO 后，指令/数学/代码达到目标区间，产出可发布 checkpoint。
+1. **M1 surgery ready**: offline `CAT-YOKO-12B` (Encoder 16L / Decoder 26L) initial weights, forward numeric-scale self-check passes, short-run loss does not diverge with cross-attn bypassed.
+2. **M2 recovery met**: after Phase B (cross-attn fully open), general benchmarks recover to ~95%+ of MiniCPM5-2B.
+3. **M3 sparsification met**: after Phase C, CSA top-k + HCA + 8K sliding window are on; short-context quality roughly matches M2; efficiency is clearly better.
+4. **M4 long context**: **128K–256K RULER/Needle pass and quality is usable (primary target)**; 1M is stretch (inference runs + needle can pass; do not chase quality); per-token FLOPs and **KV cache (YOCO single cache)** well below a decoder-only control; prefill early-exit gain is realized.
+5. **M5 post-training**: after SFT + GRPO, instruction/math/code land in the target band; produce a releasable checkpoint.
 
 ---
 
-## 11. 立即可做的下一步
+## 11. Immediate next steps
 
-发布规格已敲死，见 [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md)。下一步是跑仓库里的 **12B 训练代码**（tiny 单测 → meta 12B 图 → `--dump-megatron` → 有卡再 FSDP / Megatron）。
+The release spec is frozen; see [`docs/FROZEN_SPEC.md`](FROZEN_SPEC.md). Next is to run this repo's **12B training code** (tiny unit tests → meta 12B graph → `--dump-megatron` → FSDP / Megatron once you have GPUs).
 
 1. `python3 -m unittest tests.test_param_budget tests.test_arch_verify tests.test_train tests.test_trainer tests.test_megatron tests.test_prepare tests.test_gpu tests.test_offload`
-2. `python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy --config tiny --out /tmp/t.bin --max-tokens 256` 然后 `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin`
-3. 有 GPU：`python3 -m cat_yoko.gpu_smoke`（tiny）；`python3 -m cat_yoko.gpu_smoke --middle`（12B B0 一步，≥28GiB，bf16 直接建图）；`--middle --phase B1`（Encoder 卸载 + CPU Adam）；`--c1`（同一张 12B 图 B0→B1→B2）
-4. `python3 -m cat_yoko.train --config 12b --meta`（数参数，不分配 24GB）
-5. `python3 -m cat_yoko.train --config 12b --dump-megatron`（双栈 TransformerConfig JSON，不跑 Megatron）
-5b. `python3 -m cat_yoko.train --config 12b --dump-deepspeed --zero 3 --zero-offload-param`（ZeRO JSON，不装 DeepSpeed）
-6. 有网 + GPU 时：`pip install 'cat-yoko[data]'`，`prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8`，再 `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` 按 C1+NVFP4 开训。B1/B2 用 `--resume` 接 `latest.pt` 或 save 目录（权重 + packed 游标 + RNG；不恢复上一阶段 Adam / step）。`latest.pt` 在已有 `step_{last}.pt` 时 hardlink，不要对 12B 再写第二份 23GiB；ckpt 放到大盘（`/root/autodl-tmp`），不要放 `/tmp`。也可用 `--c1 --save-dir runs/c1 --steps N` 在同一张图上连跑三阶段，写出 `runs/c1/{B0,B1,B2}/latest.pt`。12B 默认不存 Adam。单卡 32GB + ~62GiB host cgroup：B0 直接一步；B1 卸冻结 Encoder + CPU Adam（一步 smoke 走 ephemeral 动量）；B2 逐层 offload，backward 完一层就 clip+Adam（`--accum 1`）。规模化再 `--backend megatron`。不要在小 VM / CI 上下载 Ultra-FineWeb 或 12B 权重。4M global batch / 全参 GPU Adam 仍要多卡或 ZeRO。
+2. `python3 -m cat_yoko.prepare --mix local --local texts.jsonl --tokenizer dummy --config tiny --out /tmp/t.bin --max-tokens 256` then `python3 -m cat_yoko.train --config tiny --phase B0 --steps 3 --accum 1 --data /tmp/t.bin`
+3. With a GPU: `python3 -m cat_yoko.gpu_smoke` (tiny); `python3 -m cat_yoko.gpu_smoke --middle` (one 12B B0 step, ≥28GiB, bf16 graph built directly); `--middle --phase B1` (Encoder offload + CPU Adam); `--c1` (same 12B graph B0→B1→B2)
+4. `python3 -m cat_yoko.train --config 12b --meta` (count parameters, do not allocate 24GB)
+5. `python3 -m cat_yoko.train --config 12b --dump-megatron` (dual-stack TransformerConfig JSON, does not run Megatron)
+5b. `python3 -m cat_yoko.train --config 12b --dump-deepspeed --zero 3 --zero-offload-param` (ZeRO JSON, does not install DeepSpeed)
+6. With network + GPU: `pip install 'cat-yoko[data]'`, `prepare --mix phase-b --tokenizer openbmb/MiniCPM5-2B --out data/phaseb.bin --max-tokens 1e8`, then `--config 12b --phase B0 --upcycle-hf openbmb/MiniCPM5-2B-Base --data data/phaseb.bin --save-dir runs/b0 --dtype bf16 --grad-ckpt --device cuda --steps N` to start training under C1+NVFP4. B1/B2 use `--resume` against `latest.pt` or the save directory (weights + packed cursor + RNG; do not restore the previous phase's Adam / step). `latest.pt` hardlinks when `step_{last}.pt` already exists; do not write a second 23GiB copy for 12B; put ckpts on a large disk (`/root/autodl-tmp`), not `/tmp`. You can also `--c1 --save-dir runs/c1 --steps N` to run the three stages on the same graph, writing `runs/c1/{B0,B1,B2}/latest.pt`. 12B does not save Adam by default. Single 32GB GPU + ~62GiB host cgroup: B0 one step directly; B1 offloads the frozen Encoder + CPU Adam (one-step smoke uses ephemeral momentum); B2 per-layer offload, clip+Adam as soon as a layer's backward finishes (`--accum 1`). Scale-out later with `--backend megatron`. Do not download Ultra-FineWeb or 12B weights on a small VM / in CI. 4M global batch / full-param GPU Adam still needs multi-GPU or ZeRO.
 
-不要再改 16/26、C1、C1+NVFP4、因果 Encoder、M2 默认。质量问题加长 B2 或回退 dtype，不改冻结边界。
-
----
-
-## 12. 更多先进技术（按 价值/风险 分层，避免堆砌）
-
-> 原则：新颖组件越多、训练越难。以下按"低风险先上、高风险后上/可选"排序，每个都应能独立开关与回退。
-
-### Tier 1 — 低风险高收益（建议默认加）
-
-- **QK-Norm**（对 query/key 做 RMSNorm）+ **z-loss**（router-z 抑制路由 logit 爆炸 + 输出 logit z-loss）+ **双 RMSNorm（pre+post，OLMo2/Gemma2 式）**：深层 + MoE + 稀疏注意力这种新颖栈的关键稳定器，成本极低。
-- **文档感知注意力掩码**：packed 长序列内**不跨文档**注意，避免污染长上下文训练信号。
-- **FIM（Fill-in-the-Middle）**：代码数据填中训练，提升补全/编辑能力。
-- **IN2 / 信息密集型长上下文训练（FILM 类）**：合成"关键信息位于长文**中段**"的训练样本——**这才是修 lost-in-the-middle 的正解**，比加 KDA 直接有效（见 §2.5 的澄清）。
-
-### Tier 2 — 中风险高收益（base 稳定后加）
-
-- **MTP → 投机解码**：复用已挂的 MTP 头做 EAGLE 式自投机，推理提速；训练侧几乎零额外成本。
-- **NVFP4 训练**（[`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) 定稿）：不必须 bf16 的线性 GEMM；B0 student / indexer / 必须高精度集合保持高精度。发布墙钟 2.0× vs bf16，不发布 4×。**V4 式 FP4 专家存储**是后期可选项，不进本配方。Hopper/Ada 回退见 [`docs/FP8_THEORY.md`](docs/FP8_THEORY.md)。
-- **attention logit soft-cap / QK-clip**（Gemma2 / Kimi）：抑制极端 logit，进一步稳训练。
-- **RoPE/NoPE 校准与频率缩放（YaRN）**：长上下文外推 + 缓解位置偏置。
-
-### Tier 3 — 谨慎 / 最后上（默认先不上）
-
-- **mHC**（已在 §2，标可选）、**Muon**（留 AdamW 回退）、**3 路 KDA 混合**（§2.5）。
-- **零计算 / 弹性 top-k 专家**：按 token 难度自适应激活量（潜在契合"2.03B/4.33B 非对称"，但复杂、易不稳，作为研究项）。
-- **共享注意力块（Zamba 式）跨多层复用**：进一步省参/省 cache，但耦合强。
+Do not reopen 16/26, C1, C1+NVFP4, causal Encoder, or the M2 default. If quality is the problem, lengthen B2 or fall back dtype; do not change the freeze boundary.
 
 ---
 
-## 13. 训练难度管理：分级去风险（重要）
+## 12. Further advanced techniques (layered by value/risk, avoid piling on)
 
-**核心：不要一次点亮所有新组件。** 组合创新（YOCO + CSA/HCA + 可选 KDA + DeepSeekMoE + Muon + mHC + MTP）的风险是叠乘的，
-逐步引入 + 每步可回退 + 指标监控，是唯一稳妥路径。
+> Principle: the more novel components, the harder training is. Ordered "low risk first, high risk later / optional"; each one should be independently switchable and revertible.
 
-**去风险阶梯：**
-- **L0（tiny 正确性）**：小配置（`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`）验证：YOCO 数据流（encoder→全局 cache→cross-decoder）、CSA/HCA/KDA 的 mask 与 kernel、MoE 路由/均衡。只看"能不能对、会不会 NaN"。**精度 bf16，不开 NVFP4。**
-- **L1（半规模去风险原型，≈3–6B）**：用**完整新颖架构栈**但**专家数减半**，在几十 B token 上跑通稳定性、上采样恢复曲线、稀疏化对齐、cross-attn 渐开。廉价的架构验证台。
-- **L2（扩到 12B 目标）**：**MoE 专家数是最安全的扩展轴**——架构在 L1 验证后，半规模→12B 主要是加 routed 专家（+ 少量继续训练让新专家分化），风险远低于改架构。
-- **每个新组件单独一步**：先把模块**实现进图**（B 仍滑窗），再**点亮**。默认点亮 indexer→CSA→HCA；**3:1 KDA 图则 C-kda → 稀疏化**。**NVFP4 不进 L0**（tiny 保持 bf16），从 B1 开允许的线性 GEMM，与 Muon 正交化分开留回退开关。盯 loss 尖峰/专家利用率/召回指标；坏了就回退该步。
+### Tier 1 — Low risk, high reward (recommended as defaults to add)
 
-**难度—收益取舍速查：**
+- **QK-Norm** (RMSNorm on query/key) + **z-loss** (router-z against routing-logit explosion + output-logit z-loss) + **dual RMSNorm (pre+post, OLMo2/Gemma2 style)**: the cheap stabilizer for a deep + MoE + sparse-attention novel stack.
+- **Document-aware attention mask**: packed long sequences **must not attend across documents**, so the long-context training signal is not polluted.
+- **FIM (Fill-in-the-Middle)**: fill-middle training on code data, better completion/edit skill.
+- **IN2 / information-intensive long-context training (FILM-class)**: synthesize samples whose **key information sits in the middle** of a long document — **this is the actual fix for lost-in-the-middle**, more direct than adding KDA (see the §2.5 clarification).
 
-| 想省事/快出成果 | 想要极致长上下文效率 |
+### Tier 2 — Medium risk, high reward (add after the base is stable)
+
+- **MTP → speculative decoding**: reuse the already-attached MTP head for EAGLE-style self-speculation; inference speedup; almost zero extra train cost.
+- **NVFP4 training** ([`docs/NVFP4_THEORY.md`](docs/NVFP4_THEORY.md) locked): linear GEMMs that are not must-bf16; B0 student / indexer / must-high-precision set stay high precision. Release wall-clock 2.0× vs bf16; do not publish 4×. **V4-style FP4 expert storage** is a later option, not in this recipe. Hopper/Ada fallback: [`docs/FP8_THEORY.md`](FP8_THEORY.md).
+- **attention logit soft-cap / QK-clip** (Gemma2 / Kimi): suppress extreme logits, further stabilize training.
+- **RoPE/NoPE calibration and frequency scaling (YaRN)**: long-context extrapolation + less positional bias.
+
+### Tier 3 — Cautious / last (off by default)
+
+- **mHC** (already in §2, marked optional), **Muon** (keep an AdamW fallback), **3-way KDA mix** (§2.5).
+- **Zero-compute / elastic top-k experts**: adaptive activation by token difficulty (potentially a fit for "2.03B/4.33B asymmetric", but complex and easy to destablize; research item).
+- **Shared attention blocks (Zamba-style) reused across layers**: further save params/cache, but the coupling is strong.
+
+---
+
+## 13. Training-difficulty management: staged de-risking (important)
+
+**Core: do not light up every new component at once.** The risk of combined novelty (YOCO + CSA/HCA + optional KDA + DeepSeekMoE + Muon + mHC + MTP) multiplies.
+Gradual introduction + per-step rollback + metric monitoring is the only stable path.
+
+**De-risk ladder:**
+- **L0 (tiny correctness)**: small config (`hidden 256, enc2L/dec2L, sliding=8, m=4, m'=8, index_topk=2`) verifies: YOCO dataflow (encoder→global cache→cross-decoder), CSA/HCA/KDA masks and kernels, MoE routing/balance. Only "is it correct, does it NaN". **Precision bf16, no NVFP4.**
+- **L1 (half-scale de-risk prototype, ≈3–6B)**: the **full novel architecture stack** but **half the experts**, run tens of B tokens for stability, upcycling recovery curves, sparsification alignment, and cross-attn ramp. A cheap architecture proving ground.
+- **L2 (scale to the 12B target)**: **MoE expert count is the safest scale axis** — once the architecture is proven at L1, half-scale→12B is mostly adding routed experts (+ a little continued training so new experts specialize), much lower risk than changing the architecture.
+- **Each new component is its own step**: first **implement the module into the graph** (B still sliding window), then **light it up**. Default light-up is indexer→CSA→HCA; **a 3:1 KDA graph is C-kda → sparsify**. **NVFP4 does not enter L0** (tiny stays bf16); allowed linear GEMMs start at B1, with a separate rollback switch from Muon orthogonalization. Watch loss spikes / expert utilization / recall metrics; on failure, roll that step back.
+
+**Difficulty–benefit cheat sheet:**
+
+| Want less hassle / a faster result | Want extreme long-context efficiency |
 | --- | --- |
-| 先 decoder-only + CSA/HCA（不上 YOCO/KDA/mHC/Muon），跑通再逐步加 | 全栈 YOCO + 3:1 KDA + CSA/HCA + NVFP4，但严格走 L0→L1→L2 |
+| Start decoder-only + CSA/HCA (no YOCO/KDA/mHC/Muon), then add gradually once that runs | Full-stack YOCO + 3:1 KDA + CSA/HCA + NVFP4, but strictly L0→L1→L2 |
 
 ---
 
-## 14. 融合 PDSA 记忆管理（可训练生命周期 + 校准回退）
+## 14. Fold in PDSA memory management (trainable lifecycle + calibrated fallback)
 
-> 依据：**Memory-Managed Long-Context Attention**（Zou & Donz，arXiv `2606.28876`，本团队工作，下称 PDSA）。
-> 该文是**围绕冻结 LLM 的推理/评估层记忆系统**（不是可训练架构），核心为：query-independent 写入器 +
-> 硬边界生命周期（overwrite/protection/eviction，≤32 槽）+ query-aware 读取器 + **校准稀疏回退** + 冻结 LLM 从原始证据生成。
-> 它与 CSA/HCA/KDA **正交、互补**：后者是 token 级状态压缩，PDSA 是语义单元级受管理记忆。
-> PDSA 明确的"下一步"是把生命周期**做进模型、可训练**——CAT-YOKO 正好可作为该实例。
+> Source: **Memory-Managed Long-Context Attention** (Zou & Donz, arXiv `2606.28876`, this team's work, hereafter PDSA).
+> That paper is a **memory system around a frozen LLM at inference/eval** (not a trainable architecture). Core: query-independent writer +
+> hard-boundary lifecycle (overwrite/protection/eviction, ≤32 slots) + query-aware reader + **calibrated sparse fallback** + frozen LLM generation from raw evidence.
+> It is **orthogonal and complementary** to CSA/HCA/KDA: those compress token-level state; PDSA is managed memory at the semantic-unit level.
+> PDSA's stated "next step" is to **put the lifecycle inside the model, trainable** — CAT-YOKO is a natural instance of that.
 
-### 14.1 关键可迁移结论
+### 14.1 Transferable conclusions
 
-- **"无写入时信号"边界（PDSA §5 实测）**：静态文本上，不看 query 的可写性判断 ≈ 随机（AUC 0.63–0.66 vs query-aware 0.89–0.97），纯 bounded memory 只能召回 ~0.56 黄金证据。**推论**：任何 **write-first 压缩**（HCA、KDA、甚至 CSA 的压缩步）都会系统性丢掉"写入时无信号、事后才被 query 命中"的信息 → **必须保留一条到低压缩/原始 KV 的 query 时回退**。
-- **bounded 选择在长文上优于读全文（PDSA §4）**：8.2k 词时读全文反而掉分（lost-in-the-middle），≤10% 证据即达全文 F1 的 102–116%。佐证 CAT-YOKO"压缩 + 选择"路线方向正确。
+- **"No write-time signal" bound (PDSA §5, measured)**: on static text, query-blind writability is ≈ random (AUC 0.63–0.66 vs query-aware 0.89–0.97); pure bounded memory recalls only ~0.56 of gold evidence. **Implication**: any **write-first compression** (HCA, KDA, even CSA's compress step) systematically drops information that had no signal at write time and is only later hit by a query → **you must keep a query-time fallback to less-compressed / raw KV**.
+- **Bounded selection beats reading the full document on long text (PDSA §4)**: at 8.2k words, reading the full document actually scores worse (lost-in-the-middle); ≤10% evidence already reaches 102–116% of full-document F1. Supports CAT-YOKO's "compress + select" direction.
 
-### 14.2 分层集成方案（契合 §13 难度管理）
+### 14.2 Layered integration (fits §13 difficulty management)
 
-- **Tier 1（低风险，建议加）— 校准置信度门控的稀疏回退**：
-  给 CSA 的 Lightning Indexer 增加**置信度信号**（如 top-k 得分的均值/熵）；低于阈值时**扩大 top-k 或回退到更少压缩/原始 KV 检索**。
-  阈值**在部署长度 regime 上校准**（PDSA 记录的负结果：在短上下文校准会让回退永不触发、长文覆盖崩溃）。
-  这是**用本团队自己的实测**对治前述"中段召回"担忧的原则化手段，且属推理期增量、可后加。
-- **Tier 2（中风险）— query-aware 优先于 write-first**：层调度上**多用 CSA（query-aware 选择）**、审慎用 HCA/KDA（write-first）承担关键检索；把 HCA/KDA 定位为"廉价 gist 覆盖 + 兜底"，精确检索交给 CSA + full 锚点 + 回退。
-- **Tier 3（研究级，base 稳定后）— 可训练 bounded editable memory lifecycle**：
-  把 YOCO 的"只增全局 cache"升级为**有界、可编辑、带生命周期**的记忆：学习到的**写入器**（write/overwrite/protect/evict，按 key/salience）管理一个容量受限的记忆，decoder 的 cross-attn 读取它。
-  收益：KV cache 真正有界 + **版本化/保护语义**（agent、长程任务差异化）；风险：switched-process 稳定性（PDSA Appendix H）、写入不稳定，需谨慎——属未解研究，单独里程碑推进，留符号化/冻结回退。
+- **Tier 1 (low risk, recommended) — calibrated confidence-gated sparse fallback**:
+  Give CSA's Lightning Indexer a **confidence signal** (e.g. mean/entropy of top-k scores); below threshold, **widen top-k or fall back to less-compressed / raw KV retrieval**.
+  Calibrate the threshold **on the deployment length regime** (PDSA recorded negative result: calibrating on short context makes fallback never fire and long-doc coverage collapse).
+  This is a principled treatment of the "mid-context recall" worry, using **this team's own measurements**, and it is an inference-time increment that can be added later.
+- **Tier 2 (medium risk) — query-aware over write-first**: in layer schedule **use more CSA (query-aware selection)** and be conservative about HCA/KDA (write-first) for critical retrieval; position HCA/KDA as "cheap gist coverage + safety net", and give exact retrieval to CSA + full anchors + fallback.
+- **Tier 3 (research-grade, after the base is stable) — trainable bounded editable memory lifecycle**:
+  Upgrade YOCO's "append-only global cache" to **bounded, editable, lifecycle-bearing** memory: a learned **writer** (write/overwrite/protect/evict, by key/salience) manages a capacity-limited memory that decoder cross-attn reads.
+  Gain: a truly bounded KV cache + **versioned / protected semantics** (agents, long-horizon task differentiation); risk: switched-process stability (PDSA Appendix H), unstable writes — unsolved research, its own milestone, keep a symbolic / frozen fallback.
 
-### 14.3 对应消融（补入 §7）
+### 14.3 Matching ablations (add to §7)
 
-- 有/无**校准稀疏回退**在 RULER/多跳中段召回与长文 F1 上的差异；回退阈值**跨长度 regime 校准**的敏感性。
-- **CSA 比例 ↑（query-aware） vs HCA/KDA 比例 ↑（write-first）**对"事后才被命中的信息"召回的影响。
-- （研究项）可训练 editable memory vs 只增全局 cache：KV cache 上界、版本化任务正确性、稳定性。
+- With/without **calibrated sparse fallback** on RULER / multi-hop mid-context recall and long-doc F1; sensitivity of fallback threshold **calibrated across length regimes**.
+- **More CSA (query-aware) vs more HCA/KDA (write-first)** on recall of "information only later hit by a query".
+- (Research item) trainable editable memory vs append-only global cache: KV-cache upper bound, versioned-task correctness, stability.
 
-> 定位提醒：PDSA 的贡献是**记忆管理**，不替代 CSA/HCA/KDA 的**状态压缩**；二者叠加才是完整方案。
-> 不迁移其冻结-reader 评估台架与 32 槽具体数字（那是方法学证据，非架构）。
+> Positioning: PDSA's contribution is **memory management**; it does not replace CSA/HCA/KDA **state compression**. Stacking both is the full design.
+> Do not migrate its frozen-reader eval harness or the specific 32-slot number (those are methodological evidence, not architecture).
 
 ---
 
-## 15. 算力预算估算与低预算路线（重要现实约束）
+## 15. Compute-budget estimate and low-budget routes (important real constraint)
 
-> 前提修正：本计划最初默认"几十~上百张 H100"。**若算力有限，24B 从头/重继续预训练不可行**，需重新排优先级：
-> **先在小规模验证架构，有预算再放大**。要证明的是"架构创新（YOCO×CSA/HCA + KDA + PDSA 可训练生命周期）"，
-> 不是"大模型规模"——相邻 hybrid-linear 分析在 340M/1.3B 即完成，本团队 PDSA 核心组件仅 ~2.74M 参数 + 冻结 backbone。
+> Premise correction: this plan originally defaulted to "tens to hundreds of H100s". **If compute is limited, 24B from-scratch / heavy continued pretraining is not feasible**, and priorities must be reordered:
+> **prove the architecture at small scale first, scale up when there is budget**. What must be shown is "architectural novelty (YOCO×CSA/HCA + KDA + PDSA trainable lifecycle)",
+> not "large-model scale" — nearby hybrid-linear analyses finished at 340M/1.3B, and this team's PDSA core is only ~2.74M parameters + a frozen backbone.
 
-### 15.1 训练算力估算
+### 15.1 Training compute estimate
 
-`训练 FLOPs ≈ 6 × N_active × tokens`。下表 bf16 行按 40% MFU（H100 有效 ~4.0e14、A100 ~1.25e14 FLOPS）把操作数换成小时；**默认 Phase B 墙钟是 C1+NVFP4**，不是联合 bf16。RTX PRO 6000 Server BF16 峰值 ≈ H100，小时数可比。
+`training FLOPs ≈ 6 × N_active × tokens`. The bf16 rows below convert operands to hours at 40% MFU (H100 effective ~4.0e14, A100 ~1.25e14 FLOPS); **default Phase B wall-clock is C1+NVFP4**, not joint bf16. RTX PRO 6000 Server BF16 peak ≈ H100, so hours are comparable.
 
-| 方案 | H100-h | A100-h | 8×H100 天 |
+| Scheme | H100-h | A100-h | 8×H100 days |
 | --- | ---: | ---: | ---: |
-| **C1+NVFP4（Phase B 定稿）** | **571** | **1,827** | **3.0** |
-| C1+FP8（Hopper/Ada 回退） | 729 | 2,333 | 3.8 |
-| C1 解冻课程 8+27+15B（bf16 操作数账） | 1,046 | 3,347 | 5.4 |
-| 12.25B 中间档 × 50B tok（联合 bf16 对照；untied 下与计划口径相同） | 1,325 | 4,239 | 6.9 |
-| 12.25B 中间档 × 200B tok | 5,299 | 16,956 | 27.6 |
-| 24B × 200B tok（远期；按当时 3B+6B 激活） | 7,583 | 24,038 | 39.5 |
-| 24B × 50B tok（远期最小恢复） | 1,896 | 6,010 | 9.9 |
+| **C1+NVFP4 (Phase B locked)** | **571** | **1,827** | **3.0** |
+| C1+FP8 (Hopper/Ada fallback) | 729 | 2,333 | 3.8 |
+| C1 unfreeze curriculum 8+27+15B (bf16 operand ledger) | 1,046 | 3,347 | 5.4 |
+| 12.25B middle band × 50B tok (joint bf16 control; same as the plan ledger under untied) | 1,325 | 4,239 | 6.9 |
+| 12.25B middle band × 200B tok | 5,299 | 16,956 | 27.6 |
+| 24B × 200B tok (later; using the then 3B+6B activation) | 7,583 | 24,038 | 39.5 |
+| 24B × 50B tok (later minimum recovery) | 1,896 | 6,010 | 9.9 |
 | ~6B × 60B tok | 885 | 2,804 | 4.6 |
 | ~3B × 50B tok | 316 | 1,002 | 1.6 |
 | ~1B × 20B tok | 51 | 160 | 0.3 |
-| ~0.5B × 10B tok（架构验证） | 13 | 40 | 0.1 |
+| ~0.5B × 10B tok (architecture verification) | 13 | 40 | 0.1 |
 
-> **C1+NVFP4 = 571 是 Phase B 发布墙钟（联合 bf16 1,325 的 43%）。** 1,325 / 1,046 是 bf16 操作数对照；729 是 C1+FP8 Hopper/Ada 回退。NVFP4 **不改** 6NT（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)）。发布加速比 **2.0× vs bf16**（相对 FP8 1.5× 再 ×1.33，落在 NVIDIA 1.31–1.73× vs FP8 低端）；**4× 只是 RTX PRO 6000 峰值上界，不写入配方**。蒸馏/upcycling 显著减少所需 tokens；长上下文阶段占比小、另计。
+> **C1+NVFP4 = 571 is the Phase B release wall-clock (43% of joint bf16 1,325).** 1,325 / 1,046 are bf16 operand controls; 729 is the C1+FP8 Hopper/Ada fallback. NVFP4 does **not** change 6NT ([`NVFP4_THEORY.md`](NVFP4_THEORY.md)). Release speedup is **2.0× vs bf16** (relative to FP8 1.5× then ×1.33, on the low end of NVIDIA 1.31–1.73× vs FP8); **4× is only an RTX PRO 6000 peak upper bound, not written into the recipe**. Distillation / upcycling cut required tokens a lot; the long-context stage is a small share and is counted separately.
 
-### 15.2 三条低预算路线（按实际卡数选）
+### 15.2 Three low-budget routes (pick by actual GPU count)
 
-- **Route A — 架构验证（最省，≤ 几张卡，~10–50 H100-h，可租）**：upcycle 小 MiniCPM5（减专家）→ **0.5–1.5B 小 MoE**，装 YOCO+CSA/HCA(+可选 KDA)，继续训 10–20B tok。目标：证明这套注意力/编解码器能跑、不掉点、长上下文省 KV。**推荐作为默认起点。** 仓库里的探针是 [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)：`plan-probe` 图按 **Phase A→E** DummyStream 短训（A 离线手术，不到 F/G）。
-- **Route B — 放大到 12B 目标（~8×A100/H100 或一张 RTX PRO 6000；Phase B 定稿 C1+NVFP4 ≈ 571 H100-h）**：MiniCPM5-2B → **12.25B** upcycle（可先经 3–6B 里程碑），继续训 50–60B tok + 短长上下文阶段，得到目标模型。联合 bf16 1,325 只作对照。
-- **Route C — PDSA 扩展（几乎不花训练算力，契合已有工作）**：冻结 backbone，仅训小组件（写入器/reranker/阈值）+ 落地"校准回退 / 可训练 editable memory"（§14）。**零预算最优**，直接产出 PDSA 的可训练生命周期后续。
-- **Route D — 24B（远期，暂不作为目标）**：仅在拿到真集群/算力资助后再考虑放大。
+- **Route A — architecture verification (cheapest, ≤ a few GPUs, ~10–50 H100-h, rentable)**: upcycle a small MiniCPM5 (fewer experts) → **0.5–1.5B small MoE**, install YOCO+CSA/HCA(+ optional KDA), continue train 10–20B tok. Goal: prove this attention/encoder-decoder runs, does not drop quality, and saves KV on long context. **Recommended default starting point.** The in-repo probe is [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md): `plan-probe` graph, short DummyStream train **Phase A→E** (A is offline surgery; do not go to F/G).
+- **Route B — scale to the 12B target (~8×A100/H100 or one RTX PRO 6000; Phase B locked C1+NVFP4 ≈ 571 H100-h)**: MiniCPM5-2B → **12.25B** upcycle (optionally via a 3–6B milestone), continue train 50–60B tok + a short long-context stage, obtain the target model. Joint bf16 1,325 is control only.
+- **Route C — PDSA extension (almost no training compute, fits existing work)**: freeze the backbone, train only small components (writer / reranker / threshold) + land "calibrated fallback / trainable editable memory" (§14). **Best zero-budget option**, directly produces PDSA's trainable-lifecycle follow-on.
+- **Route D — 24B (later, not a current target)**: consider scaling only after a real cluster / compute grant.
 
-### 15.3 省算力杠杆（优先级从高到低）
+### 15.3 Compute-saving levers (priority high to low)
 
-1. **upcycling**（复用 MiniCPM5 权重，绝不 from-scratch）；2. **蒸馏**（teacher=`openbmb/MiniCPM5-2B-Base`，减 tokens）；
-3. **高稀疏 MoE**（减激活参数=减 FLOPs）；4. **4K 上下文占训练大头**，长上下文只短暂一段；
-5. **解冻课程**（§4.0 / [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md)：**C1 定稿**——两栈先 MoE、B0/B1 冻 Encoder 与输入 embed、B0 冻 `lm_head` / B1 训 `lm_head`，约省 21% Phase B FLOPs、B1 Adam 状态 62%、Encoder 激活 ~38%；结尾必须短联合 B2≥10B）；
-6. **NVFP4**（[`NVFP4_THEORY.md`](NVFP4_THEORY.md)：**与 C1 敲死为 C1+NVFP4**——不必须 bf16 的线性 GEMM；B0 student / L0 / indexer / 必须高精度集合保持高精度；发布 2.0× vs bf16。Phase B 墙钟 **571 H100-h，联合 bf16 1,325 的 43%**；4× 只作峰值上界。Hopper/Ada 回退 C1+FP8 = 729）；7. **Muon**（减步数；Newton-Schulz 仍 fp32，与 NVFP4 GEMM 正交）；8. **新模块全训 + 其余 LoRA**（减优化器显存，能上更小/更少卡）；
-9. **关键短跑租 spot GPU**（不必自购）；10. seq packing + 激活重计算（塞进更少卡）。
+1. **upcycling** (reuse MiniCPM5 weights, never from-scratch); 2. **distillation** (teacher=`openbmb/MiniCPM5-2B-Base`, fewer tokens);
+3. **high-sparsity MoE** (fewer active params = fewer FLOPs); 4. **4K context is most of training**, long context is only a short stage;
+5. **unfreeze curriculum** (§4.0 / [`CURRICULUM_THEORY.md`](CURRICULUM_THEORY.md): **C1 locked** — both stacks MoE first, B0/B1 freeze Encoder and input embed, B0 freeze `lm_head` / B1 train `lm_head`, about 21% Phase B FLOPs saved, B1 Adam state 62%, Encoder activations ~38%; the end must be a short joint B2≥10B);
+6. **NVFP4** ([`NVFP4_THEORY.md`](NVFP4_THEORY.md): **locked with C1 as C1+NVFP4** — linear GEMMs that are not must-bf16; B0 student / L0 / indexer / must-high-precision set stay high precision; release 2.0× vs bf16. Phase B wall-clock **571 H100-h, 43% of joint bf16 1,325**; 4× is peak upper bound only. Hopper/Ada fallback C1+FP8 = 729); 7. **Muon** (fewer steps; Newton-Schulz still fp32, orthogonal to NVFP4 GEMM); 8. **full train on new modules + LoRA on the rest** (less optimizer VRAM, fits smaller / fewer GPUs);
+9. **rent spot GPUs for critical short runs** (no need to buy); 10. seq packing + activation recompute (fit fewer GPUs).
 
-### 15.4 修订后的默认路径
+### 15.4 Revised default path
 
-**L0 tiny 正确性 → plan-probe A→E ledger（[`PLAN_VERIFY.md`](PLAN_VERIFY.md)）→ Route A（0.5–1.5B 架构验证，出架构论文）→ 有预算再 Route B（放大到 12B 目标）→ 远期（可选）Route D（24B）。**
-§1.2 的 **12B 为目标规格**；预算紧时**当前默认先执行 Route A**，§3 的预算脚本可直接把 `Nr_e/Nr_d` 调小到 0.5–1.5B 档做验证。
+**L0 tiny correctness → plan-probe A→E ledger ([`PLAN_VERIFY.md`](PLAN_VERIFY.md)) → Route A (0.5–1.5B architecture verification, architecture paper) → Route B when there is budget (scale to the 12B target) → later (optional) Route D (24B).**
+§1.2's **12B is the target spec**; when the budget is tight, **the current default is to run Route A first**. The §3 budget script can shrink `Nr_e/Nr_d` directly to a 0.5–1.5B band for verification.
 
 ---
 
-## 16. 长上下文可行性（主目标 128K–256K；1M 为 stretch）
+## 16. Long-context feasibility (primary target 128K–256K; 1M is stretch)
 
-> 先定调：**主交付目标是"前 128K–256K 可用"**，这在 12B 上是现实的；下面对 1M 的讨论是"能不能支持得起"的 stretch 分析，**不是**要在 1M 上对标 2T 前沿质量。
+> Set the tone first: **the primary delivery target is "the first 128K–256K usable"**, which is realistic at 12B; the 1M discussion below is stretch analysis of "can we even support it", **not** a bid to match 2T-frontier quality at 1M.
 
-结论分三层，别混为一谈：
+Three layers of conclusion; do not mix them:
 
-### 16.1 推理侧：非常有戏（这套架构就是为 1M 设计的）
+### 16.1 Inference side: very promising (this architecture is built for 1M)
 
-关键是 KV cache。**YOCO 只缓存一次（单一全局 cache）+ CSA/HCA 序列压缩**，把 1M 的 KV 从"放不下"压到"零头"：
+The bottleneck is KV cache. **YOCO caches once (single global cache) + CSA/HCA sequence compression** squeeze 1M KV from "does not fit" to "pocket change":
 
-| 12B 模型在 1M token 的 KV cache | 大小 |
+| 12B model KV cache at 1M tokens | Size |
 | --- | --- |
-| decoder-only + MHA（全部 42 层缓存） | ≈344 GB（放不下） |
+| decoder-only + MHA (all 42 layers cached) | ≈344 GB (does not fit) |
 | decoder-only + GQA-2 / MLA-576 | ≈43 / 48 GB |
-| **YOCO + GQA-2（单一全局 cache，\(d_{\mathrm{kv}}=256\)）** | **≈1.02 GB** |
-| **YOCO + MLA（单一全局 cache）** | **≈1.15 GB** |
-| **YOCO + MLA + CSA \(m=4\)（全局 cache 沿序列 ÷4）** | **≈0.29 GB** |
-| YOCO + MLA + 额外序列÷8（stretch，非 CSA 默认） | ≈0.14 GB |
-| （加 26 层 8K 滑窗分支，与 N 无关） | +≈0.25 GB |
+| **YOCO + GQA-2 (single global cache, \(d_{\mathrm{kv}}=256\))** | **≈1.02 GB** |
+| **YOCO + MLA (single global cache)** | **≈1.15 GB** |
+| **YOCO + MLA + CSA \(m=4\) (global cache ÷4 along the sequence)** | **≈0.29 GB** |
+| YOCO + MLA + extra sequence÷8 (stretch, not the CSA default) | ≈0.14 GB |
+| (plus 26-layer 8K sliding-window branch, independent of N) | +≈0.25 GB |
 
-再叠加 **encoder(self-decoder) 的 prefill early-exit**——超长输入只需跑完 encoder 产出全局 cache，不必跑满全部层——1M **prefill 也便宜**。这正是"输入侧轻(≈2.03B)"的意义。中间档 prefill 激活份额约 32%。**Decode 侧**：若全局 cache 不压缩，128K/256K 上 26 层 cross-attn 分别约为 decoder MLP 的 3.2× / 6.5×，必须走 CSA \(m=4\) 或 top-\(k\) 选择，否则 encoder 省下的算力会在 cross-attn 被吐回（见理论验证 §6）。YOCO 原论文在 1M 报告近满分 needle 检索。**所以 1M 推理在中等硬件上都可行。**
+On top of that, **encoder (self-decoder) prefill early-exit** — ultra-long input only needs to finish the encoder to emit the global cache, not run every layer — so 1M **prefill is cheap too**. That is the point of "light on the input side (≈2.03B)". Middle-band prefill activation share is about 32%. **Decode side**: if the global cache is not compressed, 26-layer cross-attn at 128K/256K is about 3.2× / 6.5× the decoder MLP; you must use CSA \(m=4\) or top-\(k\) selection, or the encoder's saved compute is paid back in cross-attn (see theory verification §6). The original YOCO paper reports near-perfect needle retrieval at 1M. **So 1M inference is feasible on mid-range hardware.**
 
-### 16.2 训练出"支持 1M（needle/RULER 通过）"：现实，但要花心思
+### 16.2 Training a model that "supports 1M (needle/RULER pass)": realistic, but it takes care
 
-不 pretrain 在 1M；主训练在 4–8K，末尾加一个**渐进长上下文扩展阶段**（8K→32K→128K→256K→1M）。要点：
-1. **RoPE/YaRN 缩放**到目标长度；2. **长数据**：书/代码仓库级拼接 + 合成长依赖 + IN2 中段样本；3. **渐进长度课程**；
-4. **训练期显存瓶颈是 1M 序列的激活**（不是 KV）→ 用 **context/sequence parallelism**；YOCO early-exit + CSA/HCA 压缩显著降激活；**非对称设计天然契合**（encoder 处理长输入、decoder 生成短 → 长 prefill 便宜）；
-5. **验证**：RULER-1M / needle-in-haystack。这一阶段 token 量不大（几 B～十几 B），成本相对主训练小，可租卡短跑。
+Do not pretrain at 1M; main training is 4–8K, then a **progressive long-context extension stage** at the end (8K→32K→128K→256K→1M). Key points:
+1. **RoPE/YaRN scaling** to the target length; 2. **long data**: books / repo-scale concat + synthetic long dependency + IN2 mid-context samples; 3. **progressive length curriculum**;
+4. **The train-time VRAM bottleneck is 1M-sequence activations** (not KV) → use **context/sequence parallelism**; YOCO early-exit + CSA/HCA compression cut activations a lot; **the asymmetric design is a natural fit** (encoder handles long input, decoder generates short → long prefill is cheap);
+5. **Verify**: RULER-1M / needle-in-haystack. This stage is not many tokens (a few B to low tens of B), cheap relative to main training; short rented-GPU runs are fine.
 
-### 16.3 对标前沿 1M 质量：小预算达不到
+### 16.3 Matching frontier 1M quality: not reachable on a small budget
 
-DeepSeek/Kimi 的 1M 是 32T 级数据 + 大算力喂出来的"充分利用"。小预算能拿到"**支持 1M + needle/RULER 不错**"，但"1M 上多跳深推理达到前沿"不现实——如实说明。
+DeepSeek/Kimi 1M is "full use" fed by 32T-scale data + large compute. A small budget can get **"supports 1M + decent needle/RULER"**, but "frontier multi-hop deep reasoning at 1M" is not realistic — say so plainly.
 
-### 16.4 低预算实操建议
+### 16.4 Low-budget practical advice
 
-- **分阶段**：先稳 **128K–256K**（便宜、够用），再单独冲 **1M capability** 并用 needle/RULER 验证；别一上来就 1M。
-- **PDSA 路线是"有效 1M"的省钱替代**：bounded editable memory + 校准稀疏回退 + 检索（§14），**不必训练原生 1M 注意力**就能拿到长程召回——你自己的工作，且 §5 实测显示在 8.2k 上 bounded 选择已优于读全文。对极限长上下文，这可能比硬训 1M 注意力更划算。
-- 里程碑上把 1M 归入 **M4**（长上下文），作为 capability 目标而非质量目标。
-- **后期用 RL 提升"可用度"**：预训练/扩展只解决"能吞下 128K–256K"，**能不能真用好**很大程度靠后期 **长上下文 RLVR**（见 §4 Phase G）——用可验证长文任务 + grounding 奖励把中段召回/长指令遵循直接优化上来，且用 PS-PPO/PDSA 选证据把长 rollout 成本压下来。这是小预算下把"可用度"再抬一档的关键杠杆。
+- **Stage it**: first stabilize **128K–256K** (cheap, enough), then separately push **1M capability** and verify with needle/RULER; do not start at 1M.
+- **The PDSA route is a cheaper substitute for "effective 1M"**: bounded editable memory + calibrated sparse fallback + retrieval (§14), **without training native 1M attention**, still gets long-range recall — this team's own work, and §5 measurements show bounded selection already beats reading the full document at 8.2k. For extreme long context, that may be a better deal than hard-training native 1M attention.
+- On milestones, put 1M under **M4** (long context), as a capability target not a quality target.
+- **Use RL later to raise "usability"**: pretrain/extension only solves "can swallow 128K–256K"; **whether it is actually usable** depends a lot on later **long-context RLVR** (see §4 Phase G) — verifiable long-doc tasks + grounding reward to optimize mid-context recall / long-instruction following directly, and PS-PPO / PDSA evidence selection to keep long-rollout cost down. That is the key lever for another usability step on a small budget.
 
-> **定位（重要，避免误解）**：本项目**不是**用 12B 去对标 2T 级前沿模型的质量——那不可能。
-> **主交付目标是"前 128K–256K 长上下文可用"**（在 12B 规模上，这理论与工程都有戏）；
-> 1M 只是"架构支持得起 + needle/RULER 能过"的加分项，不是质量目标。
-> 想要更极限的长上下文又省钱，优先走 PDSA 记忆 + 检索回退（§14），而非硬训原生 1M 注意力。
+> **Positioning (important, to avoid misunderstanding)**: this project is **not** using 12B to match 2T-class frontier quality — that is impossible.
+> **The primary delivery target is "the first 128K–256K of long context usable"** (at 12B scale this is plausible in both theory and engineering);
+> 1M is only a bonus of "the architecture can support it + needle/RULER can pass", not a quality target.
+> For more extreme long context on a budget, prefer PDSA memory + retrieval fallback (§14) over hard-training native 1M attention.
 
-> 一句话：**主战场 = 128K–256K 可用；1M 推理/needle 是 stretch；2T 级前沿质量不在目标内。**
+> One line: **the main battlefield = 128K–256K usable; 1M inference/needle is stretch; 2T-class frontier quality is not in scope.**
 
 ---
 
-## 参考（本计划的架构依据）
+## References (architectural basis for this plan)
 
-- **DeepSeek-V4**（CSA/HCA、mHC、Muon、MTP、Hash-MoE bootstrap；V4-Flash 284B/13B、1M ctx、32T tokens）：arXiv `2606.19348`；HuggingFace `transformers` `deepseek_v4` 模型文档（`layer_types`、`compress_rates`、`sliding_window`、`index_topk`、`mlp_layer_types` 等配置）。
-- **DeepSeek Sparse Attention (DSA)** 与 **FlashMLA** 稀疏 kernel（Lightning Indexer + top-k + FlashMLA）：DeepSeek-V3.2 报告；`deepseek-ai/FlashMLA`。
-- **Native Sparse Attention (NSA)**（压缩 + 选择 + 滑窗三分支、硬件对齐、可原生训练）：arXiv `2502.11089`。
-- **Upcycling LLMs into MoE**（virtual-group 初始化、权重缩放、softmax-then-topK；Megatron `upcycling_utils.py`）：arXiv `2410.07524`。
-- **DeepSeekMoE**（细粒度专家 + 共享专家）：arXiv `2401.06066`。
-- **MiniCPM5-2B**（Apache-2.0 Llama GQA：d=2048、42 层、16 Q / 2 KV、`head_dim=128`、V=130560、untied、无 μP、原生 128K / `rope_theta=5e6`；WSD 调度沿用 MiniCPM 系经验）：`openbmb/MiniCPM5-2B`（tokenizer）/ `openbmb/MiniCPM5-2B-Base`（upcycle / teacher）。不要用 MiniCPM-2B-sft-bf16（GML）或 MiniCPM3/4 tokenizer。
-- **Gemma 2 / Qwen3-Next**（局部滑窗 × 全局注意力交错、混合注意力层比例）：作为层调度与滑窗设计参考。
-- **YOCO — You Only Cache Once**（decoder-decoder：self-decoder 产出单一全局 KV cache，cross-decoder 复用；prefill early-exit；1M ctx 近满分 needle）：arXiv `2405.05254`；`microsoft/unilm` YOCO。
-- **Kimi Linear / KDA**（Kimi Delta Attention：细粒度门控 Gated-DeltaNet + DPLR chunk kernel；3:1 KDA:MLA 混合，MLA 用 NoPE；1M KV cache ↓~75%、解码 ↑~6×）：arXiv `2510.26692`；`MoonshotAI/Kimi-Linear`。
-- **Hybrid Linear Attention 系统分析**（线性注意力召回弱、需 full 层补偿；gated-delta 在 3:1~6:1 达 Transformer 级召回）：arXiv `2507.06457`。
-- **Lost in the Middle**（中段位置偏置，softmax 亦有，靠位置编码校准缓解）：arXiv `2307.03172`。
-- **FILM / IN2 训练**（信息密集型长上下文训练，合成"关键信息在中段"样本以修 lost-in-the-middle）：`Make Your LLM Fully Utilize the Context`，arXiv `2404.16811`。
-- **OLMo 2 / Gemma 2**（QK-Norm、双 RMSNorm、logit soft-capping、z-loss 等稳定性技巧）：arXiv `2501.00656` / `2408.00118`。
-- **EAGLE / 投机解码**（复用 MTP 头做自投机加速）：arXiv `2401.15077`。
-- **YaRN**（RoPE 长上下文外推缩放）：arXiv `2309.00071`。
-- **PS-PPO — Prefix-Sampling PPO**（critic-free RLHF 只回传采样前缀、无偏截断，降长 trace RL 算力/显存）：arXiv `2606.29758`。
-- **PDSA / Memory-Managed Long-Context Attention**（有界可编辑记忆 + 硬生命周期 overwrite/protection/eviction + query-independent 写入器 + query-aware 读取 + 校准稀疏回退；实测"无写入时信号"边界、bounded 选择在长文优于读全文）：Zou & Donz，arXiv `2606.28876`（本团队工作；其"下一步"为可训练生命周期，本计划 §14 承接）。
-- **MSA — Memory Sparse Attention**（静态文档稀疏记忆，PDSA 的最近邻）：arXiv `2603.23516`。
-- **Gated DeltaNet / Gated DeltaNet-2**（KDA 的前身；解耦擦除与写入）：arXiv `2412.06464` / `2605.22791`。
+- **DeepSeek-V4** (CSA/HCA, mHC, Muon, MTP, Hash-MoE bootstrap; V4-Flash 284B/13B, 1M ctx, 32T tokens): arXiv `2606.19348`; HuggingFace `transformers` `deepseek_v4` model docs (`layer_types`, `compress_rates`, `sliding_window`, `index_topk`, `mlp_layer_types`, and related config).
+- **DeepSeek Sparse Attention (DSA)** and **FlashMLA** sparse kernels (Lightning Indexer + top-k + FlashMLA): DeepSeek-V3.2 report; `deepseek-ai/FlashMLA`.
+- **Native Sparse Attention (NSA)** (compress + select + sliding-window three-branch, hardware-aligned, natively trainable): arXiv `2502.11089`.
+- **Upcycling LLMs into MoE** (virtual-group init, weight scaling, softmax-then-topK; Megatron `upcycling_utils.py`): arXiv `2410.07524`.
+- **DeepSeekMoE** (fine-grained experts + shared experts): arXiv `2401.06066`.
+- **MiniCPM5-2B** (Apache-2.0 Llama GQA: d=2048, 42 layers, 16 Q / 2 KV, `head_dim=128`, V=130560, untied, no μP, native 128K / `rope_theta=5e6`; WSD schedule follows MiniCPM-family practice): `openbmb/MiniCPM5-2B` (tokenizer) / `openbmb/MiniCPM5-2B-Base` (upcycle / teacher). Do not use MiniCPM-2B-sft-bf16 (GML) or MiniCPM3/4 tokenizers.
+- **Gemma 2 / Qwen3-Next** (local sliding window × global attention interleaving, hybrid attention layer ratios): reference for layer schedule and window design.
+- **YOCO — You Only Cache Once** (decoder-decoder: self-decoder emits a single global KV cache, cross-decoder reuses it; prefill early-exit; near-perfect needle at 1M ctx): arXiv `2405.05254`; `microsoft/unilm` YOCO.
+- **Kimi Linear / KDA** (Kimi Delta Attention: fine-grained gated Gated-DeltaNet + DPLR chunk kernel; 3:1 KDA:MLA mix, MLA uses NoPE; 1M KV cache ↓~75%, decode ↑~6×): arXiv `2510.26692`; `MoonshotAI/Kimi-Linear`.
+- **Hybrid Linear Attention systematic analysis** (linear attention is weak at recall and needs full layers to compensate; gated-delta reaches Transformer-level recall at 3:1~6:1): arXiv `2507.06457`.
+- **Lost in the Middle** (mid-context positional bias, present in softmax too, relieved by position-encoding calibration): arXiv `2307.03172`.
+- **FILM / IN2 training** (information-intensive long-context training; synthesize "key information in the middle" samples to fix lost-in-the-middle): `Make Your LLM Fully Utilize the Context`, arXiv `2404.16811`.
+- **OLMo 2 / Gemma 2** (QK-Norm, dual RMSNorm, logit soft-capping, z-loss, and other stability tricks): arXiv `2501.00656` / `2408.00118`.
+- **EAGLE / speculative decoding** (reuse an MTP head for self-speculation speedup): arXiv `2401.15077`.
+- **YaRN** (RoPE long-context extrapolation scaling): arXiv `2309.00071`.
+- **PS-PPO — Prefix-Sampling PPO** (critic-free RLHF backprops only the sampled prefix with unbiased truncation; cuts long-trace RL compute/VRAM): arXiv `2606.29758`.
+- **PDSA / Memory-Managed Long-Context Attention** (bounded editable memory + hard lifecycle overwrite/protection/eviction + query-independent writer + query-aware read + calibrated sparse fallback; measured "no write-time signal" bound, bounded selection beats reading the full document on long text): Zou & Donz, arXiv `2606.28876` (this team's work; its "next step" is a trainable lifecycle, which this plan takes up in §14).
+- **MSA — Memory Sparse Attention** (static document sparse memory, PDSA's nearest neighbor): arXiv `2603.23516`.
+- **Gated DeltaNet / Gated DeltaNet-2** (KDA's predecessor; decoupled erase and write): arXiv `2412.06464` / `2605.22791`.

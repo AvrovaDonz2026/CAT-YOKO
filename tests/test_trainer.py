@@ -114,6 +114,25 @@ class LoopTests(unittest.TestCase):
             ).run()
             self.assertEqual(out.step, 2)
 
+    def test_save_keeps_rng_when_log_every_is_sparse(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            save = Path(td)
+            Trainer(
+                self.cfg,
+                "B0",
+                "cpu",
+                steps=4,
+                accum=1,
+                save_dir=save,
+                save_every=2,
+                log_every=3,
+                seed=1,
+            ).run()
+            ckpt = torch.load(save / "step_2.pt", map_location="cpu", weights_only=False)
+            self.assertIn("stream", ckpt["extra"])
+            self.assertIsNotNone(ckpt["extra"]["rng_torch"])
+            self.assertEqual(ckpt["extra"]["step"], 2)
+
     def test_latest_hardlinks_matching_step_ckpt(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             save = Path(td)
@@ -540,12 +559,29 @@ class LoopTests(unittest.TestCase):
         self.assertTrue(torch.allclose(h1.grad, h2.grad, atol=1e-5, rtol=1e-5))
         self.assertTrue(torch.allclose(lm1.weight.grad, lm2.weight.grad, atol=1e-5, rtol=1e-5))
 
+    def test_chunked_ce_cpu_still_upcasts_non_fp32(self) -> None:
+        import inspect
+
+        from cat_yoko.loss import linear_cross_entropy
+
+        src = inspect.getsource(linear_cross_entropy)
+        self.assertIn("is_cuda", src)
+        self.assertIn("logits.float()", src)
+
     def test_ce_chunk_auto_cpu_stays_small(self) -> None:
         from cat_yoko.loss import _ce_chunk_tokens
 
         self.assertEqual(_ce_chunk_tokens(100, 130560, None, torch.device("cpu")), 100)
         self.assertEqual(_ce_chunk_tokens(4096, 130560, None, torch.device("cpu")), 512)
         self.assertEqual(_ce_chunk_tokens(4096, 130560, 3, torch.device("cpu")), 3)
+
+    def test_ce_logit_budget_is_bf16_on_cuda(self) -> None:
+        from cat_yoko.loss import _ce_logit_budget_bytes
+
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cpu"), torch.bfloat16), 32)
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda"), torch.float32), 32)
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda"), torch.bfloat16), 16)
+        self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda:0"), torch.float16), 16)
 
     def test_host_step_stats_match_python_floats(self) -> None:
         from cat_yoko.trainer import _host_step_stats

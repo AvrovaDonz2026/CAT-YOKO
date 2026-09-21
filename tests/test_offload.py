@@ -211,6 +211,17 @@ class CpuAdamTests(unittest.TestCase):
         self.assertIn(id(model.decoder[0].mlp.router.weight), nodecay)
         self.assertIn(id(model.decoder[0].mlp.experts[0].gate_proj.weight), decay)
 
+    def test_cpu_adam_fast_keeps_two_groups_without_ds_ops(self) -> None:
+        from torch.optim import AdamW
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B0")
+        opt = build_optimizer(model, cfg, cpu_adam_fast=True)
+        self.assertEqual(len(opt.param_groups), 2)
+        if type(opt).__name__ != "DeepSpeedCPUAdam":
+            self.assertIsInstance(opt, AdamW)
+
     def test_host_memory_used_is_nonneg_int(self) -> None:
         import inspect
 
@@ -375,6 +386,19 @@ class CliOffloadTests(unittest.TestCase):
     def test_c1_smoke_rejects_tokens(self) -> None:
         with self.assertRaises(SystemExit):
             main(["--config", "tiny", "--c1-smoke", "--tokens", "64"])
+
+
+class GradCkptNoneDocTests(unittest.TestCase):
+    def test_b0_checkpoint_allows_collapsed_doc_ids(self) -> None:
+        cfg = CATYokoConfig.tiny()
+        m = CATYokoForCausalLM(cfg)
+        apply_freeze(m, "B0")
+        m.grad_checkpoint = True
+        m.train()
+        ids = torch.randint(0, cfg.vocab_size, (2, 8))
+        out = m(ids, labels=ids.clone(), doc_ids=None)
+        self.assertIn("nll", out)
+        out["nll"].backward()
 
 
 if __name__ == "__main__":

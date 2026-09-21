@@ -69,11 +69,11 @@ class CATYokoForCausalLM(nn.Module):
     def set_detach(self, flag: bool) -> None:
         self.detach_cache = flag
 
-    def _run_block(self, blk: nn.Module, *tensors: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def _run_block(self, blk: nn.Module, *tensors: torch.Tensor | None) -> tuple[torch.Tensor, torch.Tensor]:
         if self.offload_blocks:
             return offload_checkpoint_block(blk, *tensors)
         ckpt = self.grad_checkpoint and self.training
-        if ckpt and any(t.requires_grad for t in tensors):
+        if ckpt and any(t is not None and t.requires_grad for t in tensors):
             y = torch.utils.checkpoint.checkpoint(blk, *tensors, use_reentrant=False)
         else:
             y = blk(*tensors)
@@ -92,7 +92,9 @@ class CATYokoForCausalLM(nn.Module):
     ) -> dict[str, torch.Tensor]:
         if self.offload_encoder and not self.offload_blocks:
             move_module(self.encoder, input_ids.device)
-        x = self.embed(input_ids) * self.scale_emb
+        x = self.embed(input_ids)
+        if self.scale_emb != 1:
+            x = x * self.scale_emb
         # DummyStream / single-doc batches must not become zero tensors: that
         # forced a host sync in every attention layer. Packed multi-doc rows
         # still pass the real ids.
@@ -126,7 +128,9 @@ class CATYokoForCausalLM(nn.Module):
         idx_rec = self._indexer_recall()
         logits = None
         if labels is None or self.return_logits:
-            logits = self.lm_head(self.norm(y)) / self.logit_scale
+            logits = self.lm_head(self.norm(y))
+            if self.logit_scale != 1:
+                logits = logits / self.logit_scale
         out: dict[str, torch.Tensor] = {}
         if idx_kl is not None:
             out["indexer_kl"] = idx_kl

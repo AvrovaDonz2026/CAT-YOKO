@@ -1,4 +1,4 @@
-"""Tokenize OpenBMB mixes into a packed int32 bin the C1 trainer can mmap."""
+"""Tokenize thinking mixes (OpenBMB web/math + modest code) into a packed int32 bin."""
 
 from __future__ import annotations
 
@@ -283,7 +283,9 @@ def prepare(
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Pack OpenBMB Ultra-FineWeb (+ Math) for CAT-YOKO")
+    p = argparse.ArgumentParser(
+        description="Pack thinking mix (OpenBMB web/math + modest StarCoder) for CAT-YOKO"
+    )
     p.add_argument("--mix", choices=sorted(set(MIXES) | {"local"}), default="phase-b")
     p.add_argument("--local", type=Path, default=None, help="jsonl with {text|content} for mix=local")
     p.add_argument("--out", type=Path, required=True)

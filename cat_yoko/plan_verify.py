@@ -737,6 +737,24 @@ def _ops_source_claims() -> list[Claim]:
             "SM90+",
             "Ampere skips grouped_mm RuntimeError tax and uses padded bmm",
         ),
+        _claim(
+            "ops.banded_sliding_window",
+            "attention",
+            "_banded_window_sdpa" in inspect.getsource(attn)
+            and "_window_sdpa" in inspect.getsource(attn.WindowAttention.forward),
+            "covering Flash; else fat tiles 256 (seq>=2048); CSA union still S×S",
+            "do not materialize S×S for a static sliding window",
+        ),
+        _claim(
+            "ops.bshd_qk_rope",
+            "attention",
+            "seq_dim=1" in inspect.getsource(attn.rope_after_qk_norm)
+            and "to_sdpa_layout" in inspect.getsource(attn.WindowAttention.forward)
+            and "contiguous()" not in inspect.getsource(attn.WindowAttention.forward)
+            and "contiguous()" not in inspect.getsource(attn.CrossAttention.forward),
+            "qk_norm+RoPE in [B,S,H,D]; SDPA sees BSHD memory",
+            "do not pack BHSD before Flash; overlay QKV Linears stay 3-way cat",
+        ),
     ]
 
 

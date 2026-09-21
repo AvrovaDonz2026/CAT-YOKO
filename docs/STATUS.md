@@ -1,85 +1,86 @@
-# 现状（2026-09-19）
+# Status (2026-09-20)
 
-这是 GitHub 上的**训练进度口径**。规格旋钮仍以 [`FROZEN_SPEC.md`](FROZEN_SPEC.md) 为准；权重以 HuggingFace 为准。
+GitHub training-progress pin. Spec knobs stay in [`FROZEN_SPEC.md`](FROZEN_SPEC.md). Weights live on Hugging Face.
 
-## 一句话
+## One line
 
-CAT-YOKO-12B 按 **C1+NVFP4** 在训 **B0**（新模块、冻 encoder、8e9 DummyStream）。**还没跑完**。Vast B200 已回收；最新 overlay 在 Hub。下一台同阶段 resume，不要从头、不要叠 32 步 `--try`。
+CAT-YOKO-12B is training **B0** under **C1+NVFP4** (new modules only, encoder frozen, 8e9 DummyStream). It is **not finished**. The Vast B200 was recycled; the latest published overlay is on Hub. Next GPU: same-phase resume. Do not restart from scratch. Do not stack a 32-step `--try`.
 
-## 进度
+## Progress
 
-| 项 | 值 |
+| | |
 | --- | --- |
-| 阶段 | C1 **B0**（encoder 冻结，只训新模块 ≈219.21M / 132 张量） |
-| 信封 | 8e9 tokens，`seq=4096`，DummyStream（未拉 50B Ultra-FineWeb） |
+| Stage | C1 **B0** (encoder frozen; new modules ≈219.21M / 132 tensors) |
+| Envelope | 8e9 tokens, `seq=4096`, DummyStream (thinking mix: 5% short hashed code snippets; no 50B Ultra-FineWeb / StarCoder download) |
 | Hub overlay | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
 | step | **26940** |
-| tokens_in_phase | 130,041,856（≈1.63% of 8e9） |
+| tokens_in_phase | 130,041,856 (≈1.63% of 8e9) |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| 机器（已回收） | Vast NVIDIA B200 SM 10.0；2026-09-19T06:44Z 拷盘，随后 SSH 拒绝 |
-| 运行时 | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |
-| 吞吐 | **micro-batch=2**，~15.6–15.7k tok/s，8192 tok/step，Trainer ~138GiB |
-| 精度 | student / 冻 decoder **bf16**；冻 encoder GEMM **NVFP4 FPROP** |
-| 许可 | Apache-2.0（代码、派生权重、MiniCPM5 底座） |
-| B1 / B2 | 未开。等 B0 信封或空闲 GPU 再 `--try` |
-| C–G | **C–F 训练路径已补齐**（D 重切 packed bin 且 **sparse=hca**、E `phase-e` + WSD decay、F UltraChat→SFT jsonl 拼到 seq、D/E/F 继承 `use_kda`）。流程 **先实现、后点亮**。默认 `use_kda=False`。无 CSA CUDA kernel |
-| 计划探针 | **bf16-probe A→E GPU 已过**（RTX 3090，142/142 claims，0 fail，2 deferred，3.1s）。dense GQA=Flash，masked/HCA=cuDNN bf16，`math_fp32=0`。目录 `/root/autodl-tmp/bf16-verify/`。DummyStream：`cat_yoko.plan_verify --graph bf16` / [`docs/PLAN_VERIFY.md`](PLAN_VERIFY.md)。日志 [`artifacts/autodl-rtx3090/bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)。更早的 plan-probe 128/128：[`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md)。算子 roofline：[`docs/AMPERE_OPS_MFU.md`](AMPERE_OPS_MFU.md)。不到 F/G。不拉 50B。不写完整图 checkpoint |
+| Machine (recycled) | Vast NVIDIA B200 SM 10.0; disk copied 2026-09-19T06:44Z, SSH refused after |
+| Runtime | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 cubin |
+| Throughput | **micro-batch=2**, ~15.6–15.7k tok/s, 8192 tok/step, trainer ~138GiB |
+| Precision | student / frozen decoder **bf16**; frozen encoder GEMM **NVFP4 FPROP** |
+| License | Apache-2.0 (code, derived weights, MiniCPM5 base) |
+| B1 / B2 | Not started. Wait for the B0 envelope or a free GPU before `--try` |
+| C–G | **C–F training paths are implemented** (D rewindows packed bins with **sparse=hca**, E `phase-e` + WSD decay, F UltraChat→SFT jsonl packed to seq, D/E/F inherit `use_kda`). **Wire the graph first, then enable it.** Default `use_kda=False`. No CSA CUDA kernel |
+| Plan probe | **bf16-probe A→E passed on GPU** (RTX 3090, 142/142 claims, 0 fail, 2 deferred, 3.1s). Dense GQA=Flash; masked/HCA=cuDNN bf16; `math_fp32=0`. DummyStream: `cat_yoko.plan_verify --graph bf16` / [`PLAN_VERIFY.md`](PLAN_VERIFY.md). Logs: [`artifacts/autodl-rtx3090/bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md). Older plan-probe 128/128: [`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md). Operator roofline: [`AMPERE_OPS_MFU.md`](AMPERE_OPS_MFU.md). Not F/G. No 50B download. No full-graph checkpoint |
 
-## 机器沿革
+## Machines
 
-| 机器 | 角色 | 停在 |
+| Machine | Role | Stopped at |
 | --- | --- | --- |
-| RTX 4080 SUPER | 图 / `--try` 烟测 | 已释放；日志 [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
-| RTX 6000D sm_120 | 发布档 B0 开跑（NVFP4 **仿真**） | step **16020**，`tokens_in_phase=65,488,896`；日志 [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
-| Vast B200 SM 10.0 | 发布档 B0 续训（硬件 NVFP4 FPROP） | step **26940**；日志 [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
-| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + 算子 roofline | **142 claims ok**；Flash **85%** / MoE bmm **81%** of 71.16T；日志 [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md)、[`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md)。旧 plan-probe 128 claims：[`plan-verify/`](../artifacts/autodl-rtx3090/plan-verify/README.md) |
+| RTX 4080 SUPER | graph / `--try` smoke | Released. Logs: [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
+| RTX 6000D sm_120 | published B0 start (NVFP4 **emu**) | step **16020**, `tokens_in_phase=65,488,896`. Logs: [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
+| Vast B200 SM 10.0 | published B0 continue (hardware NVFP4 FPROP) | step **26940**. Logs: [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
+| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + operator roofline; B0 BF16 **sibling** continue | **142 claims ok**; Flash **85%** / MoE bmm **81%**. Sliding window `BANDED_SEQ_MIN=2048`. **Published** pin remains Hub `b0-full` step **26940** / `7eebc9a4…`. 3090 snapshot is Hub [`checkpoints/b0-3090-bf16/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) step **33800** / `2dc31406…` (≈1.98% of 8e9). `SAVE_EVERY=200`. ~760 tok/s (`adam=ds-cpuadam`). **Pending release** (disk copied 2026-09-20T13:53Z). Logs: [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md), [`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md), [`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md), [`occupancy/`](../artifacts/autodl-rtx3090/occupancy/README.md) |
 
-同阶段 resume：`tokens_in_phase` 按 8192/step 接着加。step **22100** 时是 90,392,576。
+Same-phase resume adds `tokens_in_phase` at 8192 tokens/step. At step **22100** it was 90,392,576.
 
-## 下一台怎么接
+## Next GPU
 
-下一张卡未知时，**不要**接 Megatron EP/TP，也**不要**默认走 B200-only 启动脚本（非 SM100 会 exit 4）。先按 SM / 显存 / TE 出 B0 recipe，再同阶段 resume Hub overlay：
+If the next card is unknown, **do not** implement a Megatron EP/TP loop, and **do not** default to the B200-only launch script (non-SM100 exits 4). Pick a B0 recipe from SM / VRAM / TE, then same-phase resume the Hub overlay:
 
 ```bash
-python3 -m cat_yoko.hw_recipe --json          # 无卡时也可 --family sm100 --gib 183
-python3 scripts/probe_nvfp4_hw.py             # 可选：TE FPROP / dX / WGRAD
+python3 -m cat_yoko.hw_recipe --json          # also works with --family sm100 --gib 183
+python3 scripts/probe_nvfp4_hw.py             # optional: TE FPROP / dX / WGRAD
 python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
 python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
-bash scripts/run_b0_next.sh                   # 探测后 dispatch；<40GiB 自动 --try
-# TRY=1 bash scripts/run_b0_next.sh           # 强制 32 步烟测
+bash scripts/run_b0_next.sh                   # dispatch after probe; <40GiB forces --try
+# TRY=1 bash scripts/run_b0_next.sh           # force 32-step smoke
 # MICRO_BATCH=1 bash scripts/run_b0_next.sh
 ```
 
-已知 SKU 的快捷方式仍在：`bash scripts/run_b0_full_b200.sh`（SM100，默认 micro-batch=2）、`bash scripts/run_b0_full_autodl.sh`（sm_120）。
+Known-SKU shortcuts: `bash scripts/run_b0_full_b200.sh` (SM100, default micro-batch=2), `bash scripts/run_b0_full_autodl.sh` (sm_120).
 
-| 卡 | B0 配方 |
+| Card | B0 recipe |
 | --- | --- |
-| SM100/103 且 ≥160GiB（B200 类） | 发布信封 seq=4096，mb=2，encoder 在 GPU，无 grad-ckpt，TE NVFP4 FPROP |
-| sm_120 且 ≥90GiB（6000D 类） | 发布信封 seq=4096，mb=1，encoder 在 GPU，grad-ckpt，`Nvfp4Linear` 仿真 |
-| Hopper SM90 且 ≥40GiB | 发布信封；<90GiB 卸 encoder；仿真 NVFP4（文档上的 FP8 回退，不新写 wrap） |
-| Ampere/Ada 且 40–90GiB | recipe 默认仍是 torch 卸 encoder。要切冻住的 24.5GiB 权重：`--backend deepspeed --zero 3 --zero-offload --zero-offload-param`（[`DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md)）。塞进 ≠ 跑完 8e9 |
-| `<40GiB` | **拒绝** 8e9 信封 → `--try` seq=64 / 32 步 |
-| CPU | 只打 JSON，不建 12B 图 |
+| SM100/103 and ≥160GiB (B200-class) | published envelope seq=4096, mb=2, encoder on GPU, no grad-ckpt, TE NVFP4 FPROP |
+| sm_120 and ≥90GiB (6000D-class) | published envelope seq=4096, mb=1, encoder on GPU, grad-ckpt, `Nvfp4Linear` emu |
+| Hopper SM90 and ≥40GiB | published envelope; <90GiB offload encoder; emu NVFP4 (FP8 is a doc fallback, do not write a new wrap) |
+| Ampere/Ada and 40–90GiB | recipe still defaults to torch encoder offload. To shard the frozen 24.5GiB: `--backend deepspeed --zero 3 --zero-offload --zero-offload-param` ([`DEEPSPEED_ZERO.md`](DEEPSPEED_ZERO.md)). Fitting in VRAM ≠ finishing 8e9 |
+| `<40GiB` | **refuse** the 8e9 envelope → `--try` seq=64 / 32 steps |
+| CPU | JSON only; do not build the 12B graph |
 
-细节：[`B200_TRAIN.md`](B200_TRAIN.md)、[`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md)、[`HF_HUB.md`](HF_HUB.md)。`cat_yoko.hw_recipe` 是纯函数，单测不需要 GPU。
+Details: [`B200_TRAIN.md`](B200_TRAIN.md), [`checkpoints/b0-full/README.md`](../checkpoints/b0-full/README.md), [`HF_HUB.md`](HF_HUB.md). `cat_yoko.hw_recipe` is a pure function; unit tests do not need a GPU.
 
-**不要**
+**Do not**
 
-- resume Hub `checkpoints/b0/` 那份 32 步 `--try`
-- `--save-full` / 23GiB `latest.pt`（尤其 32GiB 容器盘）
-- 为 B1/B2 `--try` 在 B0 还占 GPU 时抢卡
-- 实现 Megatron EP/TP 循环、CSA CUDA kernel
-- 把 ZeRO 当成一张 3090 上重开 8e9 的理由（Hub overlay 已经 1.63%，同阶段 resume）
-- 把 50B Ultra-FineWeb 拉进仓库或小盘
-- 再连已释放的 AutoDL `westc` / `weste`
-- 把 SSH 密码、deploy key 写进 git
+- resume Hub `checkpoints/b0/` (that 32-step `--try`)
+- `--save-full` / 23GiB `latest.pt` (especially on a 32GiB container disk)
+- steal the GPU for B1/B2 `--try` while B0 still holds it
+- implement a Megatron EP/TP loop or a CSA CUDA kernel
+- treat ZeRO as a reason to restart 8e9 on one 3090 (the Hub overlay is already 1.63%; same-phase resume)
+- overwrite Hub `checkpoints/b0-full` (step **26940**, sha256 `7eebc9a4…`). 3090 BF16 continue writes a sibling directory; see [`scripts/run_b0_ampere_3090.sh`](../scripts/run_b0_ampere_3090.sh)
+- pull 50B Ultra-FineWeb into the repo or a small disk
+- reconnect retired AutoDL `westc` / `weste`, or the 3090 `westd` host once it is released
+- commit SSH passwords or deploy keys
 
-## 产物放哪
+## Where artifacts go
 
-| 东西 | 去向 |
+| What | Where |
 | --- | --- |
-| 代码、理论、指针、日志 | GitHub 本仓（**不用 LFS**） |
-| `trainable.pt` / 全图 / shard | [HuggingFace AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO) |
-| 模型卡源 | [`huggingface/README.md`](../huggingface/README.md) → Hub 根 `README.md` |
+| Code, theory, pointers, logs | this GitHub repo (**no LFS**) |
+| `trainable.pt` / full graph / shards | [Hugging Face AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO) |
+| Model-card source | [`huggingface/README.md`](../huggingface/README.md) → Hub root `README.md` |
 
-`scripts/push_to_hf.sh` 会带上根卡片、`checkpoints/b0-full/README.md` 和 `LICENSE`。
+`scripts/push_to_hf.sh` always ships the root card, `checkpoints/b0-full/README.md`, and `LICENSE`.

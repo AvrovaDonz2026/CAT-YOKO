@@ -160,7 +160,8 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
             + (
                 " covers seq so B0 window is Flash; this row is C/probe hole"
                 if n_win >= s
-                else " still materializes S×S mask; not Flash"
+                else " fat tiles 256 when seq>=2048; shorter stays S×S"
+                " (tile-by-window / seq=512 fat tiles lose on Ampere); CSA union still S×S"
             ),
         )
     )
@@ -211,7 +212,8 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
 
     idx_d = 32 if d <= 128 else 64
     fl = 2 * gemm_flops(m, idx_d, d) + b * gemm_flops(s, s, idx_d)
-    nb = 2 * gemm_bytes_fp32(m, idx_d, d) + b * gemm_bytes_fp32(s, s, idx_d)
+    # One GEMM [m, 2*d_idx] reads x once; same FLOPs as two skinny projections.
+    nb = gemm_bytes_fp32(m, 2 * idx_d, d) + b * gemm_bytes_fp32(s, s, idx_d)
     rows.append(
         OpTheory(
             "indexer_fp32",
@@ -219,7 +221,7 @@ def theory_for_shape(shape: dict[str, int], *, tag: str) -> list[OpTheory]:
             fl,
             nb,
             roofline_mfu(fl, nb, peak=RTX3090_FP32_PEAK),
-            f"{tag}: fp32 scores, d_idx={idx_d}; peak is FP32/TF32 not BF16 TC",
+            f"{tag}: fp32 scores, fused QK GEMM, d_idx={idx_d}; peak is FP32/TF32 not BF16 TC",
         )
     )
     return rows
@@ -330,18 +332,34 @@ def measure_cuda() -> dict[str, Any]:
         nb = flash_bytes_bf16(B, H, KVH, S, HD)
         out["ops"].append(_row(f"dense_flash_gqa_{tag}", fl, dt, nb, "YOCO cross / covering window"))
 
-    # Masked window (equal heads)
-    for tag, B, H, S, HD in (("probe", 2, 4, 128, 32), ("mid", 1, 16, 512, 128)):
+    # Masked window (equal heads) vs fat-tile sliding window
+    from cat_yoko.attention import BANDED_SEQ_MIN, BANDED_TILE, _use_banded_window, _window_causal_bias, _window_sdpa
+
+    for tag, B, H, S, HD, W in (
+        ("probe", 2, 4, 128, 32, 32),
+        ("mid", 1, 16, 512, 128, 32),
+        ("long", 1, 16, 2048, 128, 32),
+    ):
         q = torch.randn(B, H, S, HD, device=device, dtype=dt_peak)
         k = torch.randn(B, H, S, HD, device=device, dtype=dt_peak)
         v = torch.randn(B, H, S, HD, device=device, dtype=dt_peak)
-        from cat_yoko.attention import _window_causal_bias
 
-        bias = _window_causal_bias(S, S, 32, device, dt_peak, None)
+        bias = _window_causal_bias(S, S, W, device, dt_peak, None)
         dt = _bench(lambda: _sdpa(q, k, v, bias), warmup=8, runs=20)
         fl = sdpa_flops(B, H, S, S, HD, causal=True)
         nb = flash_bytes_bf16(B, H, H, S, HD) + mask_bytes_bf16(S, S)
-        out["ops"].append(_row(f"masked_window_{tag}", fl, dt, nb, f"seq={S} switch={MASKED_SDPA_SWITCH_SEQ}"))
+        out["ops"].append(_row(f"masked_window_{tag}", fl, dt, nb, f"seq={S} S×S mask switch={MASKED_SDPA_SWITCH_SEQ}"))
+        dt_b = _bench(lambda: _window_sdpa(q, k, v, W), warmup=8, runs=20)
+        if _use_banded_window(S, S, W):
+            tile = min(S, max(W, BANDED_TILE))
+            n_tile = (S + tile - 1) // tile
+            k_width = (W - 1) + tile
+            nb_b = n_tile * (flash_bytes_bf16(B, H, H, tile, HD) + mask_bytes_bf16(tile, k_width))
+            note_b = f"seq={S} n_win={W} fat tiles {tile}×{k_width} n={n_tile}"
+        else:
+            nb_b = nb
+            note_b = f"seq={S} n_win={W} stays S×S (seq<{BANDED_SEQ_MIN})"
+        out["ops"].append(_row(f"banded_window_{tag}", fl, dt_b, nb_b, note_b))
 
     # CSA-style full extra_bias (non-covering union still S×S)
     for tag, B, H, S, HD in (("probe", 2, 4, 128, 32), ("mid", 1, 16, 512, 128)):
@@ -391,14 +409,16 @@ def measure_cuda() -> dict[str, Any]:
         wq = torch.randn(DI, D, device=device, dtype=torch.float32)
         wk = torch.randn(DI, D, device=device, dtype=torch.float32)
 
-        def _idx(x=x, wq=wq, wk=wk):
-            qq = F.relu(F.linear(x, wq))
-            kk = F.linear(x, wk)
-            return torch.matmul(qq, kk.transpose(-1, -2))
+        wqk = torch.cat((wq, wk), dim=0)
+
+        def _idx(x=x, wqk=wqk):
+            qk = F.linear(x, wqk)
+            qq, kk = qk.chunk(2, dim=-1)
+            return torch.matmul(F.relu(qq), kk.transpose(-1, -2))
 
         dt = _bench(_idx, warmup=8, runs=20)
         fl = 2 * gemm_flops(B * S, DI, D) + B * gemm_flops(S, S, DI)
-        nb = 2 * gemm_bytes_fp32(B * S, DI, D) + B * gemm_bytes_fp32(S, S, DI)
+        nb = gemm_bytes_fp32(B * S, 2 * DI, D) + B * gemm_bytes_fp32(S, S, DI)
         out["ops"].append(
             _row(f"indexer_fp32_{tag}", fl, dt, nb, f"d_idx={DI}", peak=RTX3090_FP32_PEAK)
         )

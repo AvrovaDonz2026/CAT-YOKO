@@ -11,6 +11,13 @@ from cat_yoko.moe import MoE, SwiGLU
 from cat_yoko.rope import RMSNorm
 
 
+def _add_residual(x: torch.Tensor, delta: torch.Tensor, scale: float) -> torch.Tensor:
+    """``x + scale * delta``. Scale 1 skips the multiply (bf16 identity)."""
+    if scale == 1.0:
+        return x + delta
+    return x + scale * delta
+
+
 class EncoderBlock(nn.Module):
     def __init__(self, cfg: CATYokoConfig, *, kind: str = "sliding", dense: bool = False) -> None:
         super().__init__()
@@ -83,9 +90,9 @@ class EncoderBlock(nn.Module):
             self.last_indexer_recall = indexer_recall_at_k(probs.detach(), comp, selected)
         else:
             attn_out = self.attn(h, doc_ids)
-        x = x + self.res * attn_out
+        x = _add_residual(x, attn_out, self.res)
         kwargs = {"token_ids": token_ids} if isinstance(self.mlp, MoE) else {}
-        x = x + self.res * self.mlp(self.ln2(x), **kwargs)
+        x = _add_residual(x, self.mlp(self.ln2(x), **kwargs), self.res)
         return x
 
 
@@ -133,13 +140,13 @@ class DecoderBlock(nn.Module):
         if getattr(self, "sparse_mode", "window") == "kda" and getattr(self, "kda", None) is not None:
             from cat_yoko.kda import kda_attend
 
-            x = x + self.res * kda_attend(self.self_attn, self.kda, self.ln1(x), doc_ids)
+            x = _add_residual(x, kda_attend(self.self_attn, self.kda, self.ln1(x), doc_ids), self.res)
         else:
-            x = x + self.res * self.self_attn(self.ln1(x), doc_ids)
+            x = _add_residual(x, self.self_attn(self.ln1(x), doc_ids), self.res)
         h = self.ln_cross(x)
         self.last_indexer_kl = None
         c = self.cross_attn(h, k, v, doc_ids)
-        x = x + self.res * (self.gate * c)
+        x = _add_residual(x, self.gate * c, self.res)
         kwargs = {"token_ids": token_ids} if isinstance(self.mlp, MoE) else {}
-        x = x + self.res * self.mlp(self.ln2(x), **kwargs)
+        x = _add_residual(x, self.mlp(self.ln2(x), **kwargs), self.res)
         return x

@@ -25,7 +25,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from cat_yoko.attention import _fused_qkv, _repeat_kv
+from cat_yoko.attention import _fused_qkv, _repeat_kv, merge_heads, split_heads
 from cat_yoko.config import CATYokoConfig
 
 
@@ -110,15 +110,18 @@ def kda_attend(
     return_state: bool = False,
 ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
     """Linear self-attn using ``WindowAttention`` QKV/O (NoPE; decay carries recency)."""
-    b, s, _d = x.shape
     h, hd, n_kv = attn.n_heads, attn.head_dim, attn.n_kv
     q, k, v = _fused_qkv(attn.q_proj, attn.k_proj, attn.v_proj, x)
-    q = q.view(b, s, h, hd).transpose(1, 2)
-    k = k.view(b, s, n_kv, hd).transpose(1, 2)
-    v = v.view(b, s, n_kv, hd).transpose(1, 2)
+    q = split_heads(q, h, hd)
+    k = split_heads(k, n_kv, hd)
+    v = split_heads(v, n_kv, hd)
     if attn.q_norm is not None:
         q = attn.q_norm(q)
         k = attn.k_norm(k)
+    # Scan is ``reshape(B·H, T, D)`` and needs packed BHSD.
+    q = q.transpose(1, 2).contiguous()
+    k = k.transpose(1, 2).contiguous()
+    v = v.transpose(1, 2).contiguous()
     k = _repeat_kv(k, h // n_kv)
     v = _repeat_kv(v, h // n_kv)
     q = q * (hd ** -0.5)
@@ -135,7 +138,7 @@ def kda_attend(
     else:
         y = scanned
         new_state = None
-    y = y.transpose(1, 2).contiguous().view(b, s, h * hd)
+    y = merge_heads(y)
     y = y * torch.sigmoid(gates.out_gate(x))
     out = attn.o_proj(y)
     if return_state:

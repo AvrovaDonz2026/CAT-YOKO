@@ -9,6 +9,9 @@ from dataclasses import replace
 from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "32")
+os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
+os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
 
 from cat_yoko.config import CATYokoConfig, C1_SPLIT
 from cat_yoko.data import resolve_eos
@@ -111,7 +114,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
     )
+    p.add_argument(
+        "--no-nvfp4",
+        action="store_true",
+        help="keep published Linear math in bf16; skip Nvfp4Linear wrap (Ampere has no FP4 tensor core)",
+    )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
+    p.add_argument(
+        "--more-steps",
+        type=int,
+        default=None,
+        help="run this many optimizer steps after resume (same-phase; --steps is an absolute cap)",
+    )
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
     p.add_argument("--micro-batch", type=int, default=None, help="default 2 (tiny) / 1 (12b)")
@@ -288,6 +302,8 @@ def main(argv: list[str] | None = None) -> int:
     cfg = CATYokoConfig.tiny() if args.config == "tiny" else CATYokoConfig.middle_12b()
     if args.use_kda:
         cfg = replace(cfg, use_kda=True)
+    if args.no_nvfp4:
+        cfg = replace(cfg, use_nvfp4=False)
     plan = ParallelPlan(
         tensor_parallel=args.tp,
         pipeline_parallel=args.pp,
@@ -497,6 +513,7 @@ def main(argv: list[str] | None = None) -> int:
         args.phase,
         args.device,
         steps=args.steps,
+        more_steps=args.more_steps,
         tokens=args.tokens,
         upcycle_src=src,
         resume=args.resume,

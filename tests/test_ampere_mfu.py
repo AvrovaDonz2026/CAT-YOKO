@@ -43,9 +43,29 @@ class RooflineTests(unittest.TestCase):
         self.assertLess(probe["dense_cross_flash"], pub["dense_cross_flash"])
         self.assertGreaterEqual(pub["fused_qkv"], 0.99)
         probe_notes = {r["name"]: r["note"] for r in blob["bf16_probe"]}
-        self.assertIn("still materializes", probe_notes["masked_window"])
+        self.assertIn("fat tiles 256", probe_notes["masked_window"])
+        self.assertIn("S×S", probe_notes["masked_window"])
         pub_notes = {r["name"]: r["note"] for r in blob["published_12b"]}
         self.assertIn("covers seq", pub_notes["masked_window"])
+        self.assertIn("fused QK", pub_notes["indexer_fp32"])
+        self.assertGreaterEqual(pub["indexer_fp32"], 0.99)
+
+
+class BshdLayoutSourceTests(unittest.TestCase):
+    def test_qk_norm_rope_stays_bshd(self) -> None:
+        from cat_yoko.attention import CrossAttention, WindowAttention, rope_after_qk_norm
+
+        self.assertIn("seq_dim=1", inspect.getsource(rope_after_qk_norm))
+        self.assertNotIn("contiguous()", inspect.getsource(WindowAttention.forward))
+        self.assertNotIn("contiguous()", inspect.getsource(CrossAttention.forward))
+        self.assertIn("to_sdpa_layout", inspect.getsource(WindowAttention.forward))
+
+    def test_rmsnorm_cuda_fused_cpu_fp32(self) -> None:
+        from cat_yoko.rope import RMSNorm
+
+        src = inspect.getsource(RMSNorm.forward)
+        self.assertIn("is_cuda", src)
+        self.assertIn("x.float()", src)
 
 
 class GroupedMmGateTests(unittest.TestCase):
