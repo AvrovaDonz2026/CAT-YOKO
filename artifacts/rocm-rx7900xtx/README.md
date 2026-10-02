@@ -1,50 +1,91 @@
-# RX 7900 XTX B0 续训（2026-10-02）
+# RX 7900 XTX B0 continuation (2026-10-02)
 
-Ubuntu 24.04，Radeon RX 7900 XTX 24GiB，CPU RAM 125GiB，
-PyTorch `2.9.1+rocm6.4` / HIP `6.4.43484`。
-工作目录 `/home/donz/cat-yoko-rocm-20261002/`。
+Ubuntu 24.04, Radeon RX 7900 XTX with 24 GiB VRAM, 125 GiB CPU RAM,
+PyTorch `2.9.1+rocm6.4` / HIP `6.4.43484`.
+Remote workspace: `/home/donz/cat-yoko-rocm-20261002/`.
 
-从 Hub `checkpoints/b0-3090-bf16/trainable.pt` step **33800**、
-158,140,416 tokens 接续 B0。输入 SHA256
-`2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690`，
-MiniCPM5 底座 SHA256
-`d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a`。
-两者校验通过，输入文件保留。
+B0 resumed from Hub `checkpoints/b0-3090-bf16/trainable.pt`, source step
+**33800** and **158,140,416 tokens in phase**. The input SHA256 was
+`2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690`;
+the MiniCPM5 base SHA256 was
+`d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a`.
+Both checks passed and the original input files were preserved.
 
-CPU BF16 构图并 upcycle，逐层 GPU 前向/反向和 CPU Adam；
-`seq=4096`、micro-batch=1、accum=1、8e9 token 预算，
-`--run-steps` 限制本次新增更新而不改变 gate/LR 调度。
-仅保存 132 张量 trainable overlay，不写完整图。
+The native model was built/upcycled in CPU BF16, with per-block GPU
+forward/backward and CPU Adam. Configuration: sequence 4096, micro-batch 1,
+accumulation 1, and the 8e9-token phase budget. `--run-steps` bounds additional
+updates without replacing the gate/LR schedule. Saves contain only the native
+132-tensor B0 trainable overlay; no full-model checkpoint is written.
 
-| 已完成验证 | 值 |
+## Verified initial continuation
+
+| Check | Result |
 | --- | --- |
-| step | 33800 → 33802 |
-| tokens_in_phase | 158,140,416 → 158,148,608 |
+| Step | 33800 → 33802 |
+| Tokens in phase | 158,140,416 → 158,148,608 |
 | NLL | 11.8067 / 11.8076 |
-| 吞吐 | 90 / 113 tok/s（包含逐层卸载） |
-| peak allocated | 8526.8 MiB（约 8.33 GiB） |
-| 参数更新 | 132 张量中 54 张量发生实际 BF16 值变化 |
-| checkpoint | 远程 `runs/b0-rocm-verify/trainable.pt` |
+| Throughput | 90 / 113 tok/s, including per-block offload |
+| Peak allocated | 8526.8 MiB, approximately 8.33 GiB |
+| Parameter updates | 54 of the 132 tensors changed stored BF16 values |
+| Checkpoint | Remote `runs/b0-rocm-verify/trainable.pt` |
 
-证据：[验证结果](verify/result.json)、[指标](verify/metrics.jsonl)、
-[完整两步日志](experiments/b0-rocm-verify-retry.log)。
-续训/注意力/MoE/卸载的必要回归通过，日志在 `experiments/`。
+Evidence: [result](verify/result.json), [metrics](verify/metrics.jsonl), and
+[complete two-step log](experiments/b0-rocm-verify-retry.log). Required
+continuation, attention, MoE, and offload regressions passed; their logs are in
+`experiments/`.
 
-随后从 **33802** 后台启动 `runs/b0-rocm/`，计划新增 **1000** 步，
-每 10 步保存、保留最后两个编号 overlay。
-进程 PID 初始为 `1018872`，日志 `experiments/b0-rocm.log`；
-以远程日志/进程现状判断是否仍在运行。
+The background baseline started from step **33802** in `runs/b0-rocm/`,
+requesting **1000 additional updates**, saving every 10 steps, and keeping the
+last two numbered overlays. Its initial PID was `1018872`, its remote log is
+`experiments/b0-rocm.log`, and its target is step **34802**.
 
-本次最后核对：已完成并保存 **step 33830**，158,263,296 tokens，
-约130 tok/s，进程仍运行，目标step34802。
-见 [观察状态](observed_status.json) 与 [持续训练指标](metrics.jsonl)。
+The latest recorded baseline save is **step 33850**, with **158,345,216 tokens
+in phase**. The baseline process was stopped after this completed save to release
+host memory. Its checkpoint is also retained in `runs/b0-layout-source/`. The
+compact full-model experiment waits while other GPU jobs run; one job occupied
+approximately 22 GiB. [observed_status.json](observed_status.json) and the bundled
+[metrics](metrics.jsonl) record the baseline through step 33850.
 
-实验 gfx11 AOTriton 开关能启用 Flash/efficient SDPA，但初次 causal
-GQA 梯度对照不通过：[失败记录](experiments/flash-validation.log)。
-持续训练使用已验证的 FP32 math 注意力回退，显式关闭该实验开关。
-进一步算子实验放在 `operators/rocm/`，不自动修改正在训练的图。
-实测结果与候选说明见 [算子目录](../../operators/rocm/README.md)。
+## Operator evidence and pending full-model validation
 
-限制：仍是 DummyStream，没有语言质量提升结论；overlay 没有 Adam
-状态，moments 从零恢复；分块梯度裁剪及 CPU 初始化 router 的舍入差异
-见 [ROCM_TRAIN.md](../../docs/ROCM_TRAIN.md)。Hub B0-full 不覆盖。
+The experimental gfx11 AOTriton flag enables Flash/Efficient SDPA, but native
+causal-GQA backward failed the initial comparison:
+[failure log](experiments/flash-validation.log). The baseline keeps the verified
+FP32 math attention path with the experimental flag disabled.
+
+The isolated [attention layout ledger](../../operators/rocm/results/rx7900xtx-20261002/attention_layout.jsonl)
+finished with **72 rows: 45 passed, 18 numerical failures, 9 unsupported, and
+no execution errors**. Efficient native GQA is unsupported. Repeated-KV
+Efficient attention runs but its dQ relative-L2 errors are 31%–56%; making the
+inputs or upstream gradients contiguous does not repair it.
+
+At sequence 4096 in the actual cross-cache layout, FP32 MATH measured
+**19.29 ms forward / 39.40 ms forward+backward**, with **4208 MiB incremental
+peak**. Flash forward plus full FP32 backward recomputation measured
+**5.78 / 54.19 ms** and **4224 MiB**. Query-chunked hybrid backward measured
+**5.33 / 71.60 ms** and **684 MiB**. Flash forward passed with approximately
+0.21% output relative-L2 error; full FP32 recomputation gave reference-identical
+gradients. The hybrid uses a reference derivative and remains experimental.
+
+The runner stopped/resumed this session's baseline around operator runs, but
+the GPU is shared and complete other-PID history was not recorded during the
+measurements. Exclusive compute is not established. The approximately 8%
+hybrid difference in another layout and small projection differences cannot
+support a training recommendation. Initial MoE and projection measurements,
+their exact compute/transfer scope, and failed attempts are retained in
+[the operator documentation and ledgers](../../operators/rocm/README.md).
+
+Nine compact-model tiny tests passed. Full native-versus-compact 12B parity is
+waiting for GPU availability; there is no completed full-graph or compact
+continuation speedup result. The separate entry points are
+`operators/rocm/compact_model.py`, `model_bench.py`, `run_compact_b0.py`, and
+`gpu_wait.py`. Compaction is restricted to frozen, byte-identical B0 experts,
+is numerically approximate in BF16, and retains native 132 trainable overlay
+keys. Native reconstruction is required for B1/B2. The launchers can wait using
+read-only KFD PID checks without changing another user's job.
+
+These remain DummyStream experiments, with no language-quality improvement
+claim. Source overlays lack Adam state, so moments restart. The native offload
+path clips per block; the resident compact path uses global clipping. CPU
+router initialization and numerical limitations are documented in
+[ROCM_TRAIN.md](../../docs/ROCM_TRAIN.md). The Hub B0-full pointer is preserved.

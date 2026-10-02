@@ -1,21 +1,23 @@
-# ROCm B0 续训
+# ROCm B0 continuation
 
-入口是 `scripts/run_b0_rocm.py`，用于小显存 AMD GPU 的 BF16 B0
-续训。它在 CPU 直接构造 BF16 12B 图，从 MiniCPM5 底座重建冻结参数，
-加载 B0 trainable overlay，随后逐层搬到 GPU 做前向和反向。
-Adam 状态留在 CPU。不要把 AMD 的 `gfx` capability 当成 NVIDIA SM。
+`scripts/run_b0_rocm.py` resumes BF16 B0 on a small-memory AMD GPU. It builds
+the 12B model directly in CPU BF16, reconstructs frozen parameters from the
+MiniCPM5 base, loads a B0 trainable overlay, and moves individual blocks to the
+GPU for forward/backward. Adam state stays on CPU. AMD `gfx` capability values
+must not be interpreted as NVIDIA SM versions.
 
-目前可接的 BF16 Hub 分支：
+The available BF16 Hub branch is:
 
-| 项 | 值 |
+| Field | Value |
 | --- | --- |
-| 路径 | `checkpoints/b0-3090-bf16/trainable.pt` |
-| step | 33800 |
-| tokens_in_phase | 158,140,416 |
+| Path | `checkpoints/b0-3090-bf16/trainable.pt` |
+| Source step | 33800 |
+| Source tokens in phase | 158,140,416 |
 | SHA256 | `2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690` |
-| 来源 | 从 B0-full step 26940 同阶段续训的 BF16 分支 |
+| Origin | BF16 same-phase continuation from B0-full step 26940 |
 
-新产物写到独立目录。B0-full 发布指针仍见 [STATUS.md](STATUS.md)。
+Write new outputs to a separate directory. The B0-full published pointer
+remains documented in [STATUS.md](STATUS.md).
 
 ```bash
 YOKO_WORK=/path/to/large/workspace
@@ -31,23 +33,58 @@ python scripts/run_b0_rocm.py \
   --run-steps 1000 --seq-len 4096 --save-every 10
 ```
 
-需要已安装 ROCm 版 PyTorch、transformers、safetensors 和 huggingface_hub，
-并有足够 CPU 内存容纳约 23GiB BF16 参数及加载、优化器开销。
-4096 是起点；显存不足时可缩短 `--seq-len`，但须记录为不同运行配置。
+Requires ROCm PyTorch, transformers, safetensors, huggingface_hub, and enough
+host RAM for approximately 23 GiB of BF16 parameters plus loading/optimizer
+overhead. Sequence 4096 is the starting configuration. If memory requires a
+shorter sequence, record it as a different run configuration.
 
-`--run-steps N` 在恢复 checkpoint 之后计数，最多新增 N 次更新；
-它保留 `--tokens 8e9` 的 gate/LR 进度。已有 `--steps` 仍表示绝对
-终止步数。不要把 `--try` 的绝对 32 步上限用于 step 33800 的续训。
+`--run-steps N` counts up to N additional updates after restoring the checkpoint
+and retains the `--tokens 8e9` gate/LR schedule. `--steps` remains an absolute
+end step. The absolute 32-step limit of `--try` is unsuitable for resuming step
+33800.
 
-每次保存只写 B0 的 132 个可训练张量。日志是 `metrics.jsonl`，
-结束时写 `result.json`。`trainable.pt` 指向最新已完成保存的 overlay；
-原始 Hub 输入保留。没有完整模型 checkpoint 或自动上传。
+Each save contains only B0's **132 trainable tensors**. Metrics go to
+`metrics.jsonl`; a completed run writes `result.json`. `trainable.pt` points to
+the latest completed overlay save. The original Hub input is preserved. Full
+model checkpoints and automatic uploading are not part of this launcher.
 
-这仍使用原来的 DummyStream，不是语言质量实验。原 overlay 不带 Adam
-状态，因此 Adam moments 重新开始。逐层卸载使用既有的分块梯度裁剪。
-CPU 初始化也不保证复现旧 CUDA 的冻结 router 随机值；当前冻结专家由
-相同底座复制，routing 的差别主要体现为低精度求和顺序。ROCm 上不支持
-的融合注意力会使用 FP32 math 回退，没有硬件 NVFP4 加速。
+The RX 7900 XTX baseline has saved **step 33850**, with **158,345,216 tokens in
+phase**, and is paused while another GPU job occupies approximately 22 GiB.
+This is a recorded state, not a guarantee of current process or GPU availability.
+Verified baseline results are in [the run artifacts](../artifacts/rocm-rx7900xtx/README.md).
 
-已验证运行记录见 [artifacts/rocm-rx7900xtx](../artifacts/rocm-rx7900xtx/README.md)。
-独立算子优化实验见 [operators/rocm](../operators/rocm/README.md)。
+This still uses the original DummyStream and provides no language-quality
+claim. The source overlay lacks Adam state, so moments restart. Block offload
+uses the existing per-block gradient clipping. CPU initialization does not
+guarantee reproduction of the previous CUDA frozen-router random values;
+experts are copied from the same base, with routing differences reflected in
+low-precision summation. The verified attention path uses FP32 math when fused
+ROCm kernels are unsupported, and there is no hardware NVFP4 acceleration.
+
+## Isolated operator and compact-model experiments
+
+[operators/rocm](../operators/rocm/README.md) keeps candidate operators separate
+from the baseline training code. The attention layout ledger contains 72 rows:
+45 passed, 18 failed numerically, and 9 were unsupported. Native Efficient GQA
+is unsupported; repeated-KV Efficient attention fails dQ checks. The
+Flash-forward/FP32-backward hybrid passes the numerical gates but is slower in
+the measured sequence-4096 cross-cache training operator. Its chunked backward
+reduces memory. GPU PID coverage was incomplete during these shared-GPU timing
+runs, so small timing differences do not support an implementation choice.
+
+The compact experiment merges only frozen, byte-identical routed experts and
+preserves the native 132-tensor B0 overlay. BF16 reduction order changes, so the
+result is numerically approximate. Nine compact-model tiny tests passed; full
+12B parity is waiting for GPU availability. No full-graph or continuation
+speedup has been established.
+
+- `compact_model.py` implements the B0-only frozen-expert replacement. It changes frozen full-state keys; B1/B2 require rebuilding the native model.
+- `model_bench.py` compares losses, selected outputs, and every trainable gradient against the native block-offload model, then permits bounded training only if all requested parity gates pass. `--parity-only` stops after checking.
+- `run_compact_b0.py` performs separate bounded resident continuation after full-model parity has passed; the launcher assumes that validation was done.
+- `gpu_wait.py` supplies read-only KFD PID observation through `--wait-gpu-idle` in both launchers. Two idle polls are required; `--gpu-idle-max-wait` sets an optional timeout. It neither stops other jobs nor reserves the GPU.
+
+Resident compact training retains CPU Adam but uses global clipping instead of
+the baseline's per-block clipping. Source Adam moments restart. Save only the
+native trainable overlay to a separate directory; rebuild the native graph
+before entering B1/B2. Reproduction commands and declared parity tolerances are
+in [the operator documentation](../operators/rocm/README.md).
