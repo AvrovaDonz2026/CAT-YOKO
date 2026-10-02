@@ -583,6 +583,23 @@ class LoopTests(unittest.TestCase):
         self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda"), torch.bfloat16), 16)
         self.assertEqual(_ce_logit_budget_bytes(torch.device("cuda:0"), torch.float16), 16)
 
+    def test_ce_budget_accounts_for_autocast_fp32_logits(self) -> None:
+        from unittest.mock import patch
+        from cat_yoko.loss import _CE_CHUNK_CACHE, _ce_chunk_tokens
+
+        free = 3 * 1024**3
+        vocab = 130560
+        _CE_CHUNK_CACHE.clear()
+        try:
+            with patch("torch.cuda.is_available", return_value=True), patch(
+                "torch.cuda.mem_get_info", return_value=(free, 24 * 1024**3)
+            ), patch("torch.is_autocast_enabled", return_value=True):
+                chunk = _ce_chunk_tokens(4095, vocab, None, torch.device("cuda"), torch.bfloat16)
+            self.assertEqual(chunk, free // (32 * vocab))
+            self.assertLessEqual(chunk * vocab * 32, free)
+        finally:
+            _CE_CHUNK_CACHE.clear()
+
     def test_host_step_stats_match_python_floats(self) -> None:
         from cat_yoko.trainer import _host_step_stats
 

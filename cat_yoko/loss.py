@@ -13,12 +13,12 @@ _CE_CHUNK_CACHE: dict[tuple, int] = {}
 def _ce_logit_budget_bytes(device: torch.device, dtype: torch.dtype) -> int:
     """Slack bytes per token when sizing an lm_head chunk.
 
-    8× the logit element. CUDA fp16/bf16 CE keeps that dtype (softmax
-    accumulates fp32 in-kernel), so the budget is 16, not the old fp32 32.
-    A tighter budget means fewer ``lm_head`` launches and fewer ZeRO-3
-    gathers of the vocab projection.
+    Outside autocast, CUDA fp16/bf16 CE keeps that dtype and accumulates
+    in FP32 in-kernel. CUDA autocast promotes cross_entropy to FP32;
+    its V-wide cast needs the original 32-byte budget.
     """
-    if device.type == "cuda" and dtype in (torch.float16, torch.bfloat16):
+    if (device.type == "cuda" and dtype in (torch.float16, torch.bfloat16)
+            and not torch.is_autocast_enabled("cuda")):
         return 16
     return 32
 
@@ -80,8 +80,8 @@ def linear_cross_entropy(
         logits = lm_head(h[i : i + step])
         if logit_scale != 1.0:
             logits = logits / logit_scale
-        # CUDA CE softmax-accum is fp32 on fp16/bf16 logits. Skip a V-wide
-        # ``.float()`` copy (chunk×130560×4). CPU non-fp32 still upcasts.
+        # CUDA CE accumulates in FP32. Autocast inserts its FP32 cast when
+        # enabled; the chunk budget accounts for that V-wide allocation.
         if logits.dtype != torch.float32 and not logits.is_cuda:
             logits = logits.float()
         total = total + F.cross_entropy(
