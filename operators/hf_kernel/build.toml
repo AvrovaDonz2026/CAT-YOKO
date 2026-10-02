@@ -10,4 +10,3 @@ upstream = "https://github.com/AvrovaDonz2026/CAT-YOKO.git"
 repo-id = "AvrovaDonz/CAT-YOKO-KERNEL"
 
 [torch-noarch]
-
