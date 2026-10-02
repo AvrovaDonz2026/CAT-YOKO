@@ -1,0 +1,23 @@
+{
+  "scope": "Direct source API only; kernel-builder and get_kernel validation pending",
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "gpu": "Radeon RX 7900 XTX",
+  "cpu_cases_passed": 11,
+  "gpu_bf16_cases_passed": 1,
+  "gpu_shapes": {
+    "experts": 20,
+    "rows_per_expert": 32,
+    "hidden": 64,
+    "intermediate": 64
+  },
+  "gpu_errors": {
+    "output_relative_l2": 0.0,
+    "input_gradient_relative_l2": 0.0
+  },
+  "source_sha256": {
+    "torch-ext/cat_yoko_kernel/__init__.py": "40a88373faf56782641d7093630ad775133b43b03a0e1c79e5f9b587c29bfeda",
+    "torch-ext/cat_yoko_kernel/ops.py": "f0f66c6ab7a92bf2949a087abd201ad8360d41e5f326217d65e127f84fbb4ae5"
+  },
+  "timing_claim": false
+}

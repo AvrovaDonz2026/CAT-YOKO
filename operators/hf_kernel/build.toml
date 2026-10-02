@@ -1,0 +1,13 @@
+[general]
+name = "cat-yoko-kernel"
+version = 0
+edition = 5
+license = "Apache-2.0"
+backends = ["cpu", "rocm"]
+upstream = "https://github.com/AvrovaDonz2026/CAT-YOKO.git"
+
+[general.hub]
+repo-id = "AvrovaDonz/CAT-YOKO-KERNEL"
+
+[torch-noarch]
+
