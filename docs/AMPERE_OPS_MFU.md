@@ -26,7 +26,7 @@ Now:
 - SwiGLU uses `_silu_mul`: `SiLU(g)` writes into one buffer then `mul_(u)`; do not `silu inplace` on a `gu.chunk` view
 - CUDA RMSNorm uses fused `F.rms_norm` (fp16/bf16 input, rstd still fp32) instead of `x.float()` on the whole activation; CPU still uses explicit fp32
 - Indexer does one fp32 GEMM `cat(Wq,Wk)` and reads `x` once; both Linear modules remain (overlay / C-index parameter names are unchanged)
-- CUDA `linear_cross_entropy` no longer copies chunk×V logits to fp32 (CE softmax accumulates fp32 in-kernel). The chunk budget is 8× the logit element: 16 bytes/token for CUDA bf16, 32 for fp32, so a tight card launches `lm_head` fewer times (each launch is a ZeRO-3 gather of the vocab projection)
+- CUDA `linear_cross_entropy` lets autocast perform the FP32 promotion required by `cross_entropy`. Its chunk budget remains 32 bytes per vocabulary element under autocast; the 16-byte BF16 budget applies only outside autocast. Avoid treating removal of the explicit `.float()` as removal of the allocation. Each `lm_head` launch is a ZeRO-3 gather of the vocab projection.
 - Published `residual_scale` / `embed_scale` / `logit_scale` are 1, and bf16 multiply-by-one is the identity, so those kernels are skipped
 - RoPE writes one buffer (`x1*cos - x2*sin`, `x2*cos + x1*sin`). Same bits as `rotate_half`, without that extra tensor
 - Frozen MoE load histograms run only on log steps. Trainable routers still record every step for the aux-loss-free bias
