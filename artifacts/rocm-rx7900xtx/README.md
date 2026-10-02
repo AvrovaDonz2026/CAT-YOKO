@@ -90,17 +90,70 @@ is numerically approximate in BF16, and retains native 132 trainable overlay
 keys. Native reconstruction is required for B1/B2. The launchers can wait using
 read-only KFD PID checks without changing another user's job.
 
-The new `operators/rocm/shared_storage_moe.py` candidate retains native MoE
-dispatch, batched GEMM, and reduction order while sharing identical frozen
-weight storage and broadcasting expert weights with stride zero. It remains
-unvalidated. `model_bench.py --moe-layout shared-storage` selects it; `compact`
-remains the default. The same 132-gradient/per-tensor/global 5% gate and all
-requested sequences must pass before training, whose default bound is 10
-updates. Reports retain layout and source-code version/hash evidence.
+## Validated shared storage and resumed training
+
+`operators/rocm/shared_storage_moe.py` retains native MoE dispatch, batched GEMMs,
+gate multiplication, and reduction order, while aliasing identical frozen expert
+weights and broadcasting packed weights with zero expert stride. All native
+full-state and 132-tensor overlay keys remain present. The first ordinary-mode
+comparison failed; native BF16 atomic `index_add_` itself varies on identical
+inputs, so that comparison could not isolate layout error from reference
+variation. Both the [failed report](../../operators/rocm/results/rx7900xtx-20261002/shared_storage_parity.json)
+and [standalone native probe](../../operators/rocm/results/rx7900xtx-20261002/index_add_probe.json)
+are retained. The latter ran alongside this session's continuation; its timings
+are not standalone operator benchmarks.
+
+The strict deterministic full-model comparison passed **sequences 64, 256,
+and 4096**. Loss, sampled hidden states, selected logits, and **all 132 trainable
+gradients were exactly equal**; the native 4096-token reference repeated exactly.
+The fixed gates were unchanged. At sequence 4096:
+
+| Measurement | Native block offload → resident shared storage |
+| --- | --- |
+| Forward + backward, without optimizer | 31.310048 → 6.721015 s, **4.66×** |
+| Unique parameter storage | 24,500,762,624 → 4,418,435,072 bytes, 22.82 → 4.11 GiB |
+| Actual training throughput, 20-step medians | 131.283 → 584.001 tokens/s, **4.45×** |
+| Actual peak allocated GPU memory | 8526.83 → 12006.71 MiB |
+
+Storage sharing allows the complete model to remain on GPU, so the full-model
+speedup includes removing block transfers. It is not an isolated kernel speedup.
+Throughput windows are baseline steps 33831–33850 and shared steps 33888–33907,
+with sequence 4096, micro-batch/accumulation 1, and CPU FP32 Adam; the shared
+window predates the concurrent native-reduction probe.
+
+After parity, the runner restored the original deterministic setting (**false**)
+and started **952 additional updates from step 33850 toward 34802**, saving every
+10 and keeping two numbered overlays. The recorded checkpoint **33950** has
+**158,754,816 tokens in phase**, all 132 expected keys, and **54 tensors whose
+stored BF16 values changed** from step 33850. This is a running job, not a
+completed target. Its PID is `1032727`, its remote output directory is
+`runs/b0-shared-storage-deterministic/train/`, and its log is
+`experiments/shared-storage-deterministic.log`.
+
+Evidence: [full deterministic comparison](../../operators/rocm/results/rx7900xtx-20261002/shared_storage_deterministic.json),
+[log snapshot](experiments/shared-storage-deterministic.log),
+[training metrics](shared-storage/metrics.jsonl),
+[checkpoint update proof](shared-storage/update_proof.json), and
+[observed status](observed_status.json). The parity report's `updates: 0` and
+`status: parity_pass` describe its last write before training; metrics and
+checkpoint evidence record subsequent updates.
+
+The recorded benchmark source hash predates the published capture cleanup.
+That cleanup clears pending MoE statistics after parity: the measured run's
+first utilization row included parity loads, while later rows use only training
+loads. B0's frozen-router guard prevents bias updates, so this affects logging,
+not loss or optimizer updates. Two CPU regressions verify policy restoration
+and complete tiny-model cleanup on success and exceptions, with unchanged
+parameters and router bias: [log](experiments/parity-isolation.log).
+
+Use `model_bench.py --moe-layout shared-storage --deterministic-parity
+--reference-repeat` to reproduce validation and bounded training. The separate
+`run_compact_b0.py` still installs compute collapse, which has not passed
+whole-model deterministic validation.
 
 These remain DummyStream experiments, with no language-quality improvement
 claim. Source overlays lack Adam state, so moments restart. The native offload
-path clips per block; the resident compact path uses global clipping. CPU
+path clips per block; the resident shared-storage path uses global clipping. CPU
 router initialization and numerical limitations are documented in
 [ROCM_TRAIN.md](../../docs/ROCM_TRAIN.md). The Hub B0-full pointer is preserved.
 
@@ -116,8 +169,10 @@ architecture ledger checks passed. See [check summary](integration_checks.json),
 [CPU log](experiments/integration-cpu.log), and
 [shared-storage log](experiments/shared-storage-regression.log).
 
-The shared-storage full-model experiment uses the integrated code, waits for
-other GPU tasks to exit, and checks sequences 64/256/4096 before any update.
-If all 132 gradient tensors pass the original 5% relative-L2 threshold, it
-continues from step 33850 to the original target 34802, saving every 10 updates.
-This does not change the rejected compute-collapse result.
+The shared-storage run used the integrated source, waited until other GPU
+tasks exited, and passed all requested checks before training. The published
+runner restores both deterministic-policy flags even on exceptions and clears
+pending parity statistics. It preserves the native overlay format and the
+8e9-token schedule. The recorded maximum gradient norm is below 1, so clipping
+was inactive throughout the captured continuation. This does not validate
+compute collapse or the rejected ROCm fused-attention backward paths.

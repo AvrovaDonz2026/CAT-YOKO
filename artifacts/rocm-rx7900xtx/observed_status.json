@@ -1,12 +1,33 @@
 {
-  "last_completed_step": 33850,
-  "last_saved_step": 33850,
-  "tokens_seen": 158345216.0,
-  "baseline_tok_s": 128.5383515097708,
+  "observed_at_utc": "2026-10-02T04:49:39.599183+00:00",
+  "last_completed_step": 33979,
+  "last_verified_saved_step": 33950,
+  "last_saved_tokens_in_phase": 158754816.0,
+  "tokens_seen": 158873600.0,
+  "baseline_training_window_steps": [
+    33831,
+    33850
+  ],
+  "shared_training_window_steps": [
+    33888,
+    33907
+  ],
+  "baseline_median_tok_s": 131.2832930183142,
+  "shared_median_tok_s": 584.0005242082982,
+  "training_speedup": 4.448399417638232,
+  "peak_allocated_mib": 12006.7099609375,
+  "max_grad_norm": 0.1461991786269807,
+  "clip_threshold": 1.0,
   "previous_training_pid": 1018872,
   "baseline_running": false,
-  "layout_experiment": "waiting_for_gpu_idle",
+  "training_pid": 1032727,
+  "training_running_at_checkpoint_probe": true,
+  "layout_experiment": "shared_storage_parity_pass_and_training_running",
   "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/b0-layout-source/trainable_step_33850.pt",
+  "latest_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/b0-shared-storage-deterministic/train/trainable.pt",
   "target_step": 34802,
-  "note": "Other GPU jobs are left running; full-model compact parity and training throughput are pending."
+  "changed_stored_bf16_tensors": 54,
+  "deterministic_parity": true,
+  "deterministic_algorithms_restored": false,
+  "note": "Snapshot of the bounded ongoing DummyStream run. Fixed throughput windows exclude the later concurrent index_add probe. The first MoE-utilization row includes pending parity loads; B0 freezes router bias, so updates/loss are unaffected. Published capture cleanup prevents that log artifact in future launches."
 }

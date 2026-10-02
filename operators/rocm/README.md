@@ -2,7 +2,8 @@
 
 Standalone correctness and timing experiments for CAT-YOKO's 12B shapes,
 measured on 2026-10-02 with a Radeon RX 7900 XTX, 24 GiB VRAM, and PyTorch
-2.9.1+ROCm 6.4. Production training uses the verified baseline implementation.
+2.9.1+ROCm 6.4. The B0 continuation now uses the validated shared-storage layout
+through the isolated runner; the native model remains the reference.
 
 The runner temporarily stopped this session's B0 process and resumed the same
 process in `finally`; its allocations remained resident. This is a shared GPU,
@@ -89,11 +90,42 @@ BF16 reductions remain approximate. It changes frozen full-state keys; rebuild
 the native model before applying an overlay or entering B1/B2. Compact B1/B2 and
 full compact-model checkpoint publication are unsupported.
 
-`shared_storage_moe.py` is a separate, unvalidated B0 candidate. It shares
-identical frozen expert weight storage while retaining native MoE dispatch,
-batched GEMM, and reduction order; its packed weights use stride-zero expert
-broadcasting. This differs from collapsing multiple expert outputs into one.
-No full-model correctness or speed claim is made for shared storage.
+`shared_storage_moe.py` shares byte-identical frozen expert weights while
+retaining native MoE dispatch, batched GEMMs, gate multiplication, and reduction
+order. Logical experts alias one master expert and packed weights broadcast
+with zero expert stride; this preserves all native full-state and overlay keys.
+
+The first ordinary-mode comparison failed the gradient gate: at sequence 4096,
+34.63 → 6.39 seconds, aggregate gradient relative L2 3.42%, and 43 of 132 tensors
+above 5%. It performed no updates. An isolated native BF16 `index_add_` probe
+showed that repeated fixed inputs already vary under the reference's ordinary
+atomic reduction policy. The standalone probe observed maximum repeat relative
+L2 **0.284%** for identical expert outputs and **0.358%** for independent outputs;
+deterministic mode repeated exactly in both cases. Its timings ran alongside
+this session's continuation and are not operator speed comparisons.
+[Original comparison](results/rx7900xtx-20261002/shared_storage_parity.json),
+[standalone probe](results/rx7900xtx-20261002/index_add_probe.json), and
+[earlier ad hoc probe](results/rx7900xtx-20261002/index_add_adhoc.json) are retained.
+
+Strict deterministic full-model checks then **passed at sequences 64, 256, and
+4096**: loss, sampled hidden states, selected logits, and all **132 trainable
+gradients had exactly zero error**. The native 4096-token reference repeated
+exactly too. No thresholds were relaxed. At 4096, native block-offload
+forward+backward took **31.310 → 6.721 seconds**, a **4.66×** speedup for the shared,
+resident layout. Parameter storage dropped from **24,500,762,624 to
+4,418,435,072 bytes** (22.82 → 4.11 GiB), allowing the model to stay on the GPU.
+This measures the layout plus removal of block offload, rather than an isolated
+kernel improvement. [Full parity report](results/rx7900xtx-20261002/shared_storage_deterministic.json).
+
+After validation, the runner restored the original deterministic-policy setting
+(**false**) and continued from step **33850**, targeting **34802**, with resident
+BF16 compute and CPU FP32 Adam. A recorded 20-step window reached a median
+**584.0 tokens/s**, versus the native baseline's **131.3 tokens/s**, or **4.45×**
+actual training throughput. Peak GPU allocation was **12,006.71 MiB**. The saved
+step **33950** confirms optimizer updates and overlay saves; this is an ongoing
+bounded run. [Metrics and status](../../artifacts/rocm-rx7900xtx/README.md).
+Compute collapse remains unvalidated; shared-storage success does not promote
+that separate implementation.
 
 `model_bench.py` compares the same source overlay and batches without optimizer
 updates or clipping: loss, selected hidden/logit outputs, every trainable
@@ -110,17 +142,26 @@ and benchmark/installer/native-MoE SHA256 hashes. Both layouts must retain the
 same 132 trainable gradients and pass every requested sequence, including each
 per-tensor 5% check, before bounded training (default 10 updates) can begin.
 
-`run_compact_b0.py` is the separate bounded continuation launcher and assumes
-full-model parity has already passed. `gpu_wait.py` reads other registered KFD
-PIDs and requires two consecutive idle observations. Both launchers expose
-`--wait-gpu-idle` and optional `--gpu-idle-max-wait` seconds. It does not signal
-other processes or reserve the GPU after the check.
+`--deterministic-parity` temporarily requires strict deterministic kernels,
+restoring both enabled and warn-only settings in `finally` before training.
+`--reference-repeat` also checks a repeated native 4096-token batch. Together,
+these flags avoid mistaking reference atomic variation for a layout error.
+Capture cleanup clears pending MoE statistics so parity batches cannot enter
+subsequent utilization logs; frozen B0 router bias is never updated.
+
+`run_compact_b0.py` installs compute collapse and assumes prior validation; use
+`model_bench.py --moe-layout shared-storage` for the validated shared layout.
+`gpu_wait.py` reads other registered KFD PIDs and requires two consecutive idle
+observations. Both launchers expose `--wait-gpu-idle` and optional
+`--gpu-idle-max-wait` seconds. It does not signal other processes or reserve the
+GPU after the check.
 
 ## Files and reproduction
 
 - `frozen_moe.py`: byte-equality guards, normalized gates, native MoE output/input-gradient comparisons, and real base-weight slices.
 - `attention_bench.py`: FP32 SDPA baseline plus an independent causal formula; Flash, repeated KV, gradient layouts, and checkpointed math chunks.
 - `attention_layout.py`: Efficient attention, grouped-query FP32 bmm, copy-inclusive layouts, and Flash-forward/FP32-backward hybrids.
+- `probe_index_add.py`: fixed native BF16 reductions under ordinary/deterministic policies, with identical and independent expert outputs.
 - `projection_bench.py`: real QKV and shared gate/up numerical checks plus pageable/pinned transfers.
 - `run_benchmarks.py`: temporarily stops only an authorized `run_b0_rocm.py` process and resumes it after completion, timeout, or error.
 - `compact_model.py`, `shared_storage_moe.py`, `model_bench.py`, `run_compact_b0.py`, and `gpu_wait.py`: isolated B0 layouts, full-model parity, bounded continuation, and read-only availability waiting.
@@ -141,18 +182,26 @@ python operators/rocm/attention_layout.py \
 python operators/rocm/model_bench.py \
   --base /path/to/MiniCPM5-2B-Base --resume /path/to/b0/trainable.pt \
   --out /path/to/shared-storage-parity --moe-layout shared-storage \
-  --parity-seqs 64,256,4096 \
+  --parity-seqs 64,256,4096 --deterministic-parity --reference-repeat \
   --parity-only --wait-gpu-idle
 ```
 
-After full-model parity passes, an independent bounded run can use:
+To validate and continue the shared layout from the saved step 33850:
 
 ```bash
-python operators/rocm/run_compact_b0.py \
-  --base /path/to/MiniCPM5-2B-Base --resume /path/to/b0/trainable.pt \
-  --save-dir /path/to/compact-b0 --run-steps 10 --seq-len 4096 \
-  --save-every 5 --wait-gpu-idle
+python operators/rocm/model_bench.py \
+  --base /path/to/MiniCPM5-2B-Base \
+  --resume /path/to/b0-layout-source/trainable_step_33850.pt \
+  --out /path/to/shared-storage-continuation --moe-layout shared-storage \
+  --parity-seqs 64,256,4096 --deterministic-parity --reference-repeat \
+  --seq-len 4096 --run-steps 952 --save-every 10 --wait-gpu-idle
+
+python operators/rocm/probe_index_add.py --device cuda --repeats 12 \
+  --json /path/to/operator-results/index_add_probe.json
 ```
 
-All runs remain DummyStream experiments. Operator timing and tiny tests do not
-establish language-quality improvement or full-model training throughput.
+All runs remain DummyStream experiments. Actual continuation throughput is
+measured above; language-quality improvement has not been evaluated. CPU Adam
+moments restart because the source overlay has no optimizer state. Resident
+training uses global clipping and the baseline uses per-block clipping; recorded
+gradient norms remain below the clipping threshold of 1.

@@ -1,0 +1,405 @@
+{
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "device": "cuda",
+  "dtype": "bfloat16",
+  "tokens": 4096,
+  "hidden": 2048,
+  "experts": 20,
+  "topk": 10,
+  "repeats": 12,
+  "seed": 2026,
+  "original_deterministic_algorithms": false,
+  "results": [
+    {
+      "case": "identical",
+      "mode": "default",
+      "supported": true,
+      "all_repeats_bitwise_equal": false,
+      "max_repeat_relative_l2": 0.0028429445810616016,
+      "max_repeat_abs": 0.0625,
+      "measurements": [
+        {
+          "repeat": 0,
+          "ms": 101.83199896709993,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 1,
+          "ms": 4.110642999876291,
+          "bitwise_equal": false,
+          "max_abs": 0.0625,
+          "relative_l2": 0.0025586863048374653
+        },
+        {
+          "repeat": 2,
+          "ms": 2.6425059768371284,
+          "bitwise_equal": false,
+          "max_abs": 0.0625,
+          "relative_l2": 0.002758347662165761
+        },
+        {
+          "repeat": 3,
+          "ms": 2.610864001326263,
+          "bitwise_equal": false,
+          "max_abs": 0.046875,
+          "relative_l2": 0.002769551007077098
+        },
+        {
+          "repeat": 4,
+          "ms": 4.429079999681562,
+          "bitwise_equal": false,
+          "max_abs": 0.0625,
+          "relative_l2": 0.002345481887459755
+        },
+        {
+          "repeat": 5,
+          "ms": 2.5745840393938124,
+          "bitwise_equal": false,
+          "max_abs": 0.046875,
+          "relative_l2": 0.002596178324893117
+        },
+        {
+          "repeat": 6,
+          "ms": 3.190889023244381,
+          "bitwise_equal": false,
+          "max_abs": 0.046875,
+          "relative_l2": 0.0027643877547234297
+        },
+        {
+          "repeat": 7,
+          "ms": 1.9866329967044294,
+          "bitwise_equal": false,
+          "max_abs": 0.046875,
+          "relative_l2": 0.002737415721639991
+        },
+        {
+          "repeat": 8,
+          "ms": 1.9695599912665784,
+          "bitwise_equal": false,
+          "max_abs": 0.046875,
+          "relative_l2": 0.0027275800239294767
+        },
+        {
+          "repeat": 9,
+          "ms": 3.316050977446139,
+          "bitwise_equal": false,
+          "max_abs": 0.0625,
+          "relative_l2": 0.002734868787229061
+        },
+        {
+          "repeat": 10,
+          "ms": 4.807644989341497,
+          "bitwise_equal": false,
+          "max_abs": 0.0625,
+          "relative_l2": 0.002765761688351631
+        },
+        {
+          "repeat": 11,
+          "ms": 7.988054014276713,
+          "bitwise_equal": false,
+          "max_abs": 0.046875,
+          "relative_l2": 0.0028429445810616016
+        }
+      ]
+    },
+    {
+      "case": "identical",
+      "mode": "deterministic",
+      "supported": true,
+      "all_repeats_bitwise_equal": true,
+      "max_repeat_relative_l2": 0.0,
+      "max_repeat_abs": 0.0,
+      "measurements": [
+        {
+          "repeat": 0,
+          "ms": 70.41470299009234,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 1,
+          "ms": 4.584862967021763,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 2,
+          "ms": 4.42695600213483,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 3,
+          "ms": 3.4336000098846853,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 4,
+          "ms": 4.7293329844251275,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 5,
+          "ms": 3.113890008535236,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 6,
+          "ms": 3.0349359731189907,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 7,
+          "ms": 7.65692099230364,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 8,
+          "ms": 2.8913679998368025,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 9,
+          "ms": 4.1880730423145,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 10,
+          "ms": 3.074654028750956,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 11,
+          "ms": 3.1142799998633564,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        }
+      ],
+      "versus_default": {
+        "bitwise_equal": false,
+        "max_abs": 0.0625,
+        "relative_l2": 0.004209305625408888
+      }
+    },
+    {
+      "case": "independent",
+      "mode": "default",
+      "supported": true,
+      "all_repeats_bitwise_equal": false,
+      "max_repeat_relative_l2": 0.0035820212215185165,
+      "max_repeat_abs": 0.0390625,
+      "measurements": [
+        {
+          "repeat": 0,
+          "ms": 2.0133249927312136,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 1,
+          "ms": 2.5916460435837507,
+          "bitwise_equal": false,
+          "max_abs": 0.0234375,
+          "relative_l2": 0.003385861637070775
+        },
+        {
+          "repeat": 2,
+          "ms": 6.425321975257248,
+          "bitwise_equal": false,
+          "max_abs": 0.0390625,
+          "relative_l2": 0.003472225507721305
+        },
+        {
+          "repeat": 3,
+          "ms": 1.9749209750443697,
+          "bitwise_equal": false,
+          "max_abs": 0.01953125,
+          "relative_l2": 0.0013675254303961992
+        },
+        {
+          "repeat": 4,
+          "ms": 2.867982955649495,
+          "bitwise_equal": false,
+          "max_abs": 0.0234375,
+          "relative_l2": 0.001315292902290821
+        },
+        {
+          "repeat": 5,
+          "ms": 5.872650013770908,
+          "bitwise_equal": false,
+          "max_abs": 0.0234375,
+          "relative_l2": 0.003005195641890168
+        },
+        {
+          "repeat": 6,
+          "ms": 2.815941988956183,
+          "bitwise_equal": false,
+          "max_abs": 0.03125,
+          "relative_l2": 0.0035820212215185165
+        },
+        {
+          "repeat": 7,
+          "ms": 6.540756032336503,
+          "bitwise_equal": false,
+          "max_abs": 0.03125,
+          "relative_l2": 0.0034753133077174425
+        },
+        {
+          "repeat": 8,
+          "ms": 1.939893001690507,
+          "bitwise_equal": false,
+          "max_abs": 0.0234375,
+          "relative_l2": 0.001351437414996326
+        },
+        {
+          "repeat": 9,
+          "ms": 3.121193964034319,
+          "bitwise_equal": false,
+          "max_abs": 0.015625,
+          "relative_l2": 0.001359055400826037
+        },
+        {
+          "repeat": 10,
+          "ms": 6.014645041432232,
+          "bitwise_equal": false,
+          "max_abs": 0.0234375,
+          "relative_l2": 0.0028763373848050833
+        },
+        {
+          "repeat": 11,
+          "ms": 1.707452000118792,
+          "bitwise_equal": false,
+          "max_abs": 0.0234375,
+          "relative_l2": 0.0014271277468651533
+        }
+      ]
+    },
+    {
+      "case": "independent",
+      "mode": "deterministic",
+      "supported": true,
+      "all_repeats_bitwise_equal": true,
+      "max_repeat_relative_l2": 0.0,
+      "max_repeat_abs": 0.0,
+      "measurements": [
+        {
+          "repeat": 0,
+          "ms": 2.711499051656574,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 1,
+          "ms": 4.036949016153812,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 2,
+          "ms": 3.96552198799327,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 3,
+          "ms": 3.969139012042433,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 4,
+          "ms": 3.8823200156912208,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 5,
+          "ms": 3.8358800229616463,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 6,
+          "ms": 3.79507098114118,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 7,
+          "ms": 3.9034709916450083,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 8,
+          "ms": 3.970271034631878,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 9,
+          "ms": 6.472894048783928,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 10,
+          "ms": 4.343654960393906,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        },
+        {
+          "repeat": 11,
+          "ms": 4.492353007663041,
+          "bitwise_equal": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0
+        }
+      ],
+      "versus_default": {
+        "bitwise_equal": false,
+        "max_abs": 0.03125,
+        "relative_l2": 0.004855422768741846
+      }
+    }
+  ],
+  "note": "Only native weighted index_add, with immutable inputs; no optimizer updates.",
+  "restored_deterministic_algorithms": false,
+  "restored_deterministic_warn_only": false,
+  "timing_scope_note": "Run alongside this session's own CAT-YOKO continuation PID 1032727; use for repeatability evidence, not standalone timing claims."
+}

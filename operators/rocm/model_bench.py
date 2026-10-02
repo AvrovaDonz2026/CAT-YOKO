@@ -24,6 +24,7 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -43,6 +44,7 @@ from cat_yoko.config import CATYokoConfig
 from cat_yoko.data import DummyStream
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.hf_minicpm import load_minicpm_state
+from cat_yoko.moe import MoE
 from cat_yoko.offload import move_module, set_after_block_backward
 from cat_yoko.optim import trim_host_allocator
 from cat_yoko.trainer import Trainer, build_model, configure_cuda, seed_all
@@ -56,6 +58,19 @@ def emit(report_path: Path, report: dict, event: dict) -> None:
     report_path.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
     display = {key: value for key, value in event.items() if key != "gradients"}
     print(json.dumps(display, allow_nan=False), flush=True)
+
+
+@contextmanager
+def parity_determinism(enabled: bool):
+    """Require deterministic parity kernels, then restore the caller's policy."""
+    previous = torch.are_deterministic_algorithms_enabled()
+    warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+    if enabled:
+        torch.use_deterministic_algorithms(True, warn_only=False)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(previous, warn_only=warn_only)
 
 
 def source_code_version(layout: str) -> dict:
@@ -171,6 +186,13 @@ def capture(model, batch: dict, *, device: torch.device, offload: bool) -> tuple
     finally:
         hook.remove()
         model.zero_grad(set_to_none=True)
+        # Frozen B0 bias is never updated, but pending parity loads would
+        # contaminate the first continuation step's utilization log.
+        for module in model.modules():
+            if isinstance(module, MoE):
+                module.last_load = None
+                module._load_n = 0
+                module.last_aux = None
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -224,6 +246,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seq-len", type=int, default=4096)
     parser.add_argument("--run-steps", type=int, default=10)
     parser.add_argument("--parity-only", action="store_true")
+    parser.add_argument("--deterministic-parity", action="store_true",
+                        help="require deterministic kernels for all reference/candidate parity; restore policy before training")
+    parser.add_argument("--reference-repeat", action="store_true",
+                        help="repeat the native 4096-token reference before installing the layout")
     parser.add_argument("--save-every", type=int, default=5)
     parser.add_argument("--keep-last", type=int, default=2)
     parser.add_argument("--cpu-threads", type=int, default=8)
@@ -238,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
     sequences = [int(part) for part in args.parity_seqs.split(",")]
     if not sequences or any(seq < 2 or seq > 4096 for seq in sequences):
         parser.error("parity-seqs must contain lengths in [2,4096]")
+    if args.reference_repeat and 4096 not in sequences:
+        parser.error("--reference-repeat requires 4096 in --parity-seqs")
     if args.run_steps <= 0 or args.seq_len < 2 or args.seq_len > 4096:
         parser.error("run-steps must be positive; seq-len must be in [2,4096]")
     if min(args.loss_atol, args.grad_relative_l2, args.output_relative_l2) <= 0:
@@ -273,6 +301,10 @@ def main(argv: list[str] | None = None) -> int:
         "source_tokens_in_phase": float(extra["tokens_in_phase"]),
         "dtype": "bf16", "parity_sequences": sequences,
         "moe_layout": args.moe_layout,
+        "deterministic_parity": args.deterministic_parity,
+        "reference_repeat": args.reference_repeat,
+        "original_deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+        "original_deterministic_warn_only": torch.is_deterministic_algorithms_warn_only_enabled(),
         "source_code_version": source_code_version(args.moe_layout),
         "updates": 0,
         "wait_gpu_idle": args.wait_gpu_idle,
@@ -293,69 +325,86 @@ def main(argv: list[str] | None = None) -> int:
     free_bytes, total_bytes = torch.cuda.mem_get_info(device)
     emit(report_path, report, {"event": "preflight", "free_gpu_mib": free_bytes / 1024**2,
                                "total_gpu_mib": total_bytes / 1024**2})
-    begin = time.perf_counter()
-    model = build_model(cfg, "cpu", dtype="bf16")
-    source = load_minicpm_state(args.base)
-    upcycle_from_minicpm(model, source, cfg)
-    del source
-    load_trainable_state(model, checkpoint["trainable"])
-    del checkpoint
-    apply_freeze(model, "B0")
-    trainable_parameters = {name: parameter for name, parameter in model.named_parameters()
-                            if parameter.requires_grad}
-    trainable_names = set(trainable_parameters)
-    if len(trainable_names) != 132:
-        raise RuntimeError(f"expected 132 B0 trainables, got {len(trainable_names)}")
-    trim_host_allocator()
-    emit(report_path, report, {"event": "model_built", "elapsed_s": time.perf_counter() - begin,
-                               "trainable_tensors": len(trainable_names)})
-    if args.wait_gpu_idle:
-        report["status"] = "waiting_for_gpu"
-        wait_for_gpu_idle(max_wait_seconds=args.gpu_idle_max_wait,
-                          on_event=lambda event: emit(report_path, report, event))
-        report["status"] = "running"
-    for name, module in model.named_children():
-        if name not in {"encoder", "decoder"}:
-            module.to(device)
-    gate = gate_schedule("B0", min((float(extra["tokens_in_phase"]) + 1) / 8e9, 1.0))
-    set_gate(model, gate)
-    report["parity_gate"] = gate
-    references = {}
-    batches = {}
-    for seq in sequences:
-        stream = DummyStream(cfg.vocab_size, seq, seed)
-        if extra.get("stream") is not None:
-            stream.load_state_dict(extra["stream"])
-        batch = stream.batch(1, str(device))
-        row, snapshot = capture(model, batch, device=device, offload=True)
-        references[seq] = (row, snapshot)
-        batches[seq] = batch
-        emit(report_path, report, {"event": "baseline", **row})
-    for block in list(model.encoder) + list(model.decoder):
-        move_module(block, "cpu")
-    layout_report = install_moe_layout(model, args.moe_layout)
-    trainable_after = {name: parameter for name, parameter in model.named_parameters()
-                       if parameter.requires_grad}
-    if set(trainable_after) != trainable_names or any(
-        trainable_after[name] is not parameter for name, parameter in trainable_parameters.items()
-    ):
-        raise RuntimeError("MoE layout installer changed the native 132 B0 trainable names or identities")
-    trim_host_allocator()
-    torch.cuda.empty_cache()
-    emit(report_path, report, {"event": "moe_layout_installed", "moe_layout": args.moe_layout,
-                               **layout_report})
-    model.to(device)
-    passed = True
-    for seq in sequences:
-        base_row, reference = references.pop(seq)
-        row, candidate = capture(model, batches.pop(seq), device=device, offload=False)
-        parity = compare(reference, candidate, base_row, row, args)
-        emit(report_path, report, parity)
-        passed = passed and parity["pass"]
-        del reference, candidate
+    with parity_determinism(args.deterministic_parity):
+        report["parity_deterministic_algorithms"] = torch.are_deterministic_algorithms_enabled()
+        begin = time.perf_counter()
+        model = build_model(cfg, "cpu", dtype="bf16")
+        source = load_minicpm_state(args.base)
+        upcycle_from_minicpm(model, source, cfg)
+        del source
+        load_trainable_state(model, checkpoint["trainable"])
+        del checkpoint
+        apply_freeze(model, "B0")
+        trainable_parameters = {name: parameter for name, parameter in model.named_parameters()
+                                if parameter.requires_grad}
+        trainable_names = set(trainable_parameters)
+        if len(trainable_names) != 132:
+            raise RuntimeError(f"expected 132 B0 trainables, got {len(trainable_names)}")
         trim_host_allocator()
-    report["status"] = "parity_pass" if passed else "parity_failure"
-    emit(report_path, report, {"event": "parity_complete", "pass": passed})
+        emit(report_path, report, {"event": "model_built", "elapsed_s": time.perf_counter() - begin,
+                                   "trainable_tensors": len(trainable_names)})
+        if args.wait_gpu_idle:
+            report["status"] = "waiting_for_gpu"
+            wait_for_gpu_idle(max_wait_seconds=args.gpu_idle_max_wait,
+                              on_event=lambda event: emit(report_path, report, event))
+            report["status"] = "running"
+        for name, module in model.named_children():
+            if name not in {"encoder", "decoder"}:
+                module.to(device)
+        gate = gate_schedule("B0", min((float(extra["tokens_in_phase"]) + 1) / 8e9, 1.0))
+        set_gate(model, gate)
+        report["parity_gate"] = gate
+        references = {}
+        batches = {}
+        reference_stable = True
+        for seq in sequences:
+            stream = DummyStream(cfg.vocab_size, seq, seed)
+            if extra.get("stream") is not None:
+                stream.load_state_dict(extra["stream"])
+            batch = stream.batch(1, str(device))
+            row, snapshot = capture(model, batch, device=device, offload=True)
+            references[seq] = (row, snapshot)
+            batches[seq] = batch
+            emit(report_path, report, {"event": "baseline", **row})
+            if args.reference_repeat and seq == 4096:
+                repeated_row, repeated_snapshot = capture(model, batch, device=device, offload=True)
+                stability = compare(snapshot, repeated_snapshot, row, repeated_row, args)
+                stability["event"] = "reference_repeat"
+                stability["moe_layout"] = "native-reference-repeat"
+                emit(report_path, report, stability)
+                reference_stable = reference_stable and stability["pass"]
+                del repeated_snapshot
+                trim_host_allocator()
+        for block in list(model.encoder) + list(model.decoder):
+            move_module(block, "cpu")
+        layout_report = install_moe_layout(model, args.moe_layout)
+        trainable_after = {name: parameter for name, parameter in model.named_parameters()
+                           if parameter.requires_grad}
+        if set(trainable_after) != trainable_names or any(
+            trainable_after[name] is not parameter for name, parameter in trainable_parameters.items()
+        ):
+            raise RuntimeError("MoE layout installer changed the native 132 B0 trainable names or identities")
+        trim_host_allocator()
+        torch.cuda.empty_cache()
+        emit(report_path, report, {"event": "moe_layout_installed", "moe_layout": args.moe_layout,
+                                   **layout_report})
+        model.to(device)
+        passed = reference_stable
+        for seq in sequences:
+            base_row, reference = references.pop(seq)
+            row, candidate = capture(model, batches.pop(seq), device=device, offload=False)
+            parity = compare(reference, candidate, base_row, row, args)
+            emit(report_path, report, parity)
+            passed = passed and parity["pass"]
+            del reference, candidate
+            trim_host_allocator()
+        report["status"] = "parity_pass" if passed else "parity_failure"
+        emit(report_path, report, {"event": "parity_complete", "pass": passed})
+    emit(report_path, report, {
+        "event": "parity_determinism_restored",
+        "deterministic_algorithms": torch.are_deterministic_algorithms_enabled(),
+        "warn_only": torch.is_deterministic_algorithms_warn_only_enabled(),
+    })
     if not passed:
         return 1
     if args.parity_only:

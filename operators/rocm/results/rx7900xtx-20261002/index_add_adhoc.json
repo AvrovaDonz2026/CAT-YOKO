@@ -1,0 +1,21 @@
+{
+  "experiment": "native BF16 index_add repeated identical inputs",
+  "gpu": "RX7900XTX",
+  "torch": "2.9.1+rocm6.4",
+  "seed": 2026,
+  "tokens": 4096,
+  "hidden": 2048,
+  "experts": 20,
+  "topk": 10,
+  "runs_per_policy": 12,
+  "routing_generation": "CUDA tensors, fixed scores/gates and expert-sorted indices; identical frozen expert outputs",
+  "default": {
+    "max_repeat_relative_l2": 0.0011813169112429023,
+    "max_changed_elements": 298018
+  },
+  "deterministic": {
+    "max_repeat_relative_l2": 0.0,
+    "max_changed_elements": 0
+  },
+  "note": "Ad hoc native-kernel repeat measurement before the standalone probe was added; this is not a full-model parity result."
+}

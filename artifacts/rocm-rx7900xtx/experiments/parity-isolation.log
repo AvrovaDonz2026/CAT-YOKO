@@ -1,0 +1,7 @@
+test_capture_clears_pending_loads_without_changing_weights (operators.rocm.test_model_bench.ParityIsolationTests.test_capture_clears_pending_loads_without_changing_weights) ... ok
+test_policy_restores_after_success_and_exception (operators.rocm.test_model_bench.ParityIsolationTests.test_policy_restores_after_success_and_exception) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.216s
+
+OK

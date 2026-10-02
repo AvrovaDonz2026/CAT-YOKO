@@ -21,5 +21,24 @@
   "architecture_ledger": {
     "pass": 14,
     "run": 14
+  },
+  "full_model_shared_storage_deterministic_parity": {
+    "sequences": [
+      64,
+      256,
+      4096
+    ],
+    "gradient_tensors_per_sequence": 132,
+    "all_gradient_relative_l2": 0,
+    "loss_abs": 0,
+    "sampled_hidden_and_selected_logits_relative_l2": 0,
+    "native_4096_reference_repeat_relative_l2": 0,
+    "original_deterministic_policy_restored": true,
+    "report": "../../operators/rocm/results/rx7900xtx-20261002/shared_storage_deterministic.json"
+  },
+  "parity_isolation_regressions": {
+    "run": 2,
+    "pass": 2,
+    "coverage": "success/error policy restoration, complete tiny B0 capture cleanup, unchanged weights and router bias"
   }
 }
