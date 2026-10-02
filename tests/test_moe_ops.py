@@ -30,6 +30,37 @@ class FusedSwiGLUTests(unittest.TestCase):
         y_ref = m.down_proj(ref)
         self.assertTrue(torch.allclose(y, y_ref, atol=1e-5, rtol=1e-5))
 
+    def test_silu_mul_matches_mul_and_grads(self) -> None:
+        from cat_yoko.moe import _silu_mul
+
+        torch.manual_seed(4)
+        g = torch.randn(6, 8, requires_grad=True)
+        u = torch.randn(6, 8, requires_grad=True)
+        y = _silu_mul(g, u)
+        ref = torch.nn.functional.silu(g) * u
+        self.assertTrue(torch.allclose(y, ref, atol=1e-6, rtol=1e-6))
+        y.sum().backward()
+        g2 = g.detach().clone().requires_grad_(True)
+        u2 = u.detach().clone().requires_grad_(True)
+        (torch.nn.functional.silu(g2) * u2).sum().backward()
+        self.assertTrue(torch.allclose(g.grad, g2.grad, atol=1e-5, rtol=1e-5))
+        self.assertTrue(torch.allclose(u.grad, u2.grad, atol=1e-5, rtol=1e-5))
+
+    def test_silu_mul_not_inplace_on_chunk_views(self) -> None:
+        import inspect
+
+        from cat_yoko.moe import _SiluMulFn, _fused_gate_up, _silu_mul
+
+        self.assertIn("mul_(up)", inspect.getsource(_SiluMulFn.forward))
+        self.assertNotIn("inplace=True", inspect.getsource(_SiluMulFn.forward))
+        self.assertIn("_silu_mul", inspect.getsource(_fused_gate_up))
+        gu = torch.randn(4, 8)
+        g, u = gu.chunk(2, dim=-1)
+        before = gu.clone()
+        y = _silu_mul(g, u)
+        self.assertTrue(torch.equal(gu, before))
+        self.assertEqual(tuple(y.shape), tuple(g.shape))
+
 
 class BatchedMoETests(unittest.TestCase):
     def _compare(self, hash_route: bool) -> None:
@@ -223,6 +254,39 @@ class TrainableCacheTests(unittest.TestCase):
         self.assertIsNotNone(moe.last_load)
         self.assertEqual(int(moe._load_n), 1)
 
+    def test_frozen_moe_skips_load_histogram_when_not_logging(self) -> None:
+        from cat_yoko.moe import arm_moe_load_tracking
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B0")
+        arm_moe_load_tracking(model, log_step=False)
+        moe = model.encoder[0].mlp
+        moe.train()
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        moe(x)
+        self.assertIsNone(moe.last_load)
+        self.assertEqual(int(moe._load_n), 0)
+        arm_moe_load_tracking(model, log_step=True)
+        moe(x)
+        self.assertIsNotNone(moe.last_load)
+        self.assertEqual(int(moe._load_n), 1)
+
+    def test_trainable_moe_keeps_load_when_not_logging(self) -> None:
+        from cat_yoko.moe import arm_moe_load_tracking
+
+        cfg = CATYokoConfig.tiny()
+        model = CATYokoForCausalLM(cfg)
+        apply_freeze(model, "B1")
+        arm_moe_load_tracking(model, log_step=False)
+        moe = model.decoder[-1].mlp
+        self.assertTrue(moe.track_load)
+        moe.train()
+        x = torch.randn(2, cfg.seq_len, cfg.hidden_size)
+        moe(x)
+        self.assertIsNotNone(moe.last_load)
+        self.assertIsNotNone(moe.last_aux)
+
     def test_repeat_by_counts_matches_repeat_interleave(self) -> None:
         from cat_yoko.moe import _repeat_by_counts
 
@@ -232,6 +296,14 @@ class TrainableCacheTests(unittest.TestCase):
         ref = torch.repeat_interleave(ids, counts)
         self.assertTrue(torch.equal(got, ref))
         self.assertEqual(got.tolist(), [0, 0, 2, 2, 2])
+
+    def test_kick_wait_max_count_cpu(self) -> None:
+        from cat_yoko.moe import _kick_max_count, _wait_max_count
+
+        counts = torch.tensor([2, 0, 5, 1], dtype=torch.int64)
+        pinned, done = _kick_max_count(counts)
+        self.assertIsNone(done)
+        self.assertEqual(_wait_max_count(pinned, done), 5)
 
 
 if __name__ == "__main__":

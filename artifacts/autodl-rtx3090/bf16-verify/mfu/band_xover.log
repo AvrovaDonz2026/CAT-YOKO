@@ -1,0 +1,9 @@
+BANDED_SEQ_MIN 512 TILE 256
+S= 512 W=  32 sxs=   0.07ms band=   0.53ms speedup= 0.14x fat_tile_force use_gate=True
+S=1024 W=  32 sxs=   0.19ms band=   0.55ms speedup= 0.35x fat_tile_force use_gate=True
+S=2048 W=  32 sxs=   0.63ms band=   0.54ms speedup= 1.17x fat_tile_force use_gate=True
+S=4096 W=  32 sxs=   2.27ms band=   0.78ms speedup= 2.93x fat_tile_force use_gate=True
+S=4096 W= 256 sxs=   2.27ms band=   1.07ms speedup= 2.13x fat_tile_force use_gate=True
+S=4096 W= 512 sxs=   2.27ms band=   1.14ms speedup= 1.99x fat_tile_force use_gate=True
+S=4096 W=8192 sxs=   2.08ms band=   1.18ms speedup= 1.76x covering_flash
+XOVER_DONE

@@ -1,18 +1,19 @@
 # Phase B checkpoints
 
-Weights **do not enter GitHub**. Overlay / full graph / shards go to [HuggingFace AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO). This directory keeps pointers and small `--try` logs only. Progress: [`docs/STATUS.md`](../docs/STATUS.md).
+Weights do not live on GitHub. Overlays / full graphs / shards go to [Hugging Face AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO). This directory keeps pointers and small `--try` logs. Progress: [`docs/STATUS.md`](../docs/STATUS.md).
 
-| Path | Contents | Approx size | Destination |
+| Path | Contents | Size | Destination |
 | --- | --- | --- | --- |
 | [`b0/`](b0/) | 6000D `--try` 32-step new-module overlay | ~419MiB | Hub `checkpoints/b0/` |
 | [`b0-nvfp4-try/`](b0-nvfp4-try/README.md) | 6000D NVFP4 wrap `--try` 2 steps | ~419MiB | Hub |
 | [`b0-full/`](b0-full/README.md) | **published B0 envelope** (8e9, in progress) | ~419MiB | Hub `checkpoints/b0-full/` |
+| [`b0-3090-bf16/`](b0-3090-bf16/README.md) | 3090 BF16 **sibling** snapshot (does not overwrite the published pin) | ~419MiB | Hub `checkpoints/b0-3090-bf16/` |
 | [`b1/`](b1/README.md) | decoder + `lm_head` + final RMSNorm | Hub after `--try` | Hub `checkpoints/b1/` |
 | [`b2/`](b2/README.md) | full-model overlay | Hub after `--try` | Hub `checkpoints/b2/` |
 
-12B full-graph `latest.pt` ≈ 23GiB: write only to a large disk, never git.
+The 12B full graph `latest.pt` is ≈23GiB. Write it only on a large disk, never into git.
 
-Hub `checkpoints/b0/` **is not** the 8B envelope. The in-progress published overlay is [`b0-full/`](b0-full/README.md) (step **26940** before B200 recycle, ≈1.63% of 8e9; micro-batch=2).
+Hub `checkpoints/b0/` is **not** the 8B envelope. The in-progress published overlay is [`b0-full/`](b0-full/README.md) (pre-recycle B200 step **26940**, ≈1.63% of 8e9; micro-batch=2).
 
 Resume published B0 (do not use the 32-step `--try`):
 
@@ -23,11 +24,11 @@ python3 -m cat_yoko.b0 --resume /workspace/runs/b0-full \
 # or SM100: bash scripts/run_b0_full_b200.sh
 ```
 
-The trainer MiniCPM5-upcycles then overlays `trainable.pt`. B1: same MiniCPM5 + **B0-full** overlay, then train the decoder. B2: MiniCPM5 fills encoder+embed, then stack the B1 overlay.
+The trainer MiniCPM5-upcycles, then overlays `trainable.pt`. B1: same MiniCPM5 + **B0-full** overlay, then train the decoder. B2: MiniCPM5 fills encoder+embed, then stack the B1 overlay.
 
 Logs: [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md), [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md), [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md).
 
-32GB try run (cannot finish the envelope; artifacts stay local / Hub):
+32GB smoke (cannot finish the envelope; keep products local / Hub):
 
 ```bash
 python3 -m cat_yoko.b0 --try --save-dir /tmp/runs/b0

@@ -1,21 +1,21 @@
-# Vast B200 snapshot before release
+# Vast B200 pre-release snapshot
 
-SSH Host was `vast-b200` (do not write the machine IP into scripts). **SSH refused from 2026-09-19T06:47Z**; treat as recycled. destroy will wipe the disk. This directory keeps only logs and probes; **weights do not go into GitHub**.
+SSH Host used to be `vast-b200` (do not write the machine IP into scripts). **SSH was refused from 2026-09-19T06:47Z**; treat the instance as recycled. destroy wipes the disk. This directory keeps logs and probes only; **weights do not go on GitHub**.
 
 Weights: https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 
-Progress: [`docs/STATUS.md`](../../docs/STATUS.md).
+Progress: [`docs/STATUS.md`](../../docs/STATUS.md). This Hub `b0-full` overlay is the published pin. The RTX 3090 BF16 run is a sibling, not a replacement.
 
 | Item | Value |
 | --- | --- |
-| Time | 2026-09-19T06:44Z disk copy |
-| Machine | Vast NVIDIA B200 SM 10.0, 183359 MiB (recycled) |
-| Runtime | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 |
-| Training at the time | tmux `b0-full`, `--seq-len 4096`, `--micro-batch 2` |
+| time | 2026-09-19T06:44Z disk copy |
+| machine | Vast NVIDIA B200 SM 10.0, 183359 MiB (recycled) |
+| runtime | torch `2.11.0+cu128` + TE `@stable` nvcc 12.9 SM100 |
+| then training | tmux `b0-full`, `--seq-len 4096`, `--micro-batch 2` |
 | overlay | step **26940**, `tokens_in_phase=130,041,856` (≈1.63% of 8e9) |
 | sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| Throughput / VRAM | ~15.6k tok/s, Trainer 137952 MiB, nvidia-smi ~141/183 GiB |
-| License | Apache-2.0 |
+| throughput / VRAM | ~15.6k tok/s, Trainer 137952 MiB, nvidia-smi ~141/183 GiB |
+| license | Apache-2.0 |
 
 Do not resume the 32-step `--try` under `checkpoints/b0/`. Next machine:
 

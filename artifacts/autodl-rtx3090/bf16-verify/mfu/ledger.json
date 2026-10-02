@@ -30,7 +30,7 @@
         "flops": 8388608.0,
         "nbytes": 294912.0,
         "theo_mfu": 0.37422272187870836,
-        "note": "probe: n_win=32 still materializes S\u00d7S mask; not Flash"
+        "note": "probe: n_win=32 fat tiles 256 when seq>=512; shorter stays S\u00d7S (tile-by-window launch trap); CSA union still S\u00d7S"
       },
       {
         "name": "masked_csa_union",
@@ -136,137 +136,173 @@
     "ops": [
       {
         "name": "gemm_8192",
-        "tflops": 72.11954690322074,
-        "ms": 15.24568130262196,
+        "tflops": 72.08986331579486,
+        "ms": 15.251958835870028,
         "theo_mfu": 1.0,
-        "achieved_mfu": 1.013484357830533,
-        "frac_of_roofline": 1.013484357830533,
+        "achieved_mfu": 1.013067219165189,
+        "frac_of_roofline": 1.013067219165189,
         "note": "cuBLAS bf16 peak probe"
       },
       {
         "name": "fused_qkv_probe",
-        "tflops": 0.5759201552510278,
-        "ms": 0.029131149252255756,
+        "tflops": 0.5912472953287875,
+        "ms": 0.028375970820585888,
         "theo_mfu": 0.8420011242270938,
-        "achieved_mfu": 0.008093313030509103,
-        "frac_of_roofline": 0.009611997891259678,
+        "achieved_mfu": 0.008308702857346648,
+        "frac_of_roofline": 0.00986780494500353,
         "note": "frozen cached cat"
       },
       {
         "name": "fused_qkv_12b",
-        "tflops": 74.66330447703885,
-        "ms": 1.1504894743363063,
+        "tflops": 74.70215135506038,
+        "ms": 1.1498911927143731,
         "theo_mfu": 1.0,
-        "achieved_mfu": 1.049231372639669,
-        "frac_of_roofline": 1.049231372639669,
+        "achieved_mfu": 1.0497772815494713,
+        "frac_of_roofline": 1.0497772815494713,
         "note": "frozen cached cat"
       },
       {
         "name": "dense_flash_gqa_probe",
-        "tflops": 0.16325600074858285,
-        "ms": 0.05138315260410309,
+        "tflops": 0.1404982900165748,
+        "ms": 0.05970612168312073,
         "theo_mfu": 0.5613340828180625,
-        "achieved_mfu": 0.0022942102409862684,
-        "frac_of_roofline": 0.004087067418868736,
+        "achieved_mfu": 0.0019743998034931817,
+        "frac_of_roofline": 0.003517334621088947,
         "note": "YOCO cross / covering window"
       },
       {
         "name": "dense_flash_gqa_12b",
-        "tflops": 60.451643564632384,
-        "ms": 1.136767715215683,
+        "tflops": 60.636484748693675,
+        "ms": 1.1333024501800537,
         "theo_mfu": 1.0,
-        "achieved_mfu": 0.8495171945563854,
-        "frac_of_roofline": 0.8495171945563854,
+        "achieved_mfu": 0.8521147378962011,
+        "frac_of_roofline": 0.8521147378962011,
         "note": "YOCO cross / covering window"
       },
       {
         "name": "masked_window_probe",
-        "tflops": 0.16974986157109836,
-        "ms": 0.049417465925216675,
+        "tflops": 0.17228107675186474,
+        "ms": 0.04869140684604645,
         "theo_mfu": 0.37422272187870836,
-        "achieved_mfu": 0.0023854674194926694,
-        "frac_of_roofline": 0.006374459058811073,
-        "note": "seq=128 switch=320"
+        "achieved_mfu": 0.002421038178075671,
+        "frac_of_roofline": 0.006469511434050145,
+        "note": "seq=128 S\u00d7S mask switch=320"
+      },
+      {
+        "name": "banded_window_probe",
+        "tflops": 0.14882692960562632,
+        "ms": 0.05636485293507576,
+        "theo_mfu": 0.37422272187870836,
+        "achieved_mfu": 0.002091440832007115,
+        "frac_of_roofline": 0.005588759606865841,
+        "note": "seq=128 n_win=32 stays S\u00d7S (seq<512)"
       },
       {
         "name": "masked_window_mid",
-        "tflops": 17.987641892167385,
-        "ms": 0.05969330668449402,
+        "tflops": 18.889483340026427,
+        "ms": 0.05684336647391319,
         "theo_mfu": 1.0,
-        "achieved_mfu": 0.2527774296257362,
-        "frac_of_roofline": 0.2527774296257362,
-        "note": "seq=512 switch=320"
+        "achieved_mfu": 0.2654508620014956,
+        "frac_of_roofline": 0.2654508620014956,
+        "note": "seq=512 S\u00d7S mask switch=320"
+      },
+      {
+        "name": "banded_window_mid",
+        "tflops": 2.019262067281641,
+        "ms": 0.5317496135830879,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.02837636407084937,
+        "frac_of_roofline": 0.02837636407084937,
+        "note": "seq=512 n_win=32 fat tiles 256\u00d7287 n=2"
+      },
+      {
+        "name": "masked_window_long",
+        "tflops": 31.778617904166254,
+        "ms": 0.5406109616160393,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.4465797906712515,
+        "frac_of_roofline": 0.4465797906712515,
+        "note": "seq=2048 S\u00d7S mask switch=320"
+      },
+      {
+        "name": "banded_window_long",
+        "tflops": 32.50124975480491,
+        "ms": 0.5285910330712795,
+        "theo_mfu": 1.0,
+        "achieved_mfu": 0.45673481948854566,
+        "frac_of_roofline": 0.45673481948854566,
+        "note": "seq=2048 n_win=32 fat tiles 256\u00d7287 n=8"
       },
       {
         "name": "masked_csa_probe",
-        "tflops": 0.3691944162881756,
-        "ms": 0.045442767441272736,
+        "tflops": 0.35777566943884015,
+        "ms": 0.04689311608672142,
         "theo_mfu": 0.7484454437574167,
-        "achieved_mfu": 0.005188229571222254,
-        "frac_of_roofline": 0.00693200768939926,
+        "achieved_mfu": 0.005027763763896011,
+        "frac_of_roofline": 0.00671760888630059,
         "note": "seq=128 equal-head union"
       },
       {
         "name": "masked_csa_mid",
-        "tflops": 36.729410524723065,
-        "ms": 0.05846768617630005,
+        "tflops": 36.58419076501536,
+        "ms": 0.058699771761894226,
         "theo_mfu": 1.0,
-        "achieved_mfu": 0.5161524806734551,
-        "frac_of_roofline": 0.5161524806734551,
+        "achieved_mfu": 0.514111730818091,
+        "frac_of_roofline": 0.514111730818091,
         "note": "seq=512 equal-head union"
       },
       {
         "name": "masked_hca_probe",
-        "tflops": 0.4195005686813626,
-        "ms": 0.04499247297644615,
+        "tflops": 0.4160710825249645,
+        "ms": 0.045363325625658035,
         "theo_mfu": 0.7873257265500099,
-        "achieved_mfu": 0.005895173815083791,
-        "frac_of_roofline": 0.0074875920045390995,
+        "achieved_mfu": 0.005846979799395228,
+        "frac_of_roofline": 0.007426379708200525,
         "note": "k_len=144"
       },
       {
         "name": "masked_hca_mid",
-        "tflops": 40.33889600456258,
-        "ms": 0.05989056080579758,
+        "tflops": 41.414658288690724,
+        "ms": 0.05833487957715988,
         "theo_mfu": 1.0,
-        "achieved_mfu": 0.566875997815663,
-        "frac_of_roofline": 0.566875997815663,
+        "achieved_mfu": 0.5819935116454571,
+        "frac_of_roofline": 0.5819935116454571,
         "note": "k_len=576"
       },
       {
         "name": "masked_gqa_probe",
-        "tflops": 0.14903427290093324,
-        "ms": 0.11257287114858627,
+        "tflops": 0.15592413351223142,
+        "ms": 0.10759858414530754,
         "theo_mfu": 0.3962358231656912,
-        "achieved_mfu": 0.0020943545938860767,
-        "frac_of_roofline": 0.005285626567414867,
+        "achieved_mfu": 0.0021911766935389463,
+        "frac_of_roofline": 0.005529981302631178,
         "note": "repeat KV then fused; {'kind': 'masked_bf16', 'dtype': 'bfloat16'}"
       },
       {
         "name": "indexer_fp32_probe",
-        "tflops": 0.08890215867545255,
-        "ms": 0.0707683153450489,
+        "tflops": 0.08700478389902302,
+        "ms": 0.07231160998344421,
         "theo_mfu": 0.29717686737426846,
-        "achieved_mfu": 0.0024986553871684247,
-        "frac_of_roofline": 0.008407974043355082,
+        "achieved_mfu": 0.002445328383896094,
+        "frac_of_roofline": 0.008228528705824249,
         "note": "d_idx=32"
       },
       {
         "name": "indexer_fp32_12b",
-        "tflops": 14.28301629535333,
-        "ms": 0.3007045015692711,
+        "tflops": 12.889718375772018,
+        "ms": 0.3332087770104408,
         "theo_mfu": 0.8103469466245715,
-        "achieved_mfu": 0.40143384753663097,
-        "frac_of_roofline": 0.49538515472757455,
+        "achieved_mfu": 0.3622742657608774,
+        "frac_of_roofline": 0.44706069081878913,
         "note": "d_idx=64"
       },
       {
         "name": "moe_bmm_even",
-        "tflops": 57.656131136261486,
-        "ms": 1.1901390552520752,
+        "tflops": 53.71413303104825,
+        "ms": 1.2774815410375595,
         "theo_mfu": 1.0,
-        "achieved_mfu": 0.8102323093909708,
-        "frac_of_roofline": 0.8102323093909708,
+        "achieved_mfu": 0.7548360459675133,
+        "frac_of_roofline": 0.7548360459675133,
         "note": "Ampere path after SM90 gate"
       },
       {
@@ -280,6 +316,6 @@
         "available": false
       }
     ],
-    "measured_bf16_peak_tflops": 72.11954690322074
+    "measured_bf16_peak_tflops": 72.08986331579486
   }
 }

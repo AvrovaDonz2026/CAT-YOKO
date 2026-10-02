@@ -1,7 +1,9 @@
 """DeepSeek-style softmax-then-topK MoE with optional hash routing.
 
-Expert dispatch permutes tokens by expert id (one bincount sync per layer)
-instead of 20× ``nonzero`` / ``.any()`` CUDA syncs. Routed SwiGLU prefers
+Expert dispatch permutes tokens by expert id. ``counts.max()`` used to
+``.item()`` on the default stream after the shared expert, stalling Ampere
+between layers. The scalar now copies on a side stream while shared SwiGLU
+runs. Do not pad the bmm to ``n_tok`` (~20× GEMM). Routed SwiGLU prefers
 ``grouped_mm`` (jagged tokens, no padding). Padded batched GEMM is the
 fallback; serial expert loop remains as a numeric reference. Routing math
 is unchanged.
@@ -18,6 +20,8 @@ from torch import nn
 from cat_yoko.config import CATYokoConfig
 
 _GROUPED_MM_OK: bool | None = None
+_MOE_COPY_STREAM: torch.cuda.Stream | None = None
+_MOE_MAX_PINNED: torch.Tensor | None = None
 
 
 def module_has_trainable(mod: nn.Module | None) -> bool:
@@ -40,6 +44,41 @@ def _repeat_by_counts(values: torch.Tensor, counts: torch.Tensor, output_size: i
         return torch.repeat_interleave(values, counts, output_size=int(output_size))
     except TypeError:
         return torch.repeat_interleave(values, counts)
+
+
+def _moe_copy_stream() -> torch.cuda.Stream:
+    global _MOE_COPY_STREAM
+    if _MOE_COPY_STREAM is None:
+        _MOE_COPY_STREAM = torch.cuda.Stream()
+    return _MOE_COPY_STREAM
+
+
+def _kick_max_count(counts: torch.Tensor) -> tuple[torch.Tensor, object | None]:
+    """Queue D2H of ``counts.max()`` without joining later default-stream work.
+
+    Callers should launch independent GPU work (shared SwiGLU) before
+    ``_wait_max_count``. Pad-to-``n_tok`` would be ~20× GEMM; keep the host
+    max and hide the scalar transfer behind the shared expert.
+    """
+    mx = counts.max()
+    if mx.device.type != "cuda" or not torch.cuda.is_available():
+        return mx, None
+    global _MOE_MAX_PINNED
+    if _MOE_MAX_PINNED is None or _MOE_MAX_PINNED.dtype != mx.dtype:
+        _MOE_MAX_PINNED = torch.empty((), dtype=mx.dtype, pin_memory=True)
+    ev = torch.cuda.current_stream().record_event()
+    stream = _moe_copy_stream()
+    with torch.cuda.stream(stream):
+        stream.wait_event(ev)
+        _MOE_MAX_PINNED.copy_(mx.reshape(()), non_blocking=True)
+        done = stream.record_event()
+    return _MOE_MAX_PINNED, done
+
+
+def _wait_max_count(pinned: torch.Tensor, done: object | None) -> int:
+    if done is not None:
+        done.synchronize()  # type: ignore[union-attr]
+    return int(pinned.item())
 
 
 def grouped_mm_available() -> bool:
@@ -144,6 +183,38 @@ def _like(ref: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     return t
 
 
+class _SiluMulFn(torch.autograd.Function):
+    """``SiLU(g)*u`` with one buffer: silu writes, then ``mul_`` reuses it.
+
+    ``F.silu(g) * u`` allocates silu and the product. Do not
+    ``silu(..., inplace=True)`` on ``gu.chunk`` views — those alias ``gu``.
+    """
+
+    @staticmethod
+    def forward(ctx, gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+        ctx.save_for_backward(gate, up)
+        return F.silu(gate).mul_(up)
+
+    @staticmethod
+    def backward(ctx, dy: torch.Tensor):
+        gate, up = ctx.saved_tensors
+        need_g, need_u = ctx.needs_input_grad
+        if dy is None or not (need_g or need_u):
+            return None, None
+        sig = torch.sigmoid(gate)
+        dgate = dup = None
+        if need_g:
+            dgate = dy * up * (sig * (1.0 + gate * (1.0 - sig)))
+        if need_u:
+            dup = dy * (gate * sig)
+        return dgate, dup
+
+
+def _silu_mul(gate: torch.Tensor, up: torch.Tensor) -> torch.Tensor:
+    """SwiGLU hidden: ``SiLU(gate)*up``. Same math as ``F.silu(gate) * up``."""
+    return _SiluMulFn.apply(gate, up)
+
+
 def _fused_gate_up(gate: nn.Module, up: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """One GEMM for gate and up; SiLU(gate)*up. Same math as two Linears."""
     from cat_yoko.nvfp4_linear import fused_cat_linear
@@ -151,8 +222,8 @@ def _fused_gate_up(gate: nn.Module, up: nn.Module, x: torch.Tensor) -> torch.Ten
     if isinstance(gate, nn.Linear) and isinstance(up, nn.Linear):
         gu = fused_cat_linear([gate, up], x)
         g, u = gu.chunk(2, dim=-1)
-        return F.silu(g) * u
-    return F.silu(gate(x)) * up(x)
+        return _silu_mul(g, u)
+    return _silu_mul(gate(x), up(x))
 
 
 class SwiGLU(nn.Module):
@@ -249,6 +320,7 @@ def _swiglu_experts_batched(
     expert_sorted: torch.Tensor,
     counts: torch.Tensor,
     owner: nn.Module | None = None,
+    max_n: int | None = None,
 ) -> torch.Tensor:
     """Padded bmm over experts. Empty experts stay zero-padded rows."""
     from cat_yoko.nvfp4_linear import quantize_nvfp4
@@ -256,7 +328,10 @@ def _swiglu_experts_batched(
     n_tok = x_sorted.size(0)
     if n_tok == 0:
         return x_sorted
-    max_n = int(counts.max().item())
+    if max_n is None:
+        max_n = int(counts.max().item())
+    else:
+        max_n = int(max_n)
     if max_n <= 0:
         return x_sorted.new_zeros(x_sorted.shape)
     e_count = len(experts)
@@ -281,7 +356,7 @@ def _swiglu_experts_batched(
             gu_w = torch.cat((gate_w, up_w), dim=1) if gu_cached is None else gu_cached
             gu = torch.bmm(x_q, gu_w.transpose(1, 2))
             g, u = gu.chunk(2, dim=-1)
-            hidden = F.silu(g) * u
+            hidden = _silu_mul(g, u)
             h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
             y_pad = torch.bmm(h_q, down_w.transpose(1, 2))
     else:
@@ -289,9 +364,11 @@ def _swiglu_experts_batched(
             dtype=x_pad.dtype
         )
         down_w = down_w.to(dtype=x_pad.dtype)
+        # W is [E, N, K] row-major. transpose(1,2) is [E, K, N] with K stride-1
+        # (cuBLAS OP_T). Do not ``.contiguous()`` that into NN.
         gu = torch.bmm(x_pad, gu_w.transpose(1, 2))
         g, u = gu.chunk(2, dim=-1)
-        y_pad = torch.bmm(F.silu(g) * u, down_w.transpose(1, 2))
+        y_pad = torch.bmm(_silu_mul(g, u), down_w.transpose(1, 2))
     return y_pad[expert_sorted, local]
 
 
@@ -317,14 +394,14 @@ def _swiglu_experts_grouped(
             x_q = quantize_nvfp4(x_sorted) + x_sorted - x_sorted.detach()
             gu = _grouped_linear(x_q, gu_w, offs)
             g, u = gu.chunk(2, dim=-1)
-            hidden = F.silu(g) * u
+            hidden = _silu_mul(g, u)
             h_q = quantize_nvfp4(hidden) + hidden - hidden.detach()
             return _grouped_linear(h_q, down_w, offs)
     gu_w = gu_w.to(dtype=x_sorted.dtype)
     down_w = down_w.to(dtype=x_sorted.dtype)
     gu = _grouped_linear(x_sorted, gu_w, offs)
     g, u = gu.chunk(2, dim=-1)
-    return _grouped_linear(F.silu(g) * u, down_w, offs)
+    return _grouped_linear(_silu_mul(g, u), down_w, offs)
 
 
 def _dispatch_experts(
@@ -338,14 +415,19 @@ def _dispatch_experts(
     batched: bool,
     grouped: bool = True,
     owner: nn.Module | None = None,
+    order: torch.Tensor | None = None,
+    expert_sorted: torch.Tensor | None = None,
+    counts: torch.Tensor | None = None,
+    max_n: int | None = None,
 ) -> torch.Tensor:
     """``expert_idx`` / ``token_idx`` / ``gates`` are length ``T * k`` (or ``T``)."""
-    order = expert_idx.argsort()
-    expert_sorted = expert_idx.index_select(0, order)
+    if order is None or expert_sorted is None or counts is None:
+        order = expert_idx.argsort()
+        expert_sorted = expert_idx.index_select(0, order)
+        counts = torch.bincount(expert_sorted, minlength=n_routed)
     token_sorted = token_idx.index_select(0, order)
     gate_sorted = gates.index_select(0, order)
     x_sorted = flat.index_select(0, token_sorted)
-    counts = torch.bincount(expert_sorted, minlength=n_routed)
     use_batched = batched and _experts_are_swiglu(experts)
     want_grouped = (
         use_batched
@@ -363,9 +445,13 @@ def _dispatch_experts(
         try:
             y = _swiglu_experts_grouped(experts, x_sorted, counts, owner=owner)
         except (RuntimeError, NotImplementedError):
-            y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts, owner=owner)
+            y = _swiglu_experts_batched(
+                experts, x_sorted, expert_sorted, counts, owner=owner, max_n=max_n
+            )
     elif use_batched:
-        y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts, owner=owner)
+        y = _swiglu_experts_batched(
+            experts, x_sorted, expert_sorted, counts, owner=owner, max_n=max_n
+        )
     else:
         y = _swiglu_experts_serial(experts, x_sorted, counts)
     y = y * gate_sorted.unsqueeze(-1).to(dtype=y.dtype)
@@ -402,6 +488,9 @@ class MoE(nn.Module):
         self.last_aux: torch.Tensor | None = None
         self.last_load: torch.Tensor | None = None
         self._load_n = 0
+        # Trainer clears this on non-log steps for frozen MoE. Direct callers
+        # keep the histogram (tests, bias updates).
+        self.track_load = True
 
     def mean_pending_load(self) -> torch.Tensor | None:
         """Average expert load over micro-batches since the last bias step."""
@@ -429,18 +518,27 @@ class MoE(nn.Module):
         self.last_load = None
         self._load_n = 0
 
-    def forward(self, x: torch.Tensor, token_ids: torch.Tensor | None = None) -> torch.Tensor:
-        b, s, d = x.shape
-        flat = x.reshape(b * s, d)
+    def _shared_forward(self, flat: torch.Tensor) -> torch.Tensor:
         shared_out = self.shared[0](flat)
         for m in self.shared[1:]:
             shared_out = shared_out + m(flat)
+        return shared_out
+
+    def forward(self, x: torch.Tensor, token_ids: torch.Tensor | None = None) -> torch.Tensor:
+        b, s, d = x.shape
+        flat = x.reshape(b * s, d)
         n_tok = b * s
         if self.hash_route and token_ids is not None:
             ids = token_ids.reshape(n_tok).to(torch.int64)
             expert_id = (ids * 2654435761).remainder(self.n_routed)
             token_idx = torch.arange(n_tok, device=flat.device)
             gates = torch.ones(n_tok, device=flat.device, dtype=flat.dtype)
+            order = expert_id.argsort()
+            expert_sorted = expert_id.index_select(0, order)
+            counts = torch.bincount(expert_sorted, minlength=self.n_routed)
+            pinned, done = _kick_max_count(counts)
+            shared_out = self._shared_forward(flat)
+            max_n = _wait_max_count(pinned, done)
             routed = _dispatch_experts(
                 self.experts,
                 flat,
@@ -451,6 +549,10 @@ class MoE(nn.Module):
                 batched=self.batched_experts,
                 grouped=self.grouped_experts,
                 owner=self,
+                order=order,
+                expert_sorted=expert_sorted,
+                counts=counts,
+                max_n=max_n,
             )
             self.last_aux = flat.new_zeros(())
             self.last_load = None
@@ -470,24 +572,42 @@ class MoE(nn.Module):
             .expand(-1, self.top_k)
             .reshape(-1)
         )
+        expert_idx = topi.reshape(-1)
+        order = expert_idx.argsort()
+        expert_sorted = expert_idx.index_select(0, order)
+        counts = torch.bincount(expert_sorted, minlength=self.n_routed)
+        pinned, done = _kick_max_count(counts)
+        # Shared SwiGLU is independent of routing; hide the pad-size D2H here.
+        shared_out = self._shared_forward(flat)
+        max_n = _wait_max_count(pinned, done)
         routed = _dispatch_experts(
             self.experts,
             flat,
-            topi.reshape(-1),
+            expert_idx,
             token_idx,
             gates.reshape(-1),
             self.n_routed,
             batched=self.batched_experts,
             grouped=self.grouped_experts,
             owner=self,
+            order=order,
+            expert_sorted=expert_sorted,
+            counts=counts,
+            max_n=max_n,
         )
 
+        # Frozen MoE (B0 encoder+decoder backbone) does not enter the loss or
+        # aux-loss-free bias. The load histogram is only for logs; skip the
+        # scatter on steps the trainer will not read.
+        trainable = module_has_trainable(self)
+        track = bool(self.track_load) or trainable
+        if not track:
+            self.last_aux = None
+            return (shared_out + _like(shared_out, routed)).view(b, s, d)
         ones = torch.zeros(self.n_routed, device=x.device, dtype=x.dtype)
         ones.scatter_add_(0, topi.reshape(-1), _like(ones, gates.reshape(-1)))
         load = ones / n_tok
-        # Frozen MoE (B0 encoder+decoder backbone) does not enter the loss or
-        # aux-loss-free bias. Skip z-loss / balance; keep ``last_load`` for logs.
-        if module_has_trainable(self):
+        if trainable:
             z_loss = logits.float().pow(2).mean()
             balance = self.n_routed * (load * load).sum()
             self.last_aux = self.router_z_loss * z_loss + self.seq_balance_loss * balance
@@ -505,6 +625,21 @@ class MoE(nn.Module):
             self.last_load = None
             self._load_n = 0
         return (shared_out + _like(shared_out, routed)).view(b, s, d)
+
+
+def arm_moe_load_tracking(model: nn.Module, *, log_step: bool) -> None:
+    """Record frozen expert load only on log steps.
+
+    Trainable routers still record every step (aux-loss-free bias). Default
+    ``MoE.track_load`` stays True so a bare ``forward`` still fills
+    ``last_load``.
+    """
+    blocks = list(getattr(model, "encoder", []) or []) + list(getattr(model, "decoder", []) or [])
+    for blk in blocks:
+        mlp = getattr(blk, "mlp", None)
+        if mlp is None or not hasattr(mlp, "track_load"):
+            continue
+        mlp.track_load = bool(log_step) or module_has_trainable(mlp)
 
 
 def moe_utilization(model: nn.Module) -> dict[str, float]:

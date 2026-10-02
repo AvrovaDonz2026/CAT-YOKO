@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
 
-from cat_yoko.data import DummyStream, FileStream, PackedBinStream, open_stream
+from cat_yoko.data import DummyStream, FileStream, PackedBinStream, open_stream, utf8_tile_ids
+from cat_yoko.recipe import THINK_CODE_FRAC, THINK_CODE_SNIPPETS
 
 
 def _write_bin(path: Path, toks: list[int]) -> None:
@@ -68,6 +69,45 @@ class DummyStreamTests(unittest.TestCase):
         before = stream.gen.get_state().clone()
         stream.load_state_dict({"kind": "packed", "i": 9})
         self.assertTrue(torch.equal(stream.gen.get_state(), before))
+
+    def test_thinking_dummy_defaults_to_modest_code_frac(self) -> None:
+        stream = DummyStream(32, 8, seed=0)
+        self.assertAlmostEqual(stream.code_frac, THINK_CODE_FRAC)
+        needle = DummyStream(32, 8, seed=0, needle=True)
+        sft = DummyStream(32, 8, seed=0, response_only=True)
+        self.assertEqual(needle.code_frac, 0.0)
+        self.assertEqual(sft.code_frac, 0.0)
+        via_open = open_stream(None, 32, 8, seed=0)
+        self.assertAlmostEqual(via_open.code_frac, THINK_CODE_FRAC)
+
+    def test_code_frac_one_uses_only_snippets(self) -> None:
+        allowed = {tuple(utf8_tile_ids(s, 32, 16)) for s in THINK_CODE_SNIPPETS}
+        stream = DummyStream(32, 16, seed=1, code_frac=1.0)
+        batch = stream.batch(8, "cpu")
+        for row in batch["input_ids"]:
+            self.assertIn(tuple(row.tolist()), allowed)
+        self.assertTrue((batch["doc_ids"][0] == 0).all())
+        self.assertNotIn(2, batch["input_ids"][0].tolist())
+
+    def test_dummy_doc_ids_stay_off_to_device_payload(self) -> None:
+        import inspect
+
+        src = inspect.getsource(DummyStream.batch)
+        self.assertIn('out["doc_ids"]', src)
+        self.assertIn("to_device", src)
+        self.assertLess(src.index("to_device"), src.index('out["doc_ids"]'))
+
+    def test_modest_code_frac_is_not_all_or_nothing(self) -> None:
+        allowed = {tuple(utf8_tile_ids(s, 32, 8)) for s in THINK_CODE_SNIPPETS}
+        stream = DummyStream(32, 8, seed=0)
+        n_code = 0
+        n = 200
+        for _ in range(n):
+            row = stream.batch(1, "cpu")["input_ids"][0]
+            if tuple(row.tolist()) in allowed:
+                n_code += 1
+        self.assertGreater(n_code, 0)
+        self.assertLess(n_code, n // 2)
 
 
 class PackedBinStreamResumeTests(unittest.TestCase):

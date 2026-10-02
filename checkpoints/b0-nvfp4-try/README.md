@@ -1,6 +1,6 @@
 # B0 NVFP4 `--try` overlay
 
-Weights do not enter GitHub. File on Hugging Face:
+Weights do not live on GitHub. File on Hugging Face:
 
 https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-nvfp4-try/trainable.pt
 

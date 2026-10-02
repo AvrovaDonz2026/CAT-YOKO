@@ -25,6 +25,9 @@ import sys
 from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+os.environ.setdefault("CUDA_DEVICE_MAX_CONNECTIONS", "32")
+os.environ.setdefault("TORCH_COMPILE_DISABLE", "1")
+os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
 
 from cat_yoko.phases import (
     C_STAGES,
@@ -65,6 +68,12 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         help=f"32GB path: {TRY_STEPS} steps, seq={TIGHT_GPU_SEQ}, trainable.pt overlay only",
     )
     p.add_argument("--steps", type=int, default=None)
+    p.add_argument(
+        "--more-steps",
+        type=int,
+        default=None,
+        help="same-phase resume: N more optimizer steps (Hub B0 is already step 26940; --steps is absolute)",
+    )
     p.add_argument("--tokens", type=float, default=None)
     p.add_argument("--data", type=Path, default=None)
     p.add_argument("--eval-data", type=Path, default=None)
@@ -224,6 +233,8 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         seq = ph.seq_len
     if seq is not None:
         out.extend(["--seq-len", str(seq)])
+    if args.more_steps is not None:
+        out.extend(["--more-steps", str(args.more_steps)])
     if args.try_run:
         steps = TRY_STEPS if args.steps is None else args.steps
         out.extend(["--steps", str(steps)])

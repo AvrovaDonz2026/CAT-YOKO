@@ -86,3 +86,46 @@ RTX 3090 peak BF16 71.16 TFLOPS  HBM 936 GB/s  ridge 76.0 F/B
   moe_bmm_even              57.66 T  ach= 81.0%  theo=100.0%  roof= 81.0%  Ampere path after SM90 gate
   grouped_mm                 0.00 T  ach=  0.0%  theo=  0.0%  roof=  0.0%  SM90+ only; Ampere capability gate skips the RuntimeError tax
 === exit 0 2026-09-19T17:28:21Z ===
+MFU_START 2026-09-20T01:02:41Z
+=== ampere-mfu 2026-09-20T01:02:41Z ===
+NVIDIA GeForce RTX 3090, 8.6, 49152 MiB
+RTX 3090 peak BF16 71.16 TFLOPS  HBM 936 GB/s  ridge 76.0 F/B
+-- bf16_probe theoretical MFU --
+  fused_qkv              theo= 84.2%  probe: one GEMM [256,128]×[128,256]
+  dense_cross_flash      theo= 56.1%  probe: Flash GQA causal; IO-aware bytes
+  masked_window          theo= 37.4%  probe: n_win=32 fat tiles 256 when seq>=512; shorter stays S×S (tile-by-window launch trap); CSA union still S×S
+  masked_csa_union       theo= 74.8%  probe: union mask, equal heads, cuDNN/Efficient bf16
+  masked_hca_concat      theo= 78.7%  probe: concat window+slots k_len=144
+  moe_bmm                theo= 13.0%  probe: padded bmm, E=20 tokens/expert=12
+  indexer_fp32           theo= 29.7%  probe: fp32 scores, d_idx=32; peak is FP32/TF32 not BF16 TC
+-- published_12b theoretical MFU --
+  fused_qkv              theo=100.0%  12b: one GEMM [8192,2048]×[2048,2560]
+  dense_cross_flash      theo=100.0%  12b: Flash GQA causal; IO-aware bytes
+  masked_window          theo=100.0%  12b: n_win=8192 covers seq so B0 window is Flash; this row is C/probe hole
+  masked_csa_union       theo=100.0%  12b: union mask, equal heads, cuDNN/Efficient bf16
+  masked_hca_concat      theo=100.0%  12b: concat window+slots k_len=4608
+  moe_bmm                theo=100.0%  12b: padded bmm, E=20 tokens/expert=409
+  indexer_fp32           theo= 81.3%  12b: fp32 scores, d_idx=64; peak is FP32/TF32 not BF16 TC
+-- measured NVIDIA GeForce RTX 3090 cap=[8, 6] grouped_mm=False --
+  calibrated GEMM 72.09 TFLOPS
+  gemm_8192                 72.09 T  ach=101.3%  theo=100.0%  roof=101.3%  cuBLAS bf16 peak probe
+  fused_qkv_probe            0.59 T  ach=  0.8%  theo= 84.2%  roof=  1.0%  frozen cached cat
+  fused_qkv_12b             74.70 T  ach=105.0%  theo=100.0%  roof=105.0%  frozen cached cat
+  dense_flash_gqa_probe      0.14 T  ach=  0.2%  theo= 56.1%  roof=  0.4%  YOCO cross / covering window
+  dense_flash_gqa_12b       60.64 T  ach= 85.2%  theo=100.0%  roof= 85.2%  YOCO cross / covering window
+  masked_window_probe        0.17 T  ach=  0.2%  theo= 37.4%  roof=  0.6%  seq=128 S×S mask switch=320
+  banded_window_probe        0.15 T  ach=  0.2%  theo= 37.4%  roof=  0.6%  seq=128 n_win=32 stays S×S (seq<512)
+  masked_window_mid         18.89 T  ach= 26.5%  theo=100.0%  roof= 26.5%  seq=512 S×S mask switch=320
+  banded_window_mid          2.02 T  ach=  2.8%  theo=100.0%  roof=  2.8%  seq=512 n_win=32 fat tiles 256×287 n=2
+  masked_window_long        31.78 T  ach= 44.7%  theo=100.0%  roof= 44.7%  seq=2048 S×S mask switch=320
+  banded_window_long        32.50 T  ach= 45.7%  theo=100.0%  roof= 45.7%  seq=2048 n_win=32 fat tiles 256×287 n=8
+  masked_csa_probe           0.36 T  ach=  0.5%  theo= 74.8%  roof=  0.7%  seq=128 equal-head union
+  masked_csa_mid            36.58 T  ach= 51.4%  theo=100.0%  roof= 51.4%  seq=512 equal-head union
+  masked_hca_probe           0.42 T  ach=  0.6%  theo= 78.7%  roof=  0.7%  k_len=144
+  masked_hca_mid            41.41 T  ach= 58.2%  theo=100.0%  roof= 58.2%  k_len=576
+  masked_gqa_probe           0.16 T  ach=  0.2%  theo= 39.6%  roof=  0.6%  repeat KV then fused; {'kind': 'masked_bf16', 'dtype': 'bfloat16'}
+  indexer_fp32_probe         0.09 T  ach=  0.2%  theo= 29.7%  roof=  0.8%  d_idx=32
+  indexer_fp32_12b          12.89 T  ach= 36.2%  theo= 81.0%  roof= 44.7%  d_idx=64
+  moe_bmm_even              53.71 T  ach= 75.5%  theo=100.0%  roof= 75.5%  Ampere path after SM90 gate
+  grouped_mm                 0.00 T  ach=  0.0%  theo=  0.0%  roof=  0.0%  SM90+ only; Ampere capability gate skips the RuntimeError tax
+=== exit 0 2026-09-20T01:02:47Z ===

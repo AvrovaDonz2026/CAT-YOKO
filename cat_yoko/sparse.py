@@ -19,8 +19,11 @@ from cat_yoko.attention import (
     _repeat_kv,
     _sdpa,
     _window_causal_bias,
+    merge_heads,
+    rope_after_qk_norm,
+    split_heads,
+    to_sdpa_layout,
 )
-from cat_yoko.rope import apply_rope
 
 
 _KEEP_CACHE: dict[tuple, torch.Tensor] = {}
@@ -157,18 +160,15 @@ def hca_causal_bias(
 
 
 def _qkv_rope(attn, x: torch.Tensor):
-    b, s, d = x.shape
     h, hd, n_kv = attn.n_heads, attn.head_dim, attn.n_kv
     q, k, v = _fused_qkv(attn.q_proj, attn.k_proj, attn.v_proj, x)
-    q = q.view(b, s, h, hd).transpose(1, 2)
-    k = k.view(b, s, n_kv, hd).transpose(1, 2)
-    v = v.view(b, s, n_kv, hd).transpose(1, 2)
-    if attn.q_norm is not None:
-        q = attn.q_norm(q)
-        k = attn.k_norm(k)
-    cos, sin = attn.rope(s, x.device, x.dtype)
-    q, k = apply_rope(q, k, cos, sin)
-    return q, k, v, h, n_kv
+    q = split_heads(q, h, hd)
+    k = split_heads(k, n_kv, hd)
+    v = split_heads(v, n_kv, hd)
+    q, k = rope_after_qk_norm(
+        q, k, rope=attn.rope, q_norm=attn.q_norm, k_norm=attn.k_norm
+    )
+    return to_sdpa_layout(q), to_sdpa_layout(k), to_sdpa_layout(v), h, n_kv
 
 
 def csa_attend(
@@ -189,7 +189,7 @@ def csa_attend(
         keep = keep & same
     bias = lift_compressed(bias, keep)
     out = _sdpa(q, k, v, bias)
-    return attn.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+    return attn.o_proj(merge_heads(out))
 
 
 def _cat_bias(win: torch.Tensor, comp: torch.Tensor) -> torch.Tensor:
@@ -226,7 +226,7 @@ def hca_attend(attn, x: torch.Tensor, doc_ids: torch.Tensor | None, group: int) 
     comp = hca_causal_bias(s, group, k_c.size(2), x.device, q.dtype, doc_ids)
     bias = _cat_bias(win, comp)
     out = _sdpa(q, k_cat, v_cat, bias)
-    return attn.o_proj(out.transpose(1, 2).contiguous().view(b, s, d))
+    return attn.o_proj(merge_heads(out))
 
 
 def mean_head_probs(

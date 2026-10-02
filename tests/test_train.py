@@ -234,6 +234,16 @@ class TinyTrainTests(unittest.TestCase):
         self.assertEqual(ybf.dtype, torch.bfloat16)
         self.assertTrue(torch.allclose(ybf.float(), y32, atol=2e-2, rtol=2e-2))
 
+    def test_rmsnorm_cuda_skips_activation_upcast(self) -> None:
+        import inspect
+
+        from cat_yoko.rope import RMSNorm
+
+        src = inspect.getsource(RMSNorm.forward)
+        self.assertIn("is_cuda", src)
+        self.assertIn("x.float()", src)
+        self.assertIn("rms_norm", src)
+
     def test_router_logits_fp32_under_autocast(self) -> None:
         from cat_yoko.moe import MoE
 
