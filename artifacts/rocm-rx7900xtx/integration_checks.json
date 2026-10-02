@@ -1,0 +1,25 @@
+{
+  "remote_cpu_suite": {
+    "run": 580,
+    "skipped_gpu": 24,
+    "code_failures": 0,
+    "metadata_errors": 1,
+    "metadata_error": "Remote copied source had no .git; test_git_does_not_track_pt ran and passed separately on the actual local integration Git index."
+  },
+  "local_git_repository_checks": {
+    "run": 5,
+    "pass": 5
+  },
+  "shared_storage_cpu_gpu_regressions": {
+    "run": 6,
+    "pass": 6
+  },
+  "parameter_ledger": {
+    "pass": 63,
+    "run": 63
+  },
+  "architecture_ledger": {
+    "pass": 14,
+    "run": 14
+  }
+}

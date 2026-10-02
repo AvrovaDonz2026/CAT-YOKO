@@ -1,0 +1,13 @@
+{"event": "gpu_wait", "elapsed_s": 7.819617167115211e-07, "other_gpu_pids": [], "idle_confirmations": 1, "proc_root": "/sys/class/kfd/kfd/proc"}
+{"event": "gpu_idle", "elapsed_s": 2.0001712349476293, "other_gpu_pids": [], "idle_confirmations": 2, "proc_root": "/sys/class/kfd/kfd/proc"}
+test_cache_uses_one_expert_storage_and_preserves_full_state_keys (test_shared_storage_moe.SharedStorageTests.test_cache_uses_one_expert_storage_and_preserves_full_state_keys) ... ok
+test_cpu_fp32_native_arithmetic_flags_and_statistics (test_shared_storage_moe.SharedStorageTests.test_cpu_fp32_native_arithmetic_flags_and_statistics) ... ok
+test_cpu_whole_b0_graph_checkpoint_and_overlay (test_shared_storage_moe.SharedStorageTests.test_cpu_whole_b0_graph_checkpoint_and_overlay) ... ok
+test_gpu_bf16_native_arithmetic_flags_and_statistics (test_shared_storage_moe.SharedStorageTests.test_gpu_bf16_native_arithmetic_flags_and_statistics) ... ok
+test_gpu_bf16_whole_b0_graph_checkpoint_and_overlay (test_shared_storage_moe.SharedStorageTests.test_gpu_bf16_whole_b0_graph_checkpoint_and_overlay) ... ok
+test_preflight_is_atomic_and_refuses_trainable_or_changed_experts (test_shared_storage_moe.SharedStorageTests.test_preflight_is_atomic_and_refuses_trainable_or_changed_experts) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 2.236s
+
+OK

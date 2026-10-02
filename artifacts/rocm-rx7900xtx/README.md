@@ -103,3 +103,21 @@ claim. Source overlays lack Adam state, so moments restart. The native offload
 path clips per block; the resident compact path uses global clipping. CPU
 router initialization and numerical limitations are documented in
 [ROCM_TRAIN.md](../../docs/ROCM_TRAIN.md). The Hub B0-full pointer is preserved.
+
+## Upstream integration validation
+
+PRs #13 and #14 were integrated with the ROCm changes. The remote CPU suite
+ran 580 tests, skipping 24 GPU tests; all code tests passed. Its sole error
+was the Git-index check because the copied remote source has no `.git`. All
+five repository checks passed separately against the actual local integration
+index. The new shared-storage layout passed six CPU/GPU regressions, including
+whole-model checkpointing and overlay round trips. The 63 parameter and 14
+architecture ledger checks passed. See [check summary](integration_checks.json),
+[CPU log](experiments/integration-cpu.log), and
+[shared-storage log](experiments/shared-storage-regression.log).
+
+The shared-storage full-model experiment uses the integrated code, waits for
+other GPU tasks to exit, and checks sequences 64/256/4096 before any update.
+If all 132 gradient tensors pass the original 5% relative-L2 threshold, it
+continues from step 33850 to the original target 34802, saving every 10 updates.
+This does not change the rejected compute-collapse result.

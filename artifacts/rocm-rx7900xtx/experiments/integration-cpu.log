@@ -1,0 +1,1223 @@
+test_qk_norm_rope_stays_bshd (test_ampere_mfu.BshdLayoutSourceTests.test_qk_norm_rope_stays_bshd) ... ok
+test_rmsnorm_cuda_fused_cpu_fp32 (test_ampere_mfu.BshdLayoutSourceTests.test_rmsnorm_cuda_fused_cpu_fp32) ... ok
+test_frozen_weights_are_concatenated_once (test_ampere_mfu.FrozenFusedCatTests.test_frozen_weights_are_concatenated_once) ... ok
+test_trainable_still_matches_three_linears (test_ampere_mfu.FrozenFusedCatTests.test_trainable_still_matches_three_linears) ... ok
+test_frozen_gate_up_cat_is_reused (test_ampere_mfu.FrozenMoEGuCacheTests.test_frozen_gate_up_cat_is_reused) ... ok
+test_cpu_reports_unavailable (test_ampere_mfu.GroupedMmGateTests.test_cpu_reports_unavailable) ... ok
+test_source_requires_sm90 (test_ampere_mfu.GroupedMmGateTests.test_source_requires_sm90) ... ok
+test_large_gemm_is_compute_bound (test_ampere_mfu.RooflineTests.test_large_gemm_is_compute_bound) ... ok
+test_theory_table_has_probe_and_12b (test_ampere_mfu.RooflineTests.test_theory_table_has_probe_and_12b) ... ok
+test_tiny_gemm_is_below_peak (test_ampere_mfu.RooflineTests.test_tiny_gemm_is_below_peak) ... ok
+test_compressed_path_does_not_see_own_block (test_arch_verify.CausalityTests.test_compressed_path_does_not_see_own_block) ... ok
+test_csa_combined_is_causal_on_random_lengths (test_arch_verify.CausalityTests.test_csa_combined_is_causal_on_random_lengths) ... ok
+test_hca_hole_not_covered_if_window_smaller_than_m (test_arch_verify.CausalityTests.test_hca_hole_not_covered_if_window_smaller_than_m) ... ok
+test_indexer_topk_is_subset_not_extension (test_arch_verify.CausalityTests.test_indexer_topk_is_subset_not_extension) ... ok
+test_window_fills_own_block_hole_when_n_win_ge_m (test_arch_verify.CausalityTests.test_window_fills_own_block_hole_when_n_win_ge_m) ... ok
+test_window_includes_self_and_not_future (test_arch_verify.CausalityTests.test_window_includes_self_and_not_future) ... ok
+test_yoco_cross_attn_sees_prefix_only (test_arch_verify.CausalityTests.test_yoco_cross_attn_sees_prefix_only) ... ok
+test_decoder_query_is_not_encoder_query (test_arch_verify.MechanismTests.test_decoder_query_is_not_encoder_query)
+M3 is a different query than M1; subset relation is the only share. ... ok
+test_encoder_csa_does_not_reduce_cache_slots (test_arch_verify.MechanismTests.test_encoder_csa_does_not_reduce_cache_slots)
+M1 writes one cache slot per token; pooling (M2) is a separate op. ... ok
+test_depth_cut (test_arch_verify.SkeletonTests.test_depth_cut) ... ok
+test_encoder_schedule_2_7_7 (test_arch_verify.SkeletonTests.test_encoder_schedule_2_7_7) ... ok
+test_full_ledger_passes (test_arch_verify.SkeletonTests.test_full_ledger_passes) ... ok
+test_n_win_covers_both_compression_rates (test_arch_verify.SkeletonTests.test_n_win_covers_both_compression_rates) ... ok
+test_three_bootstrap_cannot_keep_one_to_one (test_arch_verify.SkeletonTests.test_three_bootstrap_cannot_keep_one_to_one) ... ok
+test_window_only_rf (test_arch_verify.SkeletonTests.test_window_only_rf) ... ok
+test_covering_window_stays_causal_flash (test_attention_plan.BandedWindowTests.test_covering_window_stays_causal_flash) ... ok
+test_doc_ids_do_not_take_banded_path (test_attention_plan.BandedWindowTests.test_doc_ids_do_not_take_banded_path) ... ok
+test_fat_tile_accepts_bshd_memory (test_attention_plan.BandedWindowTests.test_fat_tile_accepts_bshd_memory) ... ok
+test_fat_tile_banded_matches_mask (test_attention_plan.BandedWindowTests.test_fat_tile_banded_matches_mask) ... ok
+test_fat_tile_handles_remainder_seq (test_attention_plan.BandedWindowTests.test_fat_tile_handles_remainder_seq) ... ok
+test_short_seq_stays_sxs_mask_gqa (test_attention_plan.BandedWindowTests.test_short_seq_stays_sxs_mask_gqa) ... ok
+test_use_banded_window_gates (test_attention_plan.BandedWindowTests.test_use_banded_window_gates) ... ok
+test_fused_qkv_matches_three_linears (test_attention_plan.FusedQkvTests.test_fused_qkv_matches_three_linears) ... ok
+test_12b_gqa_and_window_backend (test_attention_plan.PublishedPlanTests.test_12b_gqa_and_window_backend) ... ok
+test_attention_module_has_no_csa_kernel (test_attention_plan.PublishedPlanTests.test_attention_module_has_no_csa_kernel) ... ok
+test_cuda_masked_sdpa_kernel_skips_flash (test_attention_plan.PublishedPlanTests.test_cuda_masked_sdpa_kernel_skips_flash) ... ok
+test_cuda_sdpa_kernel_passes_list_not_tuple (test_attention_plan.PublishedPlanTests.test_cuda_sdpa_kernel_passes_list_not_tuple) ... ok
+test_encoder_kind_labels_do_not_swap_window_module (test_attention_plan.PublishedPlanTests.test_encoder_kind_labels_do_not_swap_window_module) ... ok
+test_keep_high_prec_includes_softmax_and_qk_norm (test_attention_plan.PublishedPlanTests.test_keep_high_prec_includes_softmax_and_qk_norm) ... ok
+test_masked_gqa_matches_repeated_kv (test_attention_plan.PublishedPlanTests.test_masked_gqa_matches_repeated_kv) ... ok
+test_rocm_uses_math_even_when_experimental_fused_backends_are_available (test_attention_plan.PublishedPlanTests.test_rocm_uses_math_even_when_experimental_fused_backends_are_available) ... ok
+test_sdpa_does_not_retry_oom_or_execution_errors (test_attention_plan.PublishedPlanTests.test_sdpa_does_not_retry_oom_or_execution_errors) ... ok
+test_sdpa_gqa_does_not_require_repeated_kv (test_attention_plan.PublishedPlanTests.test_sdpa_gqa_does_not_require_repeated_kv) ... ok
+test_sdpa_is_fp32_then_cast (test_attention_plan.PublishedPlanTests.test_sdpa_is_fp32_then_cast) ... ok
+test_small_seq_masked_prefers_efficient (test_attention_plan.PublishedPlanTests.test_small_seq_masked_prefers_efficient) ... ok
+test_unsupported_dense_kernel_falls_back_with_causal_gqa_gradients (test_attention_plan.PublishedPlanTests.test_unsupported_dense_kernel_falls_back_with_causal_gqa_gradients)
+Simulate ROCm fused dispatch failure using real CPU tensors and math. ... ok
+test_window_bias_is_cached_without_doc_ids (test_attention_plan.PublishedPlanTests.test_window_bias_is_cached_without_doc_ids) ... ok
+test_apply_rope_matches_rotate_half_formula (test_attention_plan.QkvLayoutTests.test_apply_rope_matches_rotate_half_formula) ... ok
+test_apply_rope_seq_dim_matches_bhsd (test_attention_plan.QkvLayoutTests.test_apply_rope_seq_dim_matches_bhsd) ... ok
+test_rotate_half_keeps_bshd_strides (test_attention_plan.QkvLayoutTests.test_rotate_half_keeps_bshd_strides) ... ok
+test_sdpa_q_keeps_bshd_memory_with_qk_norm (test_attention_plan.QkvLayoutTests.test_sdpa_q_keeps_bshd_memory_with_qk_norm) ... ok
+test_split_merge_roundtrip_is_view (test_attention_plan.QkvLayoutTests.test_split_merge_roundtrip_is_view) ... ok
+test_window_forward_does_not_pack_before_sdpa (test_attention_plan.QkvLayoutTests.test_window_forward_does_not_pack_before_sdpa) ... ok
+test_causal_fastpath_matches_mask (test_attention_plan.SdpaNumericTests.test_causal_fastpath_matches_mask) ... ok
+test_cross_attention_is_causal_on_cache (test_attention_plan.WrapDoesNotChangeTopologyTests.test_cross_attention_is_causal_on_cache) ... ok
+test_encoder_and_decoder_still_window_cross (test_attention_plan.WrapDoesNotChangeTopologyTests.test_encoder_and_decoder_still_window_cross) ... ok
+test_full_lm_future_token_does_not_leak (test_attention_plan.WrapDoesNotChangeTopologyTests.test_full_lm_future_token_does_not_leak) ... ok
+test_window_attention_is_causal_after_wrap (test_attention_plan.WrapDoesNotChangeTopologyTests.test_window_attention_is_causal_after_wrap) ... ok
+test_window_bias_still_masks_future (test_attention_plan.WrapDoesNotChangeTopologyTests.test_window_bias_still_masks_future) ... ok
+test_hub_pointer (test_b0_full.B0FullLauncherTests.test_hub_pointer) ... ok
+test_nightly_upgrade_script (test_b0_full.B0FullLauncherTests.test_nightly_upgrade_script) ... ok
+test_script_does_not_fetch_github (test_b0_full.B0FullLauncherTests.test_script_does_not_fetch_github) ... ok
+test_script_exists_and_is_published_envelope (test_b0_full.B0FullLauncherTests.test_script_exists_and_is_published_envelope) ... ok
+test_b0_b200_script_is_published_envelope (test_b0_full.B200LauncherTests.test_b0_b200_script_is_published_envelope) ... ok
+test_pull_vast_overlay_script (test_b0_full.B200LauncherTests.test_pull_vast_overlay_script) ... ok
+test_status_doc_matches_hub_pin (test_b0_full.B200LauncherTests.test_status_doc_matches_hub_pin) ... ok
+test_upgrade_and_try_scripts (test_b0_full.B200LauncherTests.test_upgrade_and_try_scripts) ... ok
+test_b1_envelope_argv (test_b1.B1ArgvTests.test_b1_envelope_argv) ... ok
+test_b1_try_keeps_explicit_upcycle (test_b1.B1ArgvTests.test_b1_try_keeps_explicit_upcycle) ... ok
+test_b1_try_resume_argv (test_b1.B1ArgvTests.test_b1_try_resume_argv) ... ok
+test_b1_freeze_names (test_b1.B1FreezeTests.test_b1_freeze_names) ... ok
+test_b1_apply_nvfp4_wraps_cache_cross_lm_head_skips_router (test_b1.B1Nvfp4WrapTests.test_b1_apply_nvfp4_wraps_cache_cross_lm_head_skips_router) ... ok
+test_envelope_flags (test_b1.B1PublishedSpecTests.test_envelope_flags) ... ok
+test_b0_to_b1_resume_handoff (test_b1.B1ResumeHandoffTests.test_b0_to_b1_resume_handoff) ... tiny B0 step 1/1 nll=4.9021 ppl=134.6 aux=0.0000 gate=0.300 gn=0.02 moe_cv=0.41 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=364 mem=0MiB
+overlay resume /tmp/tmp03iuovqt/b0/trainable_step_1.pt: 12 tensors ckpt_phase=B0 cli_phase=B1
+ok
+test_minicpm_upcycle_then_b0_overlay_then_wrap (test_b1.B1ResumeHandoffTests.test_minicpm_upcycle_then_b0_overlay_then_wrap)
+B1 GPU path: same MiniCPM5 dummy → B0 overlay cache/cross → wrap student GEMMs. ... ok
+test_hub_pointer_and_artifacts_readme (test_b1.B1ScriptTests.test_hub_pointer_and_artifacts_readme) ... ok
+test_run_b1_try_autodl_script (test_b1.B1ScriptTests.test_run_b1_try_autodl_script) ... ok
+test_finite_nll_one_step (test_b1.B1TrainStepTests.test_finite_nll_one_step) ... ok
+test_gate_ramps_from_b0_end (test_b1.B1TrainStepTests.test_gate_ramps_from_b0_end) ... ok
+test_hub_and_artifact_pointers (test_b2.B2ScriptAndHubTests.test_hub_and_artifact_pointers) ... ok
+test_run_b2_try_autodl_script (test_b2.B2ScriptAndHubTests.test_run_b2_try_autodl_script) ... ok
+test_all_requires_grad_and_no_detach (test_b2.FreezeB2Tests.test_all_requires_grad_and_no_detach) ... ok
+test_encoder_gets_grad (test_b2.FreezeB2Tests.test_encoder_gets_grad) ... ok
+test_b2_overlay_is_full_graph (test_b2.OffloadAndStepTests.test_b2_overlay_is_full_graph) ... ok
+test_finite_nll_one_step (test_b2.OffloadAndStepTests.test_finite_nll_one_step) ... ok
+test_offload_blocks_rejects_accum_gt_1 (test_b2.OffloadAndStepTests.test_offload_blocks_rejects_accum_gt_1) ... ok
+test_b1_overlay_loads_into_b2 (test_b2.OverlayResumeTests.test_b1_overlay_loads_into_b2) ... tiny B1 step 1/1 nll=4.8321 ppl=125.5 aux=0.0014 gate=1.000 gn=4.04 moe_cv=0.46 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=338 mem=0MiB
+tiny B0 step 1/1 nll=4.8810 ppl=131.8 aux=0.0000 gate=0.300 gn=0.02 moe_cv=0.40 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=898 mem=0MiB
+tiny B1 step 1/1 nll=5.4652 ppl=236.3 aux=0.0011 gate=1.000 gn=3.49 moe_cv=0.28 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=373 mem=0MiB
+tiny B1 step 1/2 nll=5.4659 ppl=236.5 aux=0.0011 gate=0.650 gn=3.42 moe_cv=0.28 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=370 mem=0MiB
+tiny B1 step 2/2 nll=4.9947 ppl=147.6 aux=0.0011 gate=1.000 gn=3.35 moe_cv=0.36 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=32 tok/s=419 mem=0MiB
+tiny B2 step 1/1 nll=5.4652 ppl=236.3 aux=0.0032 gate=1.000 gn=4.54 moe_cv=0.28 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=True tok=16 tok/s=190 mem=0MiB
+tiny B1 step 1/1 nll=4.8082 ppl=122.5 aux=0.0012 gate=1.000 gn=6.17 moe_cv=0.33 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=350 mem=0MiB
+overlay resume /tmp/tmp7htant71/b1/trainable_step_1.pt: 62 tensors ckpt_phase=B1 cli_phase=B2
+ok
+test_envelope_and_flags (test_b2.PublishedB2Tests.test_envelope_and_flags) ... ok
+test_try_keeps_explicit_upcycle (test_b2.PublishedB2Tests.test_try_keeps_explicit_upcycle) ... ok
+test_try_resume_argv (test_b2.PublishedB2Tests.test_try_resume_argv) ... ok
+test_wsd_uses_lr_b2_after_warmup (test_b2.PublishedB2Tests.test_wsd_uses_lr_b2_after_warmup) ... ok
+test_wraps_encoder_decoder_lm_head_cache_skips_router (test_b2.WrapB2Tests.test_wraps_encoder_decoder_lm_head_cache_skips_router) ... ok
+test_cleanup_save_tmp_drops_leftovers (test_checkpoint.CheckpointCpuTests.test_cleanup_save_tmp_drops_leftovers) ... ok
+test_prune_does_not_follow_dangling_latest (test_checkpoint.CheckpointCpuTests.test_prune_does_not_follow_dangling_latest) ... ok
+test_prune_hardlink_latest_still_loadable (test_checkpoint.CheckpointCpuTests.test_prune_hardlink_latest_still_loadable) ... ok
+test_prune_skips_step_sharing_inode_with_latest (test_checkpoint.CheckpointCpuTests.test_prune_skips_step_sharing_inode_with_latest) ... ok
+test_publish_latest_hardlinks_same_inode (test_checkpoint.CheckpointCpuTests.test_publish_latest_hardlinks_same_inode) ... ok
+test_require_free_bytes_errors_when_volume_is_tiny (test_checkpoint.CheckpointCpuTests.test_require_free_bytes_errors_when_volume_is_tiny) ... ok
+test_require_host_bytes_errors_when_cgroup_is_tiny (test_checkpoint.CheckpointCpuTests.test_require_host_bytes_errors_when_cgroup_is_tiny) ... ok
+test_resolve_resume_prefers_latest_then_step (test_checkpoint.CheckpointCpuTests.test_resolve_resume_prefers_latest_then_step) ... ok
+test_resolve_resume_prefers_newest_trainable_step_over_stale_pointer (test_checkpoint.CheckpointCpuTests.test_resolve_resume_prefers_newest_trainable_step_over_stale_pointer) ... ok
+test_save_checkpoint_refuses_full_disk (test_checkpoint.CheckpointCpuTests.test_save_checkpoint_refuses_full_disk) ... ok
+test_saved_model_tensors_are_cpu (test_checkpoint.CheckpointCpuTests.test_saved_model_tensors_are_cpu) ... ok
+test_saved_optimizer_tensors_are_cpu_offload_untouched (test_checkpoint.CheckpointCpuTests.test_saved_optimizer_tensors_are_cpu_offload_untouched) ... ok
+test_code_frac_one_uses_only_snippets (test_data.DummyStreamTests.test_code_frac_one_uses_only_snippets) ... ok
+test_dummy_doc_ids_stay_off_to_device_payload (test_data.DummyStreamTests.test_dummy_doc_ids_stay_off_to_device_payload) ... ok
+test_ignores_packed_kind (test_data.DummyStreamTests.test_ignores_packed_kind) ... ok
+test_legacy_resume_preserves_uniform_stream_without_extra_rng_draws (test_data.DummyStreamTests.test_legacy_resume_preserves_uniform_stream_without_extra_rng_draws) ... ok
+test_modest_code_frac_is_not_all_or_nothing (test_data.DummyStreamTests.test_modest_code_frac_is_not_all_or_nothing) ... ok
+test_open_stream_default_matches_constructor (test_data.DummyStreamTests.test_open_stream_default_matches_constructor) ... ok
+test_ranks_same_seed_are_not_identical (test_data.DummyStreamTests.test_ranks_same_seed_are_not_identical) ... ok
+test_resume_rejects_invalid_code_mix (test_data.DummyStreamTests.test_resume_rejects_invalid_code_mix) ... ok
+test_resume_restores_code_mix_and_future_batches (test_data.DummyStreamTests.test_resume_restores_code_mix_and_future_batches) ... ok
+test_same_rank_and_seed_is_deterministic (test_data.DummyStreamTests.test_same_rank_and_seed_is_deterministic) ... ok
+test_seed_constructor_still_works (test_data.DummyStreamTests.test_seed_constructor_still_works) ... ok
+test_state_dict_restores_generator (test_data.DummyStreamTests.test_state_dict_restores_generator) ... ok
+test_thinking_dummy_defaults_to_modest_code_frac (test_data.DummyStreamTests.test_thinking_dummy_defaults_to_modest_code_frac) ... ok
+test_rejects_packed_kind (test_data.FileStreamResumeTests.test_rejects_packed_kind) ... ok
+test_stride_mismatch_raises (test_data.FileStreamResumeTests.test_stride_mismatch_raises) ... ok
+test_ignores_dummy_kind (test_data.PackedBinStreamResumeTests.test_ignores_dummy_kind) ... ok
+test_rejects_file_kind (test_data.PackedBinStreamResumeTests.test_rejects_file_kind) ... ok
+test_same_stride_restores_cursor (test_data.PackedBinStreamResumeTests.test_same_stride_restores_cursor) ... ok
+test_stride_mismatch_raises (test_data.PackedBinStreamResumeTests.test_stride_mismatch_raises) ... ok
+test_world_gt_nseq_cycles (test_data.PackedBinStreamResumeTests.test_world_gt_nseq_cycles) ... ok
+test_ampere_argv (test_deepspeed_zero.ConfigTests.test_ampere_argv) ... ok
+test_default_stage_two_no_offload (test_deepspeed_zero.ConfigTests.test_default_stage_two_no_offload) ... ok
+test_json_roundtrip (test_deepspeed_zero.ConfigTests.test_json_roundtrip) ... ok
+test_offload_param_forces_stage_three (test_deepspeed_zero.ConfigTests.test_offload_param_forces_stage_three) ... ok
+test_backend_deepspeed_cpu_refuses (test_deepspeed_zero.DumpCliTests.test_backend_deepspeed_cpu_refuses) ... ok
+test_c1_plus_deepspeed_errors (test_deepspeed_zero.DumpCliTests.test_c1_plus_deepspeed_errors) ... ok
+test_dump_cli_zero (test_deepspeed_zero.DumpCliTests.test_dump_cli_zero) ... ok
+test_dump_does_not_import_deepspeed (test_deepspeed_zero.DumpCliTests.test_dump_does_not_import_deepspeed) ... ok
+test_fsdp_plus_deepspeed_errors (test_deepspeed_zero.DumpCliTests.test_fsdp_plus_deepspeed_errors) ... ok
+test_import_deepspeed_raises_without_install (test_deepspeed_zero.DumpCliTests.test_import_deepspeed_raises_without_install) ... ok
+test_megatron_plus_zero_errors (test_deepspeed_zero.DumpCliTests.test_megatron_plus_zero_errors) ... ok
+test_zero_without_backend_errors (test_deepspeed_zero.DumpCliTests.test_zero_without_backend_errors) ... ok
+test_deepspeed_disables_native_offload (test_deepspeed_zero.OffloadMutexTests.test_deepspeed_disables_native_offload) ... ok
+test_deepspeed_rejects_explicit_encoder_offload (test_deepspeed_zero.OffloadMutexTests.test_deepspeed_rejects_explicit_encoder_offload) ... ok
+test_deepspeed_rejects_explicit_optim_cpu (test_deepspeed_zero.OffloadMutexTests.test_deepspeed_rejects_explicit_optim_cpu) ... ok
+test_b0_deepspeed_drops_native_offload (test_deepspeed_zero.PhaseArgvTests.test_b0_deepspeed_drops_native_offload) ... ok
+test_phase_argv_forwards_no_nvfp4 (test_deepspeed_zero.PhaseArgvTests.test_phase_argv_forwards_no_nvfp4) ... ok
+test_new_files_have_no_hosts (test_deepspeed_zero.SecretScanTests.test_new_files_have_no_hosts) ... ok
+test_freeze_before_wrap_deepspeed (test_deepspeed_zero.SourceContractTests.test_freeze_before_wrap_deepspeed) ... ok
+test_not_a_megatron_loop_or_csa_kernel (test_deepspeed_zero.SourceContractTests.test_not_a_megatron_loop_or_csa_kernel) ... ok
+test_occupancy_hides_host_syncs (test_deepspeed_zero.SourceContractTests.test_occupancy_hides_host_syncs) ... ok
+test_overlay_gather_skips_frozen_12b (test_deepspeed_zero.SourceContractTests.test_overlay_gather_skips_frozen_12b) ... ok
+test_phase_argv_forwards_more_steps (test_deepspeed_zero.SourceContractTests.test_phase_argv_forwards_more_steps) ... ok
+test_plain_module_is_not_engine (test_deepspeed_zero.SourceContractTests.test_plain_module_is_not_engine) ... ok
+test_single_process_seeds_local_rank (test_deepspeed_zero.SourceContractTests.test_single_process_seeds_local_rank) ... ok
+test_zero3_gather_before_rank0_save (test_deepspeed_zero.SourceContractTests.test_zero3_gather_before_rank0_save) ... ok
+test_auto_falls_back_to_modelscope (test_download_minicpm5.DownloadMinicpm5Tests.test_auto_falls_back_to_modelscope) ... tiny B2 step 1/1 nll=4.8508 ppl=127.8 aux=0.0043 gate=1.000 gn=12.37 moe_cv=0.61 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=True tok=16 tok/s=195 mem=0MiB
+ok via modelscope: /tmp/tmpre_tm6wl/model.safetensors
+ok
+test_complete_size_accepted_without_hash (test_download_minicpm5.DownloadMinicpm5Tests.test_complete_size_accepted_without_hash) ... ok
+test_env_defaults_hf_mirror (test_download_minicpm5.DownloadMinicpm5Tests.test_env_defaults_hf_mirror) ... ok
+test_env_defaults_huggingface_without_autodl (test_download_minicpm5.DownloadMinicpm5Tests.test_env_defaults_huggingface_without_autodl) ... ok
+test_hf_success_skips_modelscope (test_download_minicpm5.DownloadMinicpm5Tests.test_hf_success_skips_modelscope) ... ok via hf-mirror: /tmp/tmpjpp3an4g/model.safetensors
+ok
+test_incomplete_size_rejected (test_download_minicpm5.DownloadMinicpm5Tests.test_incomplete_size_rejected) ... incomplete /tmp/tmp2188nmb1/model.safetensors: 10 bytes (want 5033557128)
+ok
+test_non_root_host_cannot_inspect_autodl_root (test_download_minicpm5.DownloadMinicpm5Tests.test_non_root_host_cannot_inspect_autodl_root) ... ok
+test_cuda_info_reports_alloc_conf (test_gpu.GpuSmokeSkipTests.test_cuda_info_reports_alloc_conf) ... ok
+test_main_skips_without_cuda (test_gpu.GpuSmokeSkipTests.test_main_skips_without_cuda) ... ok
+test_teardown_safe_without_cuda (test_gpu.GpuSmokeSkipTests.test_teardown_safe_without_cuda) ... ok
+test_12b_meta_does_not_allocate_cuda (test_gpu.GpuTinyTests.test_12b_meta_does_not_allocate_cuda) ... skipped 'CUDA GPU required'
+test_bf16_one_step (test_gpu.GpuTinyTests.test_bf16_one_step) ... skipped 'CUDA GPU required'
+test_cli_c1_smoke_cuda (test_gpu.GpuTinyTests.test_cli_c1_smoke_cuda) ... skipped 'CUDA GPU required'
+test_cli_tiny_cuda (test_gpu.GpuTinyTests.test_cli_tiny_cuda) ... skipped 'CUDA GPU required'
+test_ddp_c1_two_rank_cuda (test_gpu.GpuTinyTests.test_ddp_c1_two_rank_cuda) ... skipped 'CUDA GPU required'
+test_ddp_two_rank_cuda (test_gpu.GpuTinyTests.test_ddp_two_rank_cuda) ... skipped 'CUDA GPU required'
+test_forward_backward_cuda (test_gpu.GpuTinyTests.test_forward_backward_cuda) ... skipped 'CUDA GPU required'
+test_fp8_policy_on_cuda (test_gpu.GpuTinyTests.test_fp8_policy_on_cuda) ... skipped 'CUDA GPU required'
+test_fsdp_one_rank_cuda (test_gpu.GpuTinyTests.test_fsdp_one_rank_cuda) ... skipped 'CUDA GPU required'
+test_full_tiny_bundle (test_gpu.GpuTinyTests.test_full_tiny_bundle) ... skipped 'CUDA GPU required'
+test_gloo_ddp_cpu_from_cuda_process (test_gpu.GpuTinyTests.test_gloo_ddp_cpu_from_cuda_process) ... skipped 'CUDA GPU required'
+test_info_has_device_name (test_gpu.GpuTinyTests.test_info_has_device_name) ... skipped 'CUDA GPU required'
+test_kd_two_steps_cuda (test_gpu.GpuTinyTests.test_kd_two_steps_cuda) ... skipped 'CUDA GPU required'
+test_resume_b0_into_b1_cuda (test_gpu.GpuTinyTests.test_resume_b0_into_b1_cuda) ... skipped 'CUDA GPU required'
+test_sdpa_fastpath_matches_mask_cuda (test_gpu.GpuTinyTests.test_sdpa_fastpath_matches_mask_cuda) ... skipped 'CUDA GPU required'
+test_12b_b0_one_step (test_gpu.GpuTwelveBTests.test_12b_b0_one_step) ... skipped 'CUDA GPU required'
+test_12b_b1_one_step (test_gpu.GpuTwelveBTests.test_12b_b1_one_step) ... skipped 'CUDA GPU required'
+test_12b_c1_chain (test_gpu.GpuTwelveBTests.test_12b_c1_chain) ... skipped 'CUDA GPU required'
+test_phase_train_keeps_no_save_full (test_hw_recipe.ArgvComposeTests.test_phase_train_keeps_no_save_full) ... ok
+test_try_argv_seq_64 (test_hw_recipe.ArgvComposeTests.test_try_argv_seq_64) ... ok
+test_argv_cli (test_hw_recipe.CliTests.test_argv_cli) ... ok
+test_cpu_cli_launch_false (test_hw_recipe.CliTests.test_cpu_cli_launch_false) ... ok
+test_detect_snapshot_cpu_without_cuda (test_hw_recipe.CliTests.test_detect_snapshot_cpu_without_cuda) ... ok
+test_json_cli (test_hw_recipe.CliTests.test_json_cli) ... ok
+test_shell_cli (test_hw_recipe.CliTests.test_shell_cli) ... ok
+test_module_entrypoint (test_hw_recipe.LauncherDocTests.test_module_entrypoint) ... ok
+test_run_b0_next_script (test_hw_recipe.LauncherDocTests.test_run_b0_next_script) ... ok
+test_status_points_at_dispatcher (test_hw_recipe.LauncherDocTests.test_status_points_at_dispatcher) ... ok
+test_parse_cap_and_arch (test_hw_recipe.ParseTests.test_parse_cap_and_arch) ... ok
+test_payload_jsonable (test_hw_recipe.PayloadContractTests.test_payload_jsonable) ... ok
+test_ada_tight_try (test_hw_recipe.RecipeTableTests.test_ada_tight_try) ... ok
+test_ampere_48gib_zero_hint_does_not_change_argv (test_hw_recipe.RecipeTableTests.test_ampere_48gib_zero_hint_does_not_change_argv) ... ok
+test_ampere_a100 (test_hw_recipe.RecipeTableTests.test_ampere_a100) ... ok
+test_cpu_no_launch (test_hw_recipe.RecipeTableTests.test_cpu_no_launch) ... ok
+test_force_try_on_wide_card (test_hw_recipe.RecipeTableTests.test_force_try_on_wide_card) ... ok
+test_h200_comfortable_no_offload (test_hw_recipe.RecipeTableTests.test_h200_comfortable_no_offload) ... ok
+test_hopper_80gib_offload (test_hw_recipe.RecipeTableTests.test_hopper_80gib_offload) ... ok
+test_sm100_b200_wide (test_hw_recipe.RecipeTableTests.test_sm100_b200_wide) ... ok
+test_sm100_comfortable_mb1 (test_hw_recipe.RecipeTableTests.test_sm100_comfortable_mb1) ... ok
+test_sm103_wide (test_hw_recipe.RecipeTableTests.test_sm103_wide) ... ok
+test_sm120_6000d (test_hw_recipe.RecipeTableTests.test_sm120_6000d) ... ok
+test_te_env_off_forces_emu_on_sm100 (test_hw_recipe.RecipeTableTests.test_te_env_off_forces_emu_on_sm100) ... ok
+test_te_fprop_miss_emulates (test_hw_recipe.RecipeTableTests.test_te_fprop_miss_emulates) ... ok
+test_attention_module_has_no_kda_class (test_kda.GraphTests.test_attention_module_has_no_kda_class) ... ok
+test_c_kda_does_not_light_csa (test_kda.GraphTests.test_c_kda_does_not_light_csa) ... ok
+test_default_tiny_has_no_kda_params (test_kda.GraphTests.test_default_tiny_has_no_kda_params) ... ok
+test_kda_chain_puts_hca_last (test_kda.GraphTests.test_kda_chain_puts_hca_last) ... ok
+test_opt_in_tiny_kda_step (test_kda.GraphTests.test_opt_in_tiny_kda_step) ... ok
+test_b_implements_kda_but_stays_window (test_kda.ImplementThenLightTests.test_b_implements_kda_but_stays_window) ... ok
+test_c_inherits_kda_from_b_overlay (test_kda.ImplementThenLightTests.test_c_inherits_kda_from_b_overlay) ... SKIP: no CUDA
+tiny C-kda step 1/1 nll=4.9964 ppl=147.9 aux=0.0076 gate=1.000 gn=220.64 moe_cv=0.26 trainable=0.42M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=234 mem=0MiB
+tiny C-topk step 1/1 nll=4.9937 ppl=147.5 aux=0.0076 gate=1.000 gn=232.91 moe_cv=0.26 trainable=0.43M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=262 mem=0MiB
+tiny B0 step 1/1 nll=4.8805 ppl=131.7 aux=0.0000 gate=0.300 gn=0.11 moe_cv=0.30 trainable=0.04M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=757 mem=0MiB
+tiny B0 step 1/1 nll=4.8805 ppl=131.7 aux=0.0000 gate=0.300 gn=0.11 moe_cv=0.30 trainable=0.04M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=750 mem=0MiB
+overlay resume /tmp/tmp2l8d429v/trainable_step_1.pt: 22 tensors ckpt_phase=B0 cli_phase=C-kda
+ok
+test_c_kda_trains_gates (test_kda.ImplementThenLightTests.test_c_kda_trains_gates) ... ok
+test_extra_use_kda_legacy_cfg_is_false (test_kda.ImplementThenLightTests.test_extra_use_kda_legacy_cfg_is_false) ... ok
+test_late_implement_refused (test_kda.ImplementThenLightTests.test_late_implement_refused) ... ok
+test_kda_does_not_shrink_yoco_cache (test_kda.KvLedgerTests.test_kda_does_not_shrink_yoco_cache) ... ok
+test_kda_state_bytes_do_not_scale_with_seq (test_kda.KvLedgerTests.test_kda_state_bytes_do_not_scale_with_seq) ... ok
+test_doc_boundary_resets_state (test_kda.ScanTests.test_doc_boundary_resets_state) ... ok
+test_kda_attend_is_causal (test_kda.ScanTests.test_kda_attend_is_causal) ... ok
+test_stepwise_state_matches_full (test_kda.ScanTests.test_stepwise_state_matches_full) ... ok
+test_default_12b_is_still_2_7_7 (test_kda.ScheduleTests.test_default_12b_is_still_2_7_7) ... ok
+test_kda_decoder_keeps_sliding_anchors (test_kda.ScheduleTests.test_kda_decoder_keeps_sliding_anchors) ... ok
+test_kda_encoder_is_three_to_one (test_kda.ScheduleTests.test_kda_encoder_is_three_to_one) ... ok
+test_tiny_keeps_csa_anchor (test_kda.ScheduleTests.test_tiny_keeps_csa_anchor) ... ok
+test_b1_enables_nvfp4_b0_encoder_only (test_megatron.MappingTests.test_b1_enables_nvfp4_b0_encoder_only) ... ok
+test_csa_ratios_are_megatron_legal (test_megatron.MappingTests.test_csa_ratios_are_megatron_legal) ... ok
+test_forbids_gpt_model_in_custom_surface (test_megatron.MappingTests.test_forbids_gpt_model_in_custom_surface) ... ok
+test_import_mapping_does_not_need_megatron (test_megatron.MappingTests.test_import_mapping_does_not_need_megatron) ... ok
+test_json_roundtrip (test_megatron.MappingTests.test_json_roundtrip) ... ok
+test_router_matches_frozen_spec (test_megatron.MappingTests.test_router_matches_frozen_spec) ... ok
+test_two_stacks_differ_on_topk_and_depth (test_megatron.MappingTests.test_two_stacks_differ_on_topk_and_depth) ... ok
+test_upstream_url (test_megatron.MappingTests.test_upstream_url) ... ok
+test_12b_legal_tp_and_prime_ep (test_megatron.ParallelPlanTests.test_12b_legal_tp_and_prime_ep) ... ok
+test_backend_megatron_exits_without_loop (test_megatron.ProviderStubTests.test_backend_megatron_exits_without_loop) ... ok
+test_dump_cli (test_megatron.ProviderStubTests.test_dump_cli) ... ok
+test_dump_megatron_cli_zero (test_megatron.ProviderStubTests.test_dump_megatron_cli_zero) ... ok
+test_import_megatron_core_raises_without_install (test_megatron.ProviderStubTests.test_import_megatron_core_raises_without_install) ... ok
+test_cli_rejects_minicpm2b_upcycle_hf (test_minicpm5.MiniCPM5IdTests.test_cli_rejects_minicpm2b_upcycle_hf) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: openbmb/MiniCPM-2B-sft-bf16 is not MiniCPM5-2B (upcycle). upcycle/teacher = openbmb/MiniCPM5-2B-Base; tokenizer = openbmb/MiniCPM5-2B (Apache-2.0 Llama GQA). MiniCPM-2B-sft-bf16 is GML and is rejected.
+ok
+test_hf_config_accepts_minicpm5 (test_minicpm5.MiniCPM5IdTests.test_hf_config_accepts_minicpm5) ... ok
+test_hf_config_rejects_minicpm2b_mha (test_minicpm5.MiniCPM5IdTests.test_hf_config_rejects_minicpm2b_mha) ... ok
+test_load_causal_lm_cpu_requests_cpu_device_map (test_minicpm5.MiniCPM5IdTests.test_load_causal_lm_cpu_requests_cpu_device_map) ... ok
+test_load_state_rejects_minicpm2b_before_hub (test_minicpm5.MiniCPM5IdTests.test_load_state_rejects_minicpm2b_before_hub) ... ok
+test_published_ids_are_minicpm5 (test_minicpm5.MiniCPM5IdTests.test_published_ids_are_minicpm5) ... ok
+test_reject_minicpm2b_and_siblings (test_minicpm5.MiniCPM5IdTests.test_reject_minicpm2b_and_siblings) ... ok
+test_gqa_dummy_upcycle_ok (test_minicpm5.MiniCPM5UpcyleShapeTests.test_gqa_dummy_upcycle_ok) ... ok
+test_mha_k_proj_is_rejected (test_minicpm5.MiniCPM5UpcyleShapeTests.test_mha_k_proj_is_rejected) ... ok
+test_wrong_dense_ffn_is_rejected (test_minicpm5.MiniCPM5UpcyleShapeTests.test_wrong_dense_ffn_is_rejected) ... ok
+test_hash_batched_matches_serial (test_moe_ops.BatchedMoETests.test_hash_batched_matches_serial) ... ok
+test_routed_batched_matches_serial (test_moe_ops.BatchedMoETests.test_routed_batched_matches_serial) ... ok
+test_b0_encoder_wrap_still_finite_with_batched_moe (test_moe_ops.FrozenNvfp4CacheTests.test_b0_encoder_wrap_still_finite_with_batched_moe) ... ok
+test_frozen_weight_cache_reuses_tensor (test_moe_ops.FrozenNvfp4CacheTests.test_frozen_weight_cache_reuses_tensor) ... ok
+test_trainable_ste_still_has_weight_grad (test_moe_ops.FrozenNvfp4CacheTests.test_trainable_ste_still_has_weight_grad) ... ok
+test_cpu_bf16_silu_mul_preserves_native_opmath (test_moe_ops.FusedSwiGLUTests.test_cpu_bf16_silu_mul_preserves_native_opmath) ... ok
+test_fused_gate_up_matches_two_linears (test_moe_ops.FusedSwiGLUTests.test_fused_gate_up_matches_two_linears) ... ok
+test_gpu_bf16_silu_mul_preserves_native_opmath (test_moe_ops.FusedSwiGLUTests.test_gpu_bf16_silu_mul_preserves_native_opmath) ... skipped 'requires CUDA or ROCm'
+test_silu_mul_matches_mul_and_grads (test_moe_ops.FusedSwiGLUTests.test_silu_mul_matches_mul_and_grads) ... ok
+test_silu_mul_not_inplace_on_chunk_views (test_moe_ops.FusedSwiGLUTests.test_silu_mul_not_inplace_on_chunk_views) ... ok
+test_grouped_linear_dw_matches_serial (test_moe_ops.GroupedMoETests.test_grouped_linear_dw_matches_serial) ... ok
+test_grouped_linear_dx_through_frozen_weights (test_moe_ops.GroupedMoETests.test_grouped_linear_dx_through_frozen_weights) ... ok
+test_grouped_swiglu_matches_serial_with_empty_expert (test_moe_ops.GroupedMoETests.test_grouped_swiglu_matches_serial_with_empty_expert) ... ok
+test_rocm_does_not_use_nvidia_grouped_mm (test_moe_ops.GroupedMoETests.test_rocm_does_not_use_nvidia_grouped_mm) ... ok
+test_stacked_stats_match_per_layer_mean (test_moe_ops.MoeUtilizationTests.test_stacked_stats_match_per_layer_mean) ... ok
+test_freeze_invalidates_and_encoder_is_frozen (test_moe_ops.TrainableCacheTests.test_freeze_invalidates_and_encoder_is_frozen) ... ok
+test_frozen_moe_skips_load_histogram_when_not_logging (test_moe_ops.TrainableCacheTests.test_frozen_moe_skips_load_histogram_when_not_logging) ... ok
+test_frozen_moe_skips_z_loss_keeps_load (test_moe_ops.TrainableCacheTests.test_frozen_moe_skips_z_loss_keeps_load) ... ok
+test_gpu_max_count_survives_default_stream_allocation_reuse (test_moe_ops.TrainableCacheTests.test_gpu_max_count_survives_default_stream_allocation_reuse) ... skipped 'requires CUDA or ROCm'
+test_kick_wait_max_count_cpu (test_moe_ops.TrainableCacheTests.test_kick_wait_max_count_cpu) ... ok
+test_repeat_by_counts_matches_repeat_interleave (test_moe_ops.TrainableCacheTests.test_repeat_by_counts_matches_repeat_interleave) ... ok
+test_trainable_moe_keeps_load_when_not_logging (test_moe_ops.TrainableCacheTests.test_trainable_moe_keeps_load_when_not_logging) ... ok
+test_git_does_not_track_pt (test_no_github_lfs.NoGithubLfsTests.test_git_does_not_track_pt) ... fatal: not a git repository (or any of the parent directories): .git
+ERROR
+test_gitignore_covers_pt (test_no_github_lfs.NoGithubLfsTests.test_gitignore_covers_pt) ... ok
+test_hub_gitattributes_stays_in_huggingface_dir (test_no_github_lfs.NoGithubLfsTests.test_hub_gitattributes_stays_in_huggingface_dir) ... ok
+test_overlay_not_in_tree (test_no_github_lfs.NoGithubLfsTests.test_overlay_not_in_tree) ... ok
+test_root_gitattributes_gone (test_no_github_lfs.NoGithubLfsTests.test_root_gitattributes_gone) ... ok
+test_env_off_forces_emulation (test_nvfp4_hw.EnvOffTests.test_env_off_forces_emulation) ... ok
+test_leading_dims (test_nvfp4_hw.FamilyTests.test_leading_dims) ... ok
+test_sm100_is_training_capable (test_nvfp4_hw.FamilyTests.test_sm100_is_training_capable) ... ok
+test_sm100_recipe_is_full_default (test_nvfp4_hw.FamilyTests.test_sm100_recipe_is_full_default) ... ok
+test_b0_wrap_uses_te_linear (test_nvfp4_hw.TeWrapTests.test_b0_wrap_uses_te_linear) ... ok
+test_from_linear_copy_once_preserves_state_dict_keys (test_nvfp4_hw.TeWrapTests.test_from_linear_copy_once_preserves_state_dict_keys) ... ok
+test_frozen_fused_cat_is_one_gemm (test_nvfp4_hw.TeWrapTests.test_frozen_fused_cat_is_one_gemm) ... ok
+test_illegal_shape_falls_back_without_process_wide_disable (test_nvfp4_hw.TeWrapTests.test_illegal_shape_falls_back_without_process_wide_disable) ... ok
+test_moe_te_experts_do_not_stack_bf16_grouped (test_nvfp4_hw.TeWrapTests.test_moe_te_experts_do_not_stack_bf16_grouped) ... ok
+test_pad_leading_keeps_te_kernel (test_nvfp4_hw.TeWrapTests.test_pad_leading_keeps_te_kernel) ... ok
+test_prefer_te_when_forced (test_nvfp4_hw.TeWrapTests.test_prefer_te_when_forced) ... ok
+test_shape_fail_note_is_per_shape (test_nvfp4_hw.TeWrapTests.test_shape_fail_note_is_per_shape) ... ok
+test_te_grouped_swiglu_matches_serial (test_nvfp4_hw.TeWrapTests.test_te_grouped_swiglu_matches_serial) ... ok
+test_te_grouped_swiglu_pads_and_fuses_frozen_gate_up (test_nvfp4_hw.TeWrapTests.test_te_grouped_swiglu_pads_and_fuses_frozen_gate_up) ... ok
+test_trainable_backward_hits_te_weight (test_nvfp4_hw.TeWrapTests.test_trainable_backward_hits_te_weight) ... ok
+test_e2m1_block_amax_maps_to_six (test_nvfp4_linear.QuantizeTests.test_e2m1_block_amax_maps_to_six) ... ok
+test_from_linear_shares_data_ptr (test_nvfp4_linear.QuantizeTests.test_from_linear_shares_data_ptr) ... ok
+test_fused_cat_linear_matches_two_linears (test_nvfp4_linear.QuantizeTests.test_fused_cat_linear_matches_two_linears) ... ok
+test_hw_nvfp4_gemm_probe_does_not_throw (test_nvfp4_linear.QuantizeTests.test_hw_nvfp4_gemm_probe_does_not_throw) ... ok
+test_roundtrip_shape_and_finite (test_nvfp4_linear.QuantizeTests.test_roundtrip_shape_and_finite) ... ok
+test_ste_linear_has_weight_grad (test_nvfp4_linear.QuantizeTests.test_ste_linear_has_weight_grad) ... ok
+test_try_te_nvfp4_linear_cpu_is_none (test_nvfp4_linear.QuantizeTests.test_try_te_nvfp4_linear_cpu_is_none) ... ok
+test_b0_wraps_frozen_skips_student_and_router (test_nvfp4_linear.WrapPolicyTests.test_b0_wraps_frozen_skips_student_and_router) ... ok
+test_b1_wraps_lm_head_attn_moe_cache_cross (test_nvfp4_linear.WrapPolicyTests.test_b1_wraps_lm_head_attn_moe_cache_cross) ... ok
+test_disabled_is_noop (test_nvfp4_linear.WrapPolicyTests.test_disabled_is_noop) ... ok
+test_finite_nll_after_b1_wrap (test_nvfp4_linear.WrapPolicyTests.test_finite_nll_after_b1_wrap) ... ok
+test_tiny_default_flag_off (test_nvfp4_linear.WrapPolicyTests.test_tiny_default_flag_off) ... ok
+test_trainer_b1_hooks_wrap (test_nvfp4_linear.WrapPolicyTests.test_trainer_b1_hooks_wrap) ... ok
+test_12b_cuda_defaults (test_offload.AutoFlagsTests.test_12b_cuda_defaults) ... ok
+test_dist_keeps_auto_offload_off (test_offload.AutoFlagsTests.test_dist_keeps_auto_offload_off) ... ok
+test_dist_rejects_explicit_offload (test_offload.AutoFlagsTests.test_dist_rejects_explicit_offload) ... ok
+test_tiny_cpu_stays_off (test_offload.AutoFlagsTests.test_tiny_cpu_stays_off) ... ok
+test_12b_c1_smoke_cpu_refuses (test_offload.CliOffloadTests.test_12b_c1_smoke_cpu_refuses) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron / --dump-deepspeed only)
+ok
+test_c1_smoke_rejects_tokens (test_offload.CliOffloadTests.test_c1_smoke_rejects_tokens) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --c1-smoke is step-limited; do not pass --tokens
+ok
+test_tiny_c1_alias_writes_phase_dirs (test_offload.CliOffloadTests.test_tiny_c1_alias_writes_phase_dirs) ... ok
+test_tiny_c1_smoke (test_offload.CliOffloadTests.test_tiny_c1_smoke) ... ok
+test_clip_mixed_scales (test_offload.CpuAdamTests.test_clip_mixed_scales) ... ok
+test_cpu_adam_changes_trainable (test_offload.CpuAdamTests.test_cpu_adam_changes_trainable) ... ok
+test_cpu_adam_fast_keeps_two_groups_without_ds_ops (test_offload.CpuAdamTests.test_cpu_adam_fast_keeps_two_groups_without_ds_ops) ... ok
+test_cpu_adam_fp16_and_ephemeral (test_offload.CpuAdamTests.test_cpu_adam_fp16_and_ephemeral) ... ok
+test_cpu_adam_keeps_router_nodecay_not_gate_proj (test_offload.CpuAdamTests.test_cpu_adam_keeps_router_nodecay_not_gate_proj) ... ok
+test_host_memory_used_is_nonneg_int (test_offload.CpuAdamTests.test_host_memory_used_is_nonneg_int) ... ok
+test_b0_checkpoint_allows_collapsed_doc_ids (test_offload.GradCkptNoneDocTests.test_b0_checkpoint_allows_collapsed_doc_ids) ... ok
+test_checkpoint_offload_matches_eager (test_offload.OffloadBlockTests.test_checkpoint_offload_matches_eager) ... ok
+test_move_module_is_noop_on_same_device (test_offload.OffloadBlockTests.test_move_module_is_noop_on_same_device) ... ok
+test_step_router_bias_casts_load_to_buffer (test_offload.RouterBiasOffloadTests.test_step_router_bias_casts_load_to_buffer) ... ok
+test_block_offload_b2 (test_offload.TrainerOffloadTests.test_block_offload_b2) ... ok
+test_block_offload_logs_grad_norm (test_offload.TrainerOffloadTests.test_block_offload_logs_grad_norm) ... ok
+test_block_offload_rejects_accum (test_offload.TrainerOffloadTests.test_block_offload_rejects_accum) ... ok
+test_c1_chain (test_offload.TrainerOffloadTests.test_c1_chain) ... ok
+test_encoder_offload_and_cpu_adam (test_offload.TrainerOffloadTests.test_encoder_offload_and_cpu_adam) ... ok
+test_fsdp_requires_dist (test_offload.TrainerOffloadTests.test_fsdp_requires_dist) ... ok
+test_fsdp_wrap_passes_device_id (test_offload.TrainerOffloadTests.test_fsdp_wrap_passes_device_id) ... ok
+test_reuse_model_keeps_object (test_offload.TrainerOffloadTests.test_reuse_model_keeps_object) ... ok
+test_clear_preserves_saved_tensor_and_trainable_te_aliases (test_offload_cache.OffloadCacheTests.test_clear_preserves_saved_tensor_and_trainable_te_aliases) ... ok
+test_cpu_b0_encoder_decoder_none_docs (test_offload_cache.OffloadCacheTests.test_cpu_b0_encoder_decoder_none_docs) ... ok
+test_device_move_clears_nested_transient_caches (test_offload_cache.OffloadCacheTests.test_device_move_clears_nested_transient_caches) ... ok
+test_gpu_b0_encoder_decoder_none_docs (test_offload_cache.OffloadCacheTests.test_gpu_b0_encoder_decoder_none_docs) ... skipped 'requires CUDA or ROCm'
+test_gpu_frozen_moe_checkpoint_offload_releases_caches (test_offload_cache.OffloadCacheTests.test_gpu_frozen_moe_checkpoint_offload_releases_caches) ... skipped 'requires CUDA or ROCm'
+test_same_device_keeps_cached_weight (test_offload_cache.OffloadCacheTests.test_same_device_keeps_cached_weight) ... ok
+test_cpu_probe_is_cpu (test_ops.PhaseOpsTests.test_cpu_probe_is_cpu) ... ok
+test_every_mini_train_phase_has_ops (test_ops.PhaseOpsTests.test_every_mini_train_phase_has_ops) ... ok
+test_snapshot_records_probe_shape (test_ops.PhaseOpsTests.test_snapshot_records_probe_shape) ... ok
+test_activation_keep_is_decoder_layers (test_param_budget.CurriculumTheoryTests.test_activation_keep_is_decoder_layers) ... ok
+test_b1_optimizer_tracks_decoder_share (test_param_budget.CurriculumTheoryTests.test_b1_optimizer_tracks_decoder_share) ... ok
+test_c2_b0_stores_fewer_frozen_params (test_param_budget.CurriculumTheoryTests.test_c2_b0_stores_fewer_frozen_params) ... ok
+test_cache_proj_in_new_modules (test_param_budget.CurriculumTheoryTests.test_cache_proj_in_new_modules) ... ok
+test_curriculum_claims_pass (test_param_budget.CurriculumTheoryTests.test_curriculum_claims_pass) ... ok
+test_default_b2_at_least_10b (test_param_budget.CurriculumTheoryTests.test_default_b2_at_least_10b) ... ok
+test_delayed_curriculum_dominates_freeze_moe (test_param_budget.CurriculumTheoryTests.test_delayed_curriculum_dominates_freeze_moe) ... ok
+test_dense_encoder_cheaper_than_moe_encoder (test_param_budget.CurriculumTheoryTests.test_dense_encoder_cheaper_than_moe_encoder) ... ok
+test_detach_and_tied_emb_boundaries (test_param_budget.CurriculumTheoryTests.test_detach_and_tied_emb_boundaries) ... ok
+test_freeze_enc_dense_cheaper_than_freeze_enc_moe (test_param_budget.CurriculumTheoryTests.test_freeze_enc_dense_cheaper_than_freeze_enc_moe) ... ok
+test_frozen_spec_is_c1 (test_param_budget.CurriculumTheoryTests.test_frozen_spec_is_c1) ... ok
+test_valid_splits_stay_under_85_percent (test_param_budget.CurriculumTheoryTests.test_valid_splits_stay_under_85_percent) ... ok
+test_b0_is_a_minority_of_c1_flops (test_param_budget.Fp8TheoryTests.test_b0_is_a_minority_of_c1_flops) ... ok
+test_conservative_speedup_is_1_5_not_peak (test_param_budget.Fp8TheoryTests.test_conservative_speedup_is_1_5_not_peak) ... ok
+test_fp8_claims_pass (test_param_budget.Fp8TheoryTests.test_fp8_claims_pass) ... ok
+test_fp8_does_not_change_six_nt (test_param_budget.Fp8TheoryTests.test_fp8_does_not_change_six_nt) ... ok
+test_fp8_is_hopper_fallback_not_published (test_param_budget.Fp8TheoryTests.test_fp8_is_hopper_fallback_not_published) ... ok
+test_keep_high_prec_covers_tied_router_norm (test_param_budget.Fp8TheoryTests.test_keep_high_prec_covers_tied_router_norm) ... ok
+test_mixed_policy_under_60pct_of_joint (test_param_budget.Fp8TheoryTests.test_mixed_policy_under_60pct_of_joint) ... ok
+test_moe_is_the_considerable_portion_of_six_nt (test_param_budget.Fp8TheoryTests.test_moe_is_the_considerable_portion_of_six_nt) ... ok
+test_moe_only_amdahl_justifies_published_1_5 (test_param_budget.Fp8TheoryTests.test_moe_only_amdahl_justifies_published_1_5) ... ok
+test_phase_policy_keeps_b0_and_l0_bf16 (test_param_budget.Fp8TheoryTests.test_phase_policy_keeps_b0_and_l0_bf16) ... ok
+test_verify_includes_fp8_fallback (test_param_budget.Fp8TheoryTests.test_verify_includes_fp8_fallback) ... ok
+test_attn_fraction_is_gqa_not_placeholder_mha (test_param_budget.MiddleTierPlaceholderTests.test_attn_fraction_is_gqa_not_placeholder_mha) ... ok
+test_claim_ledger_passes (test_param_budget.MiddleTierPlaceholderTests.test_claim_ledger_passes) ... ok
+test_csa_keys_window_dominated_at_long_context (test_param_budget.MiddleTierPlaceholderTests.test_csa_keys_window_dominated_at_long_context) ... ok
+test_csa_not_cheaper_than_dense_inside_the_window (test_param_budget.MiddleTierPlaceholderTests.test_csa_not_cheaper_than_dense_inside_the_window) ... ok
+test_first_dense_retune_recovers_12b_without_touching_top_k (test_param_budget.MiddleTierPlaceholderTests.test_first_dense_retune_recovers_12b_without_touching_top_k) ... ok
+test_first_dense_stays_near_middle_activations (test_param_budget.MiddleTierPlaceholderTests.test_first_dense_stays_near_middle_activations) ... ok
+test_kv_1m_matches_plan_section_16 (test_param_budget.MiddleTierPlaceholderTests.test_kv_1m_matches_plan_section_16) ... ok
+test_mup_logit_scale (test_param_budget.MiddleTierPlaceholderTests.test_mup_logit_scale) ... ok
+test_published_targets (test_param_budget.MiddleTierPlaceholderTests.test_published_targets) ... ok
+test_sparsity_is_top_k_over_experts_not_the_old_37_53 (test_param_budget.MiddleTierPlaceholderTests.test_sparsity_is_top_k_over_experts_not_the_old_37_53) ... ok
+test_three_tiers_conserve_expert_slots (test_param_budget.MiddleTierPlaceholderTests.test_three_tiers_conserve_expert_slots) ... ok
+test_training_hours_middle_50b (test_param_budget.MiddleTierPlaceholderTests.test_training_hours_middle_50b) ... ok
+test_conservative_speedup_is_2_not_peak_4 (test_param_budget.Nvfp4TheoryTests.test_conservative_speedup_is_2_not_peak_4) ... ok
+test_frozen_wallclock_is_c1_nvfp4 (test_param_budget.Nvfp4TheoryTests.test_frozen_wallclock_is_c1_nvfp4) ... ok
+test_lm_head_is_gemm_not_must_bf16 (test_param_budget.Nvfp4TheoryTests.test_lm_head_is_gemm_not_must_bf16) ... ok
+test_nvfp4_claims_pass (test_param_budget.Nvfp4TheoryTests.test_nvfp4_claims_pass) ... ok
+test_nvfp4_does_not_change_six_nt (test_param_budget.Nvfp4TheoryTests.test_nvfp4_does_not_change_six_nt) ... ok
+test_nvfp4_over_fp8_in_nvidia_band (test_param_budget.Nvfp4TheoryTests.test_nvfp4_over_fp8_in_nvidia_band) ... ok
+test_phase_policy_is_nvfp4_not_moe_only (test_param_budget.Nvfp4TheoryTests.test_phase_policy_is_nvfp4_not_moe_only) ... ok
+test_published_hours_under_45pct_of_joint (test_param_budget.Nvfp4TheoryTests.test_published_hours_under_45pct_of_joint) ... ok
+test_rtx_pro_6000_matches_h100_bf16 (test_param_budget.Nvfp4TheoryTests.test_rtx_pro_6000_matches_h100_bf16) ... ok
+test_freeze_encoder_saves_about_one_fifth (test_param_budget.StagedTrainingTests.test_freeze_encoder_saves_about_one_fifth) ... ok
+test_independent_merge_costs_more_than_joint (test_param_budget.StagedTrainingTests.test_independent_merge_costs_more_than_joint) ... ok
+test_new_modules_cheaper_than_freeze_enc (test_param_budget.StagedTrainingTests.test_new_modules_cheaper_than_freeze_enc) ... ok
+test_unfreeze_curriculum_saves_without_extra_tokens (test_param_budget.StagedTrainingTests.test_unfreeze_curriculum_saves_without_extra_tokens) ... ok
+test_frozen_spec_lists_cg_entries (test_phase_cg.DocsRangeTests.test_frozen_spec_lists_cg_entries) ... ok
+test_c_index_trains_only_indexer (test_phase_cg.IndexerFreezeTests.test_c_index_trains_only_indexer) ... ok
+test_default_graph_has_no_indexer (test_phase_cg.IndexerFreezeTests.test_default_graph_has_no_indexer) ... ok
+test_indexer_not_in_attention_module (test_phase_cg.IndexerFreezeTests.test_indexer_not_in_attention_module) ... ok
+test_c_index_one_step_finite_kl (test_phase_cg.IndexerTrainTests.test_c_index_one_step_finite_kl) ... ok
+test_c_topk_and_hca_ce_step (test_phase_cg.IndexerTrainTests.test_c_topk_and_hca_ce_step) ... ok
+test_d_chain_inherits_kda_from_resume (test_phase_cg.LaterPhaseTests.test_d_chain_inherits_kda_from_resume) ... ok
+test_d_dummy_plants_mid_needle (test_phase_cg.LaterPhaseTests.test_d_dummy_plants_mid_needle) ... ok
+test_d_e_f_steps (test_phase_cg.LaterPhaseTests.test_d_e_f_steps) ... ok
+test_d_rewindows_packed_bin (test_phase_cg.LaterPhaseTests.test_d_rewindows_packed_bin) ... tiny C-kda step 1/1 nll=5.0657 ppl=158.5 aux=0.0074 gate=1.000 gn=1150.73 moe_cv=0.21 trainable=0.42M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=264 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1489 mem=0MiB
+tiny B1 step 1/1 nll=5.4652 ppl=236.3 aux=0.0011 gate=1.000 gn=3.49 moe_cv=0.28 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=True tok=16 tok/s=374 mem=0MiB
+tiny B0 step 1/1 nll=5.0276 ppl=152.6 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.17 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2860 mem=0MiB
+tiny B1 step 1/1 nll=5.0033 ppl=148.9 aux=0.0010 gate=1.000 gn=1.67 moe_cv=0.14 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1929 mem=0MiB
+tiny B2 step 1/1 nll=4.9403 ppl=139.8 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1499 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2848 mem=0MiB
+tiny B1 step 1/1 nll=5.1336 ppl=169.6 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.19 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2223 mem=0MiB
+tiny B2 step 1/1 nll=4.9266 ppl=137.9 aux=0.0033 gate=1.000 gn=1.91 moe_cv=0.28 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1560 mem=0MiB
+tiny B2 step 1/1 nll=5.2409 ppl=188.8 aux=0.0032 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=32 tok/s=1124 mem=0MiB
+tiny B2 step 1/1 nll=5.2409 ppl=188.8 aux=0.0032 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=32 tok/s=1084 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2705 mem=0MiB
+tiny B1 step 1/1 nll=5.1336 ppl=169.6 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.19 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2160 mem=0MiB
+tiny B2 step 1/1 nll=4.9266 ppl=137.9 aux=0.0033 gate=1.000 gn=1.91 moe_cv=0.28 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1477 mem=0MiB
+tiny B1 step 1/1 nll=5.2409 ppl=188.8 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.20 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2078 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2790 mem=0MiB
+tiny B1 step 1/1 nll=5.2409 ppl=188.8 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.20 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2207 mem=0MiB
+tiny C-index step 1/1 nll=0.0826 ppl=1.1 aux=0.0000 gate=1.000 gn=0.07 moe_cv=0.27 trainable=0.00M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1572 mem=0MiB rec=1.000
+tiny C-topk step 1/1 nll=5.4604 ppl=235.2 aux=0.0032 gate=1.000 gn=2.73 moe_cv=0.27 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=765 mem=0MiB
+tiny C-hca step 1/1 nll=5.4604 ppl=235.2 aux=0.0032 gate=1.000 gn=2.73 moe_cv=0.27 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=776 mem=0MiB
+tiny C-win step 1/1 nll=5.4604 ppl=235.2 aux=0.0032 gate=1.000 gn=2.73 moe_cv=0.27 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=772 mem=0MiB
+tiny D-8k step 1/1 nll=5.3433 ppl=209.2 aux=0.0032 gate=1.000 gn=2.73 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=772 mem=0MiB
+tiny E step 1/1 nll=5.4604 ppl=235.2 aux=0.0032 gate=1.000 gn=2.73 moe_cv=0.27 trainable=0.21M lr=3.00e-06 fp8=False nvfp4=False tok=16 tok/s=775 mem=0MiB
+tiny F step 1/1 nll=5.5139 ppl=248.1 aux=0.0032 gate=1.000 gn=3.51 moe_cv=0.27 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=773 mem=0MiB
+re-window packed bin sidecar seq_len=8 → 16
+ok
+test_e_f_inherit_kda_flag (test_phase_cg.LaterPhaseTests.test_e_f_inherit_kda_flag) ... ok
+test_g_grpo_and_dpo_finite (test_phase_cg.LaterPhaseTests.test_g_grpo_and_dpo_finite) ... ok
+test_sft_dummy_masks_prompt (test_phase_cg.LaterPhaseTests.test_sft_dummy_masks_prompt) ... ok
+test_sft_file_stream_packs_two_chats (test_phase_cg.LaterPhaseTests.test_sft_file_stream_packs_two_chats) ... ok
+test_sft_messages_ids_jsonl (test_phase_cg.LaterPhaseTests.test_sft_messages_ids_jsonl) ... ok
+test_sft_prompt_ids_jsonl (test_phase_cg.LaterPhaseTests.test_sft_prompt_ids_jsonl) ... ok
+test_wsd_decay_drops (test_phase_cg.LaterPhaseTests.test_wsd_decay_drops) ... ok
+test_b_through_g_registered (test_phase_cg.PhaseEnvelopeTests.test_b_through_g_registered) ... ok
+test_c_chain_inherits_kda_from_resume (test_phase_cg.PhaseEnvelopeTests.test_c_chain_inherits_kda_from_resume) ... ok
+test_c_chain_rejects_late_kda (test_phase_cg.PhaseEnvelopeTests.test_c_chain_rejects_late_kda) ... ok
+test_c_chain_rejects_stage (test_phase_cg.PhaseEnvelopeTests.test_c_chain_rejects_stage) ... ok
+test_c_chain_runs_four_stages (test_phase_cg.PhaseEnvelopeTests.test_c_chain_runs_four_stages) ... ok
+test_c_chain_use_kda_lights_kda_first (test_phase_cg.PhaseEnvelopeTests.test_c_chain_use_kda_lights_kda_first) ... ok
+test_c_index_use_kda_carves_tokens (test_phase_cg.PhaseEnvelopeTests.test_c_index_use_kda_carves_tokens) ... ok
+test_c_published_tokens (test_phase_cg.PhaseEnvelopeTests.test_c_published_tokens) ... ok
+test_c_try_argv (test_phase_cg.PhaseEnvelopeTests.test_c_try_argv) ... ok
+test_d_seq_curriculum_argv (test_phase_cg.PhaseEnvelopeTests.test_d_seq_curriculum_argv) ... ok
+test_e_f_published_seq_and_hca (test_phase_cg.PhaseEnvelopeTests.test_e_f_published_seq_and_hca) ... ok
+test_g_steps_not_tokens (test_phase_cg.PhaseEnvelopeTests.test_g_steps_not_tokens) ... ok
+test_no_vast_ip_in_new_scripts (test_phase_cg.PhaseEnvelopeTests.test_no_vast_ip_in_new_scripts) ... ok
+test_stage_wrappers (test_phase_cg.PhaseEnvelopeTests.test_stage_wrappers) ... ok
+test_compressed_keep_excludes_own_block (test_phase_cg.TheoremBMaskTests.test_compressed_keep_excludes_own_block) ... ok
+test_hca_slot_excludes_own (test_phase_cg.TheoremBMaskTests.test_hca_slot_excludes_own) ... ok
+test_indexer_topk_is_subset_of_compressed (test_phase_cg.TheoremBMaskTests.test_indexer_topk_is_subset_of_compressed) ... ok
+test_b0_micro_batch_override (test_phases.PhaseSpecTests.test_b0_micro_batch_override) ... ok
+test_b0_no_grad_ckpt_argv (test_phases.PhaseSpecTests.test_b0_no_grad_ckpt_argv) ... ok
+test_b0_no_offload_encoder_on_6000d (test_phases.PhaseSpecTests.test_b0_no_offload_encoder_on_6000d) ... ok
+test_b0_published_argv (test_phases.PhaseSpecTests.test_b0_published_argv) ... ok
+test_b0_try_argv (test_phases.PhaseSpecTests.test_b0_try_argv) ... ok
+test_b0_try_keeps_explicit_upcycle (test_phases.PhaseSpecTests.test_b0_try_keeps_explicit_upcycle) ... ok
+test_b1_envelope_argv (test_phases.PhaseSpecTests.test_b1_envelope_argv) ... ok
+test_b2_envelope_argv (test_phases.PhaseSpecTests.test_b2_envelope_argv) ... ok
+test_published_envelopes (test_phases.PhaseSpecTests.test_published_envelopes) ... ok
+test_tight_gpu_refuses_default_envelope (test_phases.PhaseSpecTests.test_tight_gpu_refuses_default_envelope) ... usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--more-steps MORE_STEPS]
+                   [--run-steps RUN_STEPS] [--tokens TOKENS] [--data DATA]
+                   [--eval-data EVAL_DATA] [--eval-every EVAL_EVERY]
+                   [--eval-batches EVAL_BATCHES] [--save-dir SAVE_DIR]
+                   [--save-every SAVE_EVERY] [--log LOG] [--resume RESUME]
+                   [--seq-len SEQ_LEN] [--upcycle-hf [UPCYCLE_HF]]
+                   [--upcycle UPCYCLE] [--dummy-upcycle] [--device DEVICE]
+                   [--use-kda] [--seed SEED] [--keep-last KEEP_LAST]
+                   [--offload-encoder] [--no-offload-encoder]
+                   [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                   [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                   [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                   [--dump-deepspeed] [--log-every LOG_EVERY]
+                   [--micro-batch MICRO_BATCH] [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: B0 published envelope is 8e+09 tokens; a <40GiB GPU cannot finish it. Pass --try (32 steps, seq=64, trainable.pt overlay) or explicit --steps / --tokens / --more-steps / --run-steps.
+ok
+test_b0_trainable_roundtrip (test_phases.TrainableCkptTests.test_b0_trainable_roundtrip) ... ok
+test_prune_trainable_keeps_hardlinked_pointer (test_phases.TrainableCkptTests.test_prune_trainable_keeps_hardlinked_pointer) ... ok
+test_resume_prefers_full_latest_over_trainable (test_phases.TrainableCkptTests.test_resume_prefers_full_latest_over_trainable) ... ok
+test_shard_splits_under_cap (test_phases.TrainableCkptTests.test_shard_splits_under_cap) ... ok
+test_sharded_checkpoint_writes_manifest (test_phases.TrainableCkptTests.test_sharded_checkpoint_writes_manifest) ... ok
+test_trainer_writes_trainable_not_full (test_phases.TrainableCkptTests.test_trainer_writes_trainable_not_full) ... ok
+test_fused_qk_matches_two_linears (test_plan_verify.IndexerDtypeTests.test_fused_qk_matches_two_linears) ... ok
+test_scores_fp32_against_bf16_weights (test_plan_verify.IndexerDtypeTests.test_scores_fp32_against_bf16_weights) ... ok
+test_cpu_one_step_ledger (test_plan_verify.MiniTrainTests.test_cpu_one_step_ledger) ... ok
+test_bf16_probe_is_flash_shaped_with_theorem_b_hole (test_plan_verify.PlanProbeConfigTests.test_bf16_probe_is_flash_shaped_with_theorem_b_hole) ... ok
+test_chain_is_phase_a_through_e (test_plan_verify.PlanProbeConfigTests.test_chain_is_phase_a_through_e) ... ok
+test_probe_has_sliding_csa_hca_and_theorem_b_hole (test_plan_verify.PlanProbeConfigTests.test_probe_has_sliding_csa_hca_and_theorem_b_hole) ... ok
+test_published_split_untouched (test_plan_verify.PlanProbeConfigTests.test_published_split_untouched) ... ok
+test_ampere_b0_shell_does_not_clobber_hub (test_plan_verify.SecretScanTests.test_ampere_b0_shell_does_not_clobber_hub) ... ok
+test_ampere_mfu_shell_is_dedicated_dir (test_plan_verify.SecretScanTests.test_ampere_mfu_shell_is_dedicated_dir) ... ok
+test_attention_modules_have_no_csa_class (test_plan_verify.SecretScanTests.test_attention_modules_have_no_csa_class) ... ok
+test_shell_is_dedicated_dir_dummy_only (test_plan_verify.SecretScanTests.test_shell_is_dedicated_dir_dummy_only) ... ok
+test_suite_files_have_no_secrets_or_hosts (test_plan_verify.SecretScanTests.test_suite_files_have_no_secrets_or_hosts) ... ok
+test_bf16_static_claims_keep_theorem_b (test_plan_verify.StaticLedgerTests.test_bf16_static_claims_keep_theorem_b) ... ok
+test_static_claims_pass_except_deferred_pdsa (test_plan_verify.StaticLedgerTests.test_static_claims_pass_except_deferred_pdsa) ... ok
+test_hub_load_requires_transformers (test_prepare.HfMinicpmTests.test_hub_load_requires_transformers) ... skipped 'transformers installed; skip to avoid Hub download'
+test_unwrap_state_dict_and_pt_roundtrip (test_prepare.HfMinicpmTests.test_unwrap_state_dict_and_pt_roundtrip) ... ok
+test_hf_stream_requires_data_extra (test_prepare.MixTests.test_hf_stream_requires_data_extra) ... skipped 'datasets installed; skip to avoid Hub download'
+test_iter_local_prefers_content_and_skips_tokens (test_prepare.MixTests.test_iter_local_prefers_content_and_skips_tokens) ... ok
+test_mix_documents_drops_exhausted_source (test_prepare.MixTests.test_mix_documents_drops_exhausted_source) ... ok
+test_local_prepare_writes_mmap_bin_and_meta (test_prepare.PrepareTrainTests.test_local_prepare_writes_mmap_bin_and_meta) ... ok
+test_local_sft_jsonl_masks_prompt_and_trains_f (test_prepare.PrepareTrainTests.test_local_sft_jsonl_masks_prompt_and_trains_f) ... tiny D-8k step 1/1 nll=5.2856 ppl=197.5 aux=0.0031 gate=1.000 gn=2.61 moe_cv=0.17 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=770 mem=0MiB
+tiny G step 1/1 nll=0.0000 ppl=1.0 aux=0.0000 gate=1.000 gn=0.00 moe_cv=0.27 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=337 mem=0MiB rew=0.000
+tiny G-dpo step 1/1 nll=0.6931 ppl=2.0 aux=0.0000 gate=1.000 gn=0.00 moe_cv=0.25 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=462 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2833 mem=0MiB
+plan-probe B0 step 1/1 nll=4.8721 ppl=130.6 aux=0.0000 gate=0.300 gn=0.01 moe_cv=0.29 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=5038 mem=0MiB
+plan-probe B1 step 1/1 nll=4.8718 ppl=130.6 aux=0.0011 gate=1.000 gn=1.57 moe_cv=0.28 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3831 mem=0MiB
+plan-probe B2 step 1/1 nll=4.8717 ppl=130.5 aux=0.0044 gate=1.000 gn=2.85 moe_cv=0.28 trainable=0.25M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=2407 mem=0MiB
+plan-probe C-index step 1/1 nll=0.0996 ppl=1.1 aux=0.0000 gate=1.000 gn=0.03 moe_cv=0.28 trainable=0.00M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=6998 mem=0MiB rec=0.577
+plan-probe C-topk step 1/1 nll=4.8725 ppl=130.6 aux=0.0045 gate=1.000 gn=2.90 moe_cv=0.31 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=2388 mem=0MiB
+plan-probe C-hca step 1/1 nll=4.8727 ppl=130.7 aux=0.0045 gate=1.000 gn=2.85 moe_cv=0.33 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=2320 mem=0MiB
+plan-probe C-win step 1/1 nll=4.8727 ppl=130.7 aux=0.0045 gate=1.000 gn=2.85 moe_cv=0.33 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=2367 mem=0MiB
+plan-probe D-8k step 1/1 nll=4.8616 ppl=129.2 aux=0.0045 gate=1.000 gn=2.80 moe_cv=0.33 trainable=0.26M lr=3.00e-08 fp8=False nvfp4=False tok=64 tok/s=2405 mem=0MiB
+plan-probe E step 1/1 nll=4.8727 ppl=130.7 aux=0.0045 gate=1.000 gn=2.85 moe_cv=0.33 trainable=0.26M lr=3.00e-06 fp8=False nvfp4=False tok=64 tok/s=2369 mem=0MiB
+re-window packed bin sidecar seq_len=64 → 16
+ok
+test_prepare_cli_then_trainer_step (test_prepare.PrepareTrainTests.test_prepare_cli_then_trainer_step) ... ok
+test_train_cli_on_prepared_bin_and_upcycle_pt (test_prepare.PrepareTrainTests.test_train_cli_on_prepared_bin_and_upcycle_pt) ... ok
+test_upcycle_and_upcycle_hf_conflict (test_prepare.PrepareTrainTests.test_upcycle_and_upcycle_hf_conflict) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: pick one of --dummy-upcycle / --upcycle / --upcycle-hf
+ok
+test_code_mix_is_optional_extra (test_prepare.RecipeTests.test_code_mix_is_optional_extra) ... ok
+test_mix_named_rejects_unknown (test_prepare.RecipeTests.test_mix_named_rejects_unknown) ... ok
+test_pack_sft_pairs_fills_seq_len (test_prepare.RecipeTests.test_pack_sft_pairs_fills_seq_len) ... ok
+test_phase_b_thinking_mix_has_modest_code (test_prepare.RecipeTests.test_phase_b_thinking_mix_has_modest_code) ... ok
+test_sft_turns_ultrachat_and_alpaca (test_prepare.RecipeTests.test_sft_turns_ultrachat_and_alpaca) ... ok
+test_doc_ids_increase_after_eos (test_prepare.SidecarAndDocTests.test_doc_ids_increase_after_eos) ... ok
+test_explicit_eos_wins_over_sidecar (test_prepare.SidecarAndDocTests.test_explicit_eos_wins_over_sidecar) ... ok
+test_labels_mask_last_dim_not_batch (test_prepare.SidecarAndDocTests.test_labels_mask_last_dim_not_batch) ... ok
+test_packed_bin_micro_batch_one_masks_eos_boundary (test_prepare.SidecarAndDocTests.test_packed_bin_micro_batch_one_masks_eos_boundary) ... ok
+test_hash_appends_eos_and_avoids_eos_in_body (test_prepare.TokenizerTests.test_hash_appends_eos_and_avoids_eos_in_body) ... ok
+test_load_dummy_does_not_need_transformers (test_prepare.TokenizerTests.test_load_dummy_does_not_need_transformers) ... ok
+test_license_is_apache (test_push_to_hf.PushToHfTests.test_license_is_apache) ... ok
+test_repo_does_not_ship_deploy_key_docs (test_push_to_hf.PushToHfTests.test_repo_does_not_ship_deploy_key_docs) ... ok
+test_script_exists_and_targets_this_repo (test_push_to_hf.PushToHfTests.test_script_exists_and_targets_this_repo) ... ok
+test_absolute_step_budget_still_applies (test_run_steps.RunStepsTests.test_absolute_step_budget_still_applies) ... ok
+test_cli_runs_requested_updates_without_tiny_default_step_limit (test_run_steps.RunStepsTests.test_cli_runs_requested_updates_without_tiny_default_step_limit) ... ok
+test_periodic_checkpoint_cursor_excludes_prefetched_next_batch (test_run_steps.RunStepsTests.test_periodic_checkpoint_cursor_excludes_prefetched_next_batch) ... ok
+test_phase_token_budget_can_stop_before_run_bound (test_run_steps.RunStepsTests.test_phase_token_budget_can_stop_before_run_bound) ... ok
+test_reached_absolute_cap_does_not_prefetch (test_run_steps.RunStepsTests.test_reached_absolute_cap_does_not_prefetch) ... ok
+test_relative_bounds_do_not_prefetch_past_final_update (test_run_steps.RunStepsTests.test_relative_bounds_do_not_prefetch_past_final_update) ... ok
+test_relative_options_allow_matching_counts (test_run_steps.RunStepsTests.test_relative_options_allow_matching_counts) ... ok
+test_relative_options_reject_conflicting_counts (test_run_steps.RunStepsTests.test_relative_options_reject_conflicting_counts) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --more-steps and --run-steps must match when both are provided
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--more-steps MORE_STEPS]
+                   [--run-steps RUN_STEPS] [--tokens TOKENS] [--data DATA]
+                   [--eval-data EVAL_DATA] [--eval-every EVAL_EVERY]
+                   [--eval-batches EVAL_BATCHES] [--save-dir SAVE_DIR]
+                   [--save-every SAVE_EVERY] [--log LOG] [--resume RESUME]
+                   [--seq-len SEQ_LEN] [--upcycle-hf [UPCYCLE_HF]]
+                   [--upcycle UPCYCLE] [--dummy-upcycle] [--device DEVICE]
+                   [--use-kda] [--seed SEED] [--keep-last KEEP_LAST]
+                   [--offload-encoder] [--no-offload-encoder]
+                   [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                   [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                   [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                   [--dump-deepspeed] [--log-every LOG_EVERY]
+                   [--micro-batch MICRO_BATCH] [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --more-steps and --run-steps must match when both are provided
+ok
+test_resume_beyond_try_limit_preserves_token_schedule_and_final_save (test_run_steps.RunStepsTests.test_resume_beyond_try_limit_preserves_token_schedule_and_final_save) ... ok
+test_run_steps_requires_positive_update_count (test_run_steps.RunStepsTests.test_run_steps_requires_positive_update_count) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --run-steps must be positive
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--more-steps MORE_STEPS]
+                   [--run-steps RUN_STEPS] [--tokens TOKENS] [--data DATA]
+                   [--eval-data EVAL_DATA] [--eval-every EVAL_EVERY]
+                   [--eval-batches EVAL_BATCHES] [--save-dir SAVE_DIR]
+                   [--save-every SAVE_EVERY] [--log LOG] [--resume RESUME]
+                   [--seq-len SEQ_LEN] [--upcycle-hf [UPCYCLE_HF]]
+                   [--upcycle UPCYCLE] [--dummy-upcycle] [--device DEVICE]
+                   [--use-kda] [--seed SEED] [--keep-last KEEP_LAST]
+                   [--offload-encoder] [--no-offload-encoder]
+                   [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                   [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                   [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                   [--dump-deepspeed] [--log-every LOG_EVERY]
+                   [--micro-batch MICRO_BATCH] [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --run-steps must be positive
+usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --run-steps must be positive
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--more-steps MORE_STEPS]
+                   [--run-steps RUN_STEPS] [--tokens TOKENS] [--data DATA]
+                   [--eval-data EVAL_DATA] [--eval-every EVAL_EVERY]
+                   [--eval-batches EVAL_BATCHES] [--save-dir SAVE_DIR]
+                   [--save-every SAVE_EVERY] [--log LOG] [--resume RESUME]
+                   [--seq-len SEQ_LEN] [--upcycle-hf [UPCYCLE_HF]]
+                   [--upcycle UPCYCLE] [--dummy-upcycle] [--device DEVICE]
+                   [--use-kda] [--seed SEED] [--keep-last KEEP_LAST]
+                   [--offload-encoder] [--no-offload-encoder]
+                   [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                   [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                   [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                   [--dump-deepspeed] [--log-every LOG_EVERY]
+                   [--micro-batch MICRO_BATCH] [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --run-steps must be positive
+usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --more-steps must be positive
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--more-steps MORE_STEPS]
+                   [--run-steps RUN_STEPS] [--tokens TOKENS] [--data DATA]
+                   [--eval-data EVAL_DATA] [--eval-every EVAL_EVERY]
+                   [--eval-batches EVAL_BATCHES] [--save-dir SAVE_DIR]
+                   [--save-every SAVE_EVERY] [--log LOG] [--resume RESUME]
+                   [--seq-len SEQ_LEN] [--upcycle-hf [UPCYCLE_HF]]
+                   [--upcycle UPCYCLE] [--dummy-upcycle] [--device DEVICE]
+                   [--use-kda] [--seed SEED] [--keep-last KEEP_LAST]
+                   [--offload-encoder] [--no-offload-encoder]
+                   [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                   [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                   [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                   [--dump-deepspeed] [--log-every LOG_EVERY]
+                   [--micro-batch MICRO_BATCH] [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --more-steps must be positive
+usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --more-steps must be positive
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--more-steps MORE_STEPS]
+                   [--run-steps RUN_STEPS] [--tokens TOKENS] [--data DATA]
+                   [--eval-data EVAL_DATA] [--eval-every EVAL_EVERY]
+                   [--eval-batches EVAL_BATCHES] [--save-dir SAVE_DIR]
+                   [--save-every SAVE_EVERY] [--log LOG] [--resume RESUME]
+                   [--seq-len SEQ_LEN] [--upcycle-hf [UPCYCLE_HF]]
+                   [--upcycle UPCYCLE] [--dummy-upcycle] [--device DEVICE]
+                   [--use-kda] [--seed SEED] [--keep-last KEEP_LAST]
+                   [--offload-encoder] [--no-offload-encoder]
+                   [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                   [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                   [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                   [--dump-deepspeed] [--log-every LOG_EVERY]
+                   [--micro-batch MICRO_BATCH] [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --more-steps must be positive
+ok
+test_tight_gpu_phase_cli_retains_published_token_schedule (test_run_steps.RunStepsTests.test_tight_gpu_phase_cli_retains_published_token_schedule) ... ok
+test_cpu_dtype_is_fp32_cuda_policy_is_bf16 (test_teacher.TeacherPlacementTests.test_cpu_dtype_is_fp32_cuda_policy_is_bf16) ... ok
+test_pickle_dummy_teacher_roundtrip (test_teacher.TeacherPlacementTests.test_pickle_dummy_teacher_roundtrip) ... ok
+test_place_teacher_freezes_and_disables_cache (test_teacher.TeacherPlacementTests.test_place_teacher_freezes_and_disables_cache) ... ok
+test_12b_matches_frozen_spec (test_train.ConfigFrozenTests.test_12b_matches_frozen_spec) ... ok
+test_gqa_projections_use_kv_dim (test_train.ConfigFrozenTests.test_gqa_projections_use_kv_dim) ... ok
+test_mup_off_ignores_minicpm2b_dim_model_base (test_train.ConfigFrozenTests.test_mup_off_ignores_minicpm2b_dim_model_base) ... ok
+test_meta_param_count_near_12b (test_train.MetaTwelveBTests.test_meta_param_count_near_12b) ... ok
+test_b0_does_not_step_frozen_router_bias (test_train.TinyTrainTests.test_b0_does_not_step_frozen_router_bias) ... ok
+test_b0_encoder_has_no_grad (test_train.TinyTrainTests.test_b0_encoder_has_no_grad) ... ok
+test_b0_frozen_moe_aux_is_zero (test_train.TinyTrainTests.test_b0_frozen_moe_aux_is_zero) ... ok
+test_b1_decoder_router_bias_updates (test_train.TinyTrainTests.test_b1_decoder_router_bias_updates) ... ok
+test_b1_decoder_trainable_encoder_frozen (test_train.TinyTrainTests.test_b1_decoder_trainable_encoder_frozen) ... ok
+test_b2_unfreeze (test_train.TinyTrainTests.test_b2_unfreeze) ... ok
+test_causal_fastpath_matches_mask (test_train.TinyTrainTests.test_causal_fastpath_matches_mask) ... ok
+test_causal_mask_no_future (test_train.TinyTrainTests.test_causal_mask_no_future) ... ok
+test_detach_blocks_encoder_grad_even_if_unfrozen (test_train.TinyTrainTests.test_detach_blocks_encoder_grad_even_if_unfrozen) ... ok
+test_detach_encoder_is_no_grad_and_cache_is_fused (test_train.TinyTrainTests.test_detach_encoder_is_no_grad_and_cache_is_fused) ... ok
+test_document_mask_blocks_other_doc (test_train.TinyTrainTests.test_document_mask_blocks_other_doc) ... ok
+test_forward_backward (test_train.TinyTrainTests.test_forward_backward) ... ok
+test_fp8_policy_cpu_stays_off (test_train.TinyTrainTests.test_fp8_policy_cpu_stays_off) ... ok
+test_gate_zero_nulls_cross_attn_delta (test_train.TinyTrainTests.test_gate_zero_nulls_cross_attn_delta) ... ok
+test_meta_skips_weight_init (test_train.TinyTrainTests.test_meta_skips_weight_init) ... ok
+test_moe_cpu_bf16_autocast_index_put (test_train.TinyTrainTests.test_moe_cpu_bf16_autocast_index_put)
+GPU B1+FP8 policy uses bf16 autocast; expert writes must match the buffer. ... ok
+test_moe_load_accumulates_across_forwards (test_train.TinyTrainTests.test_moe_load_accumulates_across_forwards) ... ok
+test_muon_switch_raises (test_train.TinyTrainTests.test_muon_switch_raises) ... ok
+test_new_modules_small_init (test_train.TinyTrainTests.test_new_modules_small_init) ... ok
+test_rmsnorm_cuda_skips_activation_upcast (test_train.TinyTrainTests.test_rmsnorm_cuda_skips_activation_upcast) ... ok
+test_rmsnorm_fp32_under_autocast (test_train.TinyTrainTests.test_rmsnorm_fp32_under_autocast) ... ok
+test_router_bias_updates_after_backward_not_in_forward (test_train.TinyTrainTests.test_router_bias_updates_after_backward_not_in_forward) ... ok
+test_router_logits_fp32_under_autocast (test_train.TinyTrainTests.test_router_logits_fp32_under_autocast) ... ok
+test_upcycle_copies_embed (test_train.TinyTrainTests.test_upcycle_copies_embed) ... ok
+test_12b_b0_tokens_keeps_auto (test_trainer.CliTests.test_12b_b0_tokens_keeps_auto) ... ok
+test_12b_b2_explicit_accum_with_no_offload_ok (test_trainer.CliTests.test_12b_b2_explicit_accum_with_no_offload_ok) ... ok
+test_12b_b2_explicit_accum_without_no_offload_errors (test_trainer.CliTests.test_12b_b2_explicit_accum_without_no_offload_errors) ... ok
+test_12b_b2_tokens_forces_accum_one (test_trainer.CliTests.test_12b_b2_tokens_forces_accum_one) ... ok
+test_12b_b2_tokens_no_offload_keeps_auto (test_trainer.CliTests.test_12b_b2_tokens_no_offload_keeps_auto) ... ok
+test_12b_c1_forces_accum_one (test_trainer.CliTests.test_12b_c1_forces_accum_one) ... ok
+test_12b_cli_b2_accum_without_no_offload_errors (test_trainer.CliTests.test_12b_cli_b2_accum_without_no_offload_errors) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b --device cuda requires a CUDA runtime (torch.cuda.is_available() is False); refusing to build
+ok
+test_12b_cpu_steps_need_cuda (test_trainer.CliTests.test_12b_cpu_steps_need_cuda) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron / --dump-deepspeed only)
+ok
+test_12b_cuda_device_without_runtime_errors_before_build (test_trainer.CliTests.test_12b_cuda_device_without_runtime_errors_before_build) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b --device cuda requires a CUDA runtime (torch.cuda.is_available() is False); refusing to build
+ok
+test_12b_explicit_offload_blocks_on_b0_forces_accum_one (test_trainer.CliTests.test_12b_explicit_offload_blocks_on_b0_forces_accum_one) ... ok
+test_12b_refuses_full_envelope (test_trainer.CliTests.test_12b_refuses_full_envelope) ... usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--no-nvfp4] [--steps STEPS]
+                      [--more-steps MORE_STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron / --dump-deepspeed only)
+ok
+test_12b_smoke_steps_accum_one (test_trainer.CliTests.test_12b_smoke_steps_accum_one) ... ok
+test_cli_resume_from_dir_when_latest_missing (test_trainer.CliTests.test_cli_resume_from_dir_when_latest_missing) ... ok
+test_expandable_segments_env_is_set (test_trainer.CliTests.test_expandable_segments_env_is_set) ... ok
+test_tiny_save_and_log (test_trainer.CliTests.test_tiny_save_and_log) ... ok
+test_twelve_b_cli_errors_on_32gib_card (test_trainer.CliTests.test_twelve_b_cli_errors_on_32gib_card) ... ok
+test_accum_runs (test_trainer.LoopTests.test_accum_runs) ... ok
+test_adamw_router_nodecay_not_swiglu_gate (test_trainer.LoopTests.test_adamw_router_nodecay_not_swiglu_gate) ... ok
+test_adamw_skips_norm_decay (test_trainer.LoopTests.test_adamw_skips_norm_decay) ... ok
+test_auto_accum_tiny (test_trainer.LoopTests.test_auto_accum_tiny) ... ok
+test_built_line_path_does_not_crash (test_trainer.LoopTests.test_built_line_path_does_not_crash) ... tiny F step 1/1 nll=5.1480 ppl=172.1 aux=0.0031 gate=1.000 gn=3.09 moe_cv=0.19 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=16 tok/s=683 mem=0MiB
+{
+  "out": "/tmp/tmpspusdadn/t.bin",
+  "mix": "local",
+  "format": "packed_bin",
+  "sources": [
+    "local"
+  ],
+  "weights": {
+    "local": 1.0
+  },
+  "seq_len": 16,
+  "tokens": 64,
+  "sequences": 4,
+  "eos_id": 2,
+  "vocab_size": 128,
+  "tokenizer": "dummy"
+}
+tiny B0 step 1/1 nll=4.9778 ppl=145.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.24 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2849 mem=0MiB
+{
+  "out": "/tmp/tmpu63rgxbd/t.bin",
+  "mix": "local",
+  "format": "packed_bin",
+  "sources": [
+    "local"
+  ],
+  "weights": {
+    "local": 1.0
+  },
+  "seq_len": 16,
+  "tokens": 64,
+  "sequences": 4,
+  "eos_id": 2,
+  "vocab_size": 128,
+  "tokenizer": "dummy"
+}
+tiny B0 step 1/1 nll=4.8509 ppl=127.9 aux=0.0000 gate=0.300 gn=0.02 moe_cv=0.39 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2755 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1460 mem=0MiB
+tiny B0 step 1/4 nll=5.4732 ppl=238.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1492 mem=0MiB
+tiny B0 step 2/4 nll=4.9992 ppl=148.3 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.31 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1656 mem=0MiB
+tiny B0 step 3/4 nll=5.0639 ppl=158.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=48 tok/s=1651 mem=0MiB
+tiny B0 step 4/4 nll=5.2229 ppl=185.5 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.31 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1665 mem=0MiB
+tiny B0 step 1/4 nll=5.4732 ppl=238.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1401 mem=0MiB
+tiny B0 step 2/4 nll=4.9992 ppl=148.3 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.31 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1615 mem=0MiB
+tiny B0 step 3/4 nll=5.0639 ppl=158.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=48 tok/s=1674 mem=0MiB
+tiny B0 step 4/4 nll=5.2229 ppl=185.5 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.31 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1683 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1498 mem=0MiB
+tiny B0 step 103/103 nll=5.2230 ppl=185.5 aux=0.0000 gate=0.014 gn=0.00 moe_cv=0.31 trainable=0.02M lr=5.62e-05 fp8=False nvfp4=False tok=208 tok/s=1699 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1180 mem=0MiB
+tiny B0 step 101/105 nll=4.9982 ppl=148.1 aux=0.0000 gate=0.274 gn=0.06 moe_cv=0.31 trainable=0.02M lr=4.69e-05 fp8=False nvfp4=False tok=176 tok/s=1483 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1489 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1466 mem=0MiB
+tiny B0 step 101/101 nll=5.0316 ppl=153.2 aux=0.0000 gate=0.012 gn=0.00 moe_cv=0.18 trainable=0.02M lr=4.69e-05 fp8=False nvfp4=False tok=192 tok/s=1636 mem=0MiB
+tiny B0 step 102/102 nll=5.1779 ppl=177.3 aux=0.0000 gate=0.014 gn=0.00 moe_cv=0.18 trainable=0.02M lr=5.62e-05 fp8=False nvfp4=False tok=224 tok/s=1732 mem=0MiB
+tiny B0 step 103/103 nll=5.0377 ppl=154.1 aux=0.0000 gate=0.016 gn=0.00 moe_cv=0.29 trainable=0.02M lr=6.56e-05 fp8=False nvfp4=False tok=256 tok/s=1751 mem=0MiB
+tiny B0 step 101/101 nll=5.0316 ppl=153.2 aux=0.0000 gate=0.012 gn=0.00 moe_cv=0.18 trainable=0.02M lr=4.69e-05 fp8=False nvfp4=False tok=192 tok/s=1620 mem=0MiB
+tiny B0 step 102/102 nll=5.1779 ppl=177.3 aux=0.0000 gate=0.014 gn=0.00 moe_cv=0.18 trainable=0.02M lr=5.62e-05 fp8=False nvfp4=False tok=224 tok/s=1758 mem=0MiB
+tiny B0 step 103/103 nll=5.0377 ppl=154.1 aux=0.0000 gate=0.016 gn=0.00 moe_cv=0.29 trainable=0.02M lr=6.56e-05 fp8=False nvfp4=False tok=256 tok/s=1759 mem=0MiB
+tiny B0 step 1/2 nll=5.4732 ppl=238.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1438 mem=0MiB
+tiny B0 step 2/2 nll=4.9992 ppl=148.3 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.31 trainable=0.02M lr=4.69e-06 fp8=False nvfp4=False tok=32 tok/s=1662 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1499 mem=0MiB
+tiny B0 step 102/102 nll=5.0640 ppl=158.2 aux=0.0000 gate=0.013 gn=0.00 moe_cv=0.25 trainable=0.02M lr=5.16e-05 fp8=False nvfp4=False tok=192 tok/s=1674 mem=0MiB
+tiny B0 step 1/2 nll=5.2432 ppl=189.3 aux=0.0000 gate=0.150 gn=0.03 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2876 mem=0MiB
+tiny B0 step 2/2 nll=5.1301 ppl=169.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3183 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2868 mem=0MiB
+tiny B0 step 2/2 nll=5.1301 ppl=169.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2875 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2893 mem=0MiB
+tiny B0 step 1/1 nll=5.2354 ppl=187.8 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1634 mem=0MiB
+built tiny on cpu dtype=fp32 params=123 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu zero=0 ds=False zero_offload=False zero_offload_param=False trainable=0.00M reuse=False nvfp4=False nvfp4_n=0 nvfp4_family=cpu te_linear=False grouped_mm=False te=False te_nvfp4=False return_logits=True sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+ok
+test_c1_chain_continues_packed_cursor (test_trainer.LoopTests.test_c1_chain_continues_packed_cursor) ... ok
+test_ce_budget_accounts_for_autocast_fp32_logits (test_trainer.LoopTests.test_ce_budget_accounts_for_autocast_fp32_logits) ... ok
+test_ce_chunk_auto_cpu_stays_small (test_trainer.LoopTests.test_ce_chunk_auto_cpu_stays_small) ... ok
+test_ce_logit_budget_is_bf16_on_cuda (test_trainer.LoopTests.test_ce_logit_budget_is_bf16_on_cuda) ... ok
+test_checkpoint_resume (test_trainer.LoopTests.test_checkpoint_resume) ... ok
+test_chunked_ce_cpu_still_upcasts_non_fp32 (test_trainer.LoopTests.test_chunked_ce_cpu_still_upcasts_non_fp32) ... ok
+test_chunked_ce_matches_full_logits (test_trainer.LoopTests.test_chunked_ce_matches_full_logits) ... ok
+test_configure_cuda_enables_flash_sdp (test_trainer.LoopTests.test_configure_cuda_enables_flash_sdp) ... ok
+test_dummy_stream_ignores_packed_kind (test_trainer.LoopTests.test_dummy_stream_ignores_packed_kind) ... ok
+test_eval_every_without_eval_data_skips_dummy_stream (test_trainer.LoopTests.test_eval_every_without_eval_data_skips_dummy_stream) ... ok
+test_eval_nll_is_token_weighted_and_skips_empty (test_trainer.LoopTests.test_eval_nll_is_token_weighted_and_skips_empty) ... ok
+test_eval_nll_lands_in_jsonl (test_trainer.LoopTests.test_eval_nll_lands_in_jsonl) ... ok
+test_grad_ckpt_b2 (test_trainer.LoopTests.test_grad_ckpt_b2) ... ok
+test_host_step_stats_match_python_floats (test_trainer.LoopTests.test_host_step_stats_match_python_floats) ... ok
+test_kd_w_logged_when_tokens_without_steps (test_trainer.LoopTests.test_kd_w_logged_when_tokens_without_steps) ... ok
+test_kd_weight_needs_more_than_one_step (test_trainer.LoopTests.test_kd_weight_needs_more_than_one_step) ... ok
+test_kd_weight_on_token_budget (test_trainer.LoopTests.test_kd_weight_on_token_budget) ... ok
+test_keep_last_latest_shares_inode_with_newest_step (test_trainer.LoopTests.test_keep_last_latest_shares_inode_with_newest_step) ... ok
+test_keep_last_prunes_step_ckpts (test_trainer.LoopTests.test_keep_last_prunes_step_ckpts) ... ok
+test_latest_hardlinks_matching_step_ckpt (test_trainer.LoopTests.test_latest_hardlinks_matching_step_ckpt) ... ok
+test_latest_is_fresh_save_when_step_lags (test_trainer.LoopTests.test_latest_is_fresh_save_when_step_lags) ... ok
+test_log_includes_grad_norm (test_trainer.LoopTests.test_log_includes_grad_norm) ... ok
+test_log_jsonl_is_strict_json (test_trainer.LoopTests.test_log_jsonl_is_strict_json) ... ok
+test_open_dummy_does_not_double_offset_rank_seed (test_trainer.LoopTests.test_open_dummy_does_not_double_offset_rank_seed) ... ok
+test_resume_advances_packed_cursor (test_trainer.LoopTests.test_resume_advances_packed_cursor) ... ok
+test_resume_b0_into_b1_starts_new_phase (test_trainer.LoopTests.test_resume_b0_into_b1_starts_new_phase) ... ok
+test_resume_directory_without_latest_uses_step (test_trainer.LoopTests.test_resume_directory_without_latest_uses_step) ... ok
+test_resume_stream_kind_mismatch_skips_cursor (test_trainer.LoopTests.test_resume_stream_kind_mismatch_skips_cursor) ... ok
+test_runtime_flags_drop_logits_without_teacher (test_trainer.LoopTests.test_runtime_flags_drop_logits_without_teacher) ... ok
+test_runtime_flags_keep_logits_for_kd (test_trainer.LoopTests.test_runtime_flags_keep_logits_for_kd) ... ok
+test_safe_ppl_caps (test_trainer.LoopTests.test_safe_ppl_caps) ... ok
+test_save_keeps_rng_when_log_every_is_sparse (test_trainer.LoopTests.test_save_keeps_rng_when_log_every_is_sparse) ... ok
+test_seq_len_override_rewindows_packed_bin (test_trainer.LoopTests.test_seq_len_override_rewindows_packed_bin) ... tiny B0 step 1/1 nll=5.2950 ppl=199.3 aux=0.0000 gate=0.300 gn=0.07 moe_cv=0.16 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1486 mem=0MiB
+tiny B1 step 1/1 nll=4.8431 ppl=126.9 aux=0.0012 gate=1.000 gn=2.34 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1116 mem=0MiB
+tiny B2 step 1/1 nll=4.8491 ppl=127.6 aux=0.0033 gate=1.000 gn=2.69 moe_cv=0.28 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=48 tok/s=776 mem=0MiB
+tiny B0 step 1/1 nll=4.8408 ppl=126.6 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2798 mem=0MiB
+tiny B0 step 2/2 nll=4.9090 ppl=135.5 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2907 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2899 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2887 mem=0MiB
+tiny B2 step 1/1 nll=5.2409 ppl=188.8 aux=0.0032 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=32 tok/s=946 mem=0MiB
+tiny B0 step 1/- nll=5.2436 ppl=189.4 aux=0.0000 gate=0.005 gn=0.00 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2791 mem=0MiB
+tiny B0 step 2/- nll=5.1294 ppl=168.9 aux=0.0000 gate=0.155 gn=0.03 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3094 mem=0MiB
+tiny B0 step 1/3 nll=5.2434 ppl=189.3 aux=0.0000 gate=0.100 gn=0.02 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2872 mem=0MiB
+tiny B0 step 2/3 nll=5.1296 ppl=168.9 aux=0.0000 gate=0.200 gn=0.04 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3104 mem=0MiB
+tiny B0 step 3/3 nll=4.9275 ppl=138.0 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.28 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3143 mem=0MiB
+tiny B0 step 1/3 nll=5.2434 ppl=189.3 aux=0.0000 gate=0.100 gn=0.02 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2845 mem=0MiB
+tiny B0 step 2/3 nll=5.1296 ppl=168.9 aux=0.0000 gate=0.200 gn=0.04 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3082 mem=0MiB
+tiny B0 step 3/3 nll=4.9275 ppl=138.0 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.28 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3123 mem=0MiB
+tiny B0 step 1/1 nll=4.8408 ppl=126.6 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2864 mem=0MiB
+tiny B0 step 1/3 nll=4.8399 ppl=126.5 aux=0.0000 gate=0.100 gn=0.02 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2857 mem=0MiB
+tiny B0 step 2/3 nll=4.9088 ppl=135.5 aux=0.0000 gate=0.200 gn=0.03 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3188 mem=0MiB
+tiny B0 step 3/3 nll=5.1094 ppl=165.6 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3123 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2850 mem=0MiB
+tiny B0 step 1/1 nll=1.0000 ppl=- aux=inf gate=0.000 gn=0.00 moe_cv=0.00 trainable=1.00M lr=1.00e-04 fp8=False nvfp4=False tok=1 tok/s=1 mem=0MiB
+tiny B0 step 1/1 nll=5.0685 ppl=158.9 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2898 mem=0MiB
+tiny B0 step 2/2 nll=5.0117 ppl=150.2 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2884 mem=0MiB
+tiny B0 step 1/1 nll=4.8408 ppl=126.6 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2916 mem=0MiB
+tiny B1 step 1/1 nll=4.9113 ppl=135.8 aux=0.0011 gate=1.000 gn=1.68 moe_cv=0.19 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2108 mem=0MiB
+tiny B0 step 1/1 nll=4.8408 ppl=126.6 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2892 mem=0MiB
+tiny B0 step 2/2 nll=4.9090 ppl=135.5 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2883 mem=0MiB
+tiny B0 step 1/1 nll=5.2950 ppl=199.3 aux=0.0000 gate=0.300 gn=0.07 moe_cv=0.16 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1454 mem=0MiB
+tiny B0 step 1/4 nll=4.8398 ppl=126.4 aux=0.0000 gate=0.075 gn=0.01 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2876 mem=0MiB
+tiny B0 step 3/4 nll=5.1097 ppl=165.6 aux=0.0000 gate=0.225 gn=0.04 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3110 mem=0MiB
+tiny B0 step 4/4 nll=5.1464 ppl=171.8 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.21 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=128 tok/s=3213 mem=0MiB
+re-window packed bin sidecar seq_len=16 → 8
+ok
+test_token_budget_stops (test_trainer.LoopTests.test_token_budget_stops) ... ok
+test_token_mean_nll_empty_rank_does_not_poison (test_trainer.LoopTests.test_token_mean_nll_empty_rank_does_not_poison) ... ok
+test_two_rank_gloo_accum (test_trainer.LoopTests.test_two_rank_gloo_accum) ... tiny B0 step 1/1 nll=5.3729 ppl=215.5 aux=0.0000 gate=0.300 gn=0.09 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1463 mem=0MiB
+tiny B0 step 1/- nll=5.2436 ppl=189.4 aux=0.0000 gate=0.005 gn=0.00 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2891 mem=0MiB
+tiny B0 step 2/- nll=5.1294 ppl=168.9 aux=0.0000 gate=0.155 gn=0.03 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3209 mem=0MiB
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank0]:[W1002 12:08:55.555648675 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W1002 12:08:55.555670988 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9845 ppl=146.1 aux=0.0000 gate=0.300 gn=0.04 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2486 mem=0MiB
+[W1002 12:08:55.953315006 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W1002 12:08:55.992773145 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+ok
+test_two_rank_gloo_c1_chain (test_trainer.LoopTests.test_two_rank_gloo_c1_chain) ... [Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank1]:[W1002 12:08:58.219621471 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W1002 12:08:58.220123652 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9555 ppl=142.0 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.44 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1768 mem=0MiB
+tiny B1 step 1/1 nll=5.2313 ppl=187.0 aux=0.0011 gate=1.000 gn=1.64 moe_cv=0.20 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1612 mem=0MiB
+tiny B2 step 1/1 nll=5.1476 ppl=172.0 aux=0.0032 gate=1.000 gn=1.89 moe_cv=0.17 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1145 mem=0MiB
+[W1002 12:08:59.680586027 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W1002 12:08:59.686921101 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+ok
+test_two_rank_gloo_one_step (test_trainer.LoopTests.test_two_rank_gloo_one_step) ... [Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank0]:[W1002 12:09:02.837364951 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W1002 12:09:02.837364971 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1596 mem=0MiB
+[W1002 12:09:02.256939062 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W1002 12:09:02.259271450 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+ok
+test_upcycle_src_dropped_after_copy (test_trainer.LoopTests.test_upcycle_src_dropped_after_copy) ... ok
+test_weights_only_checkpoint (test_trainer.LoopTests.test_weights_only_checkpoint) ... ok
+test_wsd_b1_offset_skips_warmup (test_trainer.LoopTests.test_wsd_b1_offset_skips_warmup) ... ok
+test_boundary_labels_are_ignored (test_trainer.PackTests.test_boundary_labels_are_ignored) ... ok
+test_int32_bin_chunks (test_trainer.PackTests.test_int32_bin_chunks) ... ok
+test_jsonl_roundtrip (test_trainer.PackTests.test_jsonl_roundtrip) ... ok
+test_packed_shards_are_disjoint (test_trainer.StreamShardTests.test_packed_shards_are_disjoint) ... ok
+test_sidecar_seq_len_wins_without_override (test_trainer.StreamShardTests.test_sidecar_seq_len_wins_without_override) ... ok
+
+======================================================================
+ERROR: test_git_does_not_track_pt (test_no_github_lfs.NoGithubLfsTests.test_git_does_not_track_pt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-integrated/tests/test_no_github_lfs.py", line 26, in test_git_does_not_track_pt
+    tracked = subprocess.check_output(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', '-C', '/home/donz/cat-yoko-rocm-20261002/source-integrated', 'ls-files', '*.pt']' returned non-zero exit status 128.
+
+----------------------------------------------------------------------
+Ran 580 tests in 22.187s
+
+FAILED (errors=1, skipped=24)
+tiny B0 step 1/1 nll=4.7943 ppl=120.8 aux=0.0000 gate=0.300 gn=0.02 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1548 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2922 mem=0MiB
+[W1002 12:09:04.938605484 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
