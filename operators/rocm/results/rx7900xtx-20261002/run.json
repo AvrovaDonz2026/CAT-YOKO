@@ -1,0 +1,27 @@
+[
+  {
+    "name": "projection",
+    "status": 1,
+    "elapsed_s": 16.449708700180054
+  },
+  {
+    "name": "frozen_moe",
+    "status": 0,
+    "elapsed_s": 23.31517267227173
+  },
+  {
+    "name": "attention",
+    "status": 0,
+    "elapsed_s": 22.019043922424316
+  },
+  {
+    "name": "projection",
+    "status": 0,
+    "elapsed_s": 17.70072913169861
+  },
+  {
+    "name": "frozen_moe_actual",
+    "status": 0,
+    "elapsed_s": 18.39859175682068
+  }
+]

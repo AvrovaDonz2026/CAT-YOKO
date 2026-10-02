@@ -1,0 +1,7 @@
+{
+  "event": "saved_checkpoint_switch",
+  "source_step": 33850,
+  "checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/b0-layout-source/trainable_step_33850.pt",
+  "previous_pid": 1018872,
+  "previous_job_terminated": true
+}

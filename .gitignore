@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+.DS_Store
 # Weights do not live on GitHub. Hub: https://huggingface.co/AvrovaDonz/CAT-YOKO
 *.pt
 *.bin

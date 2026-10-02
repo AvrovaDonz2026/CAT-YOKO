@@ -175,6 +175,19 @@ def _grouped_mm_ref(mat_a: torch.Tensor, mat_b: torch.Tensor, offs: torch.Tensor
 
 
 class GroupedMoETests(unittest.TestCase):
+    def test_rocm_does_not_use_nvidia_grouped_mm(self) -> None:
+        from unittest.mock import patch
+
+        import cat_yoko.moe as moe_mod
+
+        with (
+            patch.object(torch.version, "hip", "6.4.0"),
+            patch.object(moe_mod, "_GROUPED_MM_OK", None),
+            patch.object(torch.cuda, "get_device_capability", return_value=(11, 0)) as capability,
+        ):
+            self.assertFalse(moe_mod.grouped_mm_available())
+            capability.assert_not_called()
+
     def test_grouped_swiglu_matches_serial_with_empty_expert(self) -> None:
         from unittest.mock import patch
 

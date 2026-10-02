@@ -1,0 +1,110 @@
+{
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "device": "cuda",
+  "gpu": "Radeon RX 7900 XTX",
+  "hidden": 2048,
+  "intermediate": 2048,
+  "experts": 20,
+  "reference": "native",
+  "base_checkpoint": {
+    "path": "/home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base",
+    "layer": 16,
+    "upcycle_topk": 10,
+    "scale": 1.2805791649874942,
+    "projections": {
+      "down_proj": {
+        "file": "/home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base/model.safetensors",
+        "key": "model.layers.16.mlp.down_proj.weight",
+        "source_shape": [
+          2048,
+          6144
+        ],
+        "slice_shape": [
+          2048,
+          2048
+        ],
+        "source_dtype": "torch.bfloat16"
+      },
+      "gate_proj": {
+        "file": "/home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base/model.safetensors",
+        "key": "model.layers.16.mlp.gate_proj.weight",
+        "source_shape": [
+          6144,
+          2048
+        ],
+        "slice_shape": [
+          2048,
+          2048
+        ],
+        "source_dtype": "torch.bfloat16"
+      },
+      "up_proj": {
+        "file": "/home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base/model.safetensors",
+        "key": "model.layers.16.mlp.up_proj.weight",
+        "source_shape": [
+          6144,
+          2048
+        ],
+        "slice_shape": [
+          2048,
+          2048
+        ],
+        "source_dtype": "torch.bfloat16"
+      }
+    },
+    "router": "frozen seed-2026 random router; not checkpoint router"
+  },
+  "cpu_byte_equality_guard_seconds": {
+    "bf16": 0.22880630497820675
+  },
+  "all_passed": true,
+  "results": [
+    {
+      "tokens": 4096,
+      "topk": 10,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.125,
+        "relative_l2": 0.0024843274150043726
+      },
+      "input_grad_error": {
+        "max_abs": 0.0625,
+        "relative_l2": 0.0031341700814664364
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 23.288369399961084,
+          "peak_allocated_bytes": 2620065280
+        },
+        "collapsed": {
+          "ms": 4.172452806960791,
+          "peak_allocated_bytes": 1619583488
+        },
+        "speedup": 5.5814578324552215
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 46.891369204968214,
+          "peak_allocated_bytes": 2853602816
+        },
+        "collapsed": {
+          "ms": 7.3067485936917365,
+          "peak_allocated_bytes": 1721345536
+        },
+        "speedup": 6.417542440895224
+      }
+    }
+  ],
+  "limitations": [
+    "Only native bias-free SwiGLU with fully frozen, byte-identical routed experts.",
+    "Validation must follow checkpoint loading; never mutate weights through .data afterward.",
+    "BF16 reduction order changes; parity is numerical, not bitwise.",
+    "Peak allocated memory includes both benchmark operators and cached packed baseline weights.",
+    "Pure prototype leaves original MoE aux/load statistics untouched and is not installed in the model."
+  ]
+}

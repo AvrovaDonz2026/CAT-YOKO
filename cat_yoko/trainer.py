@@ -234,6 +234,7 @@ class Trainer:
         *,
         steps: int | None = None,
         more_steps: int | None = None,
+        run_steps: int | None = None,
         tokens: float | None = None,
         micro_batch: int = 2,
         accum: int = 1,
@@ -273,7 +274,13 @@ class Trainer:
         self.cfg = cfg
         self.phase = phase
         self.steps = steps
-        self.more_steps = int(more_steps) if more_steps is not None else None
+        for name, count in (("more_steps", more_steps), ("run_steps", run_steps)):
+            if count is not None and count <= 0:
+                raise ValueError(f"{name} must be positive")
+        if more_steps is not None and run_steps is not None and more_steps != run_steps:
+            raise ValueError("more_steps and run_steps must match when both are provided")
+        self.run_steps = run_steps if run_steps is not None else more_steps
+        self.more_steps = self.run_steps
         self.tokens_target = tokens
         self.micro_batch = micro_batch
         self.seed = seed
@@ -1026,8 +1033,11 @@ class Trainer:
         last = 0.0
         phase_budget = self.tokens_target
         max_steps = self.steps
-        if self.more_steps is not None:
-            max_steps = int(step) + int(self.more_steps)
+        # This bound counts updates in this invocation, after restoring the
+        # phase cursor. It must not become the gate / KD / LR schedule budget.
+        run_stop = step + self.run_steps if self.run_steps is not None else None
+        step_bounds = [bound for bound in (max_steps, run_stop) if bound is not None]
+        stop_step = min(step_bounds) if step_bounds else None
         if not self.deepspeed:
             trainable = [p for p in model.parameters() if p.requires_grad]
             n_train = sum(p.numel() for p in trainable)
@@ -1051,13 +1061,13 @@ class Trainer:
 
             freeze_host_gc_after_zero_init()
         if not (
-            (max_steps is not None and step >= max_steps)
+            (stop_step is not None and step >= stop_step)
             or (phase_budget is not None and tokens_in_phase >= phase_budget)
         ):
             self._prefetch_batch = stream.batch(self.micro_batch, self.device)
         try:
             while True:
-                if max_steps is not None and step >= max_steps:
+                if stop_step is not None and step >= stop_step:
                     break
                 if phase_budget is not None and tokens_in_phase >= phase_budget:
                     break
@@ -1112,9 +1122,20 @@ class Trainer:
                 t0 = time.perf_counter()
                 stats_nll_w = stats_n_valid = stats_loss = stats_aux = None
                 next_step = step + 1
-                will_log = next_step == 1 or next_step % self.log_every == 0 or (
-                    max_steps is not None and next_step == max_steps
+                # Streams emit fixed-size microbatches. Inspect the already
+                # prefetched batch to arm MoE statistics on a token-final step
+                # before its forward; confirm the actual token count below.
+                next_tokens = (
+                    int(self._prefetch_batch["input_ids"].numel())
+                    * self.accum
+                    * self.world
                 )
+                will_stop = (
+                    (stop_step is not None and next_step >= stop_step)
+                    or (phase_budget is not None and tokens_in_phase + next_tokens >= phase_budget)
+                    or (stop_step is None and phase_budget is None)
+                )
+                will_log = next_step == 1 or next_step % self.log_every == 0 or will_stop
                 arm_moe_load_tracking(unwrap(model), log_step=will_log)
                 for micro_i in range(self.accum):
                     batch = self._prefetch_batch
@@ -1175,10 +1196,11 @@ class Trainer:
                 will_save = bool(self.save_every and next_step % self.save_every == 0)
                 tokens_after = tokens_in_phase + step_tokens * self.world
                 will_stop = (
-                    (max_steps is not None and next_step >= max_steps)
+                    (stop_step is not None and next_step >= stop_step)
                     or (phase_budget is not None and tokens_after >= phase_budget)
-                    or (max_steps is None and phase_budget is None)
+                    or (stop_step is None and phase_budget is None)
                 )
+                will_log = will_log or will_stop
                 # Snapshot the stream before prefetch so resume does not skip the
                 # already-copied next batch. H2D of the next DummyStream batch
                 # overlaps leftover backward kernels.
@@ -1260,7 +1282,7 @@ class Trainer:
                         "name": self.cfg.name,
                         "phase": self.phase,
                         "step": step,
-                        "steps_or_inf": max_steps if max_steps is not None else "-",
+                        "steps_or_inf": stop_step if stop_step is not None else "-",
                         "nll": last,
                         "ppl": safe_ppl(last),
                         "loss": step_loss,
@@ -1314,7 +1336,7 @@ class Trainer:
                     barrier()
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                     barrier()
-                if max_steps is None and phase_budget is None:
+                if will_stop:
                     break
             extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
             barrier()

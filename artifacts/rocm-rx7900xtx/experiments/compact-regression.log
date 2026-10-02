@@ -1,0 +1,38 @@
+test_cpu_checkpoint_whole_b0_graph_none_docs (test_compact_model.CompactModelTests.test_cpu_checkpoint_whole_b0_graph_none_docs) ... ok
+test_cpu_whole_b0_graph_training_and_overlay (test_compact_model.CompactModelTests.test_cpu_whole_b0_graph_training_and_overlay) ... ok
+test_frozen_guard_rejects_updates_and_training (test_compact_model.CompactModelTests.test_frozen_guard_rejects_updates_and_training) ... ok
+test_gpu_bf16_checkpoint_whole_b0_graph_none_docs (test_compact_model.CompactModelTests.test_gpu_bf16_checkpoint_whole_b0_graph_none_docs) ... /home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: Mem Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:338.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: Memory efficient kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:916.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: Flash attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:918.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: Flash attention has been runtime disabled. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/sdp_utils_cpp.h:540.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: cuDNN attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:920.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: Torch was not compiled with cuDNN attention. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:661.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:206: UserWarning: Memory Efficient attention has been runtime disabled. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/sdp_utils_cpp.h:552.)
+  return F.scaled_dot_product_attention(qq, kk, vv, **extra)
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Flash Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:287.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Memory efficient kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:916.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Flash attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:918.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: cuDNN attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:920.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Torch was not compiled with cuDNN attention. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:661.)
+  return F.scaled_dot_product_attention(
+ok
+test_gpu_bf16_same_input_routing_stats_and_input_gradients (test_compact_model.CompactModelTests.test_gpu_bf16_same_input_routing_stats_and_input_gradients) ... ok
+test_gpu_bf16_whole_b0_graph_training_and_overlay (test_compact_model.CompactModelTests.test_gpu_bf16_whole_b0_graph_training_and_overlay) ... ok
+test_preflight_rejects_without_partial_replacement (test_compact_model.CompactModelTests.test_preflight_rejects_without_partial_replacement) ... ok
+test_projection_guard_rejects_shared_parameter_quantization (test_compact_model.CompactModelTests.test_projection_guard_rejects_shared_parameter_quantization) ... ok
+test_routing_stats_hash_and_input_gradients (test_compact_model.CompactModelTests.test_routing_stats_hash_and_input_gradients) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 2.689s
+
+OK

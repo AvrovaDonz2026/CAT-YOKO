@@ -71,6 +71,8 @@ B1/B2 have not started. `--try` is a 32-step, seq=64 smoke; it cannot finish the
 
 - [`docs/STATUS.md`](docs/STATUS.md) — **current progress**
 - [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 operators; unknown SKU uses `hw_recipe` / `run_b0_next.sh`
+- [`docs/ROCM_TRAIN.md`](docs/ROCM_TRAIN.md) — AMD BF16 B0 continuation and CPU block offload
+- [`operators/rocm/`](operators/rocm/README.md) — measured AMD operator/layout experiments and numerical checks
 - [`docs/HF_HUB.md`](docs/HF_HUB.md) — weights on Hub only; `scripts/push_to_hf.sh`
 - [`huggingface/README.md`](huggingface/README.md) — Hub model-card source
 - [`checkpoints/b0-full/README.md`](checkpoints/b0-full/README.md) — published B0 overlay pointer

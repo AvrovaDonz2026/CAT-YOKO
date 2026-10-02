@@ -197,6 +197,29 @@ def _masked_backend_order(seq: int) -> tuple[str, ...]:
     return ("CUDNN_ATTENTION", "EFFICIENT_ATTENTION")
 
 
+def _sdpa_support_error(exc: RuntimeError) -> bool:
+    """Retry backend dispatch failures, while propagating OOM and execution errors."""
+    message = str(exc).lower()
+    return any(
+        phrase in message
+        for phrase in (
+            "no available kernel",
+            "no viable backend",
+            "no suitable kernel",
+            "no kernel found to launch",
+        )
+    ) and "out of memory" not in message
+
+
+def _math_sdpa_kernel():
+    """Force fp32 fallback through math even if fused SDPA is enabled globally."""
+    try:
+        factory = _sdpa_backend_ctx(("MATH",))
+    except (ImportError, AttributeError):
+        factory = None
+    return factory() if factory is not None else nullcontext()
+
+
 def _sdpa(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -209,6 +232,8 @@ def _sdpa(
 
     Dense causal (YOCO cross, or window when ``n_win`` covers seq): Flash / cuDNN
     / mem-efficient, with ``enable_gqa`` so 2 KV heads are not repeated.
+    ROCm uses fp32 math until fused Q/K/V gradients have been validated.
+    Unsupported fused shapes/devices also fall back to fp32 math.
     Masked CSA/HCA ``attn_mask``: isolate Efficient (seq<320) or cuDNN (longer)
     in bf16. Flash rejects a mask. fp32 math is the CPU / last fallback.
     Softmax accumulation stays fp32 inside the kernel.
@@ -230,12 +255,17 @@ def _sdpa(
             vv = _repeat_kv(vv, n_rep)
         return F.scaled_dot_product_attention(qq, kk, vv, **extra)
 
-    cuda_low = q.is_cuda and q.dtype in (torch.bfloat16, torch.float16)
+    rocm = bool(torch.version.hip) and q.device.type == "cuda"
+    cuda_low = q.is_cuda and not rocm and q.dtype in (torch.bfloat16, torch.float16)
     if bias is None and cuda_low:
-        with _cuda_sdpa_kernel():
-            out = _call(q, k, v, is_causal=causal)
-        _note_sdpa("dense", q.dtype)
-        return out
+        try:
+            with _cuda_sdpa_kernel():
+                out = _call(q, k, v, is_causal=causal)
+            _note_sdpa("dense", q.dtype)
+            return out
+        except RuntimeError as exc:
+            if not _sdpa_support_error(exc):
+                raise
     if bias is not None and cuda_low:
         mask = bias if bias.dtype == q.dtype else bias.to(dtype=q.dtype)
         seq = int(q.size(-2))
@@ -244,8 +274,9 @@ def _sdpa(
                 out = _call(q, k, v, attn_mask=mask)
             _note_sdpa("masked_bf16", q.dtype)
             return out
-        except RuntimeError:
-            pass
+        except RuntimeError as exc:
+            if not _sdpa_support_error(exc):
+                raise
         try:
             from torch.nn.attention import SDPBackend, sdpa_kernel
         except ImportError:
@@ -261,13 +292,16 @@ def _sdpa(
                         out = _call(q, k, v, attn_mask=mask)
                     _note_sdpa("masked_bf16", q.dtype)
                     return out
-                except RuntimeError:
-                    continue
+                except RuntimeError as exc:
+                    if not _sdpa_support_error(exc):
+                        raise
     qf, kf, vf = q.float(), k.float(), v.float()
-    if bias is None:
-        out = _call(qf, kf, vf, is_causal=causal)
-    else:
-        out = _call(qf, kf, vf, attn_mask=bias.float())
+    # Training's outer bf16 autocast must not downcast this fp32 fallback again.
+    with torch.autocast(device_type=q.device.type, enabled=False), _math_sdpa_kernel():
+        if bias is None:
+            out = _call(qf, kf, vf, is_causal=causal)
+        else:
+            out = _call(qf, kf, vf, attn_mask=bias.float())
     _note_sdpa("math_fp32", torch.float32)
     return out.to(q.dtype)
 

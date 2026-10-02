@@ -1,0 +1,8 @@
+......ok via modelscope: /tmp/tmpawaut25o/model.safetensors
+....ok via hf-mirror: /tmp/tmpboeo9gla/model.safetensors
+.incomplete /tmp/tmp7mcgsmz_/model.safetensors: 10 bytes (want 5033557128)
+..
+----------------------------------------------------------------------
+Ran 13 tests in 1.483s
+
+OK

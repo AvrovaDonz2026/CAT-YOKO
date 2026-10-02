@@ -1,0 +1,277 @@
+....usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --run-steps must be positive
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--run-steps RUN_STEPS]
+                   [--tokens TOKENS] [--data DATA] [--eval-data EVAL_DATA]
+                   [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                   [--save-dir SAVE_DIR] [--save-every SAVE_EVERY] [--log LOG]
+                   [--resume RESUME] [--seq-len SEQ_LEN]
+                   [--upcycle-hf [UPCYCLE_HF]] [--upcycle UPCYCLE]
+                   [--dummy-upcycle] [--device DEVICE] [--use-kda]
+                   [--seed SEED] [--keep-last KEEP_LAST] [--offload-encoder]
+                   [--no-offload-encoder] [--offload-blocks]
+                   [--no-offload-blocks] [--optim-cpu] [--no-optim-cpu]
+                   [--backend {torch,megatron,deepspeed}] [--zero {1,2,3}]
+                   [--zero-offload] [--zero-offload-param] [--dump-deepspeed]
+                   [--log-every LOG_EVERY] [--micro-batch MICRO_BATCH]
+                   [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --run-steps must be positive
+usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --run-steps must be positive
+usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--run-steps RUN_STEPS]
+                   [--tokens TOKENS] [--data DATA] [--eval-data EVAL_DATA]
+                   [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                   [--save-dir SAVE_DIR] [--save-every SAVE_EVERY] [--log LOG]
+                   [--resume RESUME] [--seq-len SEQ_LEN]
+                   [--upcycle-hf [UPCYCLE_HF]] [--upcycle UPCYCLE]
+                   [--dummy-upcycle] [--device DEVICE] [--use-kda]
+                   [--seed SEED] [--keep-last KEEP_LAST] [--offload-encoder]
+                   [--no-offload-encoder] [--offload-blocks]
+                   [--no-offload-blocks] [--optim-cpu] [--no-optim-cpu]
+                   [--backend {torch,megatron,deepspeed}] [--zero {1,2,3}]
+                   [--zero-offload] [--zero-offload-param] [--dump-deepspeed]
+                   [--log-every LOG_EVERY] [--micro-batch MICRO_BATCH]
+                   [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: --run-steps must be positive
+........usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b on a 24.0GiB GPU needs --seq-len 64 (default 4096 OOMs activations); RTX 4080 SUPER peaks were measured at seq=64
+.usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron / --dump-deepspeed only)
+.usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b --device cuda requires a CUDA runtime (torch.cuda.is_available() is False); refusing to build
+..usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron / --dump-deepspeed only)
+..........tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1208 mem=0MiB
+tiny B0 step 1/4 nll=5.4732 ppl=238.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1559 mem=0MiB
+tiny B0 step 2/4 nll=5.0141 ppl=150.5 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.40 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1775 mem=0MiB
+tiny B0 step 3/4 nll=5.0087 ppl=149.7 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.23 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=48 tok/s=1792 mem=0MiB
+tiny B0 step 4/4 nll=5.1913 ppl=179.7 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.31 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1791 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1583 mem=0MiB
+tiny B0 step 41/45 nll=5.0131 ppl=150.4 aux=0.0000 gate=0.274 gn=0.07 moe_cv=0.40 trainable=0.02M lr=4.69e-05 fp8=False nvfp4=False tok=176 tok/s=1603 mem=0MiB
+tiny B0 step 1/1 nll=5.4727 ppl=238.1 aux=0.0000 gate=0.300 gn=0.08 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1614 mem=0MiB
+tiny B0 step 42/42 nll=5.0088 ppl=149.7 aux=0.0000 gate=0.013 gn=0.00 moe_cv=0.23 trainable=0.02M lr=5.16e-05 fp8=False nvfp4=False tok=192 tok/s=1804 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3034 mem=0MiB
+tiny B0 step 2/2 nll=5.1007 ppl=164.1 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.18 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3111 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3127 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1780 mem=0MiB
+built tiny on cpu dtype=fp32 params=123 alloc=0.00GiB grad_ckpt=False seq=16 offload_enc=False offload_blocks=False optim_cpu=False adam=gpu zero=0 ds=False zero_offload=False zero_offload_param=False trainable=0.00M reuse=False nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=False te=False te_nvfp4=False return_logits=True sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+.............................tiny B0 step 1/1 nll=5.2950 ppl=199.3 aux=0.0000 gate=0.300 gn=0.07 moe_cv=0.16 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1620 mem=0MiB
+tiny B1 step 1/1 nll=4.8431 ppl=126.9 aux=0.0012 gate=1.000 gn=2.34 moe_cv=0.23 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1191 mem=0MiB
+tiny B2 step 1/1 nll=4.8491 ppl=127.6 aux=0.0033 gate=1.000 gn=2.69 moe_cv=0.28 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=48 tok/s=825 mem=0MiB
+tiny B0 step 1/1 nll=4.9274 ppl=138.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3048 mem=0MiB
+tiny B0 step 2/2 nll=4.8283 ppl=125.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.21 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3141 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3127 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3131 mem=0MiB
+tiny B2 step 1/1 nll=5.2409 ppl=188.8 aux=0.0032 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=32 tok/s=996 mem=0MiB
+tiny B0 step 1/- nll=5.2436 ppl=189.4 aux=0.0000 gate=0.005 gn=0.00 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3020 mem=0MiB
+tiny B0 step 2/- nll=5.1004 ppl=164.1 aux=0.0000 gate=0.155 gn=0.03 moe_cv=0.18 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3369 mem=0MiB
+tiny B0 step 1/3 nll=5.2434 ppl=189.3 aux=0.0000 gate=0.100 gn=0.02 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3133 mem=0MiB
+tiny B0 step 2/3 nll=5.1005 ppl=164.1 aux=0.0000 gate=0.200 gn=0.04 moe_cv=0.18 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3400 mem=0MiB
+tiny B0 step 3/3 nll=5.1485 ppl=172.2 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.10 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3412 mem=0MiB
+tiny B0 step 1/3 nll=5.2434 ppl=189.3 aux=0.0000 gate=0.100 gn=0.02 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3103 mem=0MiB
+tiny B0 step 2/3 nll=5.1005 ppl=164.1 aux=0.0000 gate=0.200 gn=0.04 moe_cv=0.18 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3405 mem=0MiB
+tiny B0 step 3/3 nll=5.1485 ppl=172.2 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.10 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3411 mem=0MiB
+tiny B0 step 1/1 nll=4.9274 ppl=138.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3093 mem=0MiB
+tiny B0 step 1/3 nll=4.9273 ppl=138.0 aux=0.0000 gate=0.100 gn=0.02 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3086 mem=0MiB
+tiny B0 step 2/3 nll=4.8282 ppl=125.0 aux=0.0000 gate=0.200 gn=0.04 moe_cv=0.21 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3475 mem=0MiB
+tiny B0 step 3/3 nll=5.0980 ppl=163.7 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.33 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=3387 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3087 mem=0MiB
+tiny B0 step 1/1 nll=1.0000 ppl=- aux=inf gate=0.000 gn=0.00 moe_cv=0.00 trainable=1.00M lr=1.00e-04 fp8=False nvfp4=False tok=1 tok/s=1 mem=0MiB
+tiny B0 step 1/1 nll=5.0685 ppl=158.9 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.13 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3124 mem=0MiB
+tiny B0 step 2/2 nll=5.0117 ppl=150.2 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3138 mem=0MiB
+tiny B0 step 1/1 nll=4.9274 ppl=138.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3132 mem=0MiB
+tiny B1 step 1/1 nll=4.8294 ppl=125.1 aux=0.0011 gate=1.000 gn=1.66 moe_cv=0.21 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2246 mem=0MiB
+tiny B0 step 1/1 nll=4.9274 ppl=138.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3110 mem=0MiB
+tiny B0 step 2/2 nll=4.8283 ppl=125.0 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.21 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3123 mem=0MiB
+tiny B0 step 1/1 nll=5.2950 ppl=199.3 aux=0.0000 gate=0.300 gn=0.07 moe_cv=0.16 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1618 mem=0MiB
+re-window packed bin sidecar seq_len=16 → 8
+...tiny B0 step 1/1 nll=5.3729 ppl=215.5 aux=0.0000 gate=0.300 gn=0.09 moe_cv=0.14 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=1622 mem=0MiB
+tiny B0 step 1/- nll=5.2436 ppl=189.4 aux=0.0000 gate=0.005 gn=0.00 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3127 mem=0MiB
+tiny B0 step 2/- nll=5.1004 ppl=164.1 aux=0.0000 gate=0.155 gn=0.03 moe_cv=0.18 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=3473 mem=0MiB
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank1]:[W1002 10:50:48.576931730 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W1002 10:50:48.577541763 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9920 ppl=147.2 aux=0.0000 gate=0.300 gn=0.04 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2599 mem=0MiB
+[W1002 10:50:48.959903852 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W1002 10:50:48.983734235 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+.[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank0]:[W1002 10:51:05.733238011 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank1]:[W1002 10:51:05.733248111 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=5.0708 ppl=159.3 aux=0.0000 gate=0.300 gn=0.05 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1920 mem=0MiB
+tiny B1 step 1/1 nll=5.1878 ppl=179.1 aux=0.0011 gate=1.000 gn=1.68 moe_cv=0.32 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=1810 mem=0MiB
+tiny B2 step 1/1 nll=5.0277 ppl=152.6 aux=0.0034 gate=1.000 gn=1.88 moe_cv=0.23 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1290 mem=0MiB
+[W1002 10:51:05.173546884 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W1002 10:51:05.177876181 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+.[Gloo] Rank 0 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[Gloo] Rank 1 is connected to 1 peer ranks. Expected number of connected peer ranks is : 1
+[rank1]:[W1002 10:51:21.158058285 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+[rank0]:[W1002 10:51:21.158443522 reducer.cpp:1431] Warning: find_unused_parameters=True was specified in DDP constructor, but did not find any unused parameters in the forward pass. This flag results in an extra traversal of the autograd graph every iteration,  which can adversely affect performance. If your model indeed never has any unused parameters in the forward pass, consider turning this flag off. Note that this warning may be a false positive if your model has flow control causing later iterations to have unused parameters. (function operator())
+tiny B0 step 1/1 nll=4.9577 ppl=142.3 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.27 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2020 mem=0MiB
+[W1002 10:51:22.542421791 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+[W1002 10:51:22.543129524 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())
+..................usage: cat_yoko.b0 [-h] [--try] [--steps STEPS] [--run-steps RUN_STEPS]
+                   [--tokens TOKENS] [--data DATA] [--eval-data EVAL_DATA]
+                   [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                   [--save-dir SAVE_DIR] [--save-every SAVE_EVERY] [--log LOG]
+                   [--resume RESUME] [--seq-len SEQ_LEN]
+                   [--upcycle-hf [UPCYCLE_HF]] [--upcycle UPCYCLE]
+                   [--dummy-upcycle] [--device DEVICE] [--use-kda]
+                   [--seed SEED] [--keep-last KEEP_LAST] [--offload-encoder]
+                   [--no-offload-encoder] [--offload-blocks]
+                   [--no-offload-blocks] [--optim-cpu] [--no-optim-cpu]
+                   [--backend {torch,megatron,deepspeed}] [--zero {1,2,3}]
+                   [--zero-offload] [--zero-offload-param] [--dump-deepspeed]
+                   [--log-every LOG_EVERY] [--micro-batch MICRO_BATCH]
+                   [--grad-ckpt] [--no-grad-ckpt]
+cat_yoko.b0: error: B0 published envelope is 8e+09 tokens; a <40GiB GPU cannot finish it. Pass --try (32 steps, seq=64, trainable.pt overlay) or explicit --steps / --tokens / --run-steps.
+.........................................tiny B0 step 1/1 nll=4.7943 ppl=120.8 aux=0.0000 gate=0.300 gn=0.02 moe_cv=0.15 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1678 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3021 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3031 mem=0MiB
+ok via modelscope: /tmp/tmpv22p4xnj/model.safetensors
+....ok via hf-mirror: /tmp/tmprf7mo218/model.safetensors
+.incomplete /tmp/tmpwkudggtw/model.safetensors: 10 bytes (want 5033557128)
+.
+----------------------------------------------------------------------
+Ran 125 tests in 65.413s
+
+OK
+[W1002 10:51:24.652523322 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

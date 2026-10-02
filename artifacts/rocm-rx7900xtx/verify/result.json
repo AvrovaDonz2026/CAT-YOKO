@@ -1,0 +1,15 @@
+{
+  "step": 33802,
+  "nll": 11.807597870879121,
+  "tokens_seen": 158148608.0,
+  "peak_mib": 8526.830078125,
+  "phase": "B0",
+  "elapsed_s": 194.16176176071167,
+  "source_step": 33800,
+  "updates": 2,
+  "added_tokens": 8192.0,
+  "seq_len": 4096,
+  "precision": "bf16",
+  "stream_kind": "DummyStream",
+  "optimizer_restored": false
+}

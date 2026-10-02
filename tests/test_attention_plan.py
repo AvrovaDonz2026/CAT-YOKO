@@ -11,7 +11,7 @@ import sys
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -176,6 +176,99 @@ class PublishedPlanTests(unittest.TestCase):
         gqa = _sdpa(q, k, v, causal=True)
         rep = _sdpa(q, k_rep, v_rep, causal=True)
         self.assertTrue(torch.allclose(gqa, rep, atol=1e-4, rtol=1e-4))
+
+    def test_unsupported_dense_kernel_falls_back_with_causal_gqa_gradients(self) -> None:
+        """Simulate ROCm fused dispatch failure using real CPU tensors and math."""
+        from contextlib import nullcontext
+
+        torch.manual_seed(41)
+        q = torch.randn(1, 4, 5, 16, dtype=torch.bfloat16, requires_grad=True)
+        k = torch.randn(1, 2, 5, 16, dtype=torch.bfloat16, requires_grad=True)
+        v = torch.randn(1, 2, 5, 16, dtype=torch.bfloat16, requires_grad=True)
+        qr, kr, vr = [t.detach().clone().requires_grad_() for t in (q, k, v)]
+        original = attn_mod.F.scaled_dot_product_attention
+        seen: list[torch.dtype] = []
+
+        def _unsupported_low_precision(qq, kk, vv, **kwargs):
+            seen.append(qq.dtype)
+            if qq.dtype == torch.bfloat16:
+                raise RuntimeError("No available kernel. Aborting execution.")
+            self.assertTrue(torch.backends.cuda.math_sdp_enabled())
+            self.assertFalse(torch.backends.cuda.flash_sdp_enabled())
+            self.assertFalse(torch.is_autocast_enabled("cpu"))
+            self.assertTrue(kwargs["is_causal"])
+            return original(qq, kk, vv, **kwargs)
+
+        attn_mod.reset_sdpa_counts()
+        with (
+            torch.autocast("cpu", dtype=torch.bfloat16),
+            patch.object(torch.Tensor, "is_cuda", new_callable=PropertyMock, return_value=True),
+            patch.object(attn_mod, "_cuda_sdpa_kernel", return_value=nullcontext()),
+            patch.object(attn_mod.F, "scaled_dot_product_attention", _unsupported_low_precision),
+        ):
+            actual = _sdpa(q, k, v, causal=True)
+        # Explicit fp32 softmax is independent of SDPA backend selection.
+        keys = kr.float().repeat_interleave(2, dim=1)
+        values = vr.float().repeat_interleave(2, dim=1)
+        logits = qr.float() @ keys.transpose(-2, -1) / 4.0
+        causal = torch.ones(5, 5, dtype=torch.bool).tril()
+        logits = logits.masked_fill(~causal, float("-inf"))
+        expected = (logits.softmax(dim=-1) @ values).to(q.dtype)
+        torch.testing.assert_close(actual, expected, atol=1e-2, rtol=1e-2)
+        upstream = torch.randn_like(actual)
+        (actual * upstream).sum().backward()
+        (expected * upstream).sum().backward()
+        for value, reference in zip((q, k, v), (qr, kr, vr)):
+            torch.testing.assert_close(value.grad, reference.grad, atol=1e-2, rtol=1e-2)
+        self.assertEqual(seen, [torch.bfloat16, torch.float32])
+        self.assertEqual(attn_mod.last_sdpa(), {"kind": "math_fp32", "dtype": "float32"})
+        self.assertEqual(attn_mod.sdpa_counts()["dense"], 0)
+
+    def test_rocm_uses_math_even_when_experimental_fused_backends_are_available(self) -> None:
+        torch.manual_seed(42)
+        q = torch.randn(1, 4, 5, 16, dtype=torch.bfloat16, requires_grad=True)
+        k = torch.randn(1, 2, 5, 16, dtype=torch.bfloat16, requires_grad=True)
+        v = torch.randn(1, 2, 5, 16, dtype=torch.bfloat16, requires_grad=True)
+        original = attn_mod.F.scaled_dot_product_attention
+        seen = []
+
+        def math_only(qq, kk, vv, **kwargs):
+            seen.append(qq.dtype)
+            self.assertTrue(torch.backends.cuda.math_sdp_enabled())
+            self.assertFalse(torch.backends.cuda.flash_sdp_enabled())
+            return original(qq, kk, vv, **kwargs)
+
+        with (
+            patch.object(torch.version, "hip", "test-rocm"),
+            patch.object(torch.Tensor, "is_cuda", new_callable=PropertyMock, return_value=True),
+            patch.object(torch.Tensor, "device", new_callable=PropertyMock, return_value=torch.device("cuda")),
+            patch.object(attn_mod, "_cuda_sdpa_kernel", side_effect=AssertionError("unsafe fused kernel")),
+            patch.object(attn_mod.F, "scaled_dot_product_attention", math_only),
+        ):
+            result = _sdpa(q, k, v, causal=True)
+        result.float().square().mean().backward()
+        self.assertEqual(seen, [torch.float32])
+        for value in (q, k, v):
+            self.assertTrue(torch.isfinite(value.grad).all())
+
+    def test_sdpa_does_not_retry_oom_or_execution_errors(self) -> None:
+        from contextlib import nullcontext
+
+        q = torch.randn(1, 2, 4, 8, dtype=torch.bfloat16)
+        bias = _window_causal_bias(4, 4, 2, q.device, q.dtype)
+        for mask in (None, bias):
+            for message in ("CUDA out of memory", "HIP error: an illegal memory access was encountered"):
+                with self.subTest(masked=mask is not None, error=message):
+                    with (
+                        patch.object(torch.Tensor, "is_cuda", new_callable=PropertyMock, return_value=True),
+                        patch.object(attn_mod, "_cuda_sdpa_kernel", return_value=nullcontext()),
+                        patch.object(attn_mod, "_cuda_masked_sdpa_kernel", return_value=nullcontext()),
+                        patch.object(attn_mod.F, "scaled_dot_product_attention", side_effect=RuntimeError(message)) as call,
+                    ):
+                        with self.assertRaises(RuntimeError) as caught:
+                            _sdpa(q, q, q, mask, causal=mask is None)
+                    self.assertEqual(str(caught.exception), message)
+                    call.assert_called_once()
 
     def test_masked_gqa_matches_repeated_kv(self) -> None:
         torch.manual_seed(0)

@@ -1,0 +1,492 @@
+{
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "device": "cuda",
+  "gpu": "Radeon RX 7900 XTX",
+  "hidden": 2048,
+  "intermediate": 2048,
+  "experts": 20,
+  "reference": "native",
+  "cpu_byte_equality_guard_seconds": {
+    "fp32": 0.4867341190110892,
+    "bf16": 0.2279279119684361
+  },
+  "all_passed": true,
+  "results": [
+    {
+      "tokens": 64,
+      "topk": 7,
+      "mode": "fp32",
+      "weight_dtype": "torch.float32",
+      "input_dtype": "torch.float32",
+      "output_error": {
+        "max_abs": 5.960464477539063e-08,
+        "relative_l2": 5.164713812177979e-08
+      },
+      "input_grad_error": {
+        "max_abs": 1.9073486328125e-06,
+        "relative_l2": 1.067067501026031e-06
+      },
+      "relative_l2_limit": 0.0001,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 3.772628610022366,
+          "peak_allocated_bytes": 2898112000
+        },
+        "collapsed": {
+          "ms": 0.6611478049308062,
+          "peak_allocated_bytes": 2873268736
+        },
+        "speedup": 5.706180345584296
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 5.496413796208799,
+          "peak_allocated_bytes": 2904437248
+        },
+        "collapsed": {
+          "ms": 1.3969196006655693,
+          "peak_allocated_bytes": 2876431872
+        },
+        "speedup": 3.934667244693256
+      }
+    },
+    {
+      "tokens": 256,
+      "topk": 7,
+      "mode": "fp32",
+      "weight_dtype": "torch.float32",
+      "input_dtype": "torch.float32",
+      "output_error": {
+        "max_abs": 1.4007091522216797e-06,
+        "relative_l2": 6.027743779668526e-07
+      },
+      "input_grad_error": {
+        "max_abs": 2.3245811462402344e-06,
+        "relative_l2": 1.0646407417880255e-06
+      },
+      "relative_l2_limit": 0.0001,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 4.874341399408877,
+          "peak_allocated_bytes": 2984581632
+        },
+        "collapsed": {
+          "ms": 1.0376560036092997,
+          "peak_allocated_bytes": 2885868032
+        },
+        "speedup": 4.69745405264785
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 9.136922599282116,
+          "peak_allocated_bytes": 3009749504
+        },
+        "collapsed": {
+          "ms": 2.049029595218599,
+          "peak_allocated_bytes": 2898515456
+        },
+        "speedup": 4.459146232247247
+      }
+    },
+    {
+      "tokens": 1024,
+      "topk": 7,
+      "mode": "fp32",
+      "weight_dtype": "torch.float32",
+      "input_dtype": "torch.float32",
+      "output_error": {
+        "max_abs": 1.430511474609375e-06,
+        "relative_l2": 5.041975441599789e-07
+      },
+      "input_grad_error": {
+        "max_abs": 2.5033950805664062e-06,
+        "relative_l2": 1.0672499684005743e-06
+      },
+      "relative_l2_limit": 0.0001,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 22.040834603831172,
+          "peak_allocated_bytes": 3289175552
+        },
+        "collapsed": {
+          "ms": 2.5733603979460895,
+          "peak_allocated_bytes": 2936267264
+        },
+        "speedup": 8.565001086292817
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 25.97919600084424,
+          "peak_allocated_bytes": 3381458432
+        },
+        "collapsed": {
+          "ms": 5.678223597351462,
+          "peak_allocated_bytes": 2986853888
+        },
+        "speedup": 4.575233002969788
+      }
+    },
+    {
+      "tokens": 64,
+      "topk": 10,
+      "mode": "fp32",
+      "weight_dtype": "torch.float32",
+      "input_dtype": "torch.float32",
+      "output_error": {
+        "max_abs": 5.960464477539063e-08,
+        "relative_l2": 5.184392293244855e-08
+      },
+      "input_grad_error": {
+        "max_abs": 1.7434358596801758e-06,
+        "relative_l2": 1.045912199515442e-06
+      },
+      "relative_l2_limit": 0.0001,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 3.5852632019668818,
+          "peak_allocated_bytes": 2908739584
+        },
+        "collapsed": {
+          "ms": 0.6542681949213147,
+          "peak_allocated_bytes": 2873270784
+        },
+        "speedup": 5.479806644732382
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 5.906836793292314,
+          "peak_allocated_bytes": 2916703232
+        },
+        "collapsed": {
+          "ms": 1.738498394843191,
+          "peak_allocated_bytes": 2876433920
+        },
+        "speedup": 3.397665945975808
+      }
+    },
+    {
+      "tokens": 256,
+      "topk": 10,
+      "mode": "fp32",
+      "weight_dtype": "torch.float32",
+      "input_dtype": "torch.float32",
+      "output_error": {
+        "max_abs": 1.1026859283447266e-06,
+        "relative_l2": 6.020254090799426e-07
+      },
+      "input_grad_error": {
+        "max_abs": 2.0265579223632812e-06,
+        "relative_l2": 1.0476765055500437e-06
+      },
+      "relative_l2_limit": 0.0001,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 6.890276994090527,
+          "peak_allocated_bytes": 3012873728
+        },
+        "collapsed": {
+          "ms": 0.9715167921967804,
+          "peak_allocated_bytes": 2885877248
+        },
+        "speedup": 7.092288110131713
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 13.113472401164472,
+          "peak_allocated_bytes": 3042432512
+        },
+        "collapsed": {
+          "ms": 2.0362642011605203,
+          "peak_allocated_bytes": 2898524672
+        },
+        "speedup": 6.439966087745765
+      }
+    },
+    {
+      "tokens": 1024,
+      "topk": 10,
+      "mode": "fp32",
+      "weight_dtype": "torch.float32",
+      "input_dtype": "torch.float32",
+      "output_error": {
+        "max_abs": 8.940696716308594e-07,
+        "relative_l2": 3.815189302258659e-07
+      },
+      "input_grad_error": {
+        "max_abs": 2.175569534301758e-06,
+        "relative_l2": 1.0458916221978143e-06
+      },
+      "relative_l2_limit": 0.0001,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 16.766561998520046,
+          "peak_allocated_bytes": 3431998976
+        },
+        "collapsed": {
+          "ms": 2.609920792747289,
+          "peak_allocated_bytes": 2936304128
+        },
+        "speedup": 6.42416507240858
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 33.77974620088935,
+          "peak_allocated_bytes": 3547776512
+        },
+        "collapsed": {
+          "ms": 5.5786084034480155,
+          "peak_allocated_bytes": 2986890752
+        },
+        "speedup": 6.055228070859182
+      }
+    },
+    {
+      "tokens": 64,
+      "topk": 7,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.00390625,
+        "relative_l2": 0.002501772018149495
+      },
+      "input_grad_error": {
+        "max_abs": 0.0078125,
+        "relative_l2": 0.0037442133761942387
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 1.6830864013172686,
+          "peak_allocated_bytes": 1482892288
+        },
+        "collapsed": {
+          "ms": 0.6519153947010636,
+          "peak_allocated_bytes": 1470454272
+        },
+        "speedup": 2.5817558766027444
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 2.8860813938081264,
+          "peak_allocated_bytes": 1486142464
+        },
+        "collapsed": {
+          "ms": 2.081232995260507,
+          "peak_allocated_bytes": 1472126464
+        },
+        "speedup": 1.3867171048990972
+      }
+    },
+    {
+      "tokens": 256,
+      "topk": 7,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.00390625,
+        "relative_l2": 0.002495991066098213
+      },
+      "input_grad_error": {
+        "max_abs": 0.0078125,
+        "relative_l2": 0.003737698309123516
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 3.0707651982083917,
+          "peak_allocated_bytes": 1526182400
+        },
+        "collapsed": {
+          "ms": 0.6625463953241706,
+          "peak_allocated_bytes": 1477548032
+        },
+        "speedup": 4.634792702639229
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 4.632877605035901,
+          "peak_allocated_bytes": 1538607616
+        },
+        "collapsed": {
+          "ms": 1.9895093981176615,
+          "peak_allocated_bytes": 1483985920
+        },
+        "speedup": 2.328653289810651
+      }
+    },
+    {
+      "tokens": 1024,
+      "topk": 7,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.00390625,
+        "relative_l2": 0.0024894040543586016
+      },
+      "input_grad_error": {
+        "max_abs": 0.0078125,
+        "relative_l2": 0.0037445363122969866
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 5.488462606444955,
+          "peak_allocated_bytes": 1682634240
+        },
+        "collapsed": {
+          "ms": 1.5764910029247403,
+          "peak_allocated_bytes": 1505925632
+        },
+        "speedup": 3.4814423908938523
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 10.313427005894482,
+          "peak_allocated_bytes": 1728943616
+        },
+        "collapsed": {
+          "ms": 2.686836605425924,
+          "peak_allocated_bytes": 1531428352
+        },
+        "speedup": 3.838501747768012
+      }
+    },
+    {
+      "tokens": 64,
+      "topk": 10,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.00390625,
+        "relative_l2": 0.0028401350136846304
+      },
+      "input_grad_error": {
+        "max_abs": 0.0078125,
+        "relative_l2": 0.0038798912428319454
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 1.4766171923838556,
+          "peak_allocated_bytes": 1490783744
+        },
+        "collapsed": {
+          "ms": 0.6511120009236038,
+          "peak_allocated_bytes": 1470456320
+        },
+        "speedup": 2.267839005100921
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 2.8231528005562723,
+          "peak_allocated_bytes": 1495852544
+        },
+        "collapsed": {
+          "ms": 1.9898199941962957,
+          "peak_allocated_bytes": 1472128512
+        },
+        "speedup": 1.4187980866563592
+      }
+    },
+    {
+      "tokens": 256,
+      "topk": 10,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.00390625,
+        "relative_l2": 0.002800936112180352
+      },
+      "input_grad_error": {
+        "max_abs": 0.0078125,
+        "relative_l2": 0.0038837548345327377
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 2.926064794883132,
+          "peak_allocated_bytes": 1541137920
+        },
+        "collapsed": {
+          "ms": 0.6678490084595978,
+          "peak_allocated_bytes": 1477557248
+        },
+        "speedup": 4.381326853553526
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 5.058328597806394,
+          "peak_allocated_bytes": 1556020736
+        },
+        "collapsed": {
+          "ms": 2.141808799933642,
+          "peak_allocated_bytes": 1483995136
+        },
+        "speedup": 2.361708756618757
+      }
+    },
+    {
+      "tokens": 1024,
+      "topk": 10,
+      "mode": "bf16",
+      "weight_dtype": "torch.bfloat16",
+      "input_dtype": "torch.bfloat16",
+      "output_error": {
+        "max_abs": 0.00390625,
+        "relative_l2": 0.0028142747469246387
+      },
+      "input_grad_error": {
+        "max_abs": 0.0078125,
+        "relative_l2": 0.0038840873166918755
+      },
+      "relative_l2_limit": 0.015,
+      "passed": true,
+      "forward": {
+        "batched": {
+          "ms": 6.624739593826234,
+          "peak_allocated_bytes": 1756644864
+        },
+        "collapsed": {
+          "ms": 1.59975920105353,
+          "peak_allocated_bytes": 1505962496
+        },
+        "speedup": 4.141085476778928
+      },
+      "forward_backward": {
+        "batched": {
+          "ms": 14.619713800493628,
+          "peak_allocated_bytes": 1815537152
+        },
+        "collapsed": {
+          "ms": 2.7308518067002296,
+          "peak_allocated_bytes": 1531465216
+        },
+        "speedup": 5.353536125476932
+      }
+    }
+  ],
+  "limitations": [
+    "Only native bias-free SwiGLU with fully frozen, byte-identical routed experts.",
+    "Validation must follow checkpoint loading; never mutate weights through .data afterward.",
+    "BF16 reduction order changes; parity is numerical, not bitwise.",
+    "Peak allocated memory includes both benchmark operators and cached packed baseline weights.",
+    "Pure prototype leaves original MoE aux/load statistics untouched and is not installed in the model."
+  ]
+}

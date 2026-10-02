@@ -1,0 +1,72 @@
+....................../home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py:1084: UserWarning: expandable_segments not supported on this platform (Triggered internally at /pytorch/c10/hip/HIPAllocatorConfig.h:36.)
+  return self._apply(lambda t: t.cuda(device))
+......usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: 12b training needs --device cuda --dtype bf16 (CPU is --meta / --dump-megatron / --dump-deepspeed only)
+.usage: cat-yoko-train [-h] [--config {12b,tiny}]
+                      [--phase {B0,B1,B2,C-hca,C-index,C-kda,C-topk,C-win,D-128k,D-32k,D-8k,E,F,G,G-dpo}]
+                      [--use-kda] [--steps STEPS] [--run-steps RUN_STEPS]
+                      [--tokens TOKENS] [--tokens-offset TOKENS_OFFSET]
+                      [--micro-batch MICRO_BATCH] [--accum ACCUM]
+                      [--device DEVICE] [--dtype {fp32,bf16}] [--seed SEED]
+                      [--data DATA] [--eval-data EVAL_DATA] [--eos EOS]
+                      [--meta] [--upcycle UPCYCLE] [--upcycle-hf [UPCYCLE_HF]]
+                      [--dummy-upcycle] [--teacher TEACHER]
+                      [--teacher-hf [TEACHER_HF]] [--dummy-teacher] [--fsdp]
+                      [--ddp] [--save-dir SAVE_DIR] [--save-every SAVE_EVERY]
+                      [--resume RESUME] [--log LOG] [--log-every LOG_EVERY]
+                      [--eval-every EVAL_EVERY] [--eval-batches EVAL_BATCHES]
+                      [--seq-len SEQ_LEN] [--grad-ckpt] [--no-grad-ckpt]
+                      [--c1-smoke] [--c1] [--save-optim] [--no-save-optim]
+                      [--keep-last KEEP_LAST] [--save-full] [--no-save-full]
+                      [--save-trainable] [--no-save-trainable]
+                      [--offload-encoder] [--no-offload-encoder]
+                      [--offload-blocks] [--no-offload-blocks] [--optim-cpu]
+                      [--no-optim-cpu] [--backend {torch,megatron,deepspeed}]
+                      [--zero {1,2,3}] [--zero-offload] [--zero-offload-param]
+                      [--tp TP] [--pp PP] [--ep EP] [--cp CP]
+                      [--sequence-parallel] [--dump-megatron]
+                      [--dump-deepspeed]
+cat-yoko-train: error: --c1-smoke is step-limited; do not pass --tokens
+...................
+----------------------------------------------------------------------
+Ran 48 tests in 2.527s
+
+OK
+tiny B0 step 1/1 nll=5.0117 ppl=150.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.19 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2861 mem=0MiB
+tiny B1 step 1/1 nll=4.9148 ppl=136.3 aux=0.0011 gate=1.000 gn=1.67 moe_cv=0.15 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2307 mem=0MiB
+tiny B2 step 1/1 nll=5.0388 ppl=154.3 aux=0.0031 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1541 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=3019 mem=0MiB
+tiny B1 step 1/1 nll=5.1011 ppl=164.2 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.19 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2342 mem=0MiB
+tiny B2 step 1/1 nll=5.1462 ppl=171.8 aux=0.0031 gate=1.000 gn=1.85 moe_cv=0.10 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1600 mem=0MiB
+tiny B2 step 1/1 nll=5.2409 ppl=188.8 aux=0.0032 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=32 tok/s=1181 mem=0MiB
+tiny B2 step 1/1 nll=5.2409 ppl=188.8 aux=0.0032 gate=1.000 gn=1.88 moe_cv=0.20 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=32 tok/s=1137 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2801 mem=0MiB
+tiny B1 step 1/1 nll=5.1011 ppl=164.2 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.19 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=2284 mem=0MiB
+tiny B2 step 1/1 nll=5.1462 ppl=171.8 aux=0.0031 gate=1.000 gn=1.85 moe_cv=0.10 trainable=0.21M lr=3.00e-08 fp8=False nvfp4=False tok=96 tok/s=1567 mem=0MiB
+tiny B1 step 1/1 nll=5.2409 ppl=188.8 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.20 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2189 mem=0MiB
+tiny B0 step 1/1 nll=5.2428 ppl=189.2 aux=0.0000 gate=0.300 gn=0.06 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2913 mem=0MiB
+tiny B1 step 1/1 nll=5.2409 ppl=188.8 aux=0.0010 gate=1.000 gn=1.66 moe_cv=0.20 trainable=0.12M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=2312 mem=0MiB
+[W1002 10:53:23.241744816 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

@@ -74,6 +74,12 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         default=None,
         help="same-phase resume: N more optimizer steps (Hub B0 is already step 26940; --steps is absolute)",
     )
+    p.add_argument(
+        "--run-steps",
+        type=int,
+        default=None,
+        help="maximum additional optimizer updates after resume; keeps the phase token budget",
+    )
     p.add_argument("--tokens", type=float, default=None)
     p.add_argument("--data", type=Path, default=None)
     p.add_argument("--eval-data", type=Path, default=None)
@@ -148,6 +154,12 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         help="keep activations; B200 192GiB default in run_b0_full_b200.sh",
     )
     args, rest = p.parse_known_args(argv)
+    for flag, count in (("--more-steps", args.more_steps), ("--run-steps", args.run_steps)):
+        if count is not None and count <= 0:
+            p.error(f"{flag} must be positive")
+    if args.more_steps is not None and args.run_steps is not None and args.more_steps != args.run_steps:
+        p.error("--more-steps and --run-steps must match when both are provided")
+    run_steps = args.run_steps if args.run_steps is not None else args.more_steps
     ph = resolve_phase_spec(phase, use_kda=bool(args.use_kda)) or ph
     if args.offload_encoder and args.no_offload_encoder:
         p.error("pick one of --offload-encoder / --no-offload-encoder")
@@ -219,12 +231,18 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     if dump_ds:
         out.append("--dump-deepspeed")
     tight = str(args.device).startswith("cuda") and _tight_gpu()
-    if tight and not args.try_run and args.steps is None and args.tokens is None:
+    if (
+        tight
+        and not args.try_run
+        and args.steps is None
+        and args.tokens is None
+        and run_steps is None
+    ):
         p.error(
             f"{phase} published envelope is {ph.tokens:.0e} tokens; a "
             f"<{int(TIGHT_12B_GPU_GIB)}GiB GPU cannot finish it. "
             "Pass --try (32 steps, seq=64, trainable.pt overlay) "
-            "or explicit --steps / --tokens."
+            "or explicit --steps / --tokens / --more-steps / --run-steps."
         )
     seq = args.seq_len
     if seq is None and (args.try_run or tight):
@@ -233,8 +251,9 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         seq = ph.seq_len
     if seq is not None:
         out.extend(["--seq-len", str(seq)])
-    if args.more_steps is not None:
-        out.extend(["--more-steps", str(args.more_steps)])
+    if run_steps is not None:
+        run_flag = "--run-steps" if args.run_steps is not None else "--more-steps"
+        out.extend([run_flag, str(run_steps)])
     if args.try_run:
         steps = TRY_STEPS if args.steps is None else args.steps
         out.extend(["--steps", str(steps)])
