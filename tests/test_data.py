@@ -64,6 +64,33 @@ class DummyStreamTests(unittest.TestCase):
             torch.equal(a.batch(1, "cpu")["input_ids"], b.batch(1, "cpu")["input_ids"])
         )
 
+    def test_resume_restores_code_mix_and_future_batches(self) -> None:
+        source = DummyStream(32, 16, seed=3, code_frac=1.0)
+        source.batch(2, "cpu")
+        resumed = DummyStream(32, 16, seed=99, code_frac=0.0)
+        resumed.load_state_dict(source.state_dict())
+        self.assertEqual(resumed.code_frac, 1.0)
+        for _ in range(3):
+            self.assertTrue(torch.equal(source.batch(2, "cpu")["input_ids"],
+                                        resumed.batch(2, "cpu")["input_ids"]))
+
+    def test_legacy_resume_preserves_uniform_stream_without_extra_rng_draws(self) -> None:
+        source = DummyStream(32, 16, seed=3, code_frac=0.0)
+        source.batch(2, "cpu")
+        state = source.state_dict()
+        del state["code_frac"]
+        resumed = DummyStream(32, 16, seed=99)
+        resumed.load_state_dict(state)
+        self.assertEqual(resumed.code_frac, 0.0)
+        for _ in range(3):
+            self.assertTrue(torch.equal(source.batch(2, "cpu")["input_ids"],
+                                        resumed.batch(2, "cpu")["input_ids"]))
+
+    def test_resume_rejects_invalid_code_mix(self) -> None:
+        stream = DummyStream(32, 8)
+        with self.assertRaisesRegex(ValueError, "checkpoint code_frac"):
+            stream.load_state_dict({"kind": "dummy", "code_frac": 1.1})
+
     def test_ignores_packed_kind(self) -> None:
         stream = DummyStream(32, 8, seed=0)
         before = stream.gen.get_state().clone()

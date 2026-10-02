@@ -71,6 +71,9 @@ def _kick_max_count(counts: torch.Tensor) -> tuple[torch.Tensor, object | None]:
     with torch.cuda.stream(stream):
         stream.wait_event(ev)
         _MOE_MAX_PINNED.copy_(mx.reshape(()), non_blocking=True)
+        # mx was allocated on the compute stream. Its Python reference dies
+        # on return, so prevent allocator reuse until this D2H stream is done.
+        mx.record_stream(stream)
         done = stream.record_event()
     return _MOE_MAX_PINNED, done
 
@@ -201,12 +204,14 @@ class _SiluMulFn(torch.autograd.Function):
         need_g, need_u = ctx.needs_input_grad
         if dy is None or not (need_g or need_u):
             return None, None
-        sig = torch.sigmoid(gate)
         dgate = dup = None
         if need_g:
-            dgate = dy * up * (sig * (1.0 + gate * (1.0 - sig)))
+            # Match native silu(gate) * up backward, including the rounded
+            # dy*up and fp32 opmath inside the BF16/FP16 SiLU kernel. An
+            # expanded BF16 sigmoid formula loses precision near dSiLU=0.
+            dgate = torch.ops.aten.silu_backward(dy * up, gate)
         if need_u:
-            dup = dy * (gate * sig)
+            dup = dy * F.silu(gate)
         return dgate, dup
 
 

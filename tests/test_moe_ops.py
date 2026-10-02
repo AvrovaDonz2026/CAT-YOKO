@@ -61,6 +61,37 @@ class FusedSwiGLUTests(unittest.TestCase):
         self.assertTrue(torch.equal(gu, before))
         self.assertEqual(tuple(y.shape), tuple(g.shape))
 
+    def _bf16_silu_mul_native_backward(self, device: str) -> None:
+        from cat_yoko.moe import _silu_mul
+
+        torch.manual_seed(16)
+        # The first representable BF16 gate is near the SiLU derivative's
+        # zero: rounded BF16 sigmoid arithmetic incorrectly makes dgate=0.
+        g = torch.cat((torch.tensor([-1.28125, -1.2734375, -2.0, 3.0]),
+                       torch.randn(124))).to(device=device, dtype=torch.bfloat16)
+        u = torch.randn_like(g)
+        dy = torch.randn_like(g)
+        u[0] = dy[0] = 1
+        g.requires_grad_(True)
+        u.requires_grad_(True)
+        actual = _silu_mul(g, u)
+        actual.backward(dy)
+        g_ref = g.detach().clone().requires_grad_(True)
+        u_ref = u.detach().clone().requires_grad_(True)
+        expected = torch.nn.functional.silu(g_ref) * u_ref
+        expected.backward(dy)
+        torch.testing.assert_close(actual, expected, atol=0, rtol=0)
+        torch.testing.assert_close(g.grad, g_ref.grad, atol=0, rtol=0)
+        torch.testing.assert_close(u.grad, u_ref.grad, atol=0, rtol=0)
+        self.assertNotEqual(g.grad[0].item(), 0.0)
+
+    def test_cpu_bf16_silu_mul_preserves_native_opmath(self) -> None:
+        self._bf16_silu_mul_native_backward("cpu")
+
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA or ROCm")
+    def test_gpu_bf16_silu_mul_preserves_native_opmath(self) -> None:
+        self._bf16_silu_mul_native_backward("cuda")
+
 
 class BatchedMoETests(unittest.TestCase):
     def _compare(self, hash_route: bool) -> None:
@@ -304,6 +335,27 @@ class TrainableCacheTests(unittest.TestCase):
         pinned, done = _kick_max_count(counts)
         self.assertIsNone(done)
         self.assertEqual(_wait_max_count(pinned, done), 5)
+
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA or ROCm")
+    def test_gpu_max_count_survives_default_stream_allocation_reuse(self) -> None:
+        from cat_yoko.moe import _kick_max_count, _moe_copy_stream, _wait_max_count
+
+        work = torch.randn(2048, 2048, device="cuda")
+        stream = _moe_copy_stream()
+        for expected in (5, 11, 23, 47):
+            counts = torch.tensor([2, 0, expected, 1], device="cuda", dtype=torch.int64)
+            stream.wait_stream(torch.cuda.current_stream())
+            # Delay the scalar copy while the compute stream is free to
+            # recycle small allocations. This reproduces the source-lifetime
+            # hazard without CUDA-only sleep primitives (also works on ROCm).
+            with torch.cuda.stream(stream):
+                for _ in range(8):
+                    torch.mm(work, work)
+            pinned, done = _kick_max_count(counts)
+            junk = [torch.full((64,), -123, device="cuda", dtype=torch.int64)
+                    for _ in range(32)]
+            self.assertEqual(_wait_max_count(pinned, done), expected)
+            del junk
 
 
 if __name__ == "__main__":

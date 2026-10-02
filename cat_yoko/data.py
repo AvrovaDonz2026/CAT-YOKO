@@ -190,6 +190,12 @@ class DummyStream:
     def load_state_dict(self, st: dict) -> None:
         if st.get("kind") not in (None, "dummy"):
             return
+        # Legacy streams drew only random token IDs. Restoring their RNG with
+        # the new code-mix default would add random draws and change the data.
+        code_frac = float(st.get("code_frac", 0.0))
+        if not 0.0 <= code_frac <= 1.0:
+            raise ValueError(f"checkpoint code_frac must be in [0, 1], got {code_frac}")
+        self.code_frac = code_frac
         if st.get("gen") is not None:
             self.gen.set_state(st["gen"].cpu())
 
