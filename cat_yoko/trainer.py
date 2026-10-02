@@ -223,6 +223,7 @@ class TrainResult:
     phase: str = ""
     peak_mib: float = 0.0
     stream: dict | None = None
+    stop_reason: str | None = None
 
 
 class Trainer:
@@ -270,6 +271,7 @@ class Trainer:
         initial_stream: dict | None = None,
         save_full: bool | None = None,
         save_trainable: bool | None = None,
+        max_train_seconds: float | None = None,
     ) -> None:
         self.cfg = cfg
         self.phase = phase
@@ -324,14 +326,22 @@ class Trainer:
         self.optim_cpu = False
         self.adam_state = "gpu"
         self.save_optim_arg = save_optim
+        self.optimizer_restored = False
         self.save_keep = max(int(save_keep), 0)
         self.initial_stream = initial_stream
         self.save_full_arg = save_full
         self.save_trainable_arg = save_trainable
+        if max_train_seconds is not None and (
+            not math.isfinite(max_train_seconds) or max_train_seconds <= 0
+        ):
+            raise ValueError("max_train_seconds must be finite and positive")
+        self.max_train_seconds = max_train_seconds
         self._trainable_names: set[str] = set()
         self.device, self.rank, self.world = init_distributed(
             device, force=bool(fsdp or self.deepspeed)
         )
+        if self.max_train_seconds is not None and self.world != 1:
+            raise ValueError("max_train_seconds currently requires a single process")
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
             self.seq_len = int(seq_len)
@@ -447,12 +457,14 @@ class Trainer:
                     publish_latest(step_path, dest)
                 else:
                     save_trainable_checkpoint(
-                        dest, model=model, extra=extra, state=trainable_sd
+                        dest, model=model, extra=extra, state=trainable_sd,
+                        optimizer=opt, save_optimizer=self.save_optim,
                     )
             elif tag.startswith("step_"):
                 dest = self.save_dir / f"trainable_{tag}"
                 save_trainable_checkpoint(
-                    dest, model=model, extra=extra, state=trainable_sd
+                    dest, model=model, extra=extra, state=trainable_sd,
+                    optimizer=opt, save_optimizer=self.save_optim,
                 )
                 # Rental GPUs die mid-envelope. Point trainable.pt at this
                 # step so --resume save_dir works before the final latest.pt.
@@ -606,8 +618,10 @@ class Trainer:
             if opt is not None:
                 try:
                     load_optimizer_state(opt, ckpt.get("optimizer"))
-                except (ValueError, RuntimeError, KeyError):
-                    pass
+                    self.optimizer_restored = bool(ckpt.get("optimizer"))
+                except (ValueError, RuntimeError, KeyError) as exc:
+                    if self.save_optim and ckpt.get("optimizer"):
+                        raise RuntimeError("saved optimizer state could not be restored") from exc
             step = int(extra.get("step", 0))
             tokens_in_phase = float(extra.get("tokens_in_phase", 0.0))
             tokens_seen = float(extra.get("tokens_seen", tokens_seen))
@@ -1060,16 +1074,35 @@ class Trainer:
             from cat_yoko.deepspeed_zero import freeze_host_gc_after_zero_init
 
             freeze_host_gc_after_zero_init()
+        prefetched_stream_state = None
         if not (
             (stop_step is not None and step >= stop_step)
             or (phase_budget is not None and tokens_in_phase >= phase_budget)
         ):
+            if self.max_train_seconds is not None:
+                prefetched_stream_state = stream.state_dict()
             self._prefetch_batch = stream.batch(self.micro_batch, self.device)
+        training_started = time.monotonic()
+        stop_reason = "single_step"
         try:
             while True:
                 if stop_step is not None and step >= stop_step:
+                    stop_reason = "steps"
                     break
                 if phase_budget is not None and tokens_in_phase >= phase_budget:
+                    stop_reason = "tokens"
+                    break
+                if (
+                    self.max_train_seconds is not None
+                    and time.monotonic() - training_started >= self.max_train_seconds
+                ):
+                    # Prefetch advances the data cursor before its optimizer
+                    # update. Keep that unread batch available after resume.
+                    if self._prefetch_batch is not None and prefetched_stream_state is not None:
+                        stream.load_state_dict(prefetched_stream_state)
+                    self._prefetch_batch = None
+                    stop_reason = "deadline"
+                    print(f"training time limit reached at step {step}", flush=True)
                     break
                 gn_parts.clear()
                 moe_stats: dict[str, float] = {
@@ -1140,6 +1173,7 @@ class Trainer:
                 for micro_i in range(self.accum):
                     batch = self._prefetch_batch
                     self._prefetch_batch = None
+                    prefetched_stream_state = None
                     if batch is None:
                         batch = stream.batch(self.micro_batch, self.device)
                     step_tokens += int(batch["input_ids"].numel())
@@ -1204,8 +1238,11 @@ class Trainer:
                 # Snapshot the stream before prefetch so resume does not skip the
                 # already-copied next batch. H2D of the next DummyStream batch
                 # overlaps leftover backward kernels.
-                stream_snap = stream.state_dict() if will_save else None
+                stream_snap = stream.state_dict() if (
+                    will_save or self.max_train_seconds is not None
+                ) else None
                 if not will_stop:
+                    prefetched_stream_state = stream_snap
                     self._prefetch_batch = stream.batch(self.micro_batch, self.device)
                 if will_log:
                     moe_stats = moe_utilization(unwrap(model))
@@ -1337,6 +1374,11 @@ class Trainer:
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                     barrier()
                 if will_stop:
+                    stop_reason = (
+                        "tokens" if phase_budget is not None and tokens_in_phase >= phase_budget
+                        else "steps" if stop_step is not None and step >= stop_step
+                        else "single_step"
+                    )
                     break
             extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
             barrier()
@@ -1355,6 +1397,7 @@ class Trainer:
                 phase=self.phase,
                 peak_mib=peak,
                 stream=stream.state_dict(),
+                stop_reason=stop_reason,
             )
         finally:
             set_after_block_backward(None)

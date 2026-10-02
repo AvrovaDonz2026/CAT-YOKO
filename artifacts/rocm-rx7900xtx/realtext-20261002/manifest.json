@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "seq_len": 4096,
+  "seed": 20261002,
+  "requested_tokens": {
+    "train": 80000000,
+    "eval": 1000000
+  },
+  "target_tokens": {
+    "train": 79998976,
+    "eval": 999424
+  },
+  "normalization": "Python str.strip(), UTF-8; internal whitespace unchanged",
+  "split_rule": "int(SHA256(normalized_text_utf8), 16) % 1000 < 10 => eval; else train",
+  "split_seed": null,
+  "dedup": "global exact normalized-text SHA256, without source salt",
+  "mix_rule": "per-source packed rows, shuffled row locations using random.Random(seed)",
+  "hash_evidence_scope": "full document hashes, including any quota-truncated final document",
+  "eos_id": 1,
+  "vocab_size": 130560,
+  "sources": [
+    {
+      "key": "en",
+      "repo": "openbmb/Ultra-FineWeb",
+      "revision": "02c85641e3d19a854be2e09139c25adaa9518063",
+      "weight": 0.6,
+      "text_field": "content",
+      "license": "apache-2.0",
+      "license_note": "Ultra-FineWeb also requires checking underlying source licenses",
+      "files": [
+        {
+          "path": "data/ultrafineweb_en/ultrafineweb-en-part-0001-of-2048.parquet",
+          "bytes": 1300415046,
+          "url": "https://huggingface.co/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_en/ultrafineweb-en-part-0001-of-2048.parquet",
+          "official_sha256": "2fd70197e66dff7b568e46fc578aedfdb20b35245dd191c5f912e09c6184aac7"
+        },
+        {
+          "path": "data/ultrafineweb_en/ultrafineweb-en-part-0002-of-2048.parquet",
+          "bytes": 1297717678,
+          "url": "https://huggingface.co/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_en/ultrafineweb-en-part-0002-of-2048.parquet",
+          "official_sha256": "8ecfe2c281428fda74c1c3516897915542a1d3d50ae482756b86d793136a27aa"
+        }
+      ],
+      "row_quotas": {
+        "train": 11719,
+        "eval": 147
+      },
+      "token_quotas": {
+        "train": 48001024,
+        "eval": 602112
+      }
+    },
+    {
+      "key": "zh",
+      "repo": "openbmb/Ultra-FineWeb",
+      "revision": "02c85641e3d19a854be2e09139c25adaa9518063",
+      "weight": 0.3,
+      "text_field": "content",
+      "license": "apache-2.0",
+      "license_note": "Ultra-FineWeb also requires checking underlying source licenses",
+      "files": [
+        {
+          "path": "data/ultrafineweb_zh/ultrafineweb-zh-part-001-of-256.parquet",
+          "bytes": 1269012674,
+          "url": "https://huggingface.co/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_zh/ultrafineweb-zh-part-001-of-256.parquet",
+          "official_sha256": "8e58378a56b7f0a7a64390b400d45601506630cecf23dc3e9bfa255fd8be9a57"
+        },
+        {
+          "path": "data/ultrafineweb_zh/ultrafineweb-zh-part-002-of-256.parquet",
+          "bytes": 1268857869,
+          "url": "https://huggingface.co/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_zh/ultrafineweb-zh-part-002-of-256.parquet",
+          "official_sha256": "7205a2ee83f2dafb24a89ecfd2ebaf70f1a0706ceb6092fc9411c71e118d4c41"
+        }
+      ],
+      "row_quotas": {
+        "train": 5859,
+        "eval": 73
+      },
+      "token_quotas": {
+        "train": 23998464,
+        "eval": 299008
+      }
+    },
+    {
+      "key": "math",
+      "repo": "openbmb/UltraData-Math",
+      "revision": "fe10db8efd35597fd7fcff8ff576b5ec4ea5ff87",
+      "weight": 0.1,
+      "text_field": "content",
+      "license": "apache-2.0",
+      "license_note": "Ultra-FineWeb also requires checking underlying source licenses",
+      "files": [
+        {
+          "path": "data/UltraData-Math-L2-preview/UltraData-Math-L2-part-00001-of-00138.parquet",
+          "bytes": 415426460,
+          "url": "https://huggingface.co/datasets/openbmb/UltraData-Math/resolve/fe10db8efd35597fd7fcff8ff576b5ec4ea5ff87/data/UltraData-Math-L2-preview/UltraData-Math-L2-part-00001-of-00138.parquet",
+          "official_sha256": "03128309b74e1d12bde64df52ff13796df63ebbd9c0abcb93ade19b034c107e9"
+        },
+        {
+          "path": "data/UltraData-Math-L2-preview/UltraData-Math-L2-part-00002-of-00138.parquet",
+          "bytes": 342973907,
+          "url": "https://huggingface.co/datasets/openbmb/UltraData-Math/resolve/fe10db8efd35597fd7fcff8ff576b5ec4ea5ff87/data/UltraData-Math-L2-preview/UltraData-Math-L2-part-00002-of-00138.parquet",
+          "official_sha256": "912a83ff96546b61d7d69ae7f4c33223aca9701707ed25f89b169baa60901527"
+        }
+      ],
+      "row_quotas": {
+        "train": 1953,
+        "eval": 24
+      },
+      "token_quotas": {
+        "train": 7999488,
+        "eval": 98304
+      }
+    }
+  ],
+  "download_endpoint": "https://hf-mirror.com",
+  "source_dir": null,
+  "reader": "http",
+  "input_files_read": [
+    {
+      "event": "open_file",
+      "source": "en",
+      "url": "https://huggingface.co/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_en/ultrafineweb-en-part-0001-of-2048.parquet",
+      "download_url": "https://hf-mirror.com/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_en/ultrafineweb-en-part-0001-of-2048.parquet",
+      "expected_bytes": 1300415046,
+      "official_sha256": "2fd70197e66dff7b568e46fc578aedfdb20b35245dd191c5f912e09c6184aac7",
+      "full_file_verified": false
+    },
+    {
+      "event": "open_file",
+      "source": "zh",
+      "url": "https://huggingface.co/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_zh/ultrafineweb-zh-part-001-of-256.parquet",
+      "download_url": "https://hf-mirror.com/datasets/openbmb/Ultra-FineWeb/resolve/02c85641e3d19a854be2e09139c25adaa9518063/data/ultrafineweb_zh/ultrafineweb-zh-part-001-of-256.parquet",
+      "expected_bytes": 1269012674,
+      "official_sha256": "8e58378a56b7f0a7a64390b400d45601506630cecf23dc3e9bfa255fd8be9a57",
+      "full_file_verified": false
+    },
+    {
+      "event": "open_file",
+      "source": "math",
+      "url": "https://huggingface.co/datasets/openbmb/UltraData-Math/resolve/fe10db8efd35597fd7fcff8ff576b5ec4ea5ff87/data/UltraData-Math-L2-preview/UltraData-Math-L2-part-00001-of-00138.parquet",
+      "download_url": "https://hf-mirror.com/datasets/openbmb/UltraData-Math/resolve/fe10db8efd35597fd7fcff8ff576b5ec4ea5ff87/data/UltraData-Math-L2-preview/UltraData-Math-L2-part-00001-of-00138.parquet",
+      "expected_bytes": 415426460,
+      "official_sha256": "03128309b74e1d12bde64df52ff13796df63ebbd9c0abcb93ade19b034c107e9",
+      "full_file_verified": false
+    }
+  ],
+  "tokenizer": {
+    "directory": "/home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base",
+    "files_sha256": {
+      "tokenizer.json": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+      "tokenizer_config.json": "daab558a87488612988d1700dc29b9989cc05b061e67d580cebb48cd81839112",
+      "special_tokens_map.json": "82d96d7a9e6ced037f12394b7ea6a5b02e6ca87e0d11edaa8d60d9be857ce7db"
+    },
+    "base_vocab_size": 130072,
+    "total_vocab_size": 130560,
+    "add_special_tokens": false,
+    "append_eos_if_missing": 1
+  },
+  "preparer_sha256": "8a1c8e9171aa9264f581580f1f46b0c2d809129b74c230fd74193dc339ebe14c",
+  "software": {
+    "python": "3.12.3",
+    "datasets": "5.0.1",
+    "transformers": "5.17.0"
+  },
+  "hashes": {
+    "train": {
+      "path": "train.docs.sha256",
+      "documents": 90793,
+      "sha256": "b1eceb0a5273226b40849688b1d8f63ce6fc9b66020dbab72f6f95ff8b2bcb08"
+    },
+    "eval": {
+      "path": "eval.docs.sha256",
+      "documents": 1170,
+      "sha256": "8ef3a76580a326ae5a425054df1a1c023dc5023c646a960eb764a35cd09164db"
+    }
+  },
+  "hash_intersection": 0,
+  "source_stats": {
+    "en": {
+      "scanned_documents": 76597,
+      "empty_documents": 0,
+      "duplicate_documents": 282,
+      "quota_skipped_documents": 16661,
+      "train_documents": 58868,
+      "eval_documents": 786,
+      "internal_eos_tokens": 1,
+      "train_rows": 11719,
+      "eval_rows": 147,
+      "max_document_chars": 609187,
+      "max_document_tokens": 117969
+    },
+    "zh": {
+      "scanned_documents": 29618,
+      "empty_documents": 0,
+      "duplicate_documents": 6,
+      "quota_skipped_documents": 2498,
+      "train_documents": 26789,
+      "eval_documents": 325,
+      "internal_eos_tokens": 0,
+      "train_rows": 5859,
+      "eval_rows": 73,
+      "max_document_chars": 42569,
+      "max_document_tokens": 31568
+    },
+    "math": {
+      "scanned_documents": 6453,
+      "empty_documents": 0,
+      "duplicate_documents": 5,
+      "quota_skipped_documents": 1253,
+      "train_documents": 5136,
+      "eval_documents": 59,
+      "internal_eos_tokens": 0,
+      "train_rows": 1953,
+      "eval_rows": 24,
+      "max_document_chars": 49569,
+      "max_document_tokens": 16852
+    }
+  },
+  "unique_scanned_documents": 112375,
+  "outputs": {
+    "train": {
+      "path": "train.bin",
+      "sequences": 19531,
+      "tokens": 79998976,
+      "bytes": 319995904,
+      "sha256": "0eb30dddd807f8b6aae74ebda0be655b66dae1bf8ceff2b21c5e40ff1095fca7"
+    },
+    "eval": {
+      "path": "eval.bin",
+      "sequences": 244,
+      "tokens": 999424,
+      "bytes": 3997696,
+      "sha256": "22b6312c4e426e49638fe6bbd57a1687ac2b6ee285515259de445c9473307fa6"
+    }
+  }
+}

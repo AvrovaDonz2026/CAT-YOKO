@@ -5,6 +5,9 @@ from __future__ import annotations
 import gc
 import inspect
 import math
+from collections import defaultdict
+from copy import deepcopy
+from itertools import chain
 from pathlib import Path
 
 import torch
@@ -216,14 +219,53 @@ class CPUOffloadAdamW(Optimizer):
         return loss
 
     def load_state_dict(self, state_dict):
-        super().load_state_dict(state_dict)
-        for st in self.state.values():
-            if torch.is_tensor(st.get("step")):
-                st["step"] = int(st["step"].item())
-            for k, v in list(st.items()):
-                if k == "step" or not torch.is_tensor(v):
-                    continue
-                st[k] = v.detach().cpu().to(dtype=self.state_dtype)
+        """Restore host moments without the base loader's parameter-dtype cast.
+
+        Optimizer.load_state_dict first casts floating moments to each
+        parameter's dtype/device. For BF16 GPU parameters that loses FP32
+        moment bits and briefly puts the state on GPU. Keep the standard
+        group mapping and load hooks, but apply our CPU moment policy directly.
+        """
+        state_dict = state_dict.copy()
+        for hook in self._optimizer_load_state_dict_pre_hooks.values():
+            replacement = hook(self, state_dict)
+            if replacement is not None:
+                state_dict = replacement
+        groups = self.param_groups
+        saved_groups = deepcopy(state_dict["param_groups"])
+        if len(groups) != len(saved_groups):
+            raise ValueError("loaded state dict has a different number of parameter groups")
+        if any(len(group["params"]) != len(saved["params"])
+               for group, saved in zip(groups, saved_groups)):
+            raise ValueError("loaded state dict contains a parameter group that doesn't match the size of optimizer's group")
+        id_map = dict(zip(chain.from_iterable(group["params"] for group in saved_groups),
+                          chain.from_iterable(group["params"] for group in groups)))
+
+        def host_state(value, key=None):
+            if torch.is_tensor(value):
+                if key == "step":
+                    return int(value.item())
+                dtype = self.state_dtype if value.is_floating_point() else value.dtype
+                return value.detach().to(device="cpu", dtype=dtype)
+            if isinstance(value, dict):
+                return {name: host_state(item, name) for name, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return type(value)(host_state(item) for item in value)
+            return value
+
+        state = defaultdict(dict)
+        for key, value in state_dict["state"].items():
+            if key in id_map:
+                state[id_map[key]] = host_state(value)
+            else:
+                state[key] = value
+        for group, saved in zip(groups, saved_groups):
+            saved["params"] = group["params"]
+            if "param_names" in group and "param_names" not in saved:
+                saved["param_names"] = group["param_names"]
+        self.__setstate__({"state": state, "param_groups": saved_groups})
+        for hook in self._optimizer_load_state_dict_post_hooks.values():
+            hook(self)
 
 
 def _adamw_kwargs(cfg: CATYokoConfig) -> dict:

@@ -1,5 +1,8 @@
 # ROCm operator experiments
 
+[Real-text B0 continuation](REAL_TRAINING.md) describes the bounded corpus,
+held-out evaluation, optimizer-state recovery, and 24-hour training supervisor.
+
 Standalone correctness and timing experiments for CAT-YOKO's 12B shapes,
 measured on 2026-10-02 with a Radeon RX 7900 XTX, 24 GiB VRAM, and PyTorch
 2.9.1+ROCm 6.4. The B0 continuation now uses the validated shared-storage layout

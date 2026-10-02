@@ -1,12 +1,49 @@
-# Status (2026-09-20)
+# Status (2026-10-02)
 
 GitHub training-progress pin. Spec knobs stay in [`FROZEN_SPEC.md`](FROZEN_SPEC.md). Weights live on Hugging Face.
 
 ## One line
 
-CAT-YOKO-12B is training **B0** under **C1+NVFP4** (new modules only, encoder frozen, 8e9 DummyStream). It is **not finished**. The Vast B200 was recycled; the latest published overlay is on Hub. Next GPU: same-phase resume. Do not restart from scratch. Do not stack a 32-step `--try`.
+CAT-YOKO-12B is continuing **B0 in BF16 on an AMD RX 7900 XTX**. The completed
+DummyStream continuation reached **step 34802**. A real-text five-update check
+then reached **34807**, saved CPU FP32 Adam state, and handed off to a bounded
+24-hour continuation. The 8B-token B0 envelope is still unfinished.
 
-## Progress
+## Current ROCm continuation
+
+The real-text corpus contains **79,998,976 training tokens** and **999,424
+validation tokens**, with a 60% English web / 30% Chinese web / 10% L2 math
+token mixture. Selected normalized-text hashes have zero train/validation
+intersection. The dataset and tokenizer versions are recorded in the
+[corpus manifest](../artifacts/rocm-rx7900xtx/realtext-20261002/manifest.json).
+This pilot does not include the published recipe's 5% code slice.
+
+Shared frozen storage preserves native expert dispatch and reduction order.
+Real packed batches passed deterministic comparisons at sequence lengths
+64 and 4096 with zero loss, sampled-output, and all-132-gradient error.
+The five-update checkpoint passed checks of all 132 optimizer states,
+264 CPU FP32 moment tensors, and packed cursor `i=5`.
+On four fixed held-out batches (**16,362 valid loss tokens**), NLL fell from
+**11.531286 to 10.758360**. This is an early validation observation, not a
+language-quality benchmark result. See the
+[short-run report](../artifacts/rocm-rx7900xtx/realtext-20261002/parity.json).
+
+The remote supervisor writes live status under
+`runs/b0-realtext-24h-20261002/status.json`. The long run retains B0's existing
+8B-token gate/LR schedule, saves every 100 updates, and evaluates 32 fixed
+held-out batches every 250 updates. Its 24-hour cap starts in the long training
+loop; a second update cap prevents repeating the 19531-row corpus.
+New checkpoints include weights, CPU Adam moments, RNG, and the next unread
+packed-data cursor. Current local checkpoints have not been uploaded to Hub.
+At **2026-10-02T14:41:11Z** the long run had reached **step 34828**, with
+recent median loop throughput **579.51 tokens/s** and peak **12006.77 MiB**.
+Its fixed 32-batch initial validation NLL was **10.743914** over **130877
+valid loss tokens**. The [startup snapshot](../artifacts/rocm-rx7900xtx/realtext-20261002/long-start.json)
+records this observation; subsequent live steps are on the remote machine.
+The [real-text guide](../operators/rocm/REAL_TRAINING.md) gives exact launch
+and recovery commands.
+
+## Historical published progress (2026-09-20)
 
 | | |
 | --- | --- |

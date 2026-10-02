@@ -1,0 +1,53 @@
+{
+  "observed_at_utc": "2026-10-02T14:41:11.538981+00:00",
+  "supervisor_status": "long_training",
+  "supervisor_pid": 1137050,
+  "training_pid": 1147892,
+  "source_step": 34802,
+  "long_resume_step": 34807,
+  "current_metric": {
+    "step": 34828,
+    "nll": 10.513698630136986,
+    "grad_norm": 1.6320596857718823,
+    "tok_s": 579.086170889512,
+    "mem_mib": 12006.7724609375,
+    "tokens_in_phase": 162351104
+  },
+  "recent_median_tok_s": 579.5059104347189,
+  "initial_eval": {
+    "event": "initial_eval",
+    "step": 34807,
+    "pass": true,
+    "eval_nll": 10.743914181873322,
+    "eval_valid_tokens": 130877,
+    "eval_batches": 32,
+    "elapsed_s": 86.49290870002005
+  },
+  "max_train_seconds": 86400,
+  "requested_long_updates": 19526,
+  "source_optimizer_present": true,
+  "save_optimizer": true,
+  "source_code_version": {
+    "git_commit": null,
+    "file_sha256": {
+      "operators/rocm/model_bench.py": "3b090cc9837e13d80f233a4545e5456bacc4650fc03fd8e7c31b53792a40aa30",
+      "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+      "cat_yoko/moe.py": "7e35db080dc2af2813db08c92dad46ff0ae8a89fa4a84864d7e1d33d8ab22e82",
+      "cat_yoko/trainer.py": "4f81768f76087892375068b40652562d52bcf131c3b61dca4f33d2679ab2a0a1",
+      "cat_yoko/checkpoint.py": "1044fc5641a1956a650217b44a8e52262de03da11d2dcb2fcc158d78c2466a34",
+      "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+      "cat_yoko/data.py": "b9d9d15ba8a7adcee553ec32ae87b3829dbb77c9cd533f71de3efb1ca8e59831",
+      "cat_yoko/attention.py": "c3076388b4d398370ca0b13f869cd5e36ea93dbeea04c5cc59392c0b332856ed",
+      "cat_yoko/loss.py": "cf187911a8120ffb56f5ae8ea3365749a4aebdd14a2de87c23c28e4be3bee54d"
+    }
+  },
+  "parity": [
+    {
+      "seq_len": 4096,
+      "pass": true,
+      "loss_abs": 0,
+      "global_gradient_relative_l2": 0
+    }
+  ],
+  "training_complete": false
+}

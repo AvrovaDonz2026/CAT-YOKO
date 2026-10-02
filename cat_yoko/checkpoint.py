@@ -235,23 +235,29 @@ def save_trainable_checkpoint(
     model: nn.Module,
     extra: dict[str, Any],
     state: dict[str, torch.Tensor] | None = None,
+    optimizer: Optimizer | None = None,
+    save_optimizer: bool = False,
 ) -> None:
     """Trainable overlay for HuggingFace Hub. Resume = MiniCPM5 upcycle + this file.
 
     ``state`` is the already-gathered overlay (ZeRO-3). All ranks must gather
     before rank-0 calls this; do not gather inside this function.
+    Optimizer state is optional for backwards compatibility and is copied to
+    CPU without serializing any frozen model parameters.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     sd = state if state is not None else trainable_state_dict(model)
+    opt_sd = optimizer.state_dict() if save_optimizer and optimizer is not None else None
+    require_host_bytes(_nbytes(sd) + _nbytes(opt_sd), what=str(path))
     payload = {
         "kind": "trainable",
         "trainable": sd,
         "extra": extra,
         "n_tensors": len(sd),
         "nbytes": _nbytes(sd),
+        "optimizer": _cpu_copy(opt_sd),
     }
-    require_host_bytes(_nbytes(sd), what=str(path))
     tmp = path.with_name(path.name + ".tmp")
     tmp.unlink(missing_ok=True)
     require_free_bytes(path.parent, _nbytes(payload), what=str(path))

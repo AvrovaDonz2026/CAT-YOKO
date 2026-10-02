@@ -1,5 +1,8 @@
 # ROCm B0 continuation
 
+For the current real-text run with held-out evaluation and resumable CPU Adam,
+use the [real-text continuation guide](../operators/rocm/REAL_TRAINING.md).
+
 `scripts/run_b0_rocm.py` resumes BF16 B0 on a small-memory AMD GPU. It builds
 the 12B model directly in CPU BF16, reconstructs frozen parameters from the
 MiniCPM5 base, loads a B0 trainable overlay, and moves individual blocks to the

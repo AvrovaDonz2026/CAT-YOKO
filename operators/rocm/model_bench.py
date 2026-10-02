@@ -41,7 +41,7 @@ from cat_yoko.checkpoint import (
     is_trainable_ckpt, load_checkpoint, load_trainable_state, resolve_resume_path,
 )
 from cat_yoko.config import CATYokoConfig
-from cat_yoko.data import DummyStream
+from cat_yoko.data import open_stream, resolve_eos
 from cat_yoko.freeze import apply_freeze, gate_schedule, set_gate
 from cat_yoko.hf_minicpm import load_minicpm_state
 from cat_yoko.moe import MoE
@@ -78,7 +78,10 @@ def source_code_version(layout: str) -> dict:
     root = Path(__file__).resolve().parents[2]
     module = "compact_model.py" if layout == "compact" else "shared_storage_moe.py"
     paths = (Path(__file__).resolve(), root / "operators" / "rocm" / module,
-             root / "cat_yoko" / "moe.py")
+             *(root / "cat_yoko" / name for name in (
+                 "moe.py", "trainer.py", "checkpoint.py", "optim.py", "data.py",
+                 "attention.py", "loss.py",
+             )))
     hashes = {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
               for path in paths}
     try:
@@ -114,6 +117,49 @@ def tensor_error(actual: torch.Tensor, expected: torch.Tensor) -> dict:
         "finite": True, "max_abs": float(difference.abs().max()),
         "relative_l2": math.sqrt(err_sq / max(ref_sq, 1e-60)),
         "error_square_sum": err_sq, "reference_square_sum": ref_sq,
+    }
+
+
+def clear_moe_statistics(model) -> None:
+    """Keep validation/parity loads out of the next training step's log."""
+    for module in model.modules():
+        if isinstance(module, MoE):
+            module.last_load = None
+            module._load_n = 0
+            module.last_aux = None
+
+
+def open_parity_stream(cfg, seq_len: int, seed: int, *, data: Path | None = None,
+                       eos_id: int | None = None, source_state: dict | None = None):
+    """Use the training data, restoring only a cursor for the same stream kind."""
+    stream = open_stream(data, cfg.vocab_size, seq_len, seed=seed, eos_id=eos_id)
+    kind = stream.state_dict()["kind"]
+    info = {"kind": kind, "source_cursor_restored": False}
+    if source_state is not None and source_state.get("kind") == kind:
+        try:
+            stream.load_state_dict(source_state)
+            info["source_cursor_restored"] = True
+        except ValueError as exc:
+            # This matches Trainer's fallback for incompatible shard cursors.
+            info["source_cursor_restore_error"] = str(exc)
+    return stream, info
+
+
+def evaluate_heldout(trainer: Trainer, model, *, event: str, step: int) -> dict:
+    """Evaluate the fixed held-out prefix without advancing the training stream."""
+    begin = time.perf_counter()
+    try:
+        weighted, n_valid = trainer._eval_nll_stats(model)
+    finally:
+        clear_moe_statistics(model)
+    nll = weighted / n_valid if n_valid > 0 else None
+    passed = nll is not None and math.isfinite(nll) and math.isfinite(n_valid)
+    return {
+        "event": event, "step": step, "pass": passed,
+        "eval_nll": nll if passed else None,
+        "eval_valid_tokens": n_valid if math.isfinite(n_valid) else None,
+        "eval_batches": trainer.eval_batches,
+        "elapsed_s": time.perf_counter() - begin,
     }
 
 
@@ -188,11 +234,7 @@ def capture(model, batch: dict, *, device: torch.device, offload: bool) -> tuple
         model.zero_grad(set_to_none=True)
         # Frozen B0 bias is never updated, but pending parity loads would
         # contaminate the first continuation step's utilization log.
-        for module in model.modules():
-            if isinstance(module, MoE):
-                module.last_load = None
-                module._load_n = 0
-                module.last_aux = None
+        clear_moe_statistics(model)
         gc.collect()
         torch.cuda.empty_cache()
 
@@ -234,7 +276,7 @@ def compare(reference: dict, candidate: dict, base_row: dict, row: dict, args) -
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", type=Path, required=True)
     parser.add_argument("--resume", type=Path, required=True)
@@ -245,6 +287,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--parity-seqs", default="64,256,4096")
     parser.add_argument("--seq-len", type=int, default=4096)
     parser.add_argument("--run-steps", type=int, default=10)
+    parser.add_argument("--max-hours", type=float, default=None,
+                        help="stop at a complete optimizer update after this training-time limit")
+    parser.add_argument("--data", type=Path, default=None,
+                        help="tokenized training .bin/.tok or JSONL; also used for parity batches")
+    parser.add_argument("--eval-data", type=Path, default=None,
+                        help="independent tokenized held-out data; evaluate before and after training")
+    parser.add_argument("--eos-id", type=int, default=None,
+                        help="packed document boundary token; default uses each data sidecar")
+    parser.add_argument("--eval-every", type=int, default=0,
+                        help="evaluate every N optimizer updates; 0 disables periodic evaluation")
+    parser.add_argument("--eval-batches", type=int, default=2)
+    parser.add_argument("--save-optim", action="store_true",
+                        help="include CPU Adam moments and step counters in trainable overlays")
     parser.add_argument("--parity-only", action="store_true")
     parser.add_argument("--deterministic-parity", action="store_true",
                         help="require deterministic kernels for all reference/candidate parity; restore policy before training")
@@ -260,18 +315,50 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--loss-atol", type=float, default=0.02)
     parser.add_argument("--grad-relative-l2", type=float, default=0.05)
     parser.add_argument("--output-relative-l2", type=float, default=0.05)
-    args = parser.parse_args(argv)
-    sequences = [int(part) for part in args.parity_seqs.split(",")]
+    return parser
+
+
+def validate_args(parser: argparse.ArgumentParser, args) -> list[int]:
+    try:
+        sequences = [int(part) for part in args.parity_seqs.split(",")]
+    except ValueError:
+        parser.error("parity-seqs must contain integer lengths in [2,4096]")
     if not sequences or any(seq < 2 or seq > 4096 for seq in sequences):
         parser.error("parity-seqs must contain lengths in [2,4096]")
     if args.reference_repeat and 4096 not in sequences:
         parser.error("--reference-repeat requires 4096 in --parity-seqs")
     if args.run_steps <= 0 or args.seq_len < 2 or args.seq_len > 4096:
         parser.error("run-steps must be positive; seq-len must be in [2,4096]")
+    if args.max_hours is not None and (not math.isfinite(args.max_hours) or args.max_hours <= 0):
+        parser.error("max-hours must be finite and positive")
+    if args.eval_every < 0 or args.eval_batches <= 0:
+        parser.error("eval-every must be nonnegative; eval-batches must be positive")
+    if args.eval_every and args.eval_data is None:
+        parser.error("eval-every requires eval-data")
+    if args.eos_id is not None and args.eos_id < 0:
+        parser.error("eos-id must be nonnegative")
+    for label, path in (("data", args.data), ("eval-data", args.eval_data)):
+        if path is not None and not path.is_file():
+            parser.error(f"{label} must be an existing tokenized data file")
+    if args.data is not None and args.eval_data is not None and args.data.samefile(args.eval_data):
+        parser.error("eval-data must be separate from training data")
+    if not args.parity_only:
+        long_training = args.data is not None or args.run_steps > 10 or args.max_hours is not None
+        if long_training and args.moe_layout != "shared-storage":
+            parser.error("real-data or extended training requires --moe-layout shared-storage")
+        if args.data is not None and args.seq_len not in sequences:
+            parser.error("real-data training requires seq-len in parity-seqs to validate its document masks")
     if min(args.loss_atol, args.grad_relative_l2, args.output_relative_l2) <= 0:
         parser.error("parity tolerances must be positive")
     if args.gpu_idle_max_wait is not None and args.gpu_idle_max_wait <= 0:
         parser.error("gpu-idle-max-wait must be positive")
+    return sequences
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    sequences = validate_args(parser, args)
     if not torch.version.hip or not torch.cuda.is_available():
         parser.error("a ROCm PyTorch GPU runtime is required")
     device = torch.device(args.device)
@@ -288,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
     if not is_trainable_ckpt(checkpoint) or extra.get("phase") != "B0" or extra.get("name") != "CAT-YOKO-12B":
         parser.error("resume must be a CAT-YOKO-12B B0 trainable overlay")
     cfg = replace(CATYokoConfig(**extra["cfg"]), use_nvfp4=False, use_fp8=False)
+    if args.eos_id is not None and args.eos_id >= cfg.vocab_size:
+        parser.error("eos-id must be smaller than the checkpoint vocabulary")
+    source_optimizer_present = bool(checkpoint.get("optimizer"))
     seed = int(extra.get("seed", 0))
     torch.set_num_threads(max(args.cpu_threads, 1))
     seed_all(seed)
@@ -300,6 +390,16 @@ def main(argv: list[str] | None = None) -> int:
         "source_checkpoint": str(resume), "source_step": int(extra["step"]),
         "source_tokens_in_phase": float(extra["tokens_in_phase"]),
         "dtype": "bf16", "parity_sequences": sequences,
+        "data": str(args.data.resolve()) if args.data is not None else None,
+        "eval_data": str(args.eval_data.resolve()) if args.eval_data is not None else None,
+        "eos_id": resolve_eos(args.data, args.eos_id),
+        "eval_eos_id": resolve_eos(args.eval_data, args.eos_id),
+        "eval_every": args.eval_every, "eval_batches": args.eval_batches,
+        "source_stream_kind": (extra.get("stream") or {}).get("kind"),
+        "save_optimizer": args.save_optim,
+        "source_optimizer_present": source_optimizer_present,
+        "max_train_seconds": args.max_hours * 3600 if args.max_hours is not None else None,
+        "requested_updates": args.run_steps,
         "moe_layout": args.moe_layout,
         "deterministic_parity": args.deterministic_parity,
         "reference_repeat": args.reference_repeat,
@@ -318,7 +418,9 @@ def main(argv: list[str] | None = None) -> int:
              if args.moe_layout == "compact" else
              "Shared-storage retains native MoE dispatch and reduction order; stride-zero weight broadcasting is unvalidated until parity passes."),
             "Resident training retains CPU Adam; global clipping differs from baseline per-block clipping.",
-            "Optimizer moments restart because the source B0 overlay contains only trainable weights.",
+            ("Trainer restores compatible CPU Adam state from the source overlay."
+             if source_optimizer_present else
+             "Optimizer moments restart because the source B0 overlay contains no optimizer state."),
             "Flash remains disabled by the production ROCm math SDPA path.",
         ],
     }
@@ -358,14 +460,15 @@ def main(argv: list[str] | None = None) -> int:
         batches = {}
         reference_stable = True
         for seq in sequences:
-            stream = DummyStream(cfg.vocab_size, seq, seed)
-            if extra.get("stream") is not None:
-                stream.load_state_dict(extra["stream"])
+            stream, stream_info = open_parity_stream(
+                cfg, seq, seed, data=args.data, eos_id=args.eos_id,
+                source_state=extra.get("stream"),
+            )
             batch = stream.batch(1, str(device))
             row, snapshot = capture(model, batch, device=device, offload=True)
             references[seq] = (row, snapshot)
             batches[seq] = batch
-            emit(report_path, report, {"event": "baseline", **row})
+            emit(report_path, report, {"event": "baseline", "data_stream": stream_info, **row})
             if args.reference_repeat and seq == 4096:
                 repeated_row, repeated_snapshot = capture(model, batch, device=device, offload=True)
                 stability = compare(snapshot, repeated_snapshot, row, repeated_row, args)
@@ -410,26 +513,50 @@ def main(argv: list[str] | None = None) -> int:
     if args.parity_only:
         return 0
     training_dir = args.out / "train"
-    training_start = time.perf_counter()
-    result = Trainer(
+    trainer = Trainer(
         cfg, "B0", str(device), reuse_model=model, resume=resume,
         run_steps=args.run_steps, tokens=8e9, seq_len=args.seq_len,
+        max_train_seconds=args.max_hours * 3600 if args.max_hours is not None else None,
         micro_batch=1, accum=1, dtype="bf16", seed=seed,
+        data=args.data, eval_data=args.eval_data, eos_id=args.eos_id,
+        eval_every=args.eval_every, eval_batches=args.eval_batches,
         grad_ckpt=True, offload_encoder=False, offload_blocks=False, optim_cpu=True,
         save_dir=training_dir, save_every=args.save_every, save_keep=args.keep_last,
-        save_full=False, save_trainable=True, save_optim=False,
+        save_full=False, save_trainable=True, save_optim=args.save_optim,
         log_every=1, log_path=training_dir / "metrics.jsonl",
-    ).run()
-    report["status"] = "training_complete"
+    )
+    if args.eval_data is not None:
+        initial = evaluate_heldout(trainer, model, event="initial_eval", step=int(extra["step"]))
+        report["initial_eval"] = initial
+        emit(report_path, report, initial)
+        if not initial["pass"]:
+            report["status"] = "initial_eval_failure"
+            emit(report_path, report, {"event": "training_skipped", "reason": "invalid initial held-out NLL"})
+            return 1
+    training_start = time.perf_counter()
+    result = trainer.run()
+    training_elapsed = time.perf_counter() - training_start
+    if args.eval_data is not None:
+        final = evaluate_heldout(trainer, model, event="final_eval", step=result.step)
+        report["final_eval"] = final
+        if final["pass"]:
+            final["eval_nll_change"] = final["eval_nll"] - report["initial_eval"]["eval_nll"]
+        emit(report_path, report, final)
+    eval_passed = args.eval_data is None or report["final_eval"]["pass"]
+    report["status"] = "training_complete" if eval_passed else "training_complete_eval_failure"
     report["updates"] = result.step - int(extra["step"])
     emit(report_path, report, {
         "event": "training_complete", "step": result.step, "nll": result.nll,
         "tokens_seen": result.tokens_seen, "peak_mib": result.peak_mib,
         "updates": result.step - int(extra["step"]),
-        "training_elapsed_s": time.perf_counter() - training_start,
-        "save_dir": str(training_dir), "optimizer_restored": False,
+        "training_elapsed_s": training_elapsed,
+        "stop_reason": getattr(result, "stop_reason", None),
+        "max_train_seconds": report["max_train_seconds"],
+        "save_dir": str(training_dir), "save_optimizer": args.save_optim,
+        "source_optimizer_present": source_optimizer_present,
+        "optimizer_restored": trainer.optimizer_restored,
     })
-    return 0
+    return 0 if eval_passed else 1
 
 
 if __name__ == "__main__":

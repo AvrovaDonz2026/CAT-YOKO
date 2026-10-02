@@ -1,0 +1,25 @@
+{
+  "manifest": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/manifest.json",
+  "manifest_sha256": "d906ac5d60ed42d97aaf6a0d94eab33c4718f62cc8e003cc2fc2803a7dafd612",
+  "seq_len": 4096,
+  "eos_id": 1,
+  "splits": {
+    "train": {
+      "path": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin",
+      "sequences": 19531,
+      "tokens": 79998976,
+      "bytes": 319995904,
+      "sha256": "0eb30dddd807f8b6aae74ebda0be655b66dae1bf8ceff2b21c5e40ff1095fca7",
+      "documents": 90793
+    },
+    "eval": {
+      "path": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin",
+      "sequences": 244,
+      "tokens": 999424,
+      "bytes": 3997696,
+      "sha256": "22b6312c4e426e49638fe6bbd57a1687ac2b6ee285515259de445c9473307fa6",
+      "documents": 1170
+    }
+  },
+  "hash_intersection": 0
+}
