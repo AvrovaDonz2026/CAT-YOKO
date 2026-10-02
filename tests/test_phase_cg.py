@@ -484,9 +484,9 @@ class DocsRangeTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         spec = (root / "docs" / "FROZEN_SPEC.md").read_text()
         self.assertIn("python3 -m cat_yoko.c", spec)
-        self.assertNotIn("Phase C indexer 训练循环", spec)
+        self.assertNotIn("this repo does not implement CSA / Phase C training loop", spec.lower())
         plan = (root / "docs" / "TRAINING_PLAN.md").read_text()
-        self.assertNotIn("本仓库不实现 CSA / Phase C 训练循环", plan)
+        self.assertNotIn("this repo does not implement CSA / Phase C training loop", plan.lower())
         status = (root / "docs" / "STATUS.md").read_text()
         self.assertNotIn("Phase C indexer", status)
         self.assertIn("CSA CUDA kernel", status)

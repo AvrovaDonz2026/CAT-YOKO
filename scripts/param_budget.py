@@ -144,9 +144,9 @@ class Tier:
 
 TIERS: dict[str, Tier] = {
     # Same 1+20 experts on both stacks (882 slots). Tiers only change top-k.
-    "low": Tier("省算力档", "low", ns_e=1, tk_e=4, nr_e=20, ns_d=1, tk_d=6, nr_d=20),
-    "middle": Tier("默认（中间档）", "middle", ns_e=1, tk_e=7, nr_e=20, ns_d=1, tk_d=10, nr_d=20),
-    "near_dense": Tier("近-dense 档", "near_dense", ns_e=1, tk_e=12, nr_e=20, ns_d=1, tk_d=16, nr_d=20),
+    "low": Tier("compute-efficient", "low", ns_e=1, tk_e=4, nr_e=20, ns_d=1, tk_d=6, nr_d=20),
+    "middle": Tier("default (middle)", "middle", ns_e=1, tk_e=7, nr_e=20, ns_d=1, tk_d=10, nr_d=20),
+    "near_dense": Tier("near-dense", "near_dense", ns_e=1, tk_e=12, nr_e=20, ns_d=1, tk_d=16, nr_d=20),
 }
 
 DEFAULT_TIER = "middle"

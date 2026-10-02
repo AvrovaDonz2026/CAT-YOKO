@@ -1,21 +1,21 @@
-# B1 overlay（Hub 指针）
+# B1 overlay (Hub pointer)
 
-权重**不进 GitHub**。文件在 HuggingFace：
+Weights **do not enter GitHub**. Files on Hugging Face:
 
 https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b1
 
-这是 C1 B1 的 **`trainable.pt` overlay**（decoder + untied `lm_head` + 最终 RMSNorm），不是 27e9 token 发布信封。
+This is the C1 B1 **`trainable.pt` overlay** (decoder + untied `lm_head` + final RMSNorm), not the 27e9-token published envelope.
 
-恢复（等 B0 不再占 GPU；发布档 overlay 用 Hub `b0-full`，不要用 32 步 `--try`）：
+Resume (wait until B0 no longer owns the GPU; published overlay is Hub `b0-full`, not the 32-step `--try`):
 
 ```bash
-# MiniCPM5 上采样（冻结 encoder + embed）+ B0 overlay + 本目录 B1 overlay
+# MiniCPM5 upcycle (frozen encoder + embed) + B0 overlay + this directory's B1 overlay
 python3 -m cat_yoko.b1 --try \
   --resume /root/autodl-tmp/runs/b0-full \
   --upcycle-hf /root/autodl-tmp/hf/MiniCPM5-2B-Base \
   --save-dir /root/autodl-tmp/runs/b1
 ```
 
-Trainer 先 MiniCPM5 上采样，再 `load_trainable_state` 叠 B0 的 cache / cross-attn；本阶段再训 decoder 栈。不要覆盖 Hub 上的 `checkpoints/b0/` 或 `checkpoints/b0-full/`。12B 全图 `latest.pt`（≈23GiB）不写 GitHub。
+The trainer MiniCPM5-upcycles first, then `load_trainable_state` stacks B0 cache / cross-attn; this phase trains the decoder stack. Do not overwrite Hub `checkpoints/b0/` or `checkpoints/b0-full/`. 12B full-graph `latest.pt` (≈23GiB) does not go on GitHub.
 
-启动：[`scripts/run_b1_try_autodl.sh`](../../scripts/run_b1_try_autodl.sh)（`--try`：32 步、seq=64）。日志：[`artifacts/autodl-rtx6000d/b1/`](../../artifacts/autodl-rtx6000d/b1/)。
+Launch: [`scripts/run_b1_try_autodl.sh`](../../scripts/run_b1_try_autodl.sh) (`--try`: 32 steps, seq=64). Logs: [`artifacts/autodl-rtx6000d/b1/`](../../artifacts/autodl-rtx6000d/b1/).
