@@ -69,11 +69,11 @@ class CATYokoForCausalLM(nn.Module):
     def set_detach(self, flag: bool) -> None:
         self.detach_cache = flag
 
-    def _run_block(self, blk: nn.Module, *tensors: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def _run_block(self, blk: nn.Module, *tensors: torch.Tensor | None) -> tuple[torch.Tensor, torch.Tensor]:
         if self.offload_blocks:
             return offload_checkpoint_block(blk, *tensors)
         ckpt = self.grad_checkpoint and self.training
-        if ckpt and any(t.requires_grad for t in tensors):
+        if ckpt and any(t is not None and t.requires_grad for t in tensors):
             y = torch.utils.checkpoint.checkpoint(blk, *tensors, use_reentrant=False)
         else:
             y = blk(*tensors)

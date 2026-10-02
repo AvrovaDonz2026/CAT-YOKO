@@ -14,6 +14,10 @@ import download_minicpm5 as dl  # noqa: E402
 
 
 class DownloadMinicpm5Tests(unittest.TestCase):
+    def test_non_root_host_cannot_inspect_autodl_root(self) -> None:
+        with patch.object(Path, "is_dir", side_effect=PermissionError("/root")):
+            self.assertIsNone(dl._autodl_root())
+
     def test_env_defaults_hf_mirror(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             with patch.object(dl, "_autodl_root", return_value=Path("/root/autodl-tmp")):

@@ -71,6 +71,8 @@ B1/B2 还没开。烟测用 `--try`（32 步、seq=64），不能跑完信封。
 
 - [`docs/STATUS.md`](docs/STATUS.md) — **当前进度**
 - [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md) — B200 / SM100 算子；未知卡走 `hw_recipe` / `run_b0_next.sh`
+- [`docs/ROCM_TRAIN.md`](docs/ROCM_TRAIN.md) — AMD 小显存卡 BF16 B0 overlay 续训、CPU 构图与逐层卸载
+- [`operators/rocm/`](operators/rocm/README.md) — AMD 实测算子优化、数值/梯度对照与独立结果
 - [`docs/HF_HUB.md`](docs/HF_HUB.md) — 权重只走 Hub；`scripts/push_to_hf.sh`
 - [`huggingface/README.md`](huggingface/README.md) — Hub 模型卡源
 - [`checkpoints/b0-full/README.md`](checkpoints/b0-full/README.md) — 发布档 B0 overlay 指针

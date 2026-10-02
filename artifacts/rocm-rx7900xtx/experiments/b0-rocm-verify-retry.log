@@ -1,0 +1,25 @@
+{"event": "start", "gpu": "Radeon RX 7900 XTX", "torch": "2.9.1+rocm6.4", "hip": "6.4.43484-123eb5128", "resume": "/home/donz/cat-yoko-rocm-20261002/hf/b0-3090-bf16/trainable.pt", "source_step": 33800, "source_tokens": 158140416.0, "seq_len": 4096, "run_steps": 2, "precision": "bf16", "offload": "all transformer blocks and Adam"}
+CPU model built in 81.9s
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 6780.79it/s]
+/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py:1357: UserWarning: expandable_segments not supported on this platform (Triggered internally at /pytorch/c10/hip/HIPAllocatorConfig.h:36.)
+  return t.to(
+Base upcycled and staged in 88.2s
+built CAT-YOKO-12B on cuda dtype=bf16 params=12,250,381,312 alloc=1.00GiB grad_ckpt=True seq=4096 offload_enc=False offload_blocks=True optim_cpu=True adam=fp32 zero=0 ds=False zero_offload=False zero_offload_param=False trainable=219.21M reuse=True nvfp4=False nvfp4_n=0 nvfp4_family=other te_linear=False grouped_mm=False te=False te_nvfp4=False return_logits=False sparse=window loss=ce PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+warning: 12B checkpoint adds ~23GiB host tensors on top of CPU Adam moments; --steps 1 or omit --save-dir on a 62GiB cgroup
+overlay resume /home/donz/cat-yoko-rocm-20261002/hf/b0-3090-bf16/trainable.pt: 132 tensors ckpt_phase=B0 cli_phase=B0
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Flash Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:287.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Mem Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:338.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Memory efficient kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:916.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Flash attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:918.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: cuDNN attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:920.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Torch was not compiled with cuDNN attention. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:661.)
+  return F.scaled_dot_product_attention(
+CAT-YOKO-12B B0 step 33801/33802 nll=11.8067 ppl=134141.9 aux=0.0000 gate=0.006 gn=0.11 moe_cv=0.79 trainable=219.21M lr=3.16e-05 fp8=False nvfp4=False tok=158144512 tok/s=90 mem=8527MiB
+CAT-YOKO-12B B0 step 33802/33802 nll=11.8076 ppl=134268.6 aux=0.0000 gate=0.006 gn=0.11 moe_cv=0.73 trainable=219.21M lr=3.16e-05 fp8=False nvfp4=False tok=158148608 tok/s=113 mem=8527MiB
+{"step": 33802, "nll": 11.807597870879121, "tokens_seen": 158148608.0, "peak_mib": 8526.830078125, "phase": "B0", "elapsed_s": 194.16176176071167, "source_step": 33800, "updates": 2, "added_tokens": 8192.0, "seq_len": 4096, "precision": "bf16", "stream_kind": "DummyStream", "optimizer_restored": false}

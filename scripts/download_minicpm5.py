@@ -28,7 +28,11 @@ AUTODL_TMP = Path("/root/autodl-tmp")
 
 
 def _autodl_root() -> Path | None:
-    return AUTODL_TMP if AUTODL_TMP.is_dir() else None
+    try:
+        return AUTODL_TMP if AUTODL_TMP.is_dir() else None
+    except PermissionError:
+        # Non-root hosts cannot inspect /root; they are not AutoDL workspaces.
+        return None
 
 
 def _env() -> None:

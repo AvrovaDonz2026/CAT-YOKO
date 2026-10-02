@@ -34,6 +34,24 @@ def move_module(mod: nn.Module, device: torch.device | str) -> None:
     cur = module_device(mod)
     if cur is not None and same_device(cur, device):
         return
+    # Module.to() only visits registered parameters/buffers. Frozen GEMM
+    # caches live in Python attributes and otherwise keep each offloaded
+    # block's full expert weights on the GPU. Drop those references instead
+    # of moving their tensors: autograd may still hold the old storage.
+    for child in mod.modules():
+        for name in (
+            "_swiglu_w",
+            "_swiglu_gu",
+            "_wq_cache",
+            "_wq_ver",
+            "_bf16_fused_cat",
+            "_te_fused_cat",
+        ):
+            if hasattr(child, name):
+                setattr(child, name, None)
+        grouped = getattr(child, "_te_grouped", None)
+        if grouped is not None and grouped[0] == "fused_gu":
+            child._te_grouped = None
     mod.to(device)
 
 
@@ -69,13 +87,17 @@ def _read_autocast(device: torch.device) -> tuple[bool, torch.dtype]:
     return enabled, dtype
 
 
-def offload_checkpoint_block(blk: nn.Module, *tensors: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def offload_checkpoint_block(
+    blk: nn.Module, *tensors: torch.Tensor | None
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Run ``blk`` on ``tensors[0].device``, then move ``blk`` back to CPU.
 
     Backward reloads the block, recomputes, then offloads again (activation
     checkpoint + parameter offload).
     """
-    need = any(t.requires_grad for t in tensors) or any(p.requires_grad for p in blk.parameters())
+    need = any(t.requires_grad for t in tensors if t is not None) or any(
+        p.requires_grad for p in blk.parameters()
+    )
     if (not need) or (not torch.is_grad_enabled()):
         move_module(blk, tensors[0].device)
         y = blk(*tensors)

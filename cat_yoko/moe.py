@@ -46,10 +46,12 @@ def grouped_mm_available() -> bool:
     """True when jagged grouped GEMM can actually run on this device.
 
     ``torch._grouped_mm`` exists in PyTorch 2.8+ builds but only executes on
-    SM90+ (Hopper / Blackwell). Ampere / Ada raise at runtime; calling it
+    NVIDIA SM90+ (Hopper / Blackwell). Ampere / Ada and ROCm raise at runtime; calling it
     inside try/except every MoE layer is a 2–3× dispatch tax versus padded bmm.
     """
     global _GROUPED_MM_OK
+    if getattr(torch.version, "hip", None) is not None:
+        return False
     if _GROUPED_MM_OK is not None:
         return _GROUPED_MM_OK
     has = callable(getattr(F, "grouped_mm", None)) or callable(getattr(torch, "_grouped_mm", None))

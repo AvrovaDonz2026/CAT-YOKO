@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source/scripts/probe_rocm_sdpa.py", line 48, in <module>
+    main()
+  File "/home/donz/cat-yoko-rocm-20261002/source/scripts/probe_rocm_sdpa.py", line 38, in main
+    torch.testing.assert_close(x.grad.float(), ref.grad, atol=0.06, rtol=0.06)
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/testing/_comparison.py", line 1589, in assert_close
+    raise error_metas[0].to_error(msg)
+AssertionError: Tensor-likes are not close!
+
+Mismatched elements: 34571 / 262144 (13.2%)
+Greatest absolute difference: 1.5037260055541992 at index (0, 8, 85, 15) (up to 0.06 allowed)
+Greatest relative difference: 11331.8271484375 at index (0, 5, 116, 49) (up to 0.06 allowed)

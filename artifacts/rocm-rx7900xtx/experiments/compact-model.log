@@ -1,0 +1,74 @@
+{"event": "preflight", "free_gpu_mib": 6144.0, "total_gpu_mib": 24560.0}
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/381 [00:00<?, ?it/s]Loading weights:  60%|█████▉    | 227/381 [00:00<00:00, 2253.64it/s]Loading weights: 100%|██████████| 381/381 [00:00<00:00, 2405.80it/s]
+{"event": "model_built", "elapsed_s": 91.27667737304, "trainable_tensors": 132}
+/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py:1357: UserWarning: expandable_segments not supported on this platform (Triggered internally at /pytorch/c10/hip/HIPAllocatorConfig.h:36.)
+  return t.to(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Flash Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:287.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Mem Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:338.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Memory efficient kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:916.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Flash attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:918.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: cuDNN attention kernel not used because: (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:920.)
+  return F.scaled_dot_product_attention(
+/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/attention.py:198: UserWarning: Torch was not compiled with cuDNN attention. (Triggered internally at /pytorch/aten/src/ATen/native/transformers/hip/sdp_utils.cpp:661.)
+  return F.scaled_dot_product_attention(
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source/operators/rocm/model_bench.py", line 324, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/operators/rocm/model_bench.py", line 275, in main
+    row, snapshot = capture(model, batch, device=device, offload=True)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/operators/rocm/model_bench.py", line 101, in capture
+    output = model(**batch)
+             ^^^^^^^^^^^^^^
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/model.py", line 111, in forward
+    x, a = self._run_block(blk, x, input_ids, doc_ids)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/model.py", line 74, in _run_block
+    return offload_checkpoint_block(blk, *tensors)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/offload.py", line 103, in offload_checkpoint_block
+    y = blk(*tensors)
+        ^^^^^^^^^^^^^
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/blocks.py", line 88, in forward
+    x = x + self.res * self.mlp(self.ln2(x), **kwargs)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/revelation-rocm-venv/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/moe.py", line 475, in forward
+    routed = _dispatch_experts(
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/moe.py", line 370, in _dispatch_experts
+    y = _swiglu_experts_batched(experts, x_sorted, expert_sorted, counts, owner=owner)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/moe.py", line 277, in _swiglu_experts_batched
+    gate_w, up_w, down_w, nv = _swiglu_expert_weights(experts, owner)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/moe.py", line 200, in _swiglu_expert_weights
+    down_w = _stack_linear_weight([e.down_proj for e in experts])
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/donz/cat-yoko-rocm-20261002/source/cat_yoko/moe.py", line 178, in _stack_linear_weight
+    return torch.stack([lin.weight for lin in linears])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.OutOfMemoryError: HIP out of memory. Tried to allocate 160.00 MiB. GPU 0 has a total capacity of 23.98 GiB of which 0 bytes is free. Of the allocated memory 1.89 GiB is allocated by PyTorch, and 145.57 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)

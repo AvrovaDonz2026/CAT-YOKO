@@ -201,6 +201,7 @@ class Trainer:
         device: str,
         *,
         steps: int | None = None,
+        run_steps: int | None = None,
         tokens: float | None = None,
         micro_batch: int = 2,
         accum: int = 1,
@@ -240,6 +241,9 @@ class Trainer:
         self.cfg = cfg
         self.phase = phase
         self.steps = steps
+        if run_steps is not None and run_steps <= 0:
+            raise ValueError("run_steps must be positive")
+        self.run_steps = run_steps
         self.tokens_target = tokens
         self.micro_batch = micro_batch
         self.seed = seed
@@ -890,6 +894,11 @@ class Trainer:
         last = 0.0
         phase_budget = self.tokens_target
         max_steps = self.steps
+        # This bound counts updates in this invocation, after restoring the
+        # phase cursor. It must not become the gate / KD / LR schedule budget.
+        run_stop = step + self.run_steps if self.run_steps is not None else None
+        step_bounds = [bound for bound in (max_steps, run_stop) if bound is not None]
+        stop_step = min(step_bounds) if step_bounds else None
         if not self.deepspeed:
             trainable = [p for p in model.parameters() if p.requires_grad]
             n_train = sum(p.numel() for p in trainable)
@@ -910,6 +919,8 @@ class Trainer:
         try:
             while True:
                 if max_steps is not None and step >= max_steps:
+                    break
+                if run_stop is not None and step >= run_stop:
                     break
                 if phase_budget is not None and tokens_in_phase >= phase_budget:
                     break
@@ -1017,7 +1028,10 @@ class Trainer:
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
                 next_step = step + 1
                 will_log = next_step == 1 or next_step % self.log_every == 0 or (
-                    max_steps is not None and next_step == max_steps
+                    stop_step is not None and next_step == stop_step
+                ) or (
+                    phase_budget is not None
+                    and tokens_in_phase + step_tokens * self.world >= phase_budget
                 )
                 if will_log:
                     moe_stats = moe_utilization(unwrap(model))
@@ -1070,14 +1084,12 @@ class Trainer:
                 tokens_seen += step_tokens * self.world
                 last = step_nll
                 extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
-                if step == 1 or step % self.log_every == 0 or (
-                    max_steps is not None and step == max_steps
-                ):
+                if will_log:
                     row = {
                         "name": self.cfg.name,
                         "phase": self.phase,
                         "step": step,
-                        "steps_or_inf": max_steps if max_steps is not None else "-",
+                        "steps_or_inf": stop_step if stop_step is not None else "-",
                         "nll": last,
                         "ppl": safe_ppl(last),
                         "loss": step_loss,
@@ -1131,7 +1143,7 @@ class Trainer:
                     barrier()
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                     barrier()
-                if max_steps is None and phase_budget is None:
+                if max_steps is None and phase_budget is None and run_stop is None:
                     break
             extra = self._extra(model, step, tokens_in_phase, tokens_seen, stream)
             barrier()

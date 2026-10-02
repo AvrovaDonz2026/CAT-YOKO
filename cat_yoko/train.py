@@ -112,6 +112,12 @@ def main(argv: list[str] | None = None) -> int:
         help="implement 3:1 KDA in the graph (Phase B still window; C lights C-kda)",
     )
     p.add_argument("--steps", type=int, default=None, help="optimizer steps (tiny default 3)")
+    p.add_argument(
+        "--run-steps",
+        type=int,
+        default=None,
+        help="maximum additional optimizer updates after resume; keeps the phase schedule",
+    )
     p.add_argument("--tokens", type=float, default=None, help="phase token budget (overrides C1 split if set)")
     p.add_argument("--tokens-offset", type=float, default=None, help="global tokens already seen (WSD)")
     p.add_argument("--micro-batch", type=int, default=None, help="default 2 (tiny) / 1 (12b)")
@@ -256,6 +262,8 @@ def main(argv: list[str] | None = None) -> int:
         help="print DeepSpeed ZeRO config JSON and exit (no deepspeed install)",
     )
     args = p.parse_args(argv)
+    if args.run_steps is not None and args.run_steps <= 0:
+        p.error("--run-steps must be positive")
     if args.backend == "megatron" and args.fsdp:
         p.error("--fsdp is the torch path; Megatron uses its own DDP/FSDP")
     if args.backend == "deepspeed" and (args.fsdp or args.ddp):
@@ -376,13 +384,13 @@ def main(argv: list[str] | None = None) -> int:
             gpu_gib=gpu_gib,
         ):
             p.error(err)
-    if args.steps is None and args.tokens is None:
+    if args.steps is None and args.tokens is None and args.run_steps is None:
         if args.c1_smoke:
             args.steps = 1
         elif args.config == "tiny":
             args.steps = 3
         else:
-            p.error("12b training needs --steps or --tokens (this VM cannot run the 8B-token B0 envelope)")
+            p.error("12b training needs --steps, --tokens, or --run-steps")
     if args.micro_batch is None:
         args.micro_batch = 1 if args.config == "12b" else 2
     offload_encoder = True if args.offload_encoder else (False if args.no_offload_encoder else None)
@@ -453,6 +461,7 @@ def main(argv: list[str] | None = None) -> int:
         teacher = load_teacher(args.teacher_hf, args.device)
     eos = resolve_eos(args.data, args.eos)
     shared = dict(
+        run_steps=args.run_steps,
         micro_batch=args.micro_batch,
         accum=args.accum,
         seed=args.seed,
