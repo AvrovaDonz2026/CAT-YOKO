@@ -1,0 +1,10 @@
+{
+  "packed_attention": false,
+  "packed_attention_tile": 256,
+  "batched_grad_norm": false,
+  "patches_installed_after_native_reference": true,
+  "file_sha256": {
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845"
+  },
+  "status": "completed"
+}

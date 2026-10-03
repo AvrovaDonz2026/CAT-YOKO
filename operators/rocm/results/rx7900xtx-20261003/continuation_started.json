@@ -1,0 +1,25 @@
+{
+  "status": "optimized_training_started",
+  "observed_at_utc": "2026-10-03T06:46:15.778336+00:00",
+  "source_step": 42100,
+  "source_sha256": "14e845a3642ba802173797e2341b99a5084b03d267c991925e95da9821116238",
+  "adopted_flags": [
+    "--packed-attention"
+  ],
+  "training_pid": 1468948,
+  "supervisor_pid": 1468849,
+  "save_every_seconds": 300.0,
+  "keep_last": 3,
+  "initial_eval": {
+    "event": "initial_eval",
+    "step": 42100,
+    "pass": true,
+    "eval_nll": 8.16189351868786,
+    "eval_valid_tokens": 130877.0,
+    "eval_batches": 32,
+    "elapsed_s": 63.61047970701475
+  },
+  "parity_passed": true,
+  "data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin",
+  "eval_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin"
+}

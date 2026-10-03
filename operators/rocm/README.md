@@ -4,8 +4,9 @@
 held-out evaluation, optimizer-state recovery, and 24-hour training supervisor.
 
 [Packed attention and clipping candidates](OPTIMIZATION_20261003.md) describes
-the next opt-in operators, full-step profiling, and a queue that waits for the
-current training run to finish. Their GPU correctness and speed remain pending.
+the opt-in operators, full-step profiling, and the original deferred queue.
+[The October 3 checkpoint-first evaluation](OPERATOR_SWITCH_20261003.md) records
+their completed GPU checks and real-text training comparisons.
 
 Standalone correctness and timing experiments for CAT-YOKO's 12B shapes,
 measured on 2026-10-02 with a Radeon RX 7900 XTX, 24 GiB VRAM, and PyTorch
@@ -165,6 +166,8 @@ GPU after the check.
 
 ## Files and reproduction
 
+- [Checkpoint-first real-text operator evaluation](OPERATOR_SWITCH_20261003.md): packed attention, batched gradient clipping, full-model parity, and measured training comparisons.
+- `run_operator_switch.py`: compare each candidate from one verified checkpoint, bracket trials with native baselines, and optionally continue with a validated winner. `--evaluate-only` writes the decision without starting continuation; `--preflight-dir` and `--baseline-run` can reuse validated results. The script never stops an existing GPU process.
 - `frozen_moe.py`: byte-equality guards, normalized gates, native MoE output/input-gradient comparisons, and real base-weight slices.
 - `attention_bench.py`: FP32 SDPA baseline plus an independent causal formula; Flash, repeated KV, gradient layouts, and checkpointed math chunks.
 - `attention_layout.py`: Efficient attention, grouped-query FP32 bmm, copy-inclusive layouts, and Flash-forward/FP32-backward hybrids.
@@ -207,7 +210,7 @@ python operators/rocm/probe_index_add.py --device cuda --repeats 12 \
   --json /path/to/operator-results/index_add_probe.json
 ```
 
-All runs remain DummyStream experiments. Actual continuation throughput is
+The October 2 runs above use DummyStream. Actual continuation throughput is
 measured above; language-quality improvement has not been evaluated. CPU Adam
 moments restart because the source overlay has no optimizer state. Resident
 training uses global clipping and the baseline uses per-block clipping; recorded

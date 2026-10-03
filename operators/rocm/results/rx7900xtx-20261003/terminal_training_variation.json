@@ -1,0 +1,47 @@
+{
+  "updates": 20,
+  "baseline_before_vs_baseline_after": {
+    "weights": {
+      "global_relative_l2": 0.00013016038984926888,
+      "max_tensor_relative_l2": 0.00024414603643527265
+    },
+    "exp_avg": {
+      "global_relative_l2": 0.029621271290297277,
+      "max_tensor_relative_l2": 0.071572552449862
+    },
+    "exp_avg_sq": {
+      "global_relative_l2": 0.004376274259240155,
+      "max_tensor_relative_l2": 0.029808519079008527
+    }
+  },
+  "norm_vs_baseline_before": {
+    "weights": {
+      "global_relative_l2": 0.0001429785563620757,
+      "max_tensor_relative_l2": 0.0002749286734543725
+    },
+    "exp_avg": {
+      "global_relative_l2": 0.034920729872317174,
+      "max_tensor_relative_l2": 0.053819558854998624
+    },
+    "exp_avg_sq": {
+      "global_relative_l2": 0.005474892380640772,
+      "max_tensor_relative_l2": 0.03112528409115659
+    }
+  },
+  "norm_vs_baseline_after": {
+    "weights": {
+      "global_relative_l2": 0.00014452939028604064,
+      "max_tensor_relative_l2": 0.0002813736039246278
+    },
+    "exp_avg": {
+      "global_relative_l2": 0.04569703149924479,
+      "max_tensor_relative_l2": 0.10074768384841395
+    },
+    "exp_avg_sq": {
+      "global_relative_l2": 0.008006132477390304,
+      "max_tensor_relative_l2": 0.029287699920386812
+    }
+  },
+  "training_deterministic_algorithms": false,
+  "notes": "Empirical default-training variation from one independent native pair; no statistical confidence or whole-trajectory bitwise claim."
+}

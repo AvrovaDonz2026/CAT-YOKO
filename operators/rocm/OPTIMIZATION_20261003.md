@@ -1,8 +1,10 @@
 # Packed attention and gradient clipping candidates
 
-These operators are isolated, opt-in experiments. The ongoing 24-hour B0 run
-continues with its existing source and kernels. No GPU performance result has
-yet been recorded for these candidates.
+These operators are isolated, opt-in experiments. This document records their
+implementation and the original deferred evaluation plan. The user subsequently
+authorized checkpointing and pausing the B0 run to measure them immediately.
+[The GPU evaluation report](OPERATOR_SWITCH_20261003.md) records the completed
+checks, measured training speed, and attention-only continuation decision.
 
 ## Actual checkpoint configuration
 

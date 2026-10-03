@@ -1,0 +1,39 @@
+{
+  "status": "gpu_released",
+  "saved_step": 42100,
+  "last_logged_step": 42157,
+  "unpersisted_logged_updates_to_recompute": 57,
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002/long/train/trainable_step_42100.pt",
+  "immutable_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/source_checkpoint/trainable.pt",
+  "source_sha256": "14e845a3642ba802173797e2341b99a5084b03d267c991925e95da9821116238",
+  "source_bytes": 2192257315,
+  "metadata": {
+    "step": 42100,
+    "stream_i": 7298,
+    "optimizer_states": 132,
+    "optimizer_moments": 264,
+    "optimizer_moments_cpu_fp32": true,
+    "optimizer_finite": true
+  },
+  "owned_processes": {
+    "1147892": {
+      "pid": 1147892,
+      "cmd": "/home/donz/revelation-rocm-venv/bin/python -u /home/donz/cat-yoko-rocm-20261002/source-realtrain/operators/rocm/model_bench.py --base /home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base --resume /home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002/smoke/train/trainable.pt --out /home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002/long --data /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin --eval-data /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin --eos-id 1 --moe-layout shared-storage --deterministic-parity --reference-repeat --parity-seqs 4096 --seq-len 4096 --run-steps 19526 --max-hours 24.0 --save-every 100 --keep-last 3 --eval-every 250 --eval-batches 32 --save-optim --wait-gpu-idle ",
+      "start_ticks": "36361750"
+    },
+    "1137050": {
+      "pid": 1137050,
+      "cmd": "/home/donz/revelation-rocm-venv/bin/python -m operators.rocm.run_real_longtrain --work-dir /home/donz/cat-yoko-rocm-20261002 --source-dir /home/donz/cat-yoko-rocm-20261002/source-realtrain --python /home/donz/revelation-rocm-venv/bin/python --base /home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base --data-dir /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002 --resume /home/donz/cat-yoko-rocm-20261002/runs/b0-shared-storage-deterministic/train/trainable.pt --out /home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002 --max-hours 24 ",
+      "start_ticks": "36316785"
+    },
+    "1449404": {
+      "pid": 1449404,
+      "cmd": "/home/donz/revelation-rocm-venv/bin/python -u /home/donz/cat-yoko-rocm-20261002/source-operators-20261003/operators/rocm/run_operator_queue.py --training-run /home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002 --source-dir /home/donz/cat-yoko-rocm-20261002/source-operators-20261003 --base /home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base --data /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin --eval-data /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin --out /home/donz/cat-yoko-rocm-20261002/runs/operators-next-20261003 --python /home/donz/revelation-rocm-venv/bin/python --max-wait-hours 36 ",
+      "start_ticks": "41418847"
+    }
+  },
+  "paused_at_utc": "2026-10-03T05:55:03.880875+00:00",
+  "requested_action": "checkpoint-first operator evaluation and resume",
+  "original_expected_stage_deadline_utc": "2026-10-03T14:40:00+00:00",
+  "kfd_pids": []
+}

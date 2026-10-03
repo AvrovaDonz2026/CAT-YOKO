@@ -1,0 +1,64 @@
+{
+  "status": "complete",
+  "new_checkpoint_proof": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/first_checkpoint_verified.json",
+  "source_retained": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/source_checkpoint/trainable.pt",
+  "original_step42100_retained": "/home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002/long/train/trainable_step_42100.pt",
+  "deleted_files": [
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/preflight/baseline_root/train/trainable.pt",
+      "bytes": 2192252807,
+      "device": 66307,
+      "inode": 15991170,
+      "sha256": "dd6c3d9134b7932078ce0e62b9557c607f8a27a9e67d48c6411f08b1628f0815"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/preflight/attention_steps/train/trainable.pt",
+      "bytes": 2192252807,
+      "device": 66307,
+      "inode": 15991181,
+      "sha256": "0b9914dd3d166c48751db93a59aac5bad48adf4491bea3d36bf5395a7eeddbee"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/comparison/norm_steps/train/trainable.pt",
+      "bytes": 2192252807,
+      "device": 66307,
+      "inode": 15991202,
+      "sha256": "43dee404db4ad0a4ce24232d38a2b641e4c0d586cfafe946fa3493d27610a0a0"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/comparison/combined_steps/train/trainable.pt",
+      "bytes": 2192252807,
+      "device": 66307,
+      "inode": 15991242,
+      "sha256": "8450ecb9db0929407aba9090e78ffd59e0edbea5cc05583288303079b7773c55"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/comparison/baseline_after/train/trainable.pt",
+      "bytes": 2192252807,
+      "device": 66307,
+      "inode": 15991253,
+      "sha256": "8b6c49e1077d4b0423b6c5d87de9ba8b58a7d3b1bb498ec3df34766aeb493291"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002/long/train/trainable_step_41900.pt",
+      "bytes": 2192257315,
+      "device": 66307,
+      "inode": 15885924,
+      "sha256": "ee169834d8e84d337eb4a0226c5493a8cc88fb64e9533e93b439dd7e4d7b712f"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/b0-realtext-24h-20261002/long/train/trainable_step_42000.pt",
+      "bytes": 2192257315,
+      "device": 66307,
+      "inode": 15885953,
+      "sha256": "7fe565a17f00c651edde32b01f924a5ec761f2aa75ca309c957d53885a340f07"
+    }
+  ],
+  "authorized_condition": "continued training has saved and verified a new checkpoint",
+  "logical_bytes_to_reclaim": 15345778665,
+  "completed_at_utc": "2026-10-03T06:53:15.759082+00:00",
+  "retained_current_checkpoints": [
+    "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/resumed/continuation/train/trainable_step_42155.pt",
+    "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/resumed/continuation/train/trainable.pt"
+  ]
+}
