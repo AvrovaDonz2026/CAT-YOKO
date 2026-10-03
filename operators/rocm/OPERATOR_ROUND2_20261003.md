@@ -493,3 +493,58 @@ The [artifact manifest](results/rx7900xtx-20261003-round2/MANIFEST.json) hashes
 all retained reports. Source hashes distinguish the original measured/current
 training source from the later isolated candidate source. No model weights,
 corpus binaries, secrets or large profiler traces are included in this commit.
+
+## Deadline completion and the next corpus continuation
+
+The earlier continuation subsequently stopped normally at **step 45024** when
+its **2.4993134067-hour training-loop limit** expired. Its final checkpoint was
+saved at **14:45:30 UTC**, and the [controller status](results/rx7900xtx-20261003-round2/comparison/status.json)
+recorded verified completion at **2026-10-03 14:47:28 UTC**. Strict CPU inspection
+passed for all **132 BF16 weights and 264 CPU FP32 Adam moments**, with Adam
+step and next unread packed-data cursor both **10222**. The fixed step-43491
+source remains preserved.
+
+The [completed run's held-out results](results/rx7900xtx-20261003-round2/comparison/continuation/parity.json)
+use the same 32-batch prefix and **130,877 valid tokens**: initial NLL
+**8.123319335125808** and final NLL **8.07905429250309**, a decrease of
+**0.0442650426**. This records the outcome of that bounded continuation;
+it does not establish final language quality or completion of the 8-billion-token
+B0 recipe.
+
+A new [continuation](results/rx7900xtx-20261003-round2/next_continuation/status.json)
+restores the verified step-45024 checkpoint, SHA256
+`655da42cf523ef7d512234247fcb229f70c8ab1c72a495fbb41cd82e778a4285`,
+in `runs/longtrain-45024-20261003T1520`. It requests the remaining **9309** packed
+rows, bounded to **step 54333**, Adam step **19531** and cursor **19531**. No
+`--max-hours` limit is supplied. The terminal update skips the next-batch
+prefetch, so this bound ends at the corpus boundary without reading a wrapped
+row. The frozen packed-attention/shared-storage MoE and CPU FP32 Adam remain in
+use, with saving every **300 seconds**, **three** recovery checkpoints and
+32-batch held-out evaluation every 250 steps.
+
+Startup passed the unchanged 4096-token, all-132-gradient parity gates. The new
+initial held-out NLL is **8.08030031177656**; its small difference from the prior
+final value is recorded explicitly and is not a claim of exact numerical replay.
+The [progress snapshot](results/rx7900xtx-20261003-round2/next_continuation/live_snapshot.json)
+at **2026-10-03 15:30:47 UTC** records **step 45091**, GPU utilization **97%**
+and reported power **322 W**. It also lists the first periodic checkpoint,
+**step 45079**, saved at **15:29:30 UTC** after 55 updates, with
+**2,192,257,315 bytes**. These are progress and save observations, not an
+additional operator speedup or a completed-run result.
+
+The [first periodic checkpoint inspection](results/rx7900xtx-20261003-round2/next_continuation/periodic_45079.validation.json)
+also passed the strict CPU gate for all 132 weights and 264 Adam moments.
+Its Adam step/cursor are **10277**, and its token counter is **204,339,200**,
+exactly **55 updates / 225,280 tokens** beyond the fixed step-45024 source.
+
+The new supervisor's argument object omits `eval_data`, which affects its
+post-training validation call. The training worker received the correct held-out
+path and continues independently. An [independent final auditor](results/rx7900xtx-20261003-round2/next_continuation/final_audit_status.json)
+has completed its source CPU preflight and is waiting for training completion;
+it sends no signals and starts no training worker. It supplies the missing
+validation argument and requires successful child exit, unchanged source/code
+and corpus identity, all original parity gates, exactly 9309 consecutive updates,
+and strict final weight/moment/token/cursor checks. It may publish authoritative
+completion only after all checks pass, preserving the original supervisor status
+and any validation error. Other failures remain failures. **This continuation
+and its final audit are still pending at the recorded snapshot.**

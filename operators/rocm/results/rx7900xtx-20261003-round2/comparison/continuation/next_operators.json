@@ -1,0 +1,11 @@
+{
+  "gpu_fp32_adam": false,
+  "bucketed_attention": false,
+  "sync_update_timing": false,
+  "patches_installed_after_native_reference": true,
+  "file_sha256": {
+    "operators/rocm/next_candidate_bench.py": "9f0f734474ebe5c037d8811bdaed68f7ab96d6e1b05734233fbc0cee3761a79b",
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845"
+  },
+  "status": "completed"
+}

@@ -1,0 +1,73 @@
+{
+  "captured_at": "2026-10-03T15:30:47.745547+00:00",
+  "run": "/home/donz/cat-yoko-rocm-20261002/runs/longtrain-45024-20261003T1520",
+  "worker_pid": 1566889,
+  "supervisor_pid": 1566072,
+  "final_auditor_pid": 1570790,
+  "latest_training_metrics": {
+    "name": "CAT-YOKO-12B",
+    "phase": "B0",
+    "step": 45091,
+    "steps_or_inf": 54333,
+    "nll": 8.900476953601954,
+    "ppl": 7335.471384433569,
+    "loss": 8.900477409362793,
+    "aux": 0.0,
+    "gate": 0.0076644096375,
+    "grad_norm": 5.819107176998644,
+    "trainable_m": 219.212288,
+    "lr": 4.08768512e-05,
+    "fp8": false,
+    "nvfp4": false,
+    "nvfp4_n": 0,
+    "grouped_mm": false,
+    "te_nvfp4": false,
+    "nvfp4_family": "other",
+    "tokens_seen": 204388352.0,
+    "tokens_in_phase": 204388352.0,
+    "tok_s": 583.3159257443605,
+    "mem_mib": 12006.7724609375,
+    "seq_len": 4096,
+    "grad_ckpt": true,
+    "offload_encoder": false,
+    "offload_blocks": false,
+    "optim_cpu": true,
+    "adam": "fp32",
+    "backend": "torch",
+    "zero": 0,
+    "zero_offload": false,
+    "zero_offload_param": false,
+    "kd_w": 0.0,
+    "world": 1,
+    "accum": 1,
+    "n_valid": 4095.0,
+    "loss_mode": "ce",
+    "sparse": "window",
+    "moe_cv": 0.6869015693664551,
+    "moe_max": 0.015625,
+    "moe_min": 0.0,
+    "moe_layers": 40,
+    "actual_optimizer_device": "cpu",
+    "bucketed_attention": false
+  },
+  "completed_updates_at_capture": 67,
+  "checkpoints": [
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/longtrain-45024-20261003T1520/continuation/train/trainable.pt",
+      "bytes": 2192257315,
+      "mtime_utc": "2026-10-03T15:29:30.792862+00:00"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/longtrain-45024-20261003T1520/continuation/train/trainable_step_45079.pt",
+      "bytes": 2192257315,
+      "mtime_utc": "2026-10-03T15:29:30.792862+00:00"
+    }
+  ],
+  "gpu_busy_percent": [
+    97
+  ],
+  "average_power_watts": [
+    322.0
+  ],
+  "scope": "timestamped running snapshot; not final long-run validation"
+}
