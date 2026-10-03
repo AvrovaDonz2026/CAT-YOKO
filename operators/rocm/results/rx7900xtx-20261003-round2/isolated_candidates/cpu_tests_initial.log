@@ -1,0 +1,65 @@
+test_all_five_steps_cover_every_parameter_and_source_moments_remain_unchanged (operators.rocm.test_gpu_adam_streamed_bench.StreamedAdamTests.test_all_five_steps_cover_every_parameter_and_source_moments_remain_unchanged) ... ok
+test_first_mismatch_is_incomplete_and_cannot_be_mistaken_for_full_gate (operators.rocm.test_gpu_adam_streamed_bench.StreamedAdamTests.test_first_mismatch_is_incomplete_and_cannot_be_mistaken_for_full_gate) ... ok
+test_source_validation_rejects_wrong_shape_dtype_counter_mapping_or_square (operators.rocm.test_gpu_adam_streamed_bench.StreamedAdamTests.test_source_validation_rejects_wrong_shape_dtype_counter_mapping_or_square) ... ok
+test_standalone_source_parses (operators.rocm.test_gpu_adam_streamed_bench.StreamedSourceTests.test_standalone_source_parses) ... ok
+test_cache_version_configuration_lifetime_and_rng (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_cache_version_configuration_lifetime_and_rng) ... /home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_short_bucket_attention.py:27: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  self.assertLessEqual(float(error), relative)
+ok
+test_causal_and_document_isolation_with_right_padding (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_causal_and_document_isolation_with_right_padding) ... ok
+test_context_restores_only_owned_helper_and_never_replaces_wide_planner (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_context_restores_only_owned_helper_and_never_replaces_wide_planner) ... ok
+test_cross_input_and_projection_gradients_with_context (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_cross_input_and_projection_gradients_with_context) ... FAIL
+test_dispatch_limits_and_real_row_8701_plan (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_dispatch_limits_and_real_row_8701_plan) ... ok
+test_invalid_configuration_and_shapes (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_invalid_configuration_and_shapes) ... ok
+test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) ...
+  test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.float32, layout='packed_qkv') ... FAIL
+  test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.float32, layout='cross_cache') ... FAIL
+  test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.bfloat16, layout='packed_qkv') ... FAIL
+  test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.bfloat16, layout='cross_cache') ... FAIL
+test_no_eligible_and_repeated_ids_preserve_fallback_exactly (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_no_eligible_and_repeated_ids_preserve_fallback_exactly) ... ok
+test_seq4096_mixed_long_document_keeps_short_group_and_bf16_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_seq4096_mixed_long_document_keeps_short_group_and_bf16_gradients) ... ok
+
+======================================================================
+FAIL: test_cross_input_and_projection_gradients_with_context (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_cross_input_and_projection_gradients_with_context)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_short_bucket_attention.py", line 127, in test_cross_input_and_projection_gradients_with_context
+    self.assertEqual(installation.report()["short_bucketed_calls"],1)
+AssertionError: 0 != 1
+
+======================================================================
+FAIL: test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.float32, layout='packed_qkv')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_short_bucket_attention.py", line 45, in test_mixed_long_batch_layouts_output_and_all_gradients
+    self.assertEqual(stats["short_batched_fragments"], 8)
+AssertionError: 7 != 8
+
+======================================================================
+FAIL: test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.float32, layout='cross_cache')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_short_bucket_attention.py", line 45, in test_mixed_long_batch_layouts_output_and_all_gradients
+    self.assertEqual(stats["short_batched_fragments"], 8)
+AssertionError: 7 != 8
+
+======================================================================
+FAIL: test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.bfloat16, layout='packed_qkv')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_short_bucket_attention.py", line 45, in test_mixed_long_batch_layouts_output_and_all_gradients
+    self.assertEqual(stats["short_batched_fragments"], 8)
+AssertionError: 7 != 8
+
+======================================================================
+FAIL: test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) (dtype=torch.bfloat16, layout='cross_cache')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_short_bucket_attention.py", line 45, in test_mixed_long_batch_layouts_output_and_all_gradients
+    self.assertEqual(stats["short_batched_fragments"], 8)
+AssertionError: 7 != 8
+
+----------------------------------------------------------------------
+Ran 13 tests in 2.297s
+
+FAILED (failures=5)

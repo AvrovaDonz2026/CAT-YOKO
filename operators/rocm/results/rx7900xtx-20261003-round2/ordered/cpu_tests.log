@@ -1,0 +1,13 @@
+test_benchmark_preserves_numeric_gate_and_records_ordered_source_hashes (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_benchmark_preserves_numeric_gate_and_records_ordered_source_hashes) ... ok
+test_checkpoint_roundtrip_and_exception_restore_original_context (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_checkpoint_roundtrip_and_exception_restore_original_context) ... ok
+test_each_step_bf16_rounding_and_existing_policy_guard_remain (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_each_step_bf16_rounding_and_existing_policy_guard_remain) ... /home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_gpu_adam_ordered.py:105: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  self.assertEqual(float(parameter), 1.0)
+ok
+test_explicit_cpu_formula_matches_native_gate_on_vector_and_matrix_multistep (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_explicit_cpu_formula_matches_native_gate_on_vector_and_matrix_multistep) ... ok
+test_new_modules_parse_without_changing_the_original_implementation (operators.rocm.test_gpu_adam_ordered.OrderedSourceTests.test_new_modules_parse_without_changing_the_original_implementation) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 1.057s
+
+OK

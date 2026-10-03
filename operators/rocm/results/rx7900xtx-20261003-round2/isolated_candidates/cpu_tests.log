@@ -1,0 +1,18 @@
+test_all_five_steps_cover_every_parameter_and_source_moments_remain_unchanged (operators.rocm.test_gpu_adam_streamed_bench.StreamedAdamTests.test_all_five_steps_cover_every_parameter_and_source_moments_remain_unchanged) ... ok
+test_first_mismatch_is_incomplete_and_cannot_be_mistaken_for_full_gate (operators.rocm.test_gpu_adam_streamed_bench.StreamedAdamTests.test_first_mismatch_is_incomplete_and_cannot_be_mistaken_for_full_gate) ... ok
+test_source_validation_rejects_wrong_shape_dtype_counter_mapping_or_square (operators.rocm.test_gpu_adam_streamed_bench.StreamedAdamTests.test_source_validation_rejects_wrong_shape_dtype_counter_mapping_or_square) ... ok
+test_standalone_source_parses (operators.rocm.test_gpu_adam_streamed_bench.StreamedSourceTests.test_standalone_source_parses) ... ok
+test_cache_version_configuration_lifetime_and_rng (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_cache_version_configuration_lifetime_and_rng) ... ok
+test_causal_and_document_isolation_with_right_padding (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_causal_and_document_isolation_with_right_padding) ... ok
+test_context_restores_only_owned_helper_and_never_replaces_wide_planner (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_context_restores_only_owned_helper_and_never_replaces_wide_planner) ... ok
+test_cross_input_and_projection_gradients_with_context (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_cross_input_and_projection_gradients_with_context) ... ok
+test_dispatch_limits_and_real_row_8701_plan (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_dispatch_limits_and_real_row_8701_plan) ... ok
+test_invalid_configuration_and_shapes (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_invalid_configuration_and_shapes) ... ok
+test_mixed_long_batch_layouts_output_and_all_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_mixed_long_batch_layouts_output_and_all_gradients) ... ok
+test_no_eligible_and_repeated_ids_preserve_fallback_exactly (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_no_eligible_and_repeated_ids_preserve_fallback_exactly) ... ok
+test_seq4096_mixed_long_document_keeps_short_group_and_bf16_gradients (operators.rocm.test_short_bucket_attention.ShortBucketAttentionTests.test_seq4096_mixed_long_document_keeps_short_group_and_bf16_gradients) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 2.151s
+
+OK

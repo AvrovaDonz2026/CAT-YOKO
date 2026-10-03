@@ -24,10 +24,13 @@ from operators.rocm.profile_training import (
 )
 
 
-def event(name, cpu, device, parent=None, device_type="CPU"):
-    return SimpleNamespace(name=name, self_cpu_time_total=cpu,
-                           self_device_time_total=device, cpu_parent=parent,
-                           device_type=device_type)
+def event(name, cpu, device, parent=None, device_type="CPU", *, start=None, end=None):
+    value = SimpleNamespace(name=name, self_cpu_time_total=cpu,
+                            self_device_time_total=device, cpu_parent=parent,
+                            device_type=device_type)
+    if start is not None or end is not None:
+        value.time_range = SimpleNamespace(start=start, end=end)
+    return value
 
 
 class FakeProfiler:
@@ -76,6 +79,75 @@ class ProfileTrainingTests(unittest.TestCase):
         self.assertEqual(summary["steady_device_work_us"], 90)
         self.assertEqual(summary["transfer_overlay"]["device_work_us"], 40)
         self.assertIsNone(summary["phases"]["eval"]["steady_device_work_fraction"])
+
+    def test_worker_events_use_cpu_ranges_and_steady_tables_exclude_save_eval_other(self):
+        scopes = [
+            event(PREFIX + "train_step", 0, 0, start=0, end=100),
+            event(PREFIX + "forward", 0, 0, start=2, end=25),
+            event(PREFIX + "ce", 0, 0, start=12, end=20),
+            event(PREFIX + "backward", 0, 0, start=30, end=80),
+            event(PREFIX + "optimizer", 0, 0, start=86, end=98),
+            event(PREFIX + "save", 0, 0, start=100, end=130),
+            event(PREFIX + "ce", 0, 0, start=110, end=120),
+            event(PREFIX + "eval", 0, 0, start=130, end=170),
+            event(PREFIX + "forward", 0, 0, start=140, end=160),
+            event(PREFIX + "ce", 0, 0, start=148, end=155),
+        ]
+        worker_parent = event("autograd::engine", 0, 0)
+        workers = [
+            event("aten::mm", 10, 9000, worker_parent, start=50, end=55),
+            event("aten::mm", 2, 20, start=13, end=15),
+            event("aten::copy_", 3, 30, start=87, end=90),
+            event("unlabelled inside step", 4, 40, start=26, end=29),
+            event("aten::mm", 50, 13000, start=112, end=114),
+            event("aten::mm", 60, 17000, start=149, end=151),
+            event("aten::mm", 70, 19000, start=171, end=173),
+            # Linked device events remain excluded, even if their timestamps
+            # happen to look like the CPU profiler's clock.
+            event("duplicated HIP kernel", 0, 9000, device_type="CUDA", start=50, end=55),
+        ]
+        summary = summarize_events(iter(scopes + workers))
+        phases = summary["phases"]
+        self.assertEqual(phases["backward"]["device_work_us"], 9000)
+        self.assertEqual(phases["forward"]["device_work_us"], 0)
+        self.assertEqual(phases["ce"]["device_work_us"], 20)
+        self.assertEqual(phases["optimizer"]["device_work_us"], 30)
+        self.assertEqual(phases["bookkeeping"]["device_work_us"], 40)
+        self.assertEqual(phases["save"]["device_work_us"], 13000)
+        self.assertEqual(phases["eval"]["device_work_us"], 17000)
+        self.assertEqual(phases["other"]["device_work_us"], 19000)
+        self.assertEqual(summary["steady_device_work_us"], 9090)
+        self.assertEqual(summary["transfer_overlay"]["device_work_us"], 30)
+        global_mm = next(row for row in summary["top_operators_by_device_work"] if row["name"] == "aten::mm")
+        steady_mm = next(row for row in summary["top_steady_operators_by_device_work"] if row["name"] == "aten::mm")
+        self.assertEqual(global_mm["device_work_us"], 58020)
+        self.assertEqual(steady_mm["device_work_us"], 9020)
+        self.assertEqual(steady_mm["events"], 2)
+        steady_cpu_names = {row["name"] for row in summary["top_steady_operators_by_self_cpu"]}
+        self.assertNotIn(PREFIX + "eval", steady_cpu_names)
+        self.assertNotIn(PREFIX + "save", steady_cpu_names)
+        self.assertEqual(summary["phase_attribution_events"]["cpu_time_range"], 6)
+
+    def test_parent_chain_wins_and_partial_or_invalid_ranges_are_not_guessed(self):
+        step = event(PREFIX + "train_step", 0, 0, start=0, end=100)
+        forward = event(PREFIX + "forward", 0, 0, start=1, end=20)
+        backward = event(PREFIX + "backward", 0, 0, start=30, end=80)
+        # The fallback must not override a valid labelled ancestor or infer a
+        # phase for an event spanning a boundary / using invalid timestamps.
+        events = [step, forward, backward,
+                  event("has forward parent", 1, 10, forward, start=40, end=45),
+                  event("has step parent", 2, 20, step, start=40, end=45),
+                  event("straddles phases", 3, 30, start=19, end=31),
+                  event("straddles step end", 4, 40, start=99, end=101),
+                  event("missing timestamp", 5, 50),
+                  event("nan timestamp", 6, 60, start=float("nan"), end=50),
+                  event("reversed timestamp", 7, 70, start=60, end=50)]
+        summary = summarize_events(events)
+        self.assertEqual(summary["phases"]["forward"]["device_work_us"], 10)
+        self.assertEqual(summary["phases"]["backward"]["device_work_us"], 0)
+        self.assertEqual(summary["phases"]["bookkeeping"]["device_work_us"], 50)
+        self.assertEqual(summary["phases"]["other"]["device_work_us"], 220)
+        self.assertEqual(summary["steady_device_work_us"], 60)
 
     def test_window_counts_real_updates_and_restores_wrappers_on_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,0 +1,71 @@
+{
+  "captured_at": "2026-10-03T12:44:25.261674+00:00",
+  "status": "running",
+  "worker_pid": 1523284,
+  "supervisor_pid": 1495581,
+  "latest_metric": {
+    "name": "CAT-YOKO-12B",
+    "phase": "B0",
+    "step": 43764,
+    "steps_or_inf": 54333,
+    "nll": 9.496980362814561,
+    "ppl": 13319.446148867812,
+    "loss": 9.496980667114258,
+    "aux": 0.0,
+    "gate": 0.0074605824375,
+    "grad_norm": 2.8913992535251154,
+    "trainable_m": 219.212288,
+    "lr": 3.97897728e-05,
+    "fp8": false,
+    "nvfp4": false,
+    "nvfp4_n": 0,
+    "grouped_mm": false,
+    "te_nvfp4": false,
+    "nvfp4_family": "other",
+    "tokens_seen": 198952960.0,
+    "tokens_in_phase": 198952960.0,
+    "tok_s": 748.3084169438172,
+    "mem_mib": 12006.83447265625,
+    "seq_len": 4096,
+    "grad_ckpt": true,
+    "offload_encoder": false,
+    "offload_blocks": false,
+    "optim_cpu": true,
+    "adam": "fp32",
+    "backend": "torch",
+    "zero": 0,
+    "zero_offload": false,
+    "zero_offload_param": false,
+    "kd_w": 0.0,
+    "world": 1,
+    "accum": 1,
+    "n_valid": 4093.0,
+    "loss_mode": "ce",
+    "sparse": "window",
+    "moe_cv": 0.6790586113929749,
+    "moe_max": 0.015625,
+    "moe_min": 0.0,
+    "moe_layers": 40,
+    "actual_optimizer_device": "cpu",
+    "bucketed_attention": false
+  },
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/source_checkpoint/trainable.pt",
+  "source_step": 43491,
+  "active_periodic_checkpoints": [
+    {
+      "name": "trainable_step_43738.pt",
+      "bytes": 2192257315
+    },
+    {
+      "name": "trainable_step_43706.pt",
+      "bytes": 2192257315
+    },
+    {
+      "name": "trainable_step_43649.pt",
+      "bytes": 2192257315
+    }
+  ],
+  "save_every_seconds": 300,
+  "keep_last": 3,
+  "source_dir": "/home/donz/cat-yoko-rocm-20261002/source-operators-round2-20261003T0903"
+}

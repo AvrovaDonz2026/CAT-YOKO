@@ -1,0 +1,33 @@
+test_bf16_rounding_occurs_each_step_without_persistent_master (operators.rocm.test_gpu_adam.GPUAdamTests.test_bf16_rounding_occurs_each_step_without_persistent_master) ... /home/donz/cat-yoko-rocm-20261002/source-operators-round2-20261003T0903/operators/rocm/test_gpu_adam.py:76: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  self.assertEqual(float(parameter), 1.0)
+ok
+test_context_restores_methods_on_exception_and_native_can_continue_after_exit (operators.rocm.test_gpu_adam.GPUAdamTests.test_context_restores_methods_on_exception_and_native_can_continue_after_exit) ... ok
+test_cpu_benchmark_generates_real_numeric_and_timing_report (operators.rocm.test_gpu_adam.GPUAdamTests.test_cpu_benchmark_generates_real_numeric_and_timing_report) ... ok
+test_cpu_matches_all_parameter_and_moment_bytes_across_multi_step_schedule (operators.rocm.test_gpu_adam.GPUAdamTests.test_cpu_matches_all_parameter_and_moment_bytes_across_multi_step_schedule) ... ok
+test_export_is_independent_cpu_fp32_and_resume_matches_continuous_training (operators.rocm.test_gpu_adam.GPUAdamTests.test_export_is_independent_cpu_fp32_and_resume_matches_continuous_training) ... ok
+test_gpu_multi_step_numeric_gate_and_state_cleanup (operators.rocm.test_gpu_adam.GPUAdamTests.test_gpu_multi_step_numeric_gate_and_state_cleanup) ... skipped 'CUDA/HIP runtime required'
+test_invalid_policy_parameter_or_loaded_moments_reject_without_consuming_gradient (operators.rocm.test_gpu_adam.GPUAdamTests.test_invalid_policy_parameter_or_loaded_moments_reject_without_consuming_gradient) ... ok
+test_budget_is_per_bucket_and_no_batchable_or_long_documents_fall_back (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_budget_is_per_bucket_and_no_batchable_or_long_documents_fall_back) ... ok
+test_causal_and_cross_document_isolation_after_padding (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_causal_and_cross_document_isolation_after_padding) ... ok
+test_context_restoration_exception_nested_order_and_owned_stats (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_context_restoration_exception_nested_order_and_owned_stats) ... ok
+test_cross_projection_and_input_gradients_with_nested_context (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_cross_projection_and_input_gradients_with_nested_context) ... ok
+test_invalid_config_and_shapes_fail (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_invalid_config_and_shapes_fail) ... ok
+test_outputs_and_all_gradients_batch_layout_padding_and_original_order (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_outputs_and_all_gradients_batch_layout_padding_and_original_order) ... ok
+test_plan_cache_mutation_config_weak_lifetime_and_rng (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_plan_cache_mutation_config_weak_lifetime_and_rng) ... ok
+test_repeated_ids_and_non_dense_cases_preserve_existing_fallback (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_repeated_ids_and_non_dense_cases_preserve_existing_fallback) ... ok
+test_seq4096_low_heads_and_fixture_cases (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_seq4096_low_heads_and_fixture_cases) ... ok
+test_accumulation_has_one_sample_and_foreign_optimizer_cannot_end_it (operators.rocm.test_update_timing.UpdateTimingTests.test_accumulation_has_one_sample_and_foreign_optimizer_cannot_end_it) ... ok
+test_default_tokens_and_no_complete_samples_have_no_fabricated_speed (operators.rocm.test_update_timing.UpdateTimingTests.test_default_tokens_and_no_complete_samples_have_no_fabricated_speed) ... ok
+test_failed_update_is_not_a_completed_sample_and_methods_restore (operators.rocm.test_update_timing.UpdateTimingTests.test_failed_update_is_not_a_completed_sample_and_methods_restore) ... ok
+test_forward_exception_restores_nested_contexts_and_marks_failed (operators.rocm.test_update_timing.UpdateTimingTests.test_forward_exception_restores_nested_contexts_and_marks_failed) ... ok
+test_gpu_sync_follows_then_installed_candidate_step (operators.rocm.test_update_timing.UpdateTimingTests.test_gpu_sync_follows_then_installed_candidate_step) ... ok
+test_invalid_warmup_rejected_before_any_patches (operators.rocm.test_update_timing.UpdateTimingTests.test_invalid_warmup_rejected_before_any_patches) ... ok
+test_nested_profiler_wrapper_preserves_completed_update_boundary (operators.rocm.test_update_timing.UpdateTimingTests.test_nested_profiler_wrapper_preserves_completed_update_boundary) ... ok
+test_records_every_completed_update_and_discards_five_warmups (operators.rocm.test_update_timing.UpdateTimingTests.test_records_every_completed_update_and_discards_five_warmups) ... ok
+
+----------------------------------------------------------------------
+Ran 24 tests in 0.612s
+
+OK (skipped=1)
+[W1003 17:13:41.865975549 AllocatorConfig.cpp:28] Warning: PYTORCH_CUDA_ALLOC_CONF is deprecated, use PYTORCH_ALLOC_CONF instead (function operator())

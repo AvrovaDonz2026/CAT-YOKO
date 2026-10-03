@@ -14,6 +14,7 @@ import argparse
 from contextlib import ExitStack, contextmanager, nullcontext
 import functools
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -39,8 +40,36 @@ def _number(event, name):
     return float(value or 0.0)
 
 
-def event_phase(event):
-    """Classify by closest phase, excluding every save/eval descendant."""
+def _event_time_range(event):
+    """Return one CPU profiler clock interval, without using kernel times."""
+    interval = getattr(event, "time_range", None)
+    try:
+        start, end = float(interval.start), float(interval.end)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if not math.isfinite(start) or not math.isfinite(end) or end < start:
+        return None
+    return start, end
+
+
+def _scope_time_ranges(events):
+    phases, steps = [], []
+    for event in events:
+        if "CPU" not in str(getattr(event, "device_type", "CPU")):
+            continue
+        name = getattr(event, "name", "")
+        interval = _event_time_range(event)
+        if interval is None:
+            continue
+        if name == PREFIX + "train_step":
+            steps.append(interval)
+        elif name.startswith(PREFIX) and name[len(PREFIX):] in PHASES:
+            phases.append((*interval, name[len(PREFIX):]))
+    return phases, steps
+
+
+def _classify_event(event, scope_ranges=None):
+    """Prefer ancestry; fall back to enclosing CPU-clock record ranges."""
     current = event
     nearest = None
     inside_step = False
@@ -51,18 +80,43 @@ def event_phase(event):
         if name.startswith(PREFIX) and name[len(PREFIX):] in PHASES:
             phase = name[len(PREFIX):]
             if phase in ("save", "eval"):
-                return phase
+                return phase, "parent_chain"
             if nearest is None:
                 nearest = phase
         current = getattr(current, "cpu_parent", None)
-    return nearest or ("bookkeeping" if inside_step else "other")
+    if nearest is not None or inside_step:
+        return nearest or "bookkeeping", "parent_chain"
+    interval = _event_time_range(event)
+    if scope_ranges is None or interval is None:
+        return "other", "unclassified"
+    start, end = interval
+    phase_ranges, step_ranges = scope_ranges
+    containing = [(left, right, phase) for left, right, phase in phase_ranges
+                  if left <= start and end <= right]
+    # Worker-thread CE/recomputation scopes may sit inside eval/save. Those
+    # exclusions take precedence even when the inner phase is more specific.
+    excluded = [scope for scope in containing if scope[2] in ("save", "eval")]
+    if containing:
+        nearest = min(excluded or containing, key=lambda scope: (scope[1] - scope[0], -scope[0]))
+        return nearest[2], "cpu_time_range"
+    if any(left <= start and end <= right for left, right in step_ranges):
+        return "bookkeeping", "cpu_time_range"
+    return "other", "unclassified"
+
+
+def event_phase(event, scope_ranges=None):
+    """Classify by parent chain, then the narrowest enclosing CPU scope."""
+    return _classify_event(event, scope_ranges)[0]
 
 
 def summarize_events(events):
     """Sum self times once; device work is not GPU wall time under overlap."""
     phases = {name: {"self_cpu_us": 0.0, "device_work_us": 0.0, "events": 0}
               for name in (*PHASES, "other")}
-    operators = {}
+    events = list(events)
+    scope_ranges = _scope_time_ranges(events)
+    operators, steady_operators = {}, {}
+    attribution = {"parent_chain": 0, "cpu_time_range": 0, "unclassified": 0}
     transfers = {"self_cpu_us": 0.0, "device_work_us": 0.0, "events": 0}
     for event in events:
         # CPU events carry linked kernel times. Counting separate device
@@ -70,7 +124,8 @@ def summarize_events(events):
         device_type = str(getattr(event, "device_type", "CPU"))
         if "CPU" not in device_type:
             continue
-        phase = event_phase(event)
+        phase, method = _classify_event(event, scope_ranges)
+        attribution[method] += 1
         cpu = _number(event, "self_cpu_time_total")
         gpu = _number(event, "self_device_time_total")
         phases[phase]["self_cpu_us"] += cpu
@@ -82,6 +137,12 @@ def summarize_events(events):
         entry["self_cpu_us"] += cpu
         entry["device_work_us"] += gpu
         entry["events"] += 1
+        if phase in STEADY_PHASES:
+            steady = steady_operators.setdefault(name, {"name": name, "self_cpu_us": 0.0,
+                                                       "device_work_us": 0.0, "events": 0})
+            steady["self_cpu_us"] += cpu
+            steady["device_work_us"] += gpu
+            steady["events"] += 1
         if phase in STEADY_PHASES and any(word in name.lower() for word in
                                         ("memcpy", "copy_", "aten::to", "aten::_to_copy")):
             transfers["self_cpu_us"] += cpu
@@ -96,11 +157,16 @@ def summarize_events(events):
     return {
         "phases": phases, "steady_self_cpu_us": total_cpu,
         "steady_device_work_us": total_gpu, "transfer_overlay": transfers,
+        "phase_attribution_events": attribution,
         "top_operators_by_device_work": sorted(operators.values(), key=lambda row: row["device_work_us"], reverse=True)[:40],
         "top_operators_by_self_cpu": sorted(operators.values(), key=lambda row: row["self_cpu_us"], reverse=True)[:40],
+        "top_steady_operators_by_device_work": sorted(steady_operators.values(), key=lambda row: row["device_work_us"], reverse=True)[:40],
+        "top_steady_operators_by_self_cpu": sorted(steady_operators.values(), key=lambda row: row["self_cpu_us"], reverse=True)[:40],
         "accounting": [
-            "Self CPU times are assigned once to the nearest phase; CE is excluded from forward.",
+            "Self CPU times are assigned once by parent chain; CE is excluded from forward.",
+            "Events without a labelled ancestor use enclosing CPU time_range scopes, choosing save/eval before the narrowest phase, then train_step bookkeeping.",
             "Device work sums linked kernel durations; it is not GPU wall time and may overlap CPU or other GPU work.",
+            "Global top operator tables include save/eval/other; top_steady tables include only steady phase events.",
             "Transfer overlay includes aten::to/copy and memcpy inside steady phases; it overlaps phase totals and may include dtype conversions.",
             "Save/eval and events outside train_step are excluded from steady fractions; unlabelled work inside train_step is bookkeeping.",
             "Step spans start at _forward_loss and end after Adam.step; they include next-batch prefetch after backward, but exclude LR/zero_grad and the first active batch's earlier prefetch.",

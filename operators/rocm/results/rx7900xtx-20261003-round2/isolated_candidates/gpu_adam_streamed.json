@@ -1,0 +1,481 @@
+{
+  "status": "parity_failure",
+  "arithmetic_variant": "ordered-fp32",
+  "mode": "per_parameter",
+  "device": "cuda",
+  "steps": 5,
+  "expected_parameters": 132,
+  "parity": [
+    {
+      "invocation_step": 1,
+      "pass": true,
+      "parameters": 3,
+      "all_weights_bitwise": true,
+      "all_moments_bitwise": false,
+      "failed_names": [],
+      "tensors": {
+        "cache_k.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 1.324097964897322e-12,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 3.905176494581566e-10,
+              "max_abs": 1.7763568394002505e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_proj.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 9.353447713738125e-10,
+              "max_abs": 3.552713678800501e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        }
+      },
+      "gate": {
+        "fp32_moment_atol": 1e-08,
+        "fp32_moment_rtol": 1e-06
+      }
+    },
+    {
+      "invocation_step": 2,
+      "pass": true,
+      "parameters": 3,
+      "all_weights_bitwise": true,
+      "all_moments_bitwise": false,
+      "failed_names": [],
+      "tensors": {
+        "cache_k.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 2.102694924075683e-12,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 5.907324915644894e-10,
+              "max_abs": 3.552713678800501e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_proj.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 1.4517069490329806e-09,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        }
+      },
+      "gate": {
+        "fp32_moment_atol": 1e-08,
+        "fp32_moment_rtol": 1e-06
+      }
+    },
+    {
+      "invocation_step": 3,
+      "pass": true,
+      "parameters": 3,
+      "all_weights_bitwise": true,
+      "all_moments_bitwise": false,
+      "failed_names": [],
+      "tensors": {
+        "cache_k.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 2.737899962116724e-12,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 7.762924436257838e-10,
+              "max_abs": 3.552713678800501e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_proj.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 1.941092438549625e-09,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        }
+      },
+      "gate": {
+        "fp32_moment_atol": 1e-08,
+        "fp32_moment_rtol": 1e-06
+      }
+    },
+    {
+      "invocation_step": 4,
+      "pass": false,
+      "parameters": 3,
+      "all_weights_bitwise": false,
+      "all_moments_bitwise": false,
+      "failed_names": [
+        "decoder.0.cross_attn.q_proj.weight"
+      ],
+      "tensors": {
+        "cache_k.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 3.3752198929375834e-12,
+              "max_abs": 1.4210854715202004e-14,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 9.544383679180632e-10,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_proj.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": false,
+            "relative_l2": 7.507099080242977e-07,
+            "max_abs": 3.0517578125e-05,
+            "within_tolerance": false
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 2.4388187462484924e-09,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": false
+        }
+      },
+      "gate": {
+        "fp32_moment_atol": 1e-08,
+        "fp32_moment_rtol": 1e-06
+      }
+    },
+    {
+      "invocation_step": 5,
+      "pass": true,
+      "parameters": 2,
+      "all_weights_bitwise": true,
+      "all_moments_bitwise": false,
+      "failed_names": [],
+      "tensors": {
+        "cache_k.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 4.006926316392013e-12,
+              "max_abs": 1.4210854715202004e-14,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "weights": {
+            "finite": true,
+            "bitwise": true,
+            "relative_l2": 0.0,
+            "max_abs": 0.0,
+            "within_tolerance": true
+          },
+          "moments": {
+            "exp_avg": {
+              "finite": true,
+              "bitwise": true,
+              "relative_l2": 0.0,
+              "max_abs": 0.0,
+              "within_tolerance": true
+            },
+            "exp_avg_sq": {
+              "finite": true,
+              "bitwise": false,
+              "relative_l2": 1.1281481330653814e-09,
+              "max_abs": 7.105427357601002e-15,
+              "within_tolerance": true
+            }
+          },
+          "steps_match": true,
+          "pass": true
+        }
+      },
+      "gate": {
+        "fp32_moment_atol": 1e-08,
+        "fp32_moment_rtol": 1e-06
+      }
+    }
+  ],
+  "parameters_checked": 2,
+  "persistent_fp32_master": false,
+  "whole_training_speedup_measured": false,
+  "timing_measured": false,
+  "checkpoint_moments_cpu_fp32": false,
+  "exported_moments_checked": 4,
+  "max_parameter_peak_bytes": 16777728,
+  "failed_parameter": "decoder.0.cross_attn.q_proj.weight",
+  "failed_invocation_step": 4,
+  "incomplete_parameter": true,
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/source_checkpoint/trainable.pt",
+  "source_sha256": "de5353a85b9478e033dbdb08b9675d0e1813d5dba7e3382ce7e6e50f89b156f7",
+  "source_step": 43491,
+  "ordered_source_sha256": {
+    "operators/rocm/gpu_adam_streamed_bench.py": "4fdfacd682f968c59c79aa25f0b2ee091a055b5db525bcd1654a9fd4f84e7ccd",
+    "operators/rocm/gpu_adam_ordered.py": "97867c777b35e3b66e328acefc0913b715dd20195f4d2362a83a946fe0ae25ee",
+    "operators/rocm/gpu_adam.py": "cff31d5d1e312d83acb00f544e5d580a84aee5f0383cdd3908d2c3ce4d53d9eb",
+    "operators/rocm/gpu_adam_bench.py": "5ba5a20894d896d1ec534b3c4fe81ac086dc884b11ce9b5b859a6cf6fdc2c12a",
+    "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+    "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d"
+  }
+}

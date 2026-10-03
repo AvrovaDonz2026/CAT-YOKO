@@ -1,0 +1,47 @@
+{
+  "status": "complete",
+  "performed_at": "2026-10-03T12:43:06.136986+00:00",
+  "reason": "user-authorized checkpoint reclamation after continuation checkpoint and CPU FP32 restore verification",
+  "deleted": [
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/baseline_before/train/trainable.pt",
+      "bytes": 2192252807,
+      "sha256": "c94410eb2a406aebe958352a7763452f493f48e6cf3466574552b74ae9fa4f60"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/comparison/bucketed_steps/train/trainable.pt",
+      "bytes": 2192252807,
+      "sha256": "83f6e05266f200a0afc2e1a37a289cfbb876f76b6019d91505c31141d075cb3c"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/comparison/baseline_after/train/trainable.pt",
+      "bytes": 2192252807,
+      "sha256": "a0c89eef63c791085358b3b720d5451d05d011dc2bc14b4e6f8d0cb4b55beb43"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/comparison/profile_current/train/trainable.pt",
+      "bytes": 2192252807,
+      "sha256": "e72bc8212620afa3b00d019e90424c322636b581375cc52b1999b2a036ada380"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/resumed/continuation/train/trainable_step_43378.pt",
+      "bytes": 2192257315,
+      "sha256": "d4dd00159a8d8f33fdf6de8ebf2874168758635c3ea5a05c9d7ebe65cde9cf7e"
+    },
+    {
+      "path": "/home/donz/cat-yoko-rocm-20261002/runs/operators-switch-20261003/resumed/continuation/train/trainable_step_43435.pt",
+      "bytes": 2192257315,
+      "sha256": "3716d06e73a91f3156e7397af9606c03c7a42a8031c73312ffafb4ee25781aa6"
+    }
+  ],
+  "logical_bytes_removed": 13153525858,
+  "fixed_source_preserved": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/source_checkpoint/trainable.pt",
+  "source_sha256": "de5353a85b9478e033dbdb08b9675d0e1813d5dba7e3382ce7e6e50f89b156f7",
+  "verified_continuation_step": 43706,
+  "active_numbered_checkpoints": [
+    "trainable_step_43738.pt",
+    "trainable_step_43706.pt",
+    "trainable_step_43649.pt"
+  ],
+  "live_worker_running": true
+}

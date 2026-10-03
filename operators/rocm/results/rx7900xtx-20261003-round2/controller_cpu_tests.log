@@ -1,0 +1,13 @@
+test_micro_admission_rejects_failed_byteexact_or_source_and_unexercised_bucket (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_micro_admission_rejects_failed_byteexact_or_source_and_unexercised_bucket) ... ok
+test_output_isolation_and_live_command_use_original_source_without_sync (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_output_isolation_and_live_command_use_original_source_without_sync) ... ok
+test_profile_requires_cross_thread_backward_attribution_and_verified_six_update_checkpoint (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_profile_requires_cross_thread_backward_attribution_and_verified_six_update_checkpoint) ... ok
+test_reuse_then_candidate_failure_still_retests_baseline_and_continues_fixed_source (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_reuse_then_candidate_failure_still_retests_baseline_and_continues_fixed_source) ... ok
+test_selection_requires_all_three_measures_against_faster_baselines (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_selection_requires_all_three_measures_against_faster_baselines) ... ok
+test_source_mutation_stops_before_another_child_and_baseline_failure_aborts (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_source_mutation_stops_before_another_child_and_baseline_failure_aborts) ... ok
+test_timing_recomputes_raw_samples_and_rejects_incomplete_or_forged_summary (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_timing_recomputes_raw_samples_and_rejects_incomplete_or_forged_summary) ... ok
+test_trial_rejects_changed_parameter_gate_counters_or_source_hash (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_trial_rejects_changed_parameter_gate_counters_or_source_hash) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.131s
+
+OK

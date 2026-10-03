@@ -1,0 +1,10 @@
+{
+  "pid": 1495581,
+  "start_ticks": 43280051,
+  "cmdline": "/home/donz/revelation-rocm-venv/bin/python -u /home/donz/cat-yoko-rocm-20261002/source-operators-round2-20261003T0903/operators/rocm/run_next_operator_round.py --source-dir /home/donz/cat-yoko-rocm-20261002/source-operators-round2-20261003T0903 --resume /home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/source_checkpoint/trainable.pt --base /home/donz/cat-yoko-rocm-20261002/hf/MiniCPM5-2B-Base --data /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin --eval-data /home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin --micro-dir /home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/micro --out /home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/comparison --python /home/donz/revelation-rocm-venv/bin/python --deadline-utc 2026-10-03T14:40:00Z --baseline-run /home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/baseline_before --profile-current --gpu-idle-max-wait 600 --stage-timeout-seconds 1800 ",
+  "stage": "baseline_after",
+  "child_pid": 1496800,
+  "paused_at": "2026-10-03T09:59:33Z",
+  "resumed_at": "2026-10-03T12:02:08Z",
+  "status": "resumed"
+}

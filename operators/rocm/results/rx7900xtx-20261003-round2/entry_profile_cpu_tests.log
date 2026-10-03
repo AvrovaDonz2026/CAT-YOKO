@@ -1,0 +1,208 @@
+test_bucket_parity_search_uses_only_its_independent_stream_and_is_bounded (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_bucket_parity_search_uses_only_its_independent_stream_and_is_bounded) ... ok
+test_extra_options_do_not_reach_native_parser (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_extra_options_do_not_reach_native_parser) ... ok
+test_gpu_optimizer_requires_same_source_and_strict_independent_gate (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_gpu_optimizer_requires_same_source_and_strict_independent_gate) ... usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+ok
+test_cli_requires_bounded_real_data_and_independent_outputs (operators.rocm.test_profile_training.ProfileTrainingTests.test_cli_requires_bounded_real_data_and_independent_outputs) ... usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profile-warmup must be 2; profile-active must be in [4,8]
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profile-warmup must be 2; profile-active must be in [4,8]
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: run-steps must equal profile-warmup + profile-active
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: use the exact update window rather than max-hours
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profiling requires explicit MiniCPM eos-id=1
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: real-data or extended training requires --moe-layout shared-storage
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profiling requires resident shared-storage training
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: out must be empty or new, separate from previous experiments
+ok
+test_nested_ce_and_transfer_account_once_excluding_eval_and_save (operators.rocm.test_profile_training.ProfileTrainingTests.test_nested_ce_and_transfer_account_once_excluding_eval_and_save) ... ok
+test_parent_chain_wins_and_partial_or_invalid_ranges_are_not_guessed (operators.rocm.test_profile_training.ProfileTrainingTests.test_parent_chain_wins_and_partial_or_invalid_ranges_are_not_guessed) ... ok
+test_real_cpu_training_profile_excludes_warmups_and_keeps_adam_checkpoint (operators.rocm.test_profile_training.ProfileTrainingTests.test_real_cpu_training_profile_excludes_warmups_and_keeps_adam_checkpoint) ... ERROR:2026-10-03 17:32:49 1493575:1493575 DeviceProperties.cpp:47] gpuGetDeviceCount failed with code 100
+ok
+test_resume_refuses_missing_or_lossy_adam_and_packed_wrap (operators.rocm.test_profile_training.ProfileTrainingTests.test_resume_refuses_missing_or_lossy_adam_and_packed_wrap) ... ok
+test_window_counts_real_updates_and_restores_wrappers_on_failure (operators.rocm.test_profile_training.ProfileTrainingTests.test_window_counts_real_updates_and_restores_wrappers_on_failure) ... ok
+test_worker_events_use_cpu_ranges_and_steady_tables_exclude_save_eval_other (operators.rocm.test_profile_training.ProfileTrainingTests.test_worker_events_use_cpu_ranges_and_steady_tables_exclude_save_eval_other) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 3.006s
+
+OK
+tiny B0 step 1/6 nll=5.2076 ppl=182.6 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.28 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=866 mem=0MiB
+tiny B0 step 2/6 nll=4.7845 ppl=119.6 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.29 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1089 mem=0MiB
+tiny B0 step 3/6 nll=4.9067 ppl=135.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=48 tok/s=571 mem=0MiB
+tiny B0 step 4/6 nll=4.9488 ppl=141.0 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.37 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=562 mem=0MiB
+tiny B0 step 5/6 nll=4.8737 ppl=130.8 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=80 tok/s=570 mem=0MiB
+tiny B0 step 6/6 nll=4.9458 ppl=140.6 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.36 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=571 mem=0MiB

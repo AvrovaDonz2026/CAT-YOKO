@@ -1,0 +1,2 @@
+{"event": "gpu_wait", "elapsed_s": 2.3549655452370644e-06, "other_gpu_pids": [], "idle_confirmations": 1, "proc_root": "/sys/class/kfd/kfd/proc"}
+{"event": "gpu_idle", "elapsed_s": 2.000235243991483, "other_gpu_pids": [], "idle_confirmations": 2, "proc_root": "/sys/class/kfd/kfd/proc"}

@@ -1,0 +1,281 @@
+test_bf16_rounding_occurs_each_step_without_persistent_master (operators.rocm.test_gpu_adam.GPUAdamTests.test_bf16_rounding_occurs_each_step_without_persistent_master) ... /home/donz/cat-yoko-rocm-20261002/source-ordered-20261003T1210/operators/rocm/test_gpu_adam.py:76: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  self.assertEqual(float(parameter), 1.0)
+ok
+test_context_restores_methods_on_exception_and_native_can_continue_after_exit (operators.rocm.test_gpu_adam.GPUAdamTests.test_context_restores_methods_on_exception_and_native_can_continue_after_exit) ... ok
+test_cpu_benchmark_generates_real_numeric_and_timing_report (operators.rocm.test_gpu_adam.GPUAdamTests.test_cpu_benchmark_generates_real_numeric_and_timing_report) ... ok
+test_cpu_matches_all_parameter_and_moment_bytes_across_multi_step_schedule (operators.rocm.test_gpu_adam.GPUAdamTests.test_cpu_matches_all_parameter_and_moment_bytes_across_multi_step_schedule) ... ok
+test_export_is_independent_cpu_fp32_and_resume_matches_continuous_training (operators.rocm.test_gpu_adam.GPUAdamTests.test_export_is_independent_cpu_fp32_and_resume_matches_continuous_training) ... ok
+test_gpu_multi_step_numeric_gate_and_state_cleanup (operators.rocm.test_gpu_adam.GPUAdamTests.test_gpu_multi_step_numeric_gate_and_state_cleanup) ... skipped 'CUDA/HIP runtime required'
+test_invalid_policy_parameter_or_loaded_moments_reject_without_consuming_gradient (operators.rocm.test_gpu_adam.GPUAdamTests.test_invalid_policy_parameter_or_loaded_moments_reject_without_consuming_gradient) ... ok
+test_budget_is_per_bucket_and_no_batchable_or_long_documents_fall_back (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_budget_is_per_bucket_and_no_batchable_or_long_documents_fall_back) ... ok
+test_causal_and_cross_document_isolation_after_padding (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_causal_and_cross_document_isolation_after_padding) ... ok
+test_context_restoration_exception_nested_order_and_owned_stats (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_context_restoration_exception_nested_order_and_owned_stats) ... ok
+test_cross_projection_and_input_gradients_with_nested_context (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_cross_projection_and_input_gradients_with_nested_context) ... ok
+test_invalid_config_and_shapes_fail (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_invalid_config_and_shapes_fail) ... ok
+test_outputs_and_all_gradients_batch_layout_padding_and_original_order (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_outputs_and_all_gradients_batch_layout_padding_and_original_order) ... ok
+test_plan_cache_mutation_config_weak_lifetime_and_rng (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_plan_cache_mutation_config_weak_lifetime_and_rng) ... ok
+test_repeated_ids_and_non_dense_cases_preserve_existing_fallback (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_repeated_ids_and_non_dense_cases_preserve_existing_fallback) ... ok
+test_seq4096_low_heads_and_fixture_cases (operators.rocm.test_bucketed_attention.BucketedAttentionTests.test_seq4096_low_heads_and_fixture_cases) ... ok
+test_accumulation_has_one_sample_and_foreign_optimizer_cannot_end_it (operators.rocm.test_update_timing.UpdateTimingTests.test_accumulation_has_one_sample_and_foreign_optimizer_cannot_end_it) ... ok
+test_default_tokens_and_no_complete_samples_have_no_fabricated_speed (operators.rocm.test_update_timing.UpdateTimingTests.test_default_tokens_and_no_complete_samples_have_no_fabricated_speed) ... ok
+test_failed_update_is_not_a_completed_sample_and_methods_restore (operators.rocm.test_update_timing.UpdateTimingTests.test_failed_update_is_not_a_completed_sample_and_methods_restore) ... ok
+test_forward_exception_restores_nested_contexts_and_marks_failed (operators.rocm.test_update_timing.UpdateTimingTests.test_forward_exception_restores_nested_contexts_and_marks_failed) ... ok
+test_gpu_sync_follows_then_installed_candidate_step (operators.rocm.test_update_timing.UpdateTimingTests.test_gpu_sync_follows_then_installed_candidate_step) ... ok
+test_invalid_warmup_rejected_before_any_patches (operators.rocm.test_update_timing.UpdateTimingTests.test_invalid_warmup_rejected_before_any_patches) ... ok
+test_nested_profiler_wrapper_preserves_completed_update_boundary (operators.rocm.test_update_timing.UpdateTimingTests.test_nested_profiler_wrapper_preserves_completed_update_boundary) ... ok
+test_records_every_completed_update_and_discards_five_warmups (operators.rocm.test_update_timing.UpdateTimingTests.test_records_every_completed_update_and_discards_five_warmups) ... ok
+test_bucket_parity_search_uses_only_its_independent_stream_and_is_bounded (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_bucket_parity_search_uses_only_its_independent_stream_and_is_bounded) ... ok
+test_extra_options_do_not_reach_native_parser (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_extra_options_do_not_reach_native_parser) ... ok
+test_gpu_optimizer_requires_same_source_and_strict_independent_gate (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_gpu_optimizer_requires_same_source_and_strict_independent_gate) ... usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report does not match the native-order implementation and source hashes
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+usage: python -m unittest [-h]
+python -m unittest: error: GPU Adam numerical report did not pass for all source parameters
+ok
+test_native_micro_report_binds_the_implementation_and_reference_sources (operators.rocm.test_next_candidate_bench.NextCandidateTests.test_native_micro_report_binds_the_implementation_and_reference_sources) ... ok
+test_cli_requires_bounded_real_data_and_independent_outputs (operators.rocm.test_profile_training.ProfileTrainingTests.test_cli_requires_bounded_real_data_and_independent_outputs) ... usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profile-warmup must be 2; profile-active must be in [4,8]
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profile-warmup must be 2; profile-active must be in [4,8]
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: run-steps must equal profile-warmup + profile-active
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: use the exact update window rather than max-hours
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profiling requires explicit MiniCPM eos-id=1
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: real-data or extended training requires --moe-layout shared-storage
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: profiling requires resident shared-storage training
+usage: python -m unittest [-h] --base BASE --resume RESUME --out OUT
+                          [--device DEVICE]
+                          [--moe-layout {compact,shared-storage}]
+                          [--parity-seqs PARITY_SEQS] [--seq-len SEQ_LEN]
+                          [--run-steps RUN_STEPS] [--max-hours MAX_HOURS]
+                          [--data DATA] [--eval-data EVAL_DATA]
+                          [--eos-id EOS_ID] [--eval-every EVAL_EVERY]
+                          [--eval-batches EVAL_BATCHES] [--save-optim]
+                          [--parity-only] [--deterministic-parity]
+                          [--reference-repeat] [--save-every SAVE_EVERY]
+                          [--save-every-seconds SAVE_EVERY_SECONDS]
+                          [--keep-last KEEP_LAST] [--cpu-threads CPU_THREADS]
+                          [--wait-gpu-idle]
+                          [--gpu-idle-max-wait GPU_IDLE_MAX_WAIT]
+                          [--loss-atol LOSS_ATOL]
+                          [--grad-relative-l2 GRAD_RELATIVE_L2]
+                          [--output-relative-l2 OUTPUT_RELATIVE_L2]
+                          [--profile-warmup PROFILE_WARMUP]
+                          [--profile-active PROFILE_ACTIVE] [--profile-memory]
+                          [--profile-stack] [--packed-attention]
+                          [--batched-grad-norm]
+python -m unittest: error: out must be empty or new, separate from previous experiments
+ok
+test_nested_ce_and_transfer_account_once_excluding_eval_and_save (operators.rocm.test_profile_training.ProfileTrainingTests.test_nested_ce_and_transfer_account_once_excluding_eval_and_save) ... ok
+test_parent_chain_wins_and_partial_or_invalid_ranges_are_not_guessed (operators.rocm.test_profile_training.ProfileTrainingTests.test_parent_chain_wins_and_partial_or_invalid_ranges_are_not_guessed) ... ok
+test_real_cpu_training_profile_excludes_warmups_and_keeps_adam_checkpoint (operators.rocm.test_profile_training.ProfileTrainingTests.test_real_cpu_training_profile_excludes_warmups_and_keeps_adam_checkpoint) ... ERROR:2026-10-03 20:22:02 1526291:1526291 DeviceProperties.cpp:47] gpuGetDeviceCount failed with code 100
+ok
+test_resume_refuses_missing_or_lossy_adam_and_packed_wrap (operators.rocm.test_profile_training.ProfileTrainingTests.test_resume_refuses_missing_or_lossy_adam_and_packed_wrap) ... ok
+test_window_counts_real_updates_and_restores_wrappers_on_failure (operators.rocm.test_profile_training.ProfileTrainingTests.test_window_counts_real_updates_and_restores_wrappers_on_failure) ... ok
+test_worker_events_use_cpu_ranges_and_steady_tables_exclude_save_eval_other (operators.rocm.test_profile_training.ProfileTrainingTests.test_worker_events_use_cpu_ranges_and_steady_tables_exclude_save_eval_other) ... ok
+test_micro_admission_rejects_failed_byteexact_or_source_and_unexercised_bucket (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_micro_admission_rejects_failed_byteexact_or_source_and_unexercised_bucket) ... ok
+test_output_isolation_and_live_command_use_original_source_without_sync (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_output_isolation_and_live_command_use_original_source_without_sync) ... ok
+test_profile_requires_cross_thread_backward_attribution_and_verified_six_update_checkpoint (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_profile_requires_cross_thread_backward_attribution_and_verified_six_update_checkpoint) ... ok
+test_reuse_then_candidate_failure_still_retests_baseline_and_continues_fixed_source (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_reuse_then_candidate_failure_still_retests_baseline_and_continues_fixed_source) ... ok
+test_selection_requires_all_three_measures_against_faster_baselines (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_selection_requires_all_three_measures_against_faster_baselines) ... ok
+test_source_mutation_stops_before_another_child_and_baseline_failure_aborts (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_source_mutation_stops_before_another_child_and_baseline_failure_aborts) ... ok
+test_timing_recomputes_raw_samples_and_rejects_incomplete_or_forged_summary (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_timing_recomputes_raw_samples_and_rejects_incomplete_or_forged_summary) ... ok
+test_trial_rejects_changed_parameter_gate_counters_or_source_hash (operators.rocm.test_run_next_operator_round.NextOperatorRoundTests.test_trial_rejects_changed_parameter_gate_counters_or_source_hash) ... ok
+test_benchmark_preserves_numeric_gate_and_records_ordered_source_hashes (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_benchmark_preserves_numeric_gate_and_records_ordered_source_hashes) ... ok
+test_checkpoint_roundtrip_and_exception_restore_original_context (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_checkpoint_roundtrip_and_exception_restore_original_context) ... ok
+test_each_step_bf16_rounding_and_existing_policy_guard_remain (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_each_step_bf16_rounding_and_existing_policy_guard_remain) ... ok
+test_explicit_cpu_formula_matches_native_gate_on_vector_and_matrix_multistep (operators.rocm.test_gpu_adam_ordered.OrderedAdamTests.test_explicit_cpu_formula_matches_native_gate_on_vector_and_matrix_multistep) ... ok
+test_new_modules_parse_without_changing_the_original_implementation (operators.rocm.test_gpu_adam_ordered.OrderedSourceTests.test_new_modules_parse_without_changing_the_original_implementation) ... ok
+
+----------------------------------------------------------------------
+Ran 48 tests in 4.017s
+
+OK (skipped=1)
+tiny B0 step 1/6 nll=5.2076 ppl=182.6 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.28 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=16 tok/s=934 mem=0MiB
+tiny B0 step 2/6 nll=4.7845 ppl=119.6 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.29 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=32 tok/s=1072 mem=0MiB
+tiny B0 step 3/6 nll=4.9067 ppl=135.2 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.20 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=48 tok/s=581 mem=0MiB
+tiny B0 step 4/6 nll=4.9488 ppl=141.0 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.37 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=64 tok/s=550 mem=0MiB
+tiny B0 step 5/6 nll=4.8737 ppl=130.8 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.25 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=80 tok/s=551 mem=0MiB
+tiny B0 step 6/6 nll=4.9458 ppl=140.6 aux=0.0000 gate=0.000 gn=0.00 moe_cv=0.36 trainable=0.02M lr=3.00e-07 fp8=False nvfp4=False tok=96 tok/s=550 mem=0MiB

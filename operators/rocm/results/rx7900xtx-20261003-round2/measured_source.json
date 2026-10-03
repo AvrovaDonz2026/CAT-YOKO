@@ -1,0 +1,15 @@
+{
+  "source_dir": "/home/donz/cat-yoko-rocm-20261002/source-operators-round2-20261003T0903",
+  "measured_source_sha256": {
+    "operators/rocm/gpu_adam.py": "cff31d5d1e312d83acb00f544e5d580a84aee5f0383cdd3908d2c3ce4d53d9eb",
+    "operators/rocm/gpu_adam_bench.py": "3828d40281b05d5a75d6a21e9775a80e12e41d8f418748a59e1f1779af3dfea4",
+    "operators/rocm/bucketed_attention.py": "df05d4964009be09559e6355f1e2c4d4d86dbf30e31fc8abc3012d57b80c7f63",
+    "operators/rocm/bucketed_attention_bench.py": "31bff8803f2b8b404955234956b092a24164f4e5c7935f9986a14bd533800086",
+    "operators/rocm/next_candidate_bench.py": "9f0f734474ebe5c037d8811bdaed68f7ab96d6e1b05734233fbc0cee3761a79b",
+    "operators/rocm/run_next_operator_round.py": "000d9017eba5b82ec1bfc160536bfac856fbc310216720dc64461227f3e63eb7",
+    "operators/rocm/update_timing.py": "a9a13968f8deaa19ccbcf5d2812f8820df7abfa41fe6c3e2951c2a39dfd4c719",
+    "operators/rocm/profile_training.py": "31ddf4cd06c3a10b80b344af42952c0e120f0bc092efa78734a83914cd9ce6bf",
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7"
+  }
+}

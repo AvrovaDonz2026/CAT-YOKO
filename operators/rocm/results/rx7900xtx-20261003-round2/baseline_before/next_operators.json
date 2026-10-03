@@ -1,0 +1,155 @@
+{
+  "gpu_fp32_adam": false,
+  "bucketed_attention": false,
+  "sync_update_timing": true,
+  "patches_installed_after_native_reference": true,
+  "file_sha256": {
+    "operators/rocm/next_candidate_bench.py": "9f0f734474ebe5c037d8811bdaed68f7ab96d6e1b05734233fbc0cee3761a79b",
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/update_timing.py": "a9a13968f8deaa19ccbcf5d2812f8820df7abfa41fe6c3e2951c2a39dfd4c719"
+  },
+  "update_timing_calls": {
+    "status": "complete",
+    "error": null,
+    "warmup_updates": 5,
+    "started_updates": 20,
+    "completed_updates": 20,
+    "incomplete_update": false,
+    "measured_updates": 15,
+    "discarded_updates": 5,
+    "samples": [
+      {
+        "invocation_update": 1,
+        "tokens": 4096,
+        "elapsed_s": 5.239767410967033,
+        "completed_update_tokens_s": 781.7140874281778
+      },
+      {
+        "invocation_update": 2,
+        "tokens": 4096,
+        "elapsed_s": 4.977881430997513,
+        "completed_update_tokens_s": 822.8400087020968
+      },
+      {
+        "invocation_update": 3,
+        "tokens": 4096,
+        "elapsed_s": 5.28862551797647,
+        "completed_update_tokens_s": 774.4923489245667
+      },
+      {
+        "invocation_update": 4,
+        "tokens": 4096,
+        "elapsed_s": 4.667693132010754,
+        "completed_update_tokens_s": 877.5212688918821
+      },
+      {
+        "invocation_update": 5,
+        "tokens": 4096,
+        "elapsed_s": 5.112934858014341,
+        "completed_update_tokens_s": 801.1054538627003
+      },
+      {
+        "invocation_update": 6,
+        "tokens": 4096,
+        "elapsed_s": 5.499850435007829,
+        "completed_update_tokens_s": 744.7475251195934
+      },
+      {
+        "invocation_update": 7,
+        "tokens": 4096,
+        "elapsed_s": 5.109927714976948,
+        "completed_update_tokens_s": 801.5768966740615
+      },
+      {
+        "invocation_update": 8,
+        "tokens": 4096,
+        "elapsed_s": 5.184888226969633,
+        "completed_update_tokens_s": 789.9881001666171
+      },
+      {
+        "invocation_update": 9,
+        "tokens": 4096,
+        "elapsed_s": 4.986128981981892,
+        "completed_update_tokens_s": 821.4789498630092
+      },
+      {
+        "invocation_update": 10,
+        "tokens": 4096,
+        "elapsed_s": 5.194642825983465,
+        "completed_update_tokens_s": 788.5046454997671
+      },
+      {
+        "invocation_update": 11,
+        "tokens": 4096,
+        "elapsed_s": 4.702958831971046,
+        "completed_update_tokens_s": 870.9410705777613
+      },
+      {
+        "invocation_update": 12,
+        "tokens": 4096,
+        "elapsed_s": 4.716244354960509,
+        "completed_update_tokens_s": 868.4876549477042
+      },
+      {
+        "invocation_update": 13,
+        "tokens": 4096,
+        "elapsed_s": 4.668404040974565,
+        "completed_update_tokens_s": 877.387639126653
+      },
+      {
+        "invocation_update": 14,
+        "tokens": 4096,
+        "elapsed_s": 6.996725492994301,
+        "completed_update_tokens_s": 585.4167073013302
+      },
+      {
+        "invocation_update": 15,
+        "tokens": 4096,
+        "elapsed_s": 4.799927712010685,
+        "completed_update_tokens_s": 853.3461847249756
+      },
+      {
+        "invocation_update": 16,
+        "tokens": 4096,
+        "elapsed_s": 5.257329015003052,
+        "completed_update_tokens_s": 779.1028463904541
+      },
+      {
+        "invocation_update": 17,
+        "tokens": 4096,
+        "elapsed_s": 4.654068269010168,
+        "completed_update_tokens_s": 880.0902271403814
+      },
+      {
+        "invocation_update": 18,
+        "tokens": 4096,
+        "elapsed_s": 5.3202073379652575,
+        "completed_update_tokens_s": 769.894806687466
+      },
+      {
+        "invocation_update": 19,
+        "tokens": 4096,
+        "elapsed_s": 6.104607840999961,
+        "completed_update_tokens_s": 670.9685710669758
+      },
+      {
+        "invocation_update": 20,
+        "tokens": 4096,
+        "elapsed_s": 4.6931187200243585,
+        "completed_update_tokens_s": 872.7671819857011
+      }
+    ],
+    "median_completed_update_tokens_s": 801.5768966740615,
+    "sum_steady_elapsed_s": 77.88902980083367,
+    "steady_tokens": 61440,
+    "aggregate_completed_update_tokens_s": 788.8145500991,
+    "scope": "forward start through completed optimizer update, including GPU synchronization",
+    "notes": [
+      "GPU is synchronized before the first microbatch and after each complete update.",
+      "Initialization, parity, initial/final evaluation, checkpoint saves and post-update logs are excluded.",
+      "LR/zero_grad and the already-prefetched current batch are excluded; next-batch prefetch is included.",
+      "Both variants must use this measurement; synchronization can change pipeline throughput."
+    ]
+  },
+  "status": "completed"
+}

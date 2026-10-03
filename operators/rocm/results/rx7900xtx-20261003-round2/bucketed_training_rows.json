@@ -1,0 +1,433 @@
+{
+  "source_step": 43491,
+  "stream_cursor": 8689,
+  "rows": [
+    {
+      "row": 8689,
+      "fragment_lengths": [
+        589,
+        1473,
+        456,
+        1578
+      ],
+      "bucket_sizes": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "reason": "no_batchable_fragments",
+      "eligible": false
+    },
+    {
+      "row": 8690,
+      "fragment_lengths": [
+        767,
+        141,
+        182,
+        465,
+        180,
+        144,
+        208,
+        311,
+        1698
+      ],
+      "bucket_sizes": [
+        2,
+        3,
+        1,
+        1,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8691,
+      "fragment_lengths": [
+        1209,
+        1324,
+        1563
+      ],
+      "bucket_sizes": [
+        2,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8692,
+      "fragment_lengths": [
+        149,
+        347,
+        558,
+        664,
+        128,
+        113,
+        1020,
+        384,
+        733
+      ],
+      "bucket_sizes": [
+        2,
+        1,
+        2,
+        3,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8693,
+      "fragment_lengths": [
+        644,
+        1019,
+        1763,
+        670
+      ],
+      "bucket_sizes": [
+        2,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8694,
+      "fragment_lengths": [
+        268,
+        202,
+        697,
+        262,
+        2667
+      ],
+      "bucket_sizes": [
+        1,
+        2,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8695,
+      "fragment_lengths": [
+        1395,
+        1445,
+        363,
+        431,
+        96,
+        366
+      ],
+      "bucket_sizes": [
+        1,
+        3,
+        2
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8696,
+      "fragment_lengths": [
+        475,
+        507,
+        464,
+        297,
+        391,
+        1962
+      ],
+      "bucket_sizes": [
+        1,
+        4,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8697,
+      "fragment_lengths": [
+        491,
+        201,
+        743,
+        1438,
+        480,
+        415,
+        328
+      ],
+      "bucket_sizes": [
+        1,
+        2,
+        2,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8698,
+      "fragment_lengths": [
+        292,
+        157,
+        235,
+        517,
+        123,
+        390,
+        1963,
+        386,
+        33
+      ],
+      "bucket_sizes": [
+        1,
+        2,
+        2,
+        2,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8699,
+      "fragment_lengths": [
+        821,
+        400,
+        259,
+        708,
+        487,
+        954,
+        467
+      ],
+      "bucket_sizes": [
+        1,
+        3,
+        2,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8700,
+      "fragment_lengths": [
+        128,
+        31,
+        403,
+        192,
+        153,
+        270,
+        541,
+        107,
+        269,
+        55,
+        84,
+        194,
+        370,
+        235,
+        210,
+        151,
+        65,
+        215,
+        69,
+        164,
+        86,
+        85,
+        19
+      ],
+      "bucket_sizes": [
+        1,
+        1,
+        3,
+        3,
+        2,
+        3,
+        4,
+        3,
+        2,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8701,
+      "fragment_lengths": [
+        44,
+        146,
+        143,
+        152,
+        100,
+        332,
+        227,
+        360,
+        138,
+        105,
+        62,
+        104,
+        804,
+        215,
+        140,
+        61,
+        133,
+        442,
+        146,
+        242
+      ],
+      "bucket_sizes": [
+        1,
+        2,
+        3,
+        7,
+        3,
+        2,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8702,
+      "fragment_lengths": [
+        4096
+      ],
+      "bucket_sizes": [],
+      "reason": "single_document",
+      "eligible": false
+    },
+    {
+      "row": 8703,
+      "fragment_lengths": [
+        89,
+        689,
+        520,
+        246,
+        294,
+        1222,
+        240,
+        408,
+        388
+      ],
+      "bucket_sizes": [
+        1,
+        2,
+        1,
+        2,
+        1,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8704,
+      "fragment_lengths": [
+        273,
+        225,
+        337,
+        392,
+        370,
+        515,
+        1984
+      ],
+      "bucket_sizes": [
+        2,
+        3,
+        1,
+        1
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8705,
+      "fragment_lengths": [
+        789,
+        492,
+        367,
+        258,
+        188,
+        476,
+        873,
+        305,
+        255,
+        74,
+        19
+      ],
+      "bucket_sizes": [
+        1,
+        1,
+        1,
+        3,
+        1,
+        2,
+        2
+      ],
+      "reason": null,
+      "eligible": true
+    },
+    {
+      "row": 8706,
+      "fragment_lengths": [
+        2038,
+        240,
+        487,
+        137,
+        95,
+        1099
+      ],
+      "bucket_sizes": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "reason": "no_batchable_fragments",
+      "eligible": false
+    },
+    {
+      "row": 8707,
+      "fragment_lengths": [
+        3169,
+        456,
+        471
+      ],
+      "bucket_sizes": [],
+      "reason": "long_document",
+      "eligible": false
+    },
+    {
+      "row": 8708,
+      "fragment_lengths": [
+        606,
+        474,
+        786,
+        700,
+        857,
+        297,
+        295,
+        81
+      ],
+      "bucket_sizes": [
+        1,
+        2,
+        2,
+        3
+      ],
+      "reason": null,
+      "eligible": true
+    }
+  ],
+  "eligible_rows": 16
+}

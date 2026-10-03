@@ -1,0 +1,9 @@
+{
+  "gpu_adam": {
+    "pass": false,
+    "reason": "gpu_adam micro child did not exit successfully"
+  },
+  "bucketed": {
+    "pass": true
+  }
+}

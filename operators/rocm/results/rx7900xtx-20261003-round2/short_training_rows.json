@@ -1,0 +1,144 @@
+{
+  "source_step": 43491,
+  "stream_cursor": 8689,
+  "config": {
+    "max_length": 256,
+    "min_members": 4,
+    "max_padding_ratio": 1.1,
+    "max_bucket_size": 16,
+    "max_bucket_score_elements": 4194304
+  },
+  "eligible_rows": 1,
+  "rows": [
+    {
+      "row": 8689,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8690,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8691,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8692,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8693,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8694,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8695,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8696,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8697,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8698,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8699,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8700,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8701,
+      "reason": null,
+      "eligible": true,
+      "batch_lengths": [
+        [
+          133,
+          138,
+          140,
+          143,
+          146,
+          146
+        ]
+      ]
+    },
+    {
+      "row": 8702,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8703,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8704,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8705,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8706,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8707,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    },
+    {
+      "row": 8708,
+      "reason": "no_qualifying_short_bucket",
+      "eligible": false,
+      "batch_lengths": []
+    }
+  ],
+  "scope": "CPU static planning; not training-scoped GPU execution count"
+}

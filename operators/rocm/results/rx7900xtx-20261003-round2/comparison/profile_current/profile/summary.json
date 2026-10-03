@@ -1,0 +1,1108 @@
+{
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/operators-round2-20261003T0903/source_checkpoint/trainable.pt",
+  "source_step": 43491,
+  "source_adam_step": 8689,
+  "source_stream_i": 8689,
+  "source_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin",
+  "source_data_rows": 19531,
+  "optimizer_states": 132,
+  "eval_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin",
+  "eos_id": 1,
+  "packed_attention": true,
+  "batched_grad_norm": false,
+  "warmup_updates": 2,
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "device": "cuda",
+  "requested_active_updates": 4,
+  "completed_updates": 6,
+  "recorded_updates": 4,
+  "steps": [
+    {
+      "invocation_update": 3,
+      "forward_to_optimizer_s": 5.332320702029392,
+      "global_step": 43494
+    },
+    {
+      "invocation_update": 4,
+      "forward_to_optimizer_s": 4.7325887809856795,
+      "global_step": 43495
+    },
+    {
+      "invocation_update": 5,
+      "forward_to_optimizer_s": 5.161266429990064,
+      "global_step": 43496
+    },
+    {
+      "invocation_update": 6,
+      "forward_to_optimizer_s": 5.568764519004617,
+      "global_step": 43497
+    }
+  ],
+  "record_shapes": true,
+  "profile_memory": false,
+  "with_stack": false,
+  "status": "complete",
+  "error": null,
+  "trace": "trace.json",
+  "phases": {
+    "forward": {
+      "self_cpu_us": 7495213.508999996,
+      "device_work_us": 7383430.23900016,
+      "events": 247344,
+      "steady_cpu_fraction": 0.22207695049370868,
+      "steady_device_work_fraction": 0.3786621668899896
+    },
+    "ce": {
+      "self_cpu_us": 2606.5960000045598,
+      "device_work_us": 151069.74499999825,
+      "events": 372,
+      "steady_cpu_fraction": 7.723127435329634e-05,
+      "steady_device_work_fraction": 0.007747672171541224
+    },
+    "backward": {
+      "self_cpu_us": 21872967.22999979,
+      "device_work_us": 10460471.10900005,
+      "events": 456103,
+      "steady_cpu_fraction": 0.6480778505981821,
+      "steady_device_work_fraction": 0.5364694361032488
+    },
+    "clip": {
+      "self_cpu_us": 39243.79500000179,
+      "device_work_us": 10115.880000034347,
+      "events": 5764,
+      "steady_cpu_fraction": 0.001162761048626007,
+      "steady_device_work_fraction": 0.0005187969435370229
+    },
+    "optimizer": {
+      "self_cpu_us": 2137244.909000001,
+      "device_work_us": 1492713.2849999378,
+      "events": 40156,
+      "steady_cpu_fraction": 0.0633247913857292,
+      "steady_device_work_fraction": 0.07655439663503791
+    },
+    "data": {
+      "self_cpu_us": 1747.2090000007302,
+      "device_work_us": 136.71100000292063,
+      "events": 228,
+      "steady_cpu_fraction": 5.176835137910474e-05,
+      "steady_device_work_fraction": 7.011278203098923e-06
+    },
+    "bookkeeping": {
+      "self_cpu_us": 2201501.0289999982,
+      "device_work_us": 790.0880000041798,
+      "events": 2104,
+      "steady_cpu_fraction": 0.06522864684802157,
+      "steady_device_work_fraction": 4.051997844241491e-05
+    },
+    "save": {
+      "self_cpu_us": 2145616.2699999996,
+      "device_work_us": 123215.7899999991,
+      "events": 1849,
+      "steady_cpu_fraction": null,
+      "steady_device_work_fraction": null
+    },
+    "eval": {
+      "self_cpu_us": 0.0,
+      "device_work_us": 0.0,
+      "events": 0,
+      "steady_cpu_fraction": null,
+      "steady_device_work_fraction": null
+    },
+    "other": {
+      "self_cpu_us": 7916.30000001806,
+      "device_work_us": 304.3280000161902,
+      "events": 252
+    }
+  },
+  "steady_self_cpu_us": 33750524.276999794,
+  "steady_device_work_us": 19498727.057000186,
+  "transfer_overlay": {
+    "self_cpu_us": 16783602.33400001,
+    "device_work_us": 1848619.6939998907,
+    "events": 66740
+  },
+  "phase_attribution_events": {
+    "parent_chain": 297930,
+    "cpu_time_range": 455990,
+    "unclassified": 252
+  },
+  "top_operators_by_device_work": [
+    {
+      "name": "aten::bmm",
+      "self_cpu_us": 274642.8009996903,
+      "device_work_us": 9862490.089000192,
+      "events": 10076
+    },
+    {
+      "name": "aten::copy_",
+      "self_cpu_us": 216341.52900002914,
+      "device_work_us": 1961923.2269999082,
+      "events": 29462
+    },
+    {
+      "name": "aten::mm",
+      "self_cpu_us": 89526.14200009246,
+      "device_work_us": 1734606.7630000527,
+      "events": 2704
+    },
+    {
+      "name": "aten::mul",
+      "self_cpu_us": 164112.07699960674,
+      "device_work_us": 871095.7710000311,
+      "events": 15441
+    },
+    {
+      "name": "aten::_index_put_impl_",
+      "self_cpu_us": 8584.177999964415,
+      "device_work_us": 643899.1569999763,
+      "events": 376
+    },
+    {
+      "name": "aten::index_add_",
+      "self_cpu_us": 6385.254999984545,
+      "device_work_us": 548694.0920000072,
+      "events": 472
+    },
+    {
+      "name": "aten::_softmax",
+      "self_cpu_us": 16003.183000049772,
+      "device_work_us": 446182.8819999477,
+      "events": 2776
+    },
+    {
+      "name": "aten::add_",
+      "self_cpu_us": 70552.1640000998,
+      "device_work_us": 443567.79699993983,
+      "events": 8305
+    },
+    {
+      "name": "aten::where",
+      "self_cpu_us": 41853.0329999733,
+      "device_work_us": 340845.645999979,
+      "events": 7660
+    },
+    {
+      "name": "aten::mul_",
+      "self_cpu_us": 176582.56499999657,
+      "device_work_us": 340694.9680000332,
+      "events": 2212
+    },
+    {
+      "name": "aten::silu",
+      "self_cpu_us": 7923.1749999760195,
+      "device_work_us": 335293.64199999685,
+      "events": 752
+    },
+    {
+      "name": "aten::index",
+      "self_cpu_us": 14019.723999989816,
+      "device_work_us": 324812.68700001657,
+      "events": 648
+    },
+    {
+      "name": "aten::cat",
+      "self_cpu_us": 13858.803000011165,
+      "device_work_us": 294643.2220000179,
+      "events": 1291
+    },
+    {
+      "name": "aten::isneginf",
+      "self_cpu_us": 14172.486000015715,
+      "device_work_us": 265165.40300001384,
+      "events": 2520
+    },
+    {
+      "name": "aten::_softmax_backward_data",
+      "self_cpu_us": 10414.162000105716,
+      "device_work_us": 239661.71899999212,
+      "events": 1167
+    },
+    {
+      "name": "aten::fill_",
+      "self_cpu_us": 52152.79600014712,
+      "device_work_us": 173974.0320000048,
+      "events": 16705
+    },
+    {
+      "name": "aten::silu_backward",
+      "self_cpu_us": 1908.4509999954607,
+      "device_work_us": 131394.44200002006,
+      "events": 208
+    },
+    {
+      "name": "aten::all",
+      "self_cpu_us": 16786.86499996372,
+      "device_work_us": 123455.49800003809,
+      "events": 2520
+    },
+    {
+      "name": "aten::_fused_rms_norm",
+      "self_cpu_us": 43056.34700011559,
+      "device_work_us": 118747.3559999672,
+      "events": 1716
+    },
+    {
+      "name": "aten::sum",
+      "self_cpu_us": 24070.479000094805,
+      "device_work_us": 70032.54300000804,
+      "events": 2594
+    },
+    {
+      "name": "aten::gather",
+      "self_cpu_us": 11692.748999998443,
+      "device_work_us": 58334.87700002064,
+      "events": 1196
+    },
+    {
+      "name": "aten::_fused_rms_norm_backward",
+      "self_cpu_us": 8320.361999969231,
+      "device_work_us": 57770.96599997906,
+      "events": 720
+    },
+    {
+      "name": "aten::add",
+      "self_cpu_us": 17045.994999885494,
+      "device_work_us": 39693.43499996697,
+      "events": 2168
+    },
+    {
+      "name": "aten::scatter_add_",
+      "self_cpu_us": 6202.765000003787,
+      "device_work_us": 37874.37399999944,
+      "events": 256
+    },
+    {
+      "name": "hipStreamIsCapturing",
+      "self_cpu_us": 815.8549999127863,
+      "device_work_us": 27018.396999997145,
+      "events": 3128
+    },
+    {
+      "name": "aten::tril",
+      "self_cpu_us": 12650.870999993587,
+      "device_work_us": 22193.98800001847,
+      "events": 2520
+    },
+    {
+      "name": "aten::_log_softmax_backward_data",
+      "self_cpu_us": 93.14100000401959,
+      "device_work_us": 19004.83900000225,
+      "events": 8
+    },
+    {
+      "name": "aten::_log_softmax",
+      "self_cpu_us": 90.12400000030175,
+      "device_work_us": 13056.760000001406,
+      "events": 8
+    },
+    {
+      "name": "aten::topk",
+      "self_cpu_us": 4431.0430000062925,
+      "device_work_us": 9912.25699998163,
+      "events": 256
+    },
+    {
+      "name": "aten::sort",
+      "self_cpu_us": 5437.388000067744,
+      "device_work_us": 9462.37499995113,
+      "events": 272
+    },
+    {
+      "name": "hipEventDestroy",
+      "self_cpu_us": 409.30300000571333,
+      "device_work_us": 7567.956999999537,
+      "events": 544
+    },
+    {
+      "name": "aten::sub",
+      "self_cpu_us": 9337.43199996551,
+      "device_work_us": 7249.336000110232,
+      "events": 1235
+    },
+    {
+      "name": "hipEventSynchronize",
+      "self_cpu_us": 450.0750000148055,
+      "device_work_us": 6215.605999999845,
+      "events": 272
+    },
+    {
+      "name": "aten::linalg_vector_norm",
+      "self_cpu_us": 5079.811000006273,
+      "device_work_us": 5506.775999987498,
+      "events": 528
+    },
+    {
+      "name": "aten::max",
+      "self_cpu_us": 5087.393999996917,
+      "device_work_us": 5476.315999992319,
+      "events": 548
+    },
+    {
+      "name": "aten::div",
+      "self_cpu_us": 8559.834000032777,
+      "device_work_us": 4260.832000030814,
+      "events": 828
+    },
+    {
+      "name": "aten::bincount",
+      "self_cpu_us": 4597.200000002778,
+      "device_work_us": 2795.6820000086336,
+      "events": 272
+    },
+    {
+      "name": "aten::neg",
+      "self_cpu_us": 3386.4920000720304,
+      "device_work_us": 2669.675999988802,
+      "events": 504
+    },
+    {
+      "name": "aten::min",
+      "self_cpu_us": 2433.5849999923475,
+      "device_work_us": 2516.4040000104997,
+      "events": 276
+    },
+    {
+      "name": "hipStreamWaitEvent",
+      "self_cpu_us": 1722.0840000059143,
+      "device_work_us": 2164.1490000016056,
+      "events": 272
+    }
+  ],
+  "top_operators_by_self_cpu": [
+    {
+      "name": "hipMemcpyWithStream",
+      "self_cpu_us": 16617720.125000032,
+      "device_work_us": 0.0,
+      "events": 2805
+    },
+    {
+      "name": "cat_profile::backward",
+      "self_cpu_us": 11053161.615999999,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "cat_profile::train_step",
+      "self_cpu_us": 2157620.355000023,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "cat_profile::save",
+      "self_cpu_us": 2014130.8000000156,
+      "device_work_us": 0.0,
+      "events": 1
+    },
+    {
+      "name": "hipLaunchKernel",
+      "self_cpu_us": 391119.70300009294,
+      "device_work_us": 0.0,
+      "events": 99297
+    },
+    {
+      "name": "aten::bmm",
+      "self_cpu_us": 274642.8009996903,
+      "device_work_us": 9862490.089000192,
+      "events": 10076
+    },
+    {
+      "name": "aten::copy_",
+      "self_cpu_us": 216341.52900002914,
+      "device_work_us": 1961923.2269999082,
+      "events": 29462
+    },
+    {
+      "name": "aten::mul_",
+      "self_cpu_us": 176582.56499999657,
+      "device_work_us": 340694.9680000332,
+      "events": 2212
+    },
+    {
+      "name": "cat_profile::window_attention",
+      "self_cpu_us": 168884.28600016303,
+      "device_work_us": 0.0,
+      "events": 272
+    },
+    {
+      "name": "aten::mul",
+      "self_cpu_us": 164112.07699960674,
+      "device_work_us": 871095.7710000311,
+      "events": 15441
+    },
+    {
+      "name": "cat_profile::moe",
+      "self_cpu_us": 138568.2489999659,
+      "device_work_us": 0.0,
+      "events": 272
+    },
+    {
+      "name": "cat_profile::cross_attention",
+      "self_cpu_us": 117294.34100003995,
+      "device_work_us": 0.0,
+      "events": 208
+    },
+    {
+      "name": "aten::empty",
+      "self_cpu_us": 98448.54300014045,
+      "device_work_us": 0.0,
+      "events": 35724
+    },
+    {
+      "name": "aten::mm",
+      "self_cpu_us": 89526.14200009246,
+      "device_work_us": 1734606.7630000527,
+      "events": 2704
+    },
+    {
+      "name": "IndexAddBackward0",
+      "self_cpu_us": 89170.25600012089,
+      "device_work_us": 0.0,
+      "events": 104
+    },
+    {
+      "name": "aten::slice",
+      "self_cpu_us": 79161.13599994098,
+      "device_work_us": 0.0,
+      "events": 22720
+    },
+    {
+      "name": "aten::as_strided",
+      "self_cpu_us": 78620.93599981547,
+      "device_work_us": 0.0,
+      "events": 70344
+    },
+    {
+      "name": "aten::add_",
+      "self_cpu_us": 70552.1640000998,
+      "device_work_us": 443567.79699993983,
+      "events": 8305
+    },
+    {
+      "name": "aten::reshape",
+      "self_cpu_us": 68985.90999956372,
+      "device_work_us": 0.0,
+      "events": 31752
+    },
+    {
+      "name": "cat_profile::forward",
+      "self_cpu_us": 65889.64999998035,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "aten::sqrt",
+      "self_cpu_us": 62194.06399999163,
+      "device_work_us": 655.668999990361,
+      "events": 784
+    },
+    {
+      "name": "aten::matmul",
+      "self_cpu_us": 58868.79300004649,
+      "device_work_us": 0.0,
+      "events": 6812
+    },
+    {
+      "name": "aten::expand",
+      "self_cpu_us": 57344.14900007683,
+      "device_work_us": 0.0,
+      "events": 18460
+    },
+    {
+      "name": "hipExtModuleLaunchKernel",
+      "self_cpu_us": 53480.825000024415,
+      "device_work_us": 0.0,
+      "events": 12780
+    },
+    {
+      "name": "aten::_scaled_dot_product_attention_math",
+      "self_cpu_us": 53281.44300027083,
+      "device_work_us": 0.0,
+      "events": 2520
+    },
+    {
+      "name": "aten::fill_",
+      "self_cpu_us": 52152.79600014712,
+      "device_work_us": 173974.0320000048,
+      "events": 16705
+    },
+    {
+      "name": "aten::transpose",
+      "self_cpu_us": 47614.65999996334,
+      "device_work_us": 0.0,
+      "events": 14491
+    },
+    {
+      "name": "aten::view",
+      "self_cpu_us": 46748.3110002601,
+      "device_work_us": 0.0,
+      "events": 23137
+    },
+    {
+      "name": "cat_profile::optimizer",
+      "self_cpu_us": 46063.10800001584,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "aten::_fused_rms_norm",
+      "self_cpu_us": 43056.34700011559,
+      "device_work_us": 118747.3559999672,
+      "events": 1716
+    },
+    {
+      "name": "aten::_safe_softmax",
+      "self_cpu_us": 42960.40799997699,
+      "device_work_us": 0.0,
+      "events": 2520
+    },
+    {
+      "name": "aten::where",
+      "self_cpu_us": 41853.0329999733,
+      "device_work_us": 340845.645999979,
+      "events": 7660
+    },
+    {
+      "name": "aten::_to_copy",
+      "self_cpu_us": 39653.74900019918,
+      "device_work_us": 0.0,
+      "events": 10231
+    },
+    {
+      "name": "aten::empty_strided",
+      "self_cpu_us": 39534.88199981756,
+      "device_work_us": 0.0,
+      "events": 12758
+    },
+    {
+      "name": "BmmBackward0",
+      "self_cpu_us": 34584.127999943215,
+      "device_work_us": 0.0,
+      "events": 2350
+    },
+    {
+      "name": "aten::_unsafe_view",
+      "self_cpu_us": 28012.160999987937,
+      "device_work_us": 0.0,
+      "events": 11984
+    },
+    {
+      "name": "aten::clone",
+      "self_cpu_us": 27849.46300007696,
+      "device_work_us": 0.0,
+      "events": 8018
+    },
+    {
+      "name": "aten::sum",
+      "self_cpu_us": 24070.479000094805,
+      "device_work_us": 70032.54300000804,
+      "events": 2594
+    },
+    {
+      "name": "autograd::engine::evaluate_function: SliceBackward0",
+      "self_cpu_us": 23578.231999893906,
+      "device_work_us": 0.0,
+      "events": 4041
+    },
+    {
+      "name": "autograd::engine::evaluate_function: ExpandBackward0",
+      "self_cpu_us": 21911.331999913324,
+      "device_work_us": 0.0,
+      "events": 6426
+    }
+  ],
+  "top_steady_operators_by_device_work": [
+    {
+      "name": "aten::bmm",
+      "self_cpu_us": 274642.8009996903,
+      "device_work_us": 9862490.089000192,
+      "events": 10076
+    },
+    {
+      "name": "aten::copy_",
+      "self_cpu_us": 215900.11300001683,
+      "device_work_us": 1838707.436999909,
+      "events": 29330
+    },
+    {
+      "name": "aten::mm",
+      "self_cpu_us": 89526.14200009246,
+      "device_work_us": 1734606.7630000527,
+      "events": 2704
+    },
+    {
+      "name": "aten::mul",
+      "self_cpu_us": 164112.07699960674,
+      "device_work_us": 871095.7710000311,
+      "events": 15441
+    },
+    {
+      "name": "aten::_index_put_impl_",
+      "self_cpu_us": 8584.177999964415,
+      "device_work_us": 643899.1569999763,
+      "events": 376
+    },
+    {
+      "name": "aten::index_add_",
+      "self_cpu_us": 6385.254999984545,
+      "device_work_us": 548694.0920000072,
+      "events": 472
+    },
+    {
+      "name": "aten::_softmax",
+      "self_cpu_us": 16003.183000049772,
+      "device_work_us": 446182.8819999477,
+      "events": 2776
+    },
+    {
+      "name": "aten::add_",
+      "self_cpu_us": 70552.1640000998,
+      "device_work_us": 443567.79699993983,
+      "events": 8305
+    },
+    {
+      "name": "aten::where",
+      "self_cpu_us": 41853.0329999733,
+      "device_work_us": 340845.645999979,
+      "events": 7660
+    },
+    {
+      "name": "aten::mul_",
+      "self_cpu_us": 176582.56499999657,
+      "device_work_us": 340694.9680000332,
+      "events": 2212
+    },
+    {
+      "name": "aten::silu",
+      "self_cpu_us": 7923.1749999760195,
+      "device_work_us": 335293.64199999685,
+      "events": 752
+    },
+    {
+      "name": "aten::index",
+      "self_cpu_us": 14019.723999989816,
+      "device_work_us": 324812.68700001657,
+      "events": 648
+    },
+    {
+      "name": "aten::cat",
+      "self_cpu_us": 13858.803000011165,
+      "device_work_us": 294643.2220000179,
+      "events": 1291
+    },
+    {
+      "name": "aten::isneginf",
+      "self_cpu_us": 14172.486000015715,
+      "device_work_us": 265165.40300001384,
+      "events": 2520
+    },
+    {
+      "name": "aten::_softmax_backward_data",
+      "self_cpu_us": 10414.162000105716,
+      "device_work_us": 239661.71899999212,
+      "events": 1167
+    },
+    {
+      "name": "aten::fill_",
+      "self_cpu_us": 51802.31800013393,
+      "device_work_us": 173766.0539999901,
+      "events": 16601
+    },
+    {
+      "name": "aten::silu_backward",
+      "self_cpu_us": 1908.4509999954607,
+      "device_work_us": 131394.44200002006,
+      "events": 208
+    },
+    {
+      "name": "aten::all",
+      "self_cpu_us": 16786.86499996372,
+      "device_work_us": 123455.49800003809,
+      "events": 2520
+    },
+    {
+      "name": "aten::_fused_rms_norm",
+      "self_cpu_us": 43056.34700011559,
+      "device_work_us": 118747.3559999672,
+      "events": 1716
+    },
+    {
+      "name": "aten::sum",
+      "self_cpu_us": 24070.479000094805,
+      "device_work_us": 70032.54300000804,
+      "events": 2594
+    },
+    {
+      "name": "aten::gather",
+      "self_cpu_us": 11692.748999998443,
+      "device_work_us": 58334.87700002064,
+      "events": 1196
+    },
+    {
+      "name": "aten::_fused_rms_norm_backward",
+      "self_cpu_us": 8320.361999969231,
+      "device_work_us": 57770.96599997906,
+      "events": 720
+    },
+    {
+      "name": "aten::add",
+      "self_cpu_us": 17045.994999885494,
+      "device_work_us": 39693.43499996697,
+      "events": 2168
+    },
+    {
+      "name": "aten::scatter_add_",
+      "self_cpu_us": 6202.765000003787,
+      "device_work_us": 37874.37399999944,
+      "events": 256
+    },
+    {
+      "name": "hipStreamIsCapturing",
+      "self_cpu_us": 815.2039999122499,
+      "device_work_us": 26981.23799999716,
+      "events": 3127
+    },
+    {
+      "name": "aten::tril",
+      "self_cpu_us": 12650.870999993587,
+      "device_work_us": 22193.98800001847,
+      "events": 2520
+    },
+    {
+      "name": "aten::_log_softmax_backward_data",
+      "self_cpu_us": 93.14100000401959,
+      "device_work_us": 19004.83900000225,
+      "events": 8
+    },
+    {
+      "name": "aten::_log_softmax",
+      "self_cpu_us": 90.12400000030175,
+      "device_work_us": 13056.760000001406,
+      "events": 8
+    },
+    {
+      "name": "aten::topk",
+      "self_cpu_us": 4431.0430000062925,
+      "device_work_us": 9912.25699998163,
+      "events": 256
+    },
+    {
+      "name": "aten::sort",
+      "self_cpu_us": 5437.388000067744,
+      "device_work_us": 9462.37499995113,
+      "events": 272
+    },
+    {
+      "name": "hipEventDestroy",
+      "self_cpu_us": 409.30300000571333,
+      "device_work_us": 7567.956999999537,
+      "events": 544
+    },
+    {
+      "name": "aten::sub",
+      "self_cpu_us": 9337.43199996551,
+      "device_work_us": 7249.336000110232,
+      "events": 1235
+    },
+    {
+      "name": "hipEventSynchronize",
+      "self_cpu_us": 450.0750000148055,
+      "device_work_us": 6215.605999999845,
+      "events": 272
+    },
+    {
+      "name": "aten::linalg_vector_norm",
+      "self_cpu_us": 5079.811000006273,
+      "device_work_us": 5506.775999987498,
+      "events": 528
+    },
+    {
+      "name": "aten::max",
+      "self_cpu_us": 5087.393999996917,
+      "device_work_us": 5476.315999992319,
+      "events": 548
+    },
+    {
+      "name": "aten::div",
+      "self_cpu_us": 8559.834000032777,
+      "device_work_us": 4260.832000030814,
+      "events": 828
+    },
+    {
+      "name": "aten::bincount",
+      "self_cpu_us": 4597.200000002778,
+      "device_work_us": 2795.6820000086336,
+      "events": 272
+    },
+    {
+      "name": "aten::neg",
+      "self_cpu_us": 3386.4920000720304,
+      "device_work_us": 2669.675999988802,
+      "events": 504
+    },
+    {
+      "name": "aten::min",
+      "self_cpu_us": 2433.5849999923475,
+      "device_work_us": 2516.4040000104997,
+      "events": 276
+    },
+    {
+      "name": "hipStreamWaitEvent",
+      "self_cpu_us": 1722.0840000059143,
+      "device_work_us": 2164.1490000016056,
+      "events": 272
+    }
+  ],
+  "top_steady_operators_by_self_cpu": [
+    {
+      "name": "hipMemcpyWithStream",
+      "self_cpu_us": 16488522.968000019,
+      "device_work_us": 0.0,
+      "events": 2672
+    },
+    {
+      "name": "cat_profile::backward",
+      "self_cpu_us": 11053161.615999999,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "cat_profile::train_step",
+      "self_cpu_us": 2157620.355000023,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "hipLaunchKernel",
+      "self_cpu_us": 390775.74400009355,
+      "device_work_us": 0.0,
+      "events": 99193
+    },
+    {
+      "name": "aten::bmm",
+      "self_cpu_us": 274642.8009996903,
+      "device_work_us": 9862490.089000192,
+      "events": 10076
+    },
+    {
+      "name": "aten::copy_",
+      "self_cpu_us": 215900.11300001683,
+      "device_work_us": 1838707.436999909,
+      "events": 29330
+    },
+    {
+      "name": "aten::mul_",
+      "self_cpu_us": 176582.56499999657,
+      "device_work_us": 340694.9680000332,
+      "events": 2212
+    },
+    {
+      "name": "cat_profile::window_attention",
+      "self_cpu_us": 168884.28600016303,
+      "device_work_us": 0.0,
+      "events": 272
+    },
+    {
+      "name": "aten::mul",
+      "self_cpu_us": 164112.07699960674,
+      "device_work_us": 871095.7710000311,
+      "events": 15441
+    },
+    {
+      "name": "cat_profile::moe",
+      "self_cpu_us": 138568.2489999659,
+      "device_work_us": 0.0,
+      "events": 272
+    },
+    {
+      "name": "cat_profile::cross_attention",
+      "self_cpu_us": 117294.34100003995,
+      "device_work_us": 0.0,
+      "events": 208
+    },
+    {
+      "name": "aten::empty",
+      "self_cpu_us": 98448.54300014045,
+      "device_work_us": 0.0,
+      "events": 35724
+    },
+    {
+      "name": "aten::mm",
+      "self_cpu_us": 89526.14200009246,
+      "device_work_us": 1734606.7630000527,
+      "events": 2704
+    },
+    {
+      "name": "IndexAddBackward0",
+      "self_cpu_us": 89170.25600012089,
+      "device_work_us": 0.0,
+      "events": 104
+    },
+    {
+      "name": "aten::slice",
+      "self_cpu_us": 79161.13599994098,
+      "device_work_us": 0.0,
+      "events": 22720
+    },
+    {
+      "name": "aten::as_strided",
+      "self_cpu_us": 78620.93599981547,
+      "device_work_us": 0.0,
+      "events": 70344
+    },
+    {
+      "name": "aten::add_",
+      "self_cpu_us": 70552.1640000998,
+      "device_work_us": 443567.79699993983,
+      "events": 8305
+    },
+    {
+      "name": "aten::reshape",
+      "self_cpu_us": 68985.90999956372,
+      "device_work_us": 0.0,
+      "events": 31752
+    },
+    {
+      "name": "cat_profile::forward",
+      "self_cpu_us": 65889.64999998035,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "aten::sqrt",
+      "self_cpu_us": 62194.06399999163,
+      "device_work_us": 655.668999990361,
+      "events": 784
+    },
+    {
+      "name": "aten::matmul",
+      "self_cpu_us": 58868.79300004649,
+      "device_work_us": 0.0,
+      "events": 6812
+    },
+    {
+      "name": "aten::expand",
+      "self_cpu_us": 57344.14900007683,
+      "device_work_us": 0.0,
+      "events": 18460
+    },
+    {
+      "name": "hipExtModuleLaunchKernel",
+      "self_cpu_us": 53480.825000024415,
+      "device_work_us": 0.0,
+      "events": 12780
+    },
+    {
+      "name": "aten::_scaled_dot_product_attention_math",
+      "self_cpu_us": 53281.44300027083,
+      "device_work_us": 0.0,
+      "events": 2520
+    },
+    {
+      "name": "aten::fill_",
+      "self_cpu_us": 51802.31800013393,
+      "device_work_us": 173766.0539999901,
+      "events": 16601
+    },
+    {
+      "name": "aten::transpose",
+      "self_cpu_us": 47614.65999996334,
+      "device_work_us": 0.0,
+      "events": 14491
+    },
+    {
+      "name": "aten::view",
+      "self_cpu_us": 46748.3110002601,
+      "device_work_us": 0.0,
+      "events": 23137
+    },
+    {
+      "name": "cat_profile::optimizer",
+      "self_cpu_us": 46063.10800001584,
+      "device_work_us": 0.0,
+      "events": 4
+    },
+    {
+      "name": "aten::_fused_rms_norm",
+      "self_cpu_us": 43056.34700011559,
+      "device_work_us": 118747.3559999672,
+      "events": 1716
+    },
+    {
+      "name": "aten::_safe_softmax",
+      "self_cpu_us": 42960.40799997699,
+      "device_work_us": 0.0,
+      "events": 2520
+    },
+    {
+      "name": "aten::where",
+      "self_cpu_us": 41853.0329999733,
+      "device_work_us": 340845.645999979,
+      "events": 7660
+    },
+    {
+      "name": "aten::empty_strided",
+      "self_cpu_us": 39269.56499983824,
+      "device_work_us": 0.0,
+      "events": 12626
+    },
+    {
+      "name": "aten::_to_copy",
+      "self_cpu_us": 39181.12400021036,
+      "device_work_us": 0.0,
+      "events": 10099
+    },
+    {
+      "name": "BmmBackward0",
+      "self_cpu_us": 34584.127999943215,
+      "device_work_us": 0.0,
+      "events": 2350
+    },
+    {
+      "name": "aten::_unsafe_view",
+      "self_cpu_us": 28012.160999987937,
+      "device_work_us": 0.0,
+      "events": 11984
+    },
+    {
+      "name": "aten::clone",
+      "self_cpu_us": 27849.46300007696,
+      "device_work_us": 0.0,
+      "events": 8018
+    },
+    {
+      "name": "aten::sum",
+      "self_cpu_us": 24070.479000094805,
+      "device_work_us": 70032.54300000804,
+      "events": 2594
+    },
+    {
+      "name": "autograd::engine::evaluate_function: SliceBackward0",
+      "self_cpu_us": 23578.231999893906,
+      "device_work_us": 0.0,
+      "events": 4041
+    },
+    {
+      "name": "autograd::engine::evaluate_function: ExpandBackward0",
+      "self_cpu_us": 21911.331999913324,
+      "device_work_us": 0.0,
+      "events": 6426
+    },
+    {
+      "name": "aten::scalar_tensor",
+      "self_cpu_us": 21766.117999910082,
+      "device_work_us": 0.0,
+      "events": 7656
+    }
+  ],
+  "accounting": [
+    "Self CPU times are assigned once by parent chain; CE is excluded from forward.",
+    "Events without a labelled ancestor use enclosing CPU time_range scopes, choosing save/eval before the narrowest phase, then train_step bookkeeping.",
+    "Device work sums linked kernel durations; it is not GPU wall time and may overlap CPU or other GPU work.",
+    "Global top operator tables include save/eval/other; top_steady tables include only steady phase events.",
+    "Transfer overlay includes aten::to/copy and memcpy inside steady phases; it overlaps phase totals and may include dtype conversions.",
+    "Save/eval and events outside train_step are excluded from steady fractions; unlabelled work inside train_step is bookkeeping.",
+    "Step spans start at _forward_loss and end after Adam.step; they include next-batch prefetch after backward, but exclude LR/zero_grad and the first active batch's earlier prefetch.",
+    "Data includes packed-row assembly and H2D; CE includes vocabulary-head GEMMs, not just softmax."
+  ]
+}
