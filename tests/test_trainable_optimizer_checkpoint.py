@@ -170,6 +170,7 @@ class TrainableOptimizerCheckpointTests(unittest.TestCase):
             trainer.save_full = False
             trainer.save_optim = True
             trainer.save_keep = 2
+            trainer.save_every_seconds = 0.0
             trainer.rank = 0
             trainer._trainable_names = None
             trainer._maybe_save(model, opt, {"step": 4}, "step_4.pt")

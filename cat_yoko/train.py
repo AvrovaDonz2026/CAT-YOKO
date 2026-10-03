@@ -165,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--ddp", action="store_true", help="DDP (also auto when WORLD_SIZE>1)")
     p.add_argument("--save-dir", type=Path, default=None)
     p.add_argument("--save-every", type=int, default=0)
+    p.add_argument("--save-every-seconds", type=float, default=0,
+                   help="single-process checkpoint interval in seconds; 0 disables timed saves")
     p.add_argument(
         "--resume",
         type=Path,
@@ -497,6 +499,7 @@ def main(argv: list[str] | None = None) -> int:
         zero_offload_param=bool(args.zero_offload_param),
         save_dir=args.save_dir,
         save_every=args.save_every,
+        save_every_seconds=args.save_every_seconds,
         log_every=args.log_every,
         log_path=args.log,
         eval_every=args.eval_every,

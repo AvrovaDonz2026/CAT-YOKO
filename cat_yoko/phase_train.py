@@ -87,6 +87,7 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
     p.add_argument("--eval-batches", type=int, default=None)
     p.add_argument("--save-dir", type=Path, default=Path("checkpoints") / phase.lower())
     p.add_argument("--save-every", type=int, default=None)
+    p.add_argument("--save-every-seconds", type=float, default=0)
     p.add_argument("--log", type=Path, default=None)
     p.add_argument("--resume", type=Path, default=None)
     p.add_argument("--seq-len", type=int, default=None)
@@ -272,6 +273,8 @@ def build_phase_argv(phase: str, argv: list[str] | None = None) -> list[str]:
         out.extend(["--save-every", str(every)])
     if args.log_every is not None:
         out.extend(["--log-every", str(args.log_every)])
+    if args.save_every_seconds:
+        out.extend(["--save-every-seconds", str(args.save_every_seconds)])
     if args.data is not None:
         out.extend(["--data", str(args.data)])
     if args.eval_data is not None:

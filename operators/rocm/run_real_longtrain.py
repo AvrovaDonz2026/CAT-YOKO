@@ -250,7 +250,9 @@ def training_command(args, corpus: dict, *, stage: str, resume: Path,
             "--moe-layout", "shared-storage", "--deterministic-parity", "--reference-repeat",
             "--parity-seqs", "64,4096" if smoke else "4096", "--seq-len", "4096",
             "--run-steps", str(updates), "--max-hours", "0.25" if smoke else str(args.max_hours),
-            "--save-every", "1" if smoke else "100", "--keep-last", "2" if smoke else "3",
+            "--save-every", "1" if smoke else ("0" if args.save_every_seconds else "100"),
+            "--save-every-seconds", "0" if smoke else str(args.save_every_seconds),
+            "--keep-last", "2" if smoke else str(args.keep_last),
             "--eval-every", "0" if smoke else "250", "--eval-batches", "4" if smoke else "32",
             "--save-optim", "--wait-gpu-idle"]
 
@@ -287,12 +289,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-hours", type=float, default=24,
                         help="long Trainer-loop cap; excludes preparation, parity, and smoke")
+    parser.add_argument("--save-every-seconds", type=float, default=300,
+                        help="long-run checkpoint interval; default 5 minutes after completed updates")
+    parser.add_argument("--keep-last", type=int, default=3,
+                        help="retain this many numbered checkpoints after successful publication")
     return parser
 
 
 def supervise(args) -> dict:
     if not math.isfinite(args.max_hours) or args.max_hours <= 0:
         raise ValueError("max-hours must be finite and positive")
+    if not math.isfinite(args.save_every_seconds) or args.save_every_seconds < 0:
+        raise ValueError("save-every-seconds must be finite and nonnegative")
+    if args.keep_last < 1:
+        raise ValueError("keep-last must be positive")
     for key in ("work_dir", "source_dir", "data_dir", "base", "resume", "out"):
         setattr(args, key, getattr(args, key).resolve())
     if not args.work_dir.is_dir() or not args.source_dir.is_dir():
@@ -309,6 +319,7 @@ def supervise(args) -> dict:
     status = {"status": "starting", "supervisor_pid": os.getpid(), "started_at": utc_now(),
               "source_checkpoint": str(args.resume), "data_dir": str(args.data_dir),
               "max_long_train_hours": args.max_hours,
+              "save_every_seconds": args.save_every_seconds, "keep_last": args.keep_last,
               "time_limit_scope": "long Trainer loop only; excludes preparation, smoke, reconstruction, parity",
               "retries": 0, "controls_other_gpu_jobs": False}
 

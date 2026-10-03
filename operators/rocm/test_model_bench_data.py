@@ -71,9 +71,16 @@ class RealDataContinuationTests(unittest.TestCase):
         for flags in (("--eval-every", "-1"), ("--eval-batches", "0"),
                       ("--eval-every", "10"), ("--eos-id", "-1"),
                       ("--max-hours", "0"), ("--max-hours", "nan"),
-                      ("--max-hours", "inf"), ("--data", str(self.root / "missing.bin"))):
+            ("--max-hours", "inf"), ("--data", str(self.root / "missing.bin"))):
             with self.subTest(flags=flags), self.assertRaises(SystemExit):
                 self.parsed(*flags)
+
+    def test_timed_checkpoint_interval_validation(self):
+        args, _ = self.parsed("--save-every", "0", "--save-every-seconds", "300", "--keep-last", "3")
+        self.assertEqual(args.save_every_seconds, 300)
+        for value in ("-1", "nan", "inf"):
+            with self.subTest(value=value), self.assertRaises(SystemExit):
+                self.parsed("--save-every-seconds", value)
 
     def test_parity_uses_real_document_masks_and_ignores_dummy_cursor(self):
         dummy = DummyStream(self.cfg.vocab_size, 8, 11)

@@ -168,7 +168,9 @@ def publish_latest(step_path: Path, latest_path: Path | None = None) -> Path:
     """Point ``latest.pt`` at ``step_N.pt`` without a second 23GiB ``torch.save``.
 
     Same-directory hardlink when the FS allows it (nlink=2, no extra bytes).
-    Copy only if ``os.link`` fails. Unlink a leftover ``latest.pt.tmp`` first.
+    Build a same-directory temporary hardlink (or copy), then atomically
+    replace ``latest``. The previous checkpoint remains visible until the new
+    file is complete and the replace succeeds; failures remove the temporary.
     """
     step_path = Path(step_path)
     if not step_path.is_file():
@@ -182,14 +184,16 @@ def publish_latest(step_path: Path, latest_path: Path | None = None) -> Path:
                 return latest
         except OSError:
             pass
-        latest.unlink()
     try:
-        os.link(step_path, latest)
+        try:
+            os.link(step_path, tmp)
+        except OSError:
+            require_free_bytes(latest.parent, step_path.stat().st_size, what=str(latest))
+            shutil.copy2(step_path, tmp)
+        os.replace(tmp, latest)
         return latest
-    except OSError:
-        require_free_bytes(latest.parent, step_path.stat().st_size, what=str(latest))
-        shutil.copy2(step_path, latest)
-        return latest
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def model_state_dict(model: nn.Module) -> dict[str, torch.Tensor]:

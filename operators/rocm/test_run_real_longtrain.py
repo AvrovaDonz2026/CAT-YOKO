@@ -94,10 +94,17 @@ class LongtrainSupervisorTests(unittest.TestCase):
         self.assertEqual(option(long, "--eval-every"), "250")
         self.assertEqual(option(long, "--eval-batches"), "32")
         self.assertEqual(option(long, "--max-hours"), "24")
+        self.assertEqual(option(long, "--save-every-seconds"), "300")
+        self.assertEqual(option(long, "--save-every"), "0")
+        self.assertEqual(option(long, "--keep-last"), "3")
+        self.assertEqual(option(smoke, "--save-every-seconds"), "0")
         for command in (smoke, long):
             self.assertEqual(option(command, "--moe-layout"), "shared-storage")
             self.assertIn("--save-optim", command)
             self.assertIn("--wait-gpu-idle", command)
+        args.save_every_seconds = 0
+        legacy = training_command(args, corpus, stage="long", resume=args.resume, updates=3)
+        self.assertEqual(option(legacy, "--save-every"), "100")
 
     def test_real_stdlib_child_logs_pid_and_propagates_failure(self):
         events = []
@@ -154,6 +161,12 @@ class LongtrainSupervisorTests(unittest.TestCase):
         args.max_hours = float("nan")
         with self.assertRaisesRegex(ValueError, "finite"):
             supervise(args)
+        for key, value in (("save_every_seconds", -1), ("save_every_seconds", float("nan")),
+                           ("keep_last", 0)):
+            args = self.args()
+            setattr(args, key, value)
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                supervise(args)
 
 
 if __name__ == "__main__":

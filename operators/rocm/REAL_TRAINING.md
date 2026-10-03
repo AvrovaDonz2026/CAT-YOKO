@@ -76,13 +76,41 @@ An incompatible supplied optimizer is an error when optimizer saving is
 requested. Frozen base weights are reconstructed rather than serialized into
 each overlay. Use the explicit final `trainable.pt` path for future resumes.
 
-The long run saves every 100 updates and retains three numbered checkpoints,
+The run launched on October 2 saves every 100 updates and retains three numbered checkpoints,
 evaluates 32 fixed validation batches every 250 updates, and records initial
 and final held-out NLL. Periodic evaluation samples **131072 input tokens**
 from the independent validation bin; valid loss tokens exclude boundaries.
 Logs report valid token counts, actual throughput, and peak memory. Packed
 multi-document masks can change both speed and memory compared with DummyStream;
 the earlier 4.4x result is not a promised real-text speedup.
+
+## Five-minute checkpoint saves
+
+New launches of the supervisor default to `--save-every-seconds 300 --keep-last 3`.
+The existing running process cannot change its interval through a source edit;
+the new setting takes effect on the next launch or continuation.
+
+For a continuation from a real-text checkpoint with Adam, use `model_bench.py`
+with the normal base/data/evaluation arguments and add:
+
+```sh
+--save-every 0 --save-every-seconds 300 --keep-last 3 --save-optim
+```
+
+Timed saves happen after completed optimizer updates. The interval starts after
+the previous checkpoint successfully finishes, so update and I/O time can make
+the wall-clock spacing longer than five minutes. The prefetch cursor and RNG are
+captured at the same boundary as step-based saves. CPU FP32 Adam moments and
+step counters remain in each overlay.
+
+Numbered files are completed before a temporary hardlink or copy atomically
+replaces `trainable.pt`/`latest.pt`. Only then does retention remove older
+numbered checkpoints from the same save directory. A failed save or publication
+keeps the previous latest checkpoint and does not advance the save timer.
+Timed final saves also use numbered files, so they enter the same retention
+policy; the latest hardlink does not consume another checkpoint's storage.
+Source checkpoints in other directories and the base model are not reclaimed.
+Timed saving currently supports one training process.
 
 The supervisor records process IDs and stage status under its output directory,
 with separate smoke and long-run logs. Failed preparation or parity prevents

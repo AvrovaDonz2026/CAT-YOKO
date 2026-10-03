@@ -253,6 +253,7 @@ class Trainer:
         zero_offload_param: bool = False,
         save_dir: Path | None = None,
         save_every: int = 0,
+        save_every_seconds: float = 0,
         resume: Path | None = None,
         log_every: int = 1,
         log_path: Path | None = None,
@@ -306,6 +307,10 @@ class Trainer:
             raise ValueError("DeepSpeed ZeRO cannot mix --fsdp/--ddp")
         self.save_dir = Path(save_dir) if save_dir else None
         self.save_every = save_every
+        if not math.isfinite(save_every_seconds) or save_every_seconds < 0:
+            raise ValueError("save_every_seconds must be finite and nonnegative")
+        self.save_every_seconds = float(save_every_seconds)
+        self._last_checkpoint_time: float | None = None
         self.resume = Path(resume) if resume else None
         if self.resume is not None:
             self.resume = resolve_resume_path(self.resume)
@@ -342,6 +347,8 @@ class Trainer:
         )
         if self.max_train_seconds is not None and self.world != 1:
             raise ValueError("max_train_seconds currently requires a single process")
+        if self.save_every_seconds and self.world != 1:
+            raise ValueError("save_every_seconds currently requires a single process")
         if seq_len is not None:
             packed = sidecar_meta(data).get("seq_len") if data is not None else None
             self.seq_len = int(seq_len)
@@ -446,6 +453,17 @@ class Trainer:
                 full_sd = gathered_state_dict(model)
         if not is_rank0(self.rank):
             return
+        if self.save_every_seconds and tag == "latest.pt" and extra.get("step") is not None:
+            step = int(extra["step"])
+            numbered = []
+            if self.save_trainable:
+                numbered.append(self.save_dir / f"trainable_step_{step}.pt")
+            if self.save_full:
+                numbered.append(self.save_dir / f"step_{step}.pt")
+            if numbered and not all(path.is_file() for path in numbered):
+                # Keep a time-mode final save inside the same numbered rotation;
+                # a completed periodic save at this step can be reused below.
+                tag = f"step_{step}.pt"
         if self.save_trainable:
             if tag == "latest.pt":
                 step = extra.get("step")
@@ -485,6 +503,8 @@ class Trainer:
                 save_optimizer=self.save_optim,
                 model_state=full_sd,
             )
+            if tag.startswith("step_"):
+                publish_latest(dest, self.save_dir / "latest.pt")
         if tag.startswith("step_") and self.save_keep:
             prune_step_checkpoints(self.save_dir, self.save_keep)
 
@@ -1083,6 +1103,7 @@ class Trainer:
                 prefetched_stream_state = stream.state_dict()
             self._prefetch_batch = stream.batch(self.micro_batch, self.device)
         training_started = time.monotonic()
+        self._last_checkpoint_time = training_started if self.save_every_seconds else None
         stop_reason = "single_step"
         try:
             while True:
@@ -1228,6 +1249,13 @@ class Trainer:
                         step_reward = rew.detach().float().reshape(())
                 allreduce_router_loads(model, device=str(self.device), world=self.world)
                 will_save = bool(self.save_every and next_step % self.save_every == 0)
+                if self.save_every_seconds and self.save_dir is not None:
+                    # Decide before prefetch advances the stream. Save only
+                    # after this update finishes, then start the next interval
+                    # when serialization and publication have succeeded.
+                    will_save = will_save or (
+                        time.monotonic() - self._last_checkpoint_time >= self.save_every_seconds
+                    )
                 tokens_after = tokens_in_phase + step_tokens * self.world
                 will_stop = (
                     (stop_step is not None and next_step >= stop_step)
@@ -1373,6 +1401,8 @@ class Trainer:
                     barrier()
                     self._maybe_save(model, opt, extra, f"step_{step}.pt")
                     barrier()
+                    if self.save_every_seconds and self.save_dir is not None:
+                        self._last_checkpoint_time = time.monotonic()
                 if will_stop:
                     stop_reason = (
                         "tokens" if phase_budget is not None and tokens_in_phase >= phase_budget

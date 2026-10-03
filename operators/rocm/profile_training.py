@@ -374,6 +374,7 @@ def benchmark_arguments(args, resume):
         "eval-data": args.eval_data, "eos-id": args.eos_id,
         "eval-every": args.eval_every, "eval-batches": args.eval_batches,
         "save-every": args.save_every, "keep-last": args.keep_last,
+        "save-every-seconds": args.save_every_seconds,
         "cpu-threads": args.cpu_threads, "loss-atol": args.loss_atol,
         "grad-relative-l2": args.grad_relative_l2, "output-relative-l2": args.output_relative_l2,
     }

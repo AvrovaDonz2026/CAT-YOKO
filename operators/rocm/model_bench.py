@@ -306,6 +306,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reference-repeat", action="store_true",
                         help="repeat the native 4096-token reference before installing the layout")
     parser.add_argument("--save-every", type=int, default=5)
+    parser.add_argument("--save-every-seconds", type=float, default=0,
+                        help="save after a complete update when this time interval expires; 0 disables")
     parser.add_argument("--keep-last", type=int, default=2)
     parser.add_argument("--cpu-threads", type=int, default=8)
     parser.add_argument("--wait-gpu-idle", action="store_true",
@@ -333,6 +335,8 @@ def validate_args(parser: argparse.ArgumentParser, args) -> list[int]:
         parser.error("max-hours must be finite and positive")
     if args.eval_every < 0 or args.eval_batches <= 0:
         parser.error("eval-every must be nonnegative; eval-batches must be positive")
+    if not math.isfinite(args.save_every_seconds) or args.save_every_seconds < 0:
+        parser.error("save-every-seconds must be finite and nonnegative")
     if args.eval_every and args.eval_data is None:
         parser.error("eval-every requires eval-data")
     if args.eos_id is not None and args.eos_id < 0:
@@ -397,6 +401,9 @@ def main(argv: list[str] | None = None) -> int:
         "eval_every": args.eval_every, "eval_batches": args.eval_batches,
         "source_stream_kind": (extra.get("stream") or {}).get("kind"),
         "save_optimizer": args.save_optim,
+        "save_every_steps": args.save_every,
+        "save_every_seconds": args.save_every_seconds,
+        "keep_last": args.keep_last,
         "source_optimizer_present": source_optimizer_present,
         "max_train_seconds": args.max_hours * 3600 if args.max_hours is not None else None,
         "requested_updates": args.run_steps,
@@ -522,6 +529,7 @@ def main(argv: list[str] | None = None) -> int:
         eval_every=args.eval_every, eval_batches=args.eval_batches,
         grad_ckpt=True, offload_encoder=False, offload_blocks=False, optim_cpu=True,
         save_dir=training_dir, save_every=args.save_every, save_keep=args.keep_last,
+        save_every_seconds=args.save_every_seconds,
         save_full=False, save_trainable=True, save_optim=args.save_optim,
         log_every=1, log_path=training_dir / "metrics.jsonl",
     )
