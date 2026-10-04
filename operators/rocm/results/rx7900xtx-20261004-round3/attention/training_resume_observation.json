@@ -1,0 +1,10 @@
+{
+  "observed_at_utc": "2026-10-04T03:26:43Z",
+  "worker_pid": 1566889,
+  "completed_step": 52498,
+  "checkpoint_step": 52446,
+  "process_state": "R",
+  "gpu_pids": [
+    "1566889"
+  ]
+}

@@ -1,5 +1,9 @@
 # ROCm operator experiments
 
+[The October 4 operator experiments](OPERATOR_ROUND3_20261004.md) test document
+split backward and a BF16 CPU Adam cache. Both are opt-in candidates; operator
+timings do not qualify them for the active continuation.
+
 [Real-text B0 continuation](REAL_TRAINING.md) describes the bounded corpus,
 held-out evaluation, optimizer-state recovery, and 24-hour training supervisor.
 

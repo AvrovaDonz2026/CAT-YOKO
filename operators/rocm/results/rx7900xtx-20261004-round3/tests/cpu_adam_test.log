@@ -1,0 +1,16 @@
+test_checkpoint_resume_load_invalidates_cache_without_new_state_keys_or_group_mapping (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_checkpoint_resume_load_invalidates_cache_without_new_state_keys_or_group_mapping) ... ok
+test_external_version_change_and_explicit_alias_invalidation_rebuild_latest_bf16 (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_external_version_change_and_explicit_alias_invalidation_rebuild_latest_bf16) ... ok
+test_guards_leave_bad_gradients_unconsumed_and_exception_restores_methods_and_clears_cache (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_guards_leave_bad_gradients_unconsumed_and_exception_restores_methods_and_clears_cache) ... ok
+test_multistep_native_weights_and_moments_are_byteequal_with_skipped_gradient_and_lr_schedule (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_multistep_native_weights_and_moments_are_byteequal_with_skipped_gradient_and_lr_schedule) ... ok
+test_per_step_bf16_rounding_uses_no_fp32_master (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_per_step_bf16_rounding_uses_no_fp32_master) ... /home/donz/cat-yoko-rocm-20261002/source-split-20261004T0310/operators/rocm/test_cpu_adam_cached.py:173: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  self.assertEqual(float(parameter), 1.0)
+ok
+test_step_params_uses_native_fallback_and_later_regular_step_rebuilds (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_step_params_uses_native_fallback_and_later_regular_step_rebuilds) ... ok
+test_storage_replacement_is_detected_even_when_parameter_version_does_not_change (operators.rocm.test_cpu_adam_cached.CachedCPUAdamTests.test_storage_replacement_is_detected_even_when_parameter_version_does_not_change) ... ok
+test_candidate_module_parses (operators.rocm.test_cpu_adam_cached.CachedSourceTests.test_candidate_module_parses) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.713s
+
+OK

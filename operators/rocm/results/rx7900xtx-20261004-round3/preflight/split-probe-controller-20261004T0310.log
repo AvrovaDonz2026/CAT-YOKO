@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/donz/cat-yoko-rocm-20261002/source-split-20261004T0310/cat-yoko-split-probe.py", line 42, in <module>
+    if free < 6*2**30:raise RuntimeError('less than 6 GiB free for copy-inclusive full-length split microcheck')
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: less than 6 GiB free for copy-inclusive full-length split microcheck

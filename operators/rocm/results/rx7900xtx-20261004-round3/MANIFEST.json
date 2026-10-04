@@ -1,0 +1,22 @@
+{
+  "files": {
+    "operators/rocm/results/rx7900xtx-20261004-round3/attention/continuation_checkpoint_check.log": "8b946f443b53830106517775ce0030f42ff54aa460ca065af89d6bd19c42db99",
+    "operators/rocm/results/rx7900xtx-20261004-round3/attention/probe_controller.py": "95a7777082be163709628ee0138e08677bf00d06467af3bc024755afab71c52d",
+    "operators/rocm/results/rx7900xtx-20261004-round3/attention/probe_receipt.json": "27651ee2c94f883dc9397b43442e68103fb8fe7c9e783fe009b76eea40d2d85a",
+    "operators/rocm/results/rx7900xtx-20261004-round3/attention/split_attention.jsonl": "7507db01cdc84e20cc63512c4099d14739436830309fcc644811e4bed01b398e",
+    "operators/rocm/results/rx7900xtx-20261004-round3/attention/split_attention.log": "7507db01cdc84e20cc63512c4099d14739436830309fcc644811e4bed01b398e",
+    "operators/rocm/results/rx7900xtx-20261004-round3/attention/training_resume_observation.json": "0acb08c73514c8946a24b87e5ff9dda8456cc86e19db806012f3969657e9350c",
+    "operators/rocm/results/rx7900xtx-20261004-round3/cached_adam/cached_cpu_adam.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "operators/rocm/results/rx7900xtx-20261004-round3/cached_adam/continuation_checkpoint_check.log": "1e794f70eded2ce437b5b3221503c057f35de8a4620575493e0c014374640217",
+    "operators/rocm/results/rx7900xtx-20261004-round3/cached_adam/cpu_adam_cached.json": "1f2f434819c0e79a512e746f11e13cf5ec86e7153f60cb1c00631a532e4bc2b3",
+    "operators/rocm/results/rx7900xtx-20261004-round3/cached_adam/probe_controller.py": "ba9a2fa3c96b360f779da6e40e6b14de3cd5d7755aa620d6d116d7a773cc0508",
+    "operators/rocm/results/rx7900xtx-20261004-round3/cached_adam/probe_receipt.json": "dbc60d0b2c1360cc53b6aee46274fcde3f5156d27d8e59d74cdd3b51c4c1f2b9",
+    "operators/rocm/results/rx7900xtx-20261004-round3/cached_adam/training_resume_observation.json": "b38b3548061570bf4d92d06a0296b769a0a32967b983a1a1df46d5b27f7f3b63",
+    "operators/rocm/results/rx7900xtx-20261004-round3/preflight/probe_receipt.json": "2b0f68b44fef41932a788ca40fc58b9aa08aec14e571d81b2849bf9153d0ec8f",
+    "operators/rocm/results/rx7900xtx-20261004-round3/preflight/split-probe-controller-20261004T0310.log": "695357a7c8a3de731aeb5fbc26f25f7b6b20025b66b915cf84c7b9cbad54ee23",
+    "operators/rocm/results/rx7900xtx-20261004-round3/tests/cached_bench_cpu_smoke.log": "435ff51d34c96c6edeb1e45456a80d3f730744c649cbc27c9ce7aef553c33b26",
+    "operators/rocm/results/rx7900xtx-20261004-round3/tests/cpu_adam_test.log": "746ff8d06c4f6740331ce4a45170fc71f0b6757ff9ccb6554720dde88420ddc2",
+    "operators/rocm/results/rx7900xtx-20261004-round3/tests/cpu_test.log": "158c54497ca42aff32239b5fa1f5eb6cdc615d4714d0790dc21d8eb3876d89ea"
+  },
+  "scope": "operator microchecks; no production installation or full-model acceptance"
+}

@@ -1,0 +1,8 @@
+{
+  "status": "preflight_failed",
+  "controller_pid": 1701015,
+  "started_at": "2026-10-04T03:17:10.259085+00:00",
+  "source_dir": "/home/donz/cat-yoko-rocm-20261002/source-split-20261004T0310",
+  "error": "free_gpu_bytes below 6GiB; no signal sent",
+  "worker_paused": false
+}

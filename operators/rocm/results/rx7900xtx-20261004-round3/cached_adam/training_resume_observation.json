@@ -1,0 +1,13 @@
+{
+  "observed_at_utc": "2026-10-04T03:34:44Z",
+  "worker_pid": 1566889,
+  "worker_identity_matches": true,
+  "process_state": "S",
+  "completed_step": 52543,
+  "checkpoint_step_before_micro": 52493,
+  "latest_periodic_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/longtrain-45024-20261003T1520/continuation/train/trainable_step_52506.pt",
+  "latest_checkpoint_age_seconds": 202.67752194404602,
+  "gpu_pids": [
+    "1566889"
+  ]
+}
