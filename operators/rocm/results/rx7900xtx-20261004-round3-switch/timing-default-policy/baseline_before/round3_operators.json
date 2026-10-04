@@ -1,0 +1,173 @@
+{
+  "split_attention": false,
+  "cached_cpu_adam": false,
+  "sync_update_timing": true,
+  "patches_installed_after_native_reference": true,
+  "full_model_parity_passed": true,
+  "cached_cpu_adam_training_exercised": false,
+  "file_sha256": {
+    "operators/rocm/round3_candidate_bench.py": "ace6dd0350e5cbca4f9aefea95cacb5b268173175414345ad2a9327f317b2d69",
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7",
+    "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+    "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+    "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+    "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d",
+    "operators/rocm/update_timing.py": "a9a13968f8deaa19ccbcf5d2812f8820df7abfa41fe6c3e2951c2a39dfd4c719"
+  },
+  "optimizer_device": "cpu",
+  "checkpoint_format_changed": false,
+  "persistent_fp32_master": false,
+  "notes": [
+    "Native/reference-repeat captures precede all new context installation.",
+    "The existing loss, sampled-output and all-132-gradient gates remain in force.",
+    "Gradient parity alone does not compare Adam arithmetic; independent optimizer checks are required.",
+    "Parity-only never verifies or claims cached optimizer updates.",
+    "No context changes another process or the source checkpoint."
+  ],
+  "update_timing_calls": {
+    "status": "complete",
+    "error": null,
+    "warmup_updates": 5,
+    "started_updates": 20,
+    "completed_updates": 20,
+    "incomplete_update": false,
+    "measured_updates": 15,
+    "discarded_updates": 5,
+    "samples": [
+      {
+        "invocation_update": 1,
+        "tokens": 4096,
+        "elapsed_s": 6.9581544999964535,
+        "completed_update_tokens_s": 588.661835548792
+      },
+      {
+        "invocation_update": 2,
+        "tokens": 4096,
+        "elapsed_s": 5.469428204989526,
+        "completed_update_tokens_s": 748.8899838311057
+      },
+      {
+        "invocation_update": 3,
+        "tokens": 4096,
+        "elapsed_s": 4.885638858017046,
+        "completed_update_tokens_s": 838.3755162907108
+      },
+      {
+        "invocation_update": 4,
+        "tokens": 4096,
+        "elapsed_s": 5.394023446016945,
+        "completed_update_tokens_s": 759.3589536627929
+      },
+      {
+        "invocation_update": 5,
+        "tokens": 4096,
+        "elapsed_s": 4.971304186037742,
+        "completed_update_tokens_s": 823.9286607131997
+      },
+      {
+        "invocation_update": 6,
+        "tokens": 4096,
+        "elapsed_s": 6.985219475987833,
+        "completed_update_tokens_s": 586.3810026414028
+      },
+      {
+        "invocation_update": 7,
+        "tokens": 4096,
+        "elapsed_s": 4.6869958490133286,
+        "completed_update_tokens_s": 873.9073239977927
+      },
+      {
+        "invocation_update": 8,
+        "tokens": 4096,
+        "elapsed_s": 5.400826533033978,
+        "completed_update_tokens_s": 758.4024361728618
+      },
+      {
+        "invocation_update": 9,
+        "tokens": 4096,
+        "elapsed_s": 5.381951433024369,
+        "completed_update_tokens_s": 761.0622375494509
+      },
+      {
+        "invocation_update": 10,
+        "tokens": 4096,
+        "elapsed_s": 5.81512941303663,
+        "completed_update_tokens_s": 704.3695348924472
+      },
+      {
+        "invocation_update": 11,
+        "tokens": 4096,
+        "elapsed_s": 5.145668689976446,
+        "completed_update_tokens_s": 796.0092743590044
+      },
+      {
+        "invocation_update": 12,
+        "tokens": 4096,
+        "elapsed_s": 4.847983895975631,
+        "completed_update_tokens_s": 844.8872949846509
+      },
+      {
+        "invocation_update": 13,
+        "tokens": 4096,
+        "elapsed_s": 6.984736395999789,
+        "completed_update_tokens_s": 586.4215580627796
+      },
+      {
+        "invocation_update": 14,
+        "tokens": 4096,
+        "elapsed_s": 6.9900035510072485,
+        "completed_update_tokens_s": 585.9796737027083
+      },
+      {
+        "invocation_update": 15,
+        "tokens": 4096,
+        "elapsed_s": 5.017809776007198,
+        "completed_update_tokens_s": 816.2924030291348
+      },
+      {
+        "invocation_update": 16,
+        "tokens": 4096,
+        "elapsed_s": 4.960848830000032,
+        "completed_update_tokens_s": 825.6651513406374
+      },
+      {
+        "invocation_update": 17,
+        "tokens": 4096,
+        "elapsed_s": 6.229834208963439,
+        "completed_update_tokens_s": 657.4813811428089
+      },
+      {
+        "invocation_update": 18,
+        "tokens": 4096,
+        "elapsed_s": 7.0465604300261475,
+        "completed_update_tokens_s": 581.276502298413
+      },
+      {
+        "invocation_update": 19,
+        "tokens": 4096,
+        "elapsed_s": 5.74912229902111,
+        "completed_update_tokens_s": 712.4565780584311
+      },
+      {
+        "invocation_update": 20,
+        "tokens": 4096,
+        "elapsed_s": 5.5266176569857635,
+        "completed_update_tokens_s": 741.1404685870693
+      }
+    ],
+    "median_completed_update_tokens_s": 741.1404685870693,
+    "sum_steady_elapsed_s": 86.76930843805894,
+    "steady_tokens": 61440,
+    "aggregate_completed_update_tokens_s": 708.0844725627784,
+    "scope": "forward start through completed optimizer update, including GPU synchronization",
+    "notes": [
+      "GPU is synchronized before the first microbatch and after each complete update.",
+      "Initialization, parity, initial/final evaluation, checkpoint saves and post-update logs are excluded.",
+      "LR/zero_grad and the already-prefetched current batch are excluded; next-batch prefetch is included.",
+      "Both variants must use this measurement; synchronization can change pipeline throughput."
+    ]
+  },
+  "status": "completed"
+}

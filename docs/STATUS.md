@@ -19,7 +19,7 @@ not started. The remote continuation remains active after this immutable save.
 | Native CPU Adam | **132** states, **264** finite FP32 moments, counter **17814** |
 | Full snapshot SHA256 | `d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df` |
 | Machine / runtime | RX 7900 XTX / gfx1100, PyTorch 2.9.1+ROCm 6.4, BF16 |
-| Current operators | Validated packed FP32 attention, shared frozen expert storage, native CPU FP32 Adam |
+| Operators used for this published snapshot | Validated packed FP32 attention, shared frozen expert storage, native CPU FP32 Adam |
 | Fixed held-out NLL | **7.900367** at step **52500**, 32 batches / 130877 valid loss tokens |
 
 The full file contains trainable weights, Adam, RNG and the packed cursor; it
@@ -39,20 +39,39 @@ intersection. Dataset versions and tokenizer hashes are in the
 Cumulative phase counters include DummyStream and must not be interpreted as
 all real-text training.
 
-The current supervisor is `runs/longtrain-45024-20261003T1520/status.json`.
+The current supervisor is `runs/round3-confirm-20261004T0455/status.json`, with
+the frozen source `source-round3-confirm-20261004T0455`. It resumes the complete
+**step 53143** checkpoint / packed cursor and Adam counter **18341**, using
+document-split FP32 attention and cached BF16 CPU-shadow Adam with shared frozen
+expert storage. The operator switch passed all 132 model-gradient gates and
+byte-exact weights/264 moments after two deterministic real updates. Production
+retains its original ordinary training policy and CPU FP32 Adam moments.
+The short old/new/old whole-update comparison gains **2.55–3.03%**; adoption was
+user-requested below the 5% automatic selection gate. See the
+[switch and recovery evidence](../operators/rocm/OPERATOR_SWITCH_20261004.md).
+
+At **2026-10-04T05:31:24Z**, the new backend has completed **106** consecutive
+updates to **53249**. Its first periodic complete checkpoint at **53201** /
+cursor and Adam counter **18399** passed the CPU recovery audit and a native
+Adam load/export bitwise check of all 264 moments. The ongoing run remains
+separate from the published step-52616 snapshot above.
+
 It targets **54333** without a time cap, saving every **300 seconds** and
 retaining the latest three periodic checkpoints. Fixed 32-batch evaluation
-runs every 250 updates. Completion is checked by a separate source/cursor/Adam
-auditor. The initial fixed evaluation was NLL **10.743914**; the later
+runs every 250 updates. The new supervisor checks periodic recovery snapshots
+and the exact final source/cursor/Adam boundary. The previous supervisor and
+auditor were superseded at the checkpoint-first handoff. The initial fixed
+evaluation was NLL **10.743914**; the later
 7.900367 observation uses the same held-out pilot, not a standard language
 quality benchmark.
 
 Use the [real-text recovery guide](../operators/rocm/REAL_TRAINING.md) and
 explicit original `train.bin`/`eval.bin` hashes from the release manifest.
 Older launchers default to DummyStream and cannot be used as a complete
-packed-stream recovery recipe. The new split-attention and cached-Adam
-[operator experiments](../operators/rocm/OPERATOR_ROUND3_20261004.md) remain
-independent candidates and are not installed in the active continuation.
+packed-stream recovery recipe. The earlier
+[operator microbenchmarks](../operators/rocm/OPERATOR_ROUND3_20261004.md) keep
+their narrower scope; the full acceptance and applied continuation are in the
+switch report above. This remains B0 on the bounded pilot; B1 has not started.
 
 ## Historical published progress (2026-09-20)
 

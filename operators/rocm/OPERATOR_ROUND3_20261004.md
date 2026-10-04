@@ -1,9 +1,10 @@
 # ROCm operator round 3 — document backward and CPU Adam transfers
 
-This round adds two independent, opt-in candidates. Neither is installed in the
-active B0 continuation. The production source remains frozen at
-`source-operators-round2-20261003T0903`; numerical microchecks and operator timings
-are not full-model acceptance or a measured training speedup.
+This report describes the independent, opt-in candidates before adoption, when
+the production source was `source-operators-round2-20261003T0903`. The later
+[checkpoint-first adoption](OPERATOR_SWITCH_20261004.md) records the additional
+full-model, real-update and recovery checks and the switch to both operators.
+The numerical microchecks and timings below keep their operator-only scope.
 
 Hardware: RX 7900 XTX, gfx1100, PyTorch 2.9.1+ROCm 6.4, BF16 parameters. The
 isolated experiment source is `source-split-20261004T0310`. Raw evidence is in
@@ -136,12 +137,15 @@ identity was complete, and its automatic resume protection was independent of
 the microprocess snapshot. Both actual probes finished normally and have
 separate evidence of subsequent training updates.
 
-## Acceptance still required
+## Acceptance required after these microbenchmarks
 
-Before applying either candidate to training, capture native deterministic
+The next acceptance step was to capture native deterministic
 reference repeats from the same fixed checkpoint, validate all 132 model
 gradients without relaxing existing thresholds, and bracket synchronized full
-training updates on the same data window. Require the existing conservative
-5% whole-update improvement, plus checkpoint export and resume checks. Attention
-must also cover the long-document shapes skipped here. B1 changes the frozen
-expert and memory assumptions and requires separate validation.
+training updates on the same data window, plus checkpoint export and resume
+checks and the long-document shapes skipped here. The existing conservative
+automatic selection gate was 5% whole-update improvement. The later
+[adoption report](OPERATOR_SWITCH_20261004.md) records passed mathematical and
+recovery checks and the user's explicit switch with a measured 2.55–3.03% gain,
+below that automatic gate. B1 changes the frozen expert and memory assumptions
+and requires separate validation.

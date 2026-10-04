@@ -1,0 +1,143 @@
+{
+  "status": "complete",
+  "error": null,
+  "warmup_updates": 5,
+  "started_updates": 20,
+  "completed_updates": 20,
+  "incomplete_update": false,
+  "measured_updates": 15,
+  "discarded_updates": 5,
+  "samples": [
+    {
+      "invocation_update": 1,
+      "tokens": 4096,
+      "elapsed_s": 7.0061484860489145,
+      "completed_update_tokens_s": 584.6293449469725
+    },
+    {
+      "invocation_update": 2,
+      "tokens": 4096,
+      "elapsed_s": 5.335191711958032,
+      "completed_update_tokens_s": 767.7324866919834
+    },
+    {
+      "invocation_update": 3,
+      "tokens": 4096,
+      "elapsed_s": 4.724947536014952,
+      "completed_update_tokens_s": 866.8879323588405
+    },
+    {
+      "invocation_update": 4,
+      "tokens": 4096,
+      "elapsed_s": 5.234735235979315,
+      "completed_update_tokens_s": 782.4655527651954
+    },
+    {
+      "invocation_update": 5,
+      "tokens": 4096,
+      "elapsed_s": 4.824556345003657,
+      "completed_update_tokens_s": 848.9899810667245
+    },
+    {
+      "invocation_update": 6,
+      "tokens": 4096,
+      "elapsed_s": 6.863875619019382,
+      "completed_update_tokens_s": 596.7474102604997
+    },
+    {
+      "invocation_update": 7,
+      "tokens": 4096,
+      "elapsed_s": 4.5413447709870525,
+      "completed_update_tokens_s": 901.9354853143516
+    },
+    {
+      "invocation_update": 8,
+      "tokens": 4096,
+      "elapsed_s": 5.199385087005794,
+      "completed_update_tokens_s": 787.7854652921644
+    },
+    {
+      "invocation_update": 9,
+      "tokens": 4096,
+      "elapsed_s": 5.249118525010999,
+      "completed_update_tokens_s": 780.3214921673763
+    },
+    {
+      "invocation_update": 10,
+      "tokens": 4096,
+      "elapsed_s": 5.559926367015578,
+      "completed_update_tokens_s": 736.7004038577987
+    },
+    {
+      "invocation_update": 11,
+      "tokens": 4096,
+      "elapsed_s": 5.102400720992591,
+      "completed_update_tokens_s": 802.7593722986124
+    },
+    {
+      "invocation_update": 12,
+      "tokens": 4096,
+      "elapsed_s": 4.670361440978013,
+      "completed_update_tokens_s": 877.0199162877345
+    },
+    {
+      "invocation_update": 13,
+      "tokens": 4096,
+      "elapsed_s": 6.885277570981998,
+      "completed_update_tokens_s": 594.8925018306585
+    },
+    {
+      "invocation_update": 14,
+      "tokens": 4096,
+      "elapsed_s": 6.88171283097472,
+      "completed_update_tokens_s": 595.2006572497222
+    },
+    {
+      "invocation_update": 15,
+      "tokens": 4096,
+      "elapsed_s": 4.863845190964639,
+      "completed_update_tokens_s": 842.1320661292771
+    },
+    {
+      "invocation_update": 16,
+      "tokens": 4096,
+      "elapsed_s": 4.778716275992338,
+      "completed_update_tokens_s": 857.1339588788275
+    },
+    {
+      "invocation_update": 17,
+      "tokens": 4096,
+      "elapsed_s": 6.122064068971667,
+      "completed_update_tokens_s": 669.0553959994756
+    },
+    {
+      "invocation_update": 18,
+      "tokens": 4096,
+      "elapsed_s": 6.8948790520080365,
+      "completed_update_tokens_s": 594.0640827930256
+    },
+    {
+      "invocation_update": 19,
+      "tokens": 4096,
+      "elapsed_s": 5.612060523999389,
+      "completed_update_tokens_s": 729.8567045889624
+    },
+    {
+      "invocation_update": 20,
+      "tokens": 4096,
+      "elapsed_s": 5.363980174006429,
+      "completed_update_tokens_s": 763.6120692334034
+    }
+  ],
+  "median_completed_update_tokens_s": 763.6120692334034,
+  "sum_steady_elapsed_s": 84.58894821890863,
+  "steady_tokens": 61440,
+  "aggregate_completed_update_tokens_s": 726.3360201736848,
+  "scope": "forward start through completed optimizer update, including GPU synchronization",
+  "notes": [
+    "GPU is synchronized before the first microbatch and after each complete update.",
+    "Initialization, parity, initial/final evaluation, checkpoint saves and post-update logs are excluded.",
+    "LR/zero_grad and the already-prefetched current batch are excluded; next-batch prefetch is included.",
+    "Both variants must use this measurement; synchronization can change pipeline throughput."
+  ]
+}

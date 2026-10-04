@@ -1,0 +1,10 @@
+{
+  "reason": "native B/B default-policy terminal instability; add deterministic real-update control without relaxing numerical gates",
+  "parent_pid": 1712098,
+  "parent_stopped": true,
+  "production_updates_completed": 0,
+  "previous_status": "running_continuation",
+  "child_pid": 1715983,
+  "child_alive": false,
+  "source_step": 53143
+}

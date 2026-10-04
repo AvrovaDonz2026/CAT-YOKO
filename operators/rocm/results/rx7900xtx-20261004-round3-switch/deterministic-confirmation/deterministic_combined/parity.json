@@ -1,0 +1,2471 @@
+{
+  "status": "training_complete",
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "gpu": "Radeon RX 7900 XTX",
+  "device": "cuda:0",
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/round3-confirm-20261004T0455/source_checkpoint/trainable.pt",
+  "source_step": 53143,
+  "source_tokens_in_phase": 237369344.0,
+  "dtype": "bf16",
+  "parity_sequences": [
+    4096
+  ],
+  "data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin",
+  "eval_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin",
+  "eos_id": 1,
+  "eval_eos_id": 1,
+  "eval_every": 0,
+  "eval_batches": 2,
+  "source_stream_kind": "packed",
+  "save_optimizer": true,
+  "save_every_steps": 0,
+  "save_every_seconds": 0.0,
+  "keep_last": 1,
+  "source_optimizer_present": true,
+  "max_train_seconds": null,
+  "requested_updates": 2,
+  "moe_layout": "shared-storage",
+  "deterministic_parity": true,
+  "reference_repeat": true,
+  "original_deterministic_algorithms": true,
+  "original_deterministic_warn_only": false,
+  "source_code_version": {
+    "git_commit": null,
+    "file_sha256": {
+      "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d",
+      "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+      "cat_yoko/moe.py": "7e35db080dc2af2813db08c92dad46ff0ae8a89fa4a84864d7e1d33d8ab22e82",
+      "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+      "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d",
+      "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+      "cat_yoko/data.py": "b9d9d15ba8a7adcee553ec32ae87b3829dbb77c9cd533f71de3efb1ca8e59831",
+      "cat_yoko/attention.py": "c3076388b4d398370ca0b13f869cd5e36ea93dbeea04c5cc59392c0b332856ed",
+      "cat_yoko/loss.py": "cf187911a8120ffb56f5ae8ea3365749a4aebdd14a2de87c23c28e4be3bee54d"
+    },
+    "experimental_operators": {
+      "packed_attention": true,
+      "packed_attention_tile": 256,
+      "batched_grad_norm": false,
+      "patches_installed_after_native_reference": false,
+      "file_sha256": {
+        "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+        "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7"
+      }
+    },
+    "round3_operators": {
+      "split_attention": true,
+      "cached_cpu_adam": true,
+      "sync_update_timing": false,
+      "deterministic_training": true,
+      "file_sha256": {
+        "operators/rocm/round3_candidate_bench.py": "a92922a223cd528a3d7690a8664b0a838680a13e6b8784303fc21162680c5ab0",
+        "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+        "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d",
+        "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7",
+        "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+        "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+        "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+        "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d",
+        "operators/rocm/split_attention.py": "a9f972886a004d08a4c121bacdba8f20c1486519f617bcec0a9abf1930f29623",
+        "operators/rocm/cpu_adam_cached.py": "b88675315d93cde92d1f60cdfea273160566fb6fd16cdeec7048fad4b9e109d3"
+      }
+    }
+  },
+  "updates": 2,
+  "wait_gpu_idle": true,
+  "gpu_idle_max_wait_s": 3600.0,
+  "thresholds": {
+    "loss_atol": 0.02,
+    "gradient_relative_l2_per_tensor_and_global": 0.05,
+    "selected_output_relative_l2": 0.05
+  },
+  "notes": [
+    "One native CPU model is measured, receives the selected MoE layout in place, and moves to GPU.",
+    "Parity uses the same source overlay and batch without optimizer updates or clipping.",
+    "Shared-storage retains native MoE dispatch and reduction order; stride-zero weight broadcasting is unvalidated until parity passes.",
+    "Resident training retains CPU Adam; global clipping differs from baseline per-block clipping.",
+    "Trainer restores compatible CPU Adam state from the source overlay.",
+    "Flash remains disabled by the production ROCm math SDPA path."
+  ],
+  "events": [
+    {
+      "event": "preflight",
+      "free_gpu_mib": 24514.0,
+      "total_gpu_mib": 24560.0
+    },
+    {
+      "event": "model_built",
+      "elapsed_s": 82.68792133999523,
+      "trainable_tensors": 132
+    },
+    {
+      "event": "gpu_wait",
+      "elapsed_s": 1.8039718270301819e-06,
+      "other_gpu_pids": [],
+      "idle_confirmations": 1,
+      "proc_root": "/sys/class/kfd/kfd/proc"
+    },
+    {
+      "event": "gpu_idle",
+      "elapsed_s": 2.0022818939760327,
+      "other_gpu_pids": [],
+      "idle_confirmations": 2,
+      "proc_root": "/sys/class/kfd/kfd/proc"
+    },
+    {
+      "event": "baseline",
+      "data_stream": {
+        "kind": "packed",
+        "source_cursor_restored": true,
+        "packed_parity_scanned_batches": 2,
+        "packed_parity_document_boundaries": 3
+      },
+      "seq_len": 4096,
+      "offload_blocks": true,
+      "loss": 7.647597312927246,
+      "nll": 7.647597312927246,
+      "aux": 0.0,
+      "elapsed_s": 37.16736298397882,
+      "tok_s": 110.20421335152568,
+      "baseline_mib": 1022.09814453125,
+      "peak_mib": 8442.8095703125,
+      "parity_ce_chunk_tokens": 512,
+      "sdpa_counts": {
+        "dense": 0,
+        "masked_bf16": 0,
+        "math_fp32": 120
+      },
+      "gradient_tensors": 132
+    },
+    {
+      "event": "reference_repeat",
+      "seq_len": 4096,
+      "pass": true,
+      "moe_layout": "native-reference-repeat",
+      "loss_abs": 0.0,
+      "nll_abs": 0.0,
+      "global_gradient_relative_l2": 0.0,
+      "selected_logits": {
+        "finite": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "error_square_sum": 0.0,
+        "reference_square_sum": 9595.114729178793
+      },
+      "final_hidden": {
+        "finite": true,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "error_square_sum": 0.0,
+        "reference_square_sum": 111689.18969426095
+      },
+      "failed_gradients": [],
+      "gradients": {
+        "cache_k.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 14.400780301523465,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.332023229464531,
+          "pass": true
+        },
+        "decoder.0.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.004189909401053408,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 4.132619992611639,
+          "pass": true
+        },
+        "decoder.0.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.2009611300146434,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.005362048187240065,
+          "pass": true
+        },
+        "decoder.0.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0053829076592610825,
+          "pass": true
+        },
+        "decoder.1.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.007602390995861755,
+          "pass": true
+        },
+        "decoder.1.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 6.678577662200204,
+          "pass": true
+        },
+        "decoder.1.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.38458282279371325,
+          "pass": true
+        },
+        "decoder.1.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.008012110595132071,
+          "pass": true
+        },
+        "decoder.1.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.008051383812286872,
+          "pass": true
+        },
+        "decoder.2.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.004046600945556103,
+          "pass": true
+        },
+        "decoder.2.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 6.448558568954019,
+          "pass": true
+        },
+        "decoder.2.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.11759689912730834,
+          "pass": true
+        },
+        "decoder.2.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.001562642543392126,
+          "pass": true
+        },
+        "decoder.2.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.001667639380318775,
+          "pass": true
+        },
+        "decoder.3.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0019766498200434893,
+          "pass": true
+        },
+        "decoder.3.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.288186719684734,
+          "pass": true
+        },
+        "decoder.3.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.25752083876907983,
+          "pass": true
+        },
+        "decoder.3.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.000980614146268266,
+          "pass": true
+        },
+        "decoder.3.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0009578830584895427,
+          "pass": true
+        },
+        "decoder.4.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.002941378961880773,
+          "pass": true
+        },
+        "decoder.4.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.3554503770066924,
+          "pass": true
+        },
+        "decoder.4.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.1371840151055573,
+          "pass": true
+        },
+        "decoder.4.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0016388605136168355,
+          "pass": true
+        },
+        "decoder.4.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0016497766636000147,
+          "pass": true
+        },
+        "decoder.5.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0009793629893024727,
+          "pass": true
+        },
+        "decoder.5.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.3539897556371268,
+          "pass": true
+        },
+        "decoder.5.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.1417397174446921,
+          "pass": true
+        },
+        "decoder.5.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0004658263443411692,
+          "pass": true
+        },
+        "decoder.5.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0004635138442683484,
+          "pass": true
+        },
+        "decoder.6.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00015788461669920695,
+          "pass": true
+        },
+        "decoder.6.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.2820451259008289,
+          "pass": true
+        },
+        "decoder.6.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.17763362112918227,
+          "pass": true
+        },
+        "decoder.6.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00010124653842230602,
+          "pass": true
+        },
+        "decoder.6.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 9.712618138187079e-05,
+          "pass": true
+        },
+        "decoder.7.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0013770265447965342,
+          "pass": true
+        },
+        "decoder.7.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.192416961764414,
+          "pass": true
+        },
+        "decoder.7.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.11005397184891945,
+          "pass": true
+        },
+        "decoder.7.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0005426982919143342,
+          "pass": true
+        },
+        "decoder.7.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0005373222678750761,
+          "pass": true
+        },
+        "decoder.8.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.850519871632375e-05,
+          "pass": true
+        },
+        "decoder.8.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.06775484988542785,
+          "pass": true
+        },
+        "decoder.8.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.02175498697196796,
+          "pass": true
+        },
+        "decoder.8.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 8.421557653154332e-06,
+          "pass": true
+        },
+        "decoder.8.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 8.308929976266896e-06,
+          "pass": true
+        },
+        "decoder.9.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.002277918966332393,
+          "pass": true
+        },
+        "decoder.9.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.6540066892145937,
+          "pass": true
+        },
+        "decoder.9.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.068518365101433,
+          "pass": true
+        },
+        "decoder.9.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00018734434606398898,
+          "pass": true
+        },
+        "decoder.9.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00018232625185993223,
+          "pass": true
+        },
+        "decoder.10.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.002038380137014081,
+          "pass": true
+        },
+        "decoder.10.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.465255583122428,
+          "pass": true
+        },
+        "decoder.10.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.08966485131155624,
+          "pass": true
+        },
+        "decoder.10.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.000494644997273589,
+          "pass": true
+        },
+        "decoder.10.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00048814814607323065,
+          "pass": true
+        },
+        "decoder.11.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00024540486297107287,
+          "pass": true
+        },
+        "decoder.11.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.38912306445001155,
+          "pass": true
+        },
+        "decoder.11.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.06653985012752123,
+          "pass": true
+        },
+        "decoder.11.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 7.636314474271724e-05,
+          "pass": true
+        },
+        "decoder.11.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 7.542663457020884e-05,
+          "pass": true
+        },
+        "decoder.12.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0007936645546261621,
+          "pass": true
+        },
+        "decoder.12.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.1002207641222868,
+          "pass": true
+        },
+        "decoder.12.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.05656036221764864,
+          "pass": true
+        },
+        "decoder.12.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 6.034500753385533e-05,
+          "pass": true
+        },
+        "decoder.12.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 6.240415253949694e-05,
+          "pass": true
+        },
+        "decoder.13.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00014560588915844965,
+          "pass": true
+        },
+        "decoder.13.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.37680000587899837,
+          "pass": true
+        },
+        "decoder.13.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.07858658491776485,
+          "pass": true
+        },
+        "decoder.13.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.5528955441942473e-05,
+          "pass": true
+        },
+        "decoder.13.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.6244005124930322e-05,
+          "pass": true
+        },
+        "decoder.14.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0006753509179964307,
+          "pass": true
+        },
+        "decoder.14.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.7152872579952636,
+          "pass": true
+        },
+        "decoder.14.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.22013413089925532,
+          "pass": true
+        },
+        "decoder.14.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 8.516163626241303e-05,
+          "pass": true
+        },
+        "decoder.14.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 8.546561749083696e-05,
+          "pass": true
+        },
+        "decoder.15.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00023831829631529083,
+          "pass": true
+        },
+        "decoder.15.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.1940946923711713,
+          "pass": true
+        },
+        "decoder.15.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0477600281788748,
+          "pass": true
+        },
+        "decoder.15.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.3659346509619676e-05,
+          "pass": true
+        },
+        "decoder.15.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.5489948027583994e-05,
+          "pass": true
+        },
+        "decoder.16.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.001181686238732915,
+          "pass": true
+        },
+        "decoder.16.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.7854718394217154,
+          "pass": true
+        },
+        "decoder.16.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.04111767563829495,
+          "pass": true
+        },
+        "decoder.16.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 3.350972449508993e-05,
+          "pass": true
+        },
+        "decoder.16.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 3.143103803754377e-05,
+          "pass": true
+        },
+        "decoder.17.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00016544203615474068,
+          "pass": true
+        },
+        "decoder.17.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.3047342881223481,
+          "pass": true
+        },
+        "decoder.17.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.05186400886756137,
+          "pass": true
+        },
+        "decoder.17.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.2438833711825303e-05,
+          "pass": true
+        },
+        "decoder.17.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.3128097012795638e-05,
+          "pass": true
+        },
+        "decoder.18.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 6.130078204244689e-05,
+          "pass": true
+        },
+        "decoder.18.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.19716031951279622,
+          "pass": true
+        },
+        "decoder.18.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.03133593715625521,
+          "pass": true
+        },
+        "decoder.18.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.243258452988602e-05,
+          "pass": true
+        },
+        "decoder.18.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.2480106033455063e-05,
+          "pass": true
+        },
+        "decoder.19.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.000459430829024254,
+          "pass": true
+        },
+        "decoder.19.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.5353210513617134,
+          "pass": true
+        },
+        "decoder.19.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.1838445101666566,
+          "pass": true
+        },
+        "decoder.19.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 5.4389970312422814e-05,
+          "pass": true
+        },
+        "decoder.19.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 5.247649028233825e-05,
+          "pass": true
+        },
+        "decoder.20.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0004846671575886197,
+          "pass": true
+        },
+        "decoder.20.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.45297045414626347,
+          "pass": true
+        },
+        "decoder.20.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.06466313973322077,
+          "pass": true
+        },
+        "decoder.20.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.8526337519336337e-05,
+          "pass": true
+        },
+        "decoder.20.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.9501411554055945e-05,
+          "pass": true
+        },
+        "decoder.21.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0004499017332861219,
+          "pass": true
+        },
+        "decoder.21.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.5121575148740777,
+          "pass": true
+        },
+        "decoder.21.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.09291725661094424,
+          "pass": true
+        },
+        "decoder.21.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 5.095339000496524e-05,
+          "pass": true
+        },
+        "decoder.21.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 5.4955247429603477e-05,
+          "pass": true
+        },
+        "decoder.22.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00024876632190600737,
+          "pass": true
+        },
+        "decoder.22.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.28155450840416474,
+          "pass": true
+        },
+        "decoder.22.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.09517561826197428,
+          "pass": true
+        },
+        "decoder.22.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.914748850377084e-05,
+          "pass": true
+        },
+        "decoder.22.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 2.868093843570599e-05,
+          "pass": true
+        },
+        "decoder.23.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 5.661821648979227e-05,
+          "pass": true
+        },
+        "decoder.23.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.11280375350161204,
+          "pass": true
+        },
+        "decoder.23.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.07972576992383981,
+          "pass": true
+        },
+        "decoder.23.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 4.722528052744139e-06,
+          "pass": true
+        },
+        "decoder.23.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 4.873813135499382e-06,
+          "pass": true
+        },
+        "decoder.24.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00017389995694778657,
+          "pass": true
+        },
+        "decoder.24.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.32138557464135764,
+          "pass": true
+        },
+        "decoder.24.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.05094770924721066,
+          "pass": true
+        },
+        "decoder.24.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.8070640439996088e-05,
+          "pass": true
+        },
+        "decoder.24.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 1.8060798510089078e-05,
+          "pass": true
+        },
+        "decoder.25.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 8.899101427753487e-05,
+          "pass": true
+        },
+        "decoder.25.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.07592492653487884,
+          "pass": true
+        },
+        "decoder.25.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.035530902375957504,
+          "pass": true
+        },
+        "decoder.25.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.0001087602031586421,
+          "pass": true
+        },
+        "decoder.25.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0,
+          "relative_l2": 0.0,
+          "error_square_sum": 0.0,
+          "reference_square_sum": 0.00010471147752889876,
+          "pass": true
+        }
+      },
+      "baseline": {
+        "seq_len": 4096,
+        "offload_blocks": true,
+        "loss": 7.647597312927246,
+        "nll": 7.647597312927246,
+        "aux": 0.0,
+        "elapsed_s": 37.16736298397882,
+        "tok_s": 110.20421335152568,
+        "baseline_mib": 1022.09814453125,
+        "peak_mib": 8442.8095703125,
+        "parity_ce_chunk_tokens": 512,
+        "sdpa_counts": {
+          "dense": 0,
+          "masked_bf16": 0,
+          "math_fp32": 120
+        },
+        "gradient_tensors": 132
+      },
+      "candidate": {
+        "seq_len": 4096,
+        "offload_blocks": true,
+        "loss": 7.647597312927246,
+        "nll": 7.647597312927246,
+        "aux": 0.0,
+        "elapsed_s": 32.48794178798562,
+        "tok_s": 126.0775467627421,
+        "baseline_mib": 1222.09814453125,
+        "peak_mib": 8444.1064453125,
+        "parity_ce_chunk_tokens": 512,
+        "sdpa_counts": {
+          "dense": 0,
+          "masked_bf16": 0,
+          "math_fp32": 120
+        },
+        "gradient_tensors": 132
+      },
+      "forward_backward_speedup": 1.1440356310206052
+    },
+    {
+      "event": "moe_layout_installed",
+      "moe_layout": "shared-storage",
+      "shared_storage_moes": 42,
+      "parameter_bytes_before": 24500762624,
+      "parameter_bytes_after": 4418435072,
+      "removed_parameter_bytes": 20082327552,
+      "trainable_keys": 132,
+      "experimental_operators": {
+        "packed_attention": true,
+        "packed_attention_tile": 256,
+        "batched_grad_norm": false,
+        "patches_installed_after_native_reference": true,
+        "file_sha256": {
+          "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+          "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7"
+        }
+      },
+      "round3_operators": {
+        "split_attention": true,
+        "cached_cpu_adam": true,
+        "sync_update_timing": false,
+        "deterministic_training": true
+      }
+    },
+    {
+      "event": "parity",
+      "seq_len": 4096,
+      "pass": true,
+      "moe_layout": "shared-storage",
+      "loss_abs": 0.0009279251098632812,
+      "nll_abs": 0.0009279251098632812,
+      "global_gradient_relative_l2": 0.01494909464606219,
+      "selected_logits": {
+        "finite": true,
+        "max_abs": 0.20947265625,
+        "relative_l2": 0.015490340667102193,
+        "error_square_sum": 2.302354054307216,
+        "reference_square_sum": 9595.114729178793
+      },
+      "final_hidden": {
+        "finite": true,
+        "max_abs": 1.11328125,
+        "relative_l2": 0.013564747274428033,
+        "error_square_sum": 20.55107545289229,
+        "reference_square_sum": 111689.18969426095
+      },
+      "failed_gradients": [],
+      "gradients": {
+        "cache_k.weight": {
+          "finite": true,
+          "max_abs": 0.009521484375,
+          "relative_l2": 0.0141533008909708,
+          "error_square_sum": 0.0028847056428114278,
+          "reference_square_sum": 14.400780301523465,
+          "pass": true
+        },
+        "cache_v.weight": {
+          "finite": true,
+          "max_abs": 0.00048828125,
+          "relative_l2": 0.012768033845432599,
+          "error_square_sum": 5.41273194380884e-05,
+          "reference_square_sum": 0.332023229464531,
+          "pass": true
+        },
+        "decoder.0.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.012900857569247155,
+          "error_square_sum": 6.973355294568901e-07,
+          "reference_square_sum": 0.004189909401053408,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0009765625,
+          "relative_l2": 0.013468489775484453,
+          "error_square_sum": 0.0007496581627453702,
+          "reference_square_sum": 4.132619992611639,
+          "pass": true
+        },
+        "decoder.0.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 7.62939453125e-05,
+          "relative_l2": 0.01008778449576517,
+          "error_square_sum": 0.0001222138830939195,
+          "reference_square_sum": 1.2009611300146434,
+          "pass": true
+        },
+        "decoder.0.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000274658203125,
+          "relative_l2": 0.012035419258665348,
+          "error_square_sum": 7.766997403013676e-07,
+          "reference_square_sum": 0.005362048187240065,
+          "pass": true
+        },
+        "decoder.0.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0003662109375,
+          "relative_l2": 0.011858301469643989,
+          "error_square_sum": 7.569407809977866e-07,
+          "reference_square_sum": 0.0053829076592610825,
+          "pass": true
+        },
+        "decoder.1.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 8.0108642578125e-05,
+          "relative_l2": 0.008247056112464157,
+          "error_square_sum": 5.170685234041905e-07,
+          "reference_square_sum": 0.007602390995861755,
+          "pass": true
+        },
+        "decoder.1.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0009765625,
+          "relative_l2": 0.011036143826334966,
+          "error_square_sum": 0.0008134271875871303,
+          "reference_square_sum": 6.678577662200204,
+          "pass": true
+        },
+        "decoder.1.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 7.62939453125e-05,
+          "relative_l2": 0.01310652197853489,
+          "error_square_sum": 6.606399049029942e-05,
+          "reference_square_sum": 0.38458282279371325,
+          "pass": true
+        },
+        "decoder.1.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000152587890625,
+          "relative_l2": 0.006889175726519242,
+          "error_square_sum": 3.8026071536023665e-07,
+          "reference_square_sum": 0.008012110595132071,
+          "pass": true
+        },
+        "decoder.1.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000152587890625,
+          "relative_l2": 0.006218364163551692,
+          "error_square_sum": 3.1133133493455034e-07,
+          "reference_square_sum": 0.008051383812286872,
+          "pass": true
+        },
+        "decoder.2.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.010446832245366959,
+          "error_square_sum": 4.41631070810522e-07,
+          "reference_square_sum": 0.004046600945556103,
+          "pass": true
+        },
+        "decoder.2.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0009765625,
+          "relative_l2": 0.010471361659585557,
+          "error_square_sum": 0.0007070806747166945,
+          "reference_square_sum": 6.448558568954019,
+          "pass": true
+        },
+        "decoder.2.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 9.1552734375e-05,
+          "relative_l2": 0.01409874972039241,
+          "error_square_sum": 2.3375293481389506e-05,
+          "reference_square_sum": 0.11759689912730834,
+          "pass": true
+        },
+        "decoder.2.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.012087938807809385,
+          "error_square_sum": 2.2833061666394094e-07,
+          "reference_square_sum": 0.001562642543392126,
+          "pass": true
+        },
+        "decoder.2.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.011651466250206915,
+          "error_square_sum": 2.263931619950199e-07,
+          "reference_square_sum": 0.001667639380318775,
+          "pass": true
+        },
+        "decoder.3.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 9.1552734375e-05,
+          "relative_l2": 0.012191917230275247,
+          "error_square_sum": 2.938148543022573e-07,
+          "reference_square_sum": 0.0019766498200434893,
+          "pass": true
+        },
+        "decoder.3.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000732421875,
+          "relative_l2": 0.013875474351128715,
+          "error_square_sum": 0.0004405418169313701,
+          "reference_square_sum": 2.288186719684734,
+          "pass": true
+        },
+        "decoder.3.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.01388368023634047,
+          "error_square_sum": 4.963883536281961e-05,
+          "reference_square_sum": 0.25752083876907983,
+          "pass": true
+        },
+        "decoder.3.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.014165173766552765,
+          "error_square_sum": 1.9676233464771542e-07,
+          "reference_square_sum": 0.000980614146268266,
+          "pass": true
+        },
+        "decoder.3.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.014717687945592708,
+          "error_square_sum": 2.074873735082028e-07,
+          "reference_square_sum": 0.0009578830584895427,
+          "pass": true
+        },
+        "decoder.4.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.00800186052888238,
+          "error_square_sum": 1.883358240703536e-07,
+          "reference_square_sum": 0.002941378961880773,
+          "pass": true
+        },
+        "decoder.4.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00048828125,
+          "relative_l2": 0.00933462254503903,
+          "error_square_sum": 0.000205242588008088,
+          "reference_square_sum": 2.3554503770066924,
+          "pass": true
+        },
+        "decoder.4.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.015343406644574184,
+          "error_square_sum": 3.2295878321729565e-05,
+          "reference_square_sum": 0.1371840151055573,
+          "pass": true
+        },
+        "decoder.4.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.007433404771408812,
+          "error_square_sum": 9.055606775554281e-08,
+          "reference_square_sum": 0.0016388605136168355,
+          "pass": true
+        },
+        "decoder.4.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.00777898202306028,
+          "error_square_sum": 9.983221151230876e-08,
+          "reference_square_sum": 0.0016497766636000147,
+          "pass": true
+        },
+        "decoder.5.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0001678466796875,
+          "relative_l2": 0.026024967706764126,
+          "error_square_sum": 6.633215185825134e-07,
+          "reference_square_sum": 0.0009793629893024727,
+          "pass": true
+        },
+        "decoder.5.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001220703125,
+          "relative_l2": 0.02510353550501713,
+          "error_square_sum": 0.0008532674121597662,
+          "reference_square_sum": 1.3539897556371268,
+          "pass": true
+        },
+        "decoder.5.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.01727468032594218,
+          "error_square_sum": 4.229719830209799e-05,
+          "reference_square_sum": 0.1417397174446921,
+          "pass": true
+        },
+        "decoder.5.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000274658203125,
+          "relative_l2": 0.033719751078589676,
+          "error_square_sum": 5.296546213284792e-07,
+          "reference_square_sum": 0.0004658263443411692,
+          "pass": true
+        },
+        "decoder.5.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.03302786256847053,
+          "error_square_sum": 5.056193055352765e-07,
+          "reference_square_sum": 0.0004635138442683484,
+          "pass": true
+        },
+        "decoder.6.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0001373291015625,
+          "relative_l2": 0.03864140104490013,
+          "error_square_sum": 2.3574665872043432e-07,
+          "reference_square_sum": 0.00015788461669920695,
+          "pass": true
+        },
+        "decoder.6.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001220703125,
+          "relative_l2": 0.03659365446997293,
+          "error_square_sum": 0.0003776853722787866,
+          "reference_square_sum": 0.2820451259008289,
+          "pass": true
+        },
+        "decoder.6.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.014781028825322173,
+          "error_square_sum": 3.8809182717176886e-05,
+          "reference_square_sum": 0.17763362112918227,
+          "pass": true
+        },
+        "decoder.6.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000213623046875,
+          "relative_l2": 0.03774332908109944,
+          "error_square_sum": 1.4423165640379404e-07,
+          "reference_square_sum": 0.00010124653842230602,
+          "pass": true
+        },
+        "decoder.6.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.000213623046875,
+          "relative_l2": 0.039336310532977724,
+          "error_square_sum": 1.5028774282715464e-07,
+          "reference_square_sum": 9.712618138187079e-05,
+          "pass": true
+        },
+        "decoder.7.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.014339359061582232,
+          "error_square_sum": 2.8314036766216577e-07,
+          "reference_square_sum": 0.0013770265447965342,
+          "pass": true
+        },
+        "decoder.7.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0009765625,
+          "relative_l2": 0.02021568403580695,
+          "error_square_sum": 0.0004873096675769178,
+          "reference_square_sum": 1.192416961764414,
+          "pass": true
+        },
+        "decoder.7.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.01966972300889747,
+          "error_square_sum": 4.257966195772102e-05,
+          "reference_square_sum": 0.11005397184891945,
+          "pass": true
+        },
+        "decoder.7.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 7.62939453125e-05,
+          "relative_l2": 0.012212773482096637,
+          "error_square_sum": 8.094444670092571e-08,
+          "reference_square_sum": 0.0005426982919143342,
+          "pass": true
+        },
+        "decoder.7.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.01356810723043022,
+          "error_square_sum": 9.891755509139344e-08,
+          "reference_square_sum": 0.0005373222678750761,
+          "pass": true
+        },
+        "decoder.8.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 1.9073486328125e-05,
+          "relative_l2": 0.024334411067750195,
+          "error_square_sum": 1.68797400077821e-08,
+          "reference_square_sum": 2.850519871632375e-05,
+          "pass": true
+        },
+        "decoder.8.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000732421875,
+          "relative_l2": 0.024914094694616175,
+          "error_square_sum": 4.205625613678222e-05,
+          "reference_square_sum": 0.06775484988542785,
+          "pass": true
+        },
+        "decoder.8.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 7.62939453125e-05,
+          "relative_l2": 0.015042832148160977,
+          "error_square_sum": 4.922866364994483e-06,
+          "reference_square_sum": 0.02175498697196796,
+          "pass": true
+        },
+        "decoder.8.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 2.288818359375e-05,
+          "relative_l2": 0.021610712211267695,
+          "error_square_sum": 3.933060128448462e-09,
+          "reference_square_sum": 8.421557653154332e-06,
+          "pass": true
+        },
+        "decoder.8.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 2.288818359375e-05,
+          "relative_l2": 0.02292060757709851,
+          "error_square_sum": 4.365131690137192e-09,
+          "reference_square_sum": 8.308929976266896e-06,
+          "pass": true
+        },
+        "decoder.9.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.013826783217192344,
+          "error_square_sum": 4.3549239794882233e-07,
+          "reference_square_sum": 0.002277918966332393,
+          "pass": true
+        },
+        "decoder.9.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00164794921875,
+          "relative_l2": 0.017978739655313766,
+          "error_square_sum": 0.0005346329838365462,
+          "reference_square_sum": 1.6540066892145937,
+          "pass": true
+        },
+        "decoder.9.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000152587890625,
+          "relative_l2": 0.016853546026890903,
+          "error_square_sum": 1.946209439750879e-05,
+          "reference_square_sum": 0.068518365101433,
+          "pass": true
+        },
+        "decoder.9.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001068115234375,
+          "relative_l2": 0.025081814718253662,
+          "error_square_sum": 1.1785784655160558e-07,
+          "reference_square_sum": 0.00018734434606398898,
+          "pass": true
+        },
+        "decoder.9.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 0.0001068115234375,
+          "relative_l2": 0.0250166266222573,
+          "error_square_sum": 1.1410553130142276e-07,
+          "reference_square_sum": 0.00018232625185993223,
+          "pass": true
+        },
+        "decoder.10.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.00011444091796875,
+          "relative_l2": 0.01173436706708873,
+          "error_square_sum": 2.806755081150112e-07,
+          "reference_square_sum": 0.002038380137014081,
+          "pass": true
+        },
+        "decoder.10.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001708984375,
+          "relative_l2": 0.016771496442548377,
+          "error_square_sum": 0.00041215162234251024,
+          "reference_square_sum": 1.465255583122428,
+          "pass": true
+        },
+        "decoder.10.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.015067169629956757,
+          "error_square_sum": 2.0355678737798693e-05,
+          "reference_square_sum": 0.08966485131155624,
+          "pass": true
+        },
+        "decoder.10.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 9.1552734375e-05,
+          "relative_l2": 0.012949157943401995,
+          "error_square_sum": 8.294241516174083e-08,
+          "reference_square_sum": 0.000494644997273589,
+          "pass": true
+        },
+        "decoder.10.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 9.1552734375e-05,
+          "relative_l2": 0.012615056728037786,
+          "error_square_sum": 7.768372816595532e-08,
+          "reference_square_sum": 0.00048814814607323065,
+          "pass": true
+        },
+        "decoder.11.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.018704475254789528,
+          "error_square_sum": 8.585670597068544e-08,
+          "reference_square_sum": 0.00024540486297107287,
+          "pass": true
+        },
+        "decoder.11.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000732421875,
+          "relative_l2": 0.017047021880438606,
+          "error_square_sum": 0.0001130795341386463,
+          "reference_square_sum": 0.38912306445001155,
+          "pass": true
+        },
+        "decoder.11.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.01630205340635707,
+          "error_square_sum": 1.768342730819567e-05,
+          "reference_square_sum": 0.06653985012752123,
+          "pass": true
+        },
+        "decoder.11.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 3.814697265625e-05,
+          "relative_l2": 0.016829690549278683,
+          "error_square_sum": 2.1628981349214663e-08,
+          "reference_square_sum": 7.636314474271724e-05,
+          "pass": true
+        },
+        "decoder.11.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 4.57763671875e-05,
+          "relative_l2": 0.01680723585918104,
+          "error_square_sum": 2.130675538086768e-08,
+          "reference_square_sum": 7.542663457020884e-05,
+          "pass": true
+        },
+        "decoder.12.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.015261585351065496,
+          "error_square_sum": 1.8485716342724284e-07,
+          "reference_square_sum": 0.0007936645546261621,
+          "pass": true
+        },
+        "decoder.12.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001953125,
+          "relative_l2": 0.014755922673620981,
+          "error_square_sum": 0.00023955904791862732,
+          "reference_square_sum": 1.1002207641222868,
+          "pass": true
+        },
+        "decoder.12.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000213623046875,
+          "relative_l2": 0.017552212995065423,
+          "error_square_sum": 1.742512663080432e-05,
+          "reference_square_sum": 0.05656036221764864,
+          "pass": true
+        },
+        "decoder.12.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 6.866455078125e-05,
+          "relative_l2": 0.0193451527877923,
+          "error_square_sum": 2.2583210055465708e-08,
+          "reference_square_sum": 6.034500753385533e-05,
+          "pass": true
+        },
+        "decoder.12.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 6.103515625e-05,
+          "relative_l2": 0.01877463645873562,
+          "error_square_sum": 2.1996650903521875e-08,
+          "reference_square_sum": 6.240415253949694e-05,
+          "pass": true
+        },
+        "decoder.13.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000335693359375,
+          "relative_l2": 0.04113514131495377,
+          "error_square_sum": 2.463797033499123e-07,
+          "reference_square_sum": 0.00014560588915844965,
+          "pass": true
+        },
+        "decoder.13.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00146484375,
+          "relative_l2": 0.030426756873857107,
+          "error_square_sum": 0.0003488367482014569,
+          "reference_square_sum": 0.37680000587899837,
+          "pass": true
+        },
+        "decoder.13.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.014692690467210256,
+          "error_square_sum": 1.6964891055856503e-05,
+          "reference_square_sum": 0.07858658491776485,
+          "pass": true
+        },
+        "decoder.13.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 4.38690185546875e-05,
+          "relative_l2": 0.039529743991922696,
+          "error_square_sum": 2.426555602372954e-08,
+          "reference_square_sum": 1.5528955441942473e-05,
+          "pass": true
+        },
+        "decoder.13.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 4.38690185546875e-05,
+          "relative_l2": 0.040542209215448176,
+          "error_square_sum": 2.669979573045357e-08,
+          "reference_square_sum": 1.6244005124930322e-05,
+          "pass": true
+        },
+        "decoder.14.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.012110272553512892,
+          "error_square_sum": 9.904608856887466e-08,
+          "reference_square_sum": 0.0006753509179964307,
+          "pass": true
+        },
+        "decoder.14.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00146484375,
+          "relative_l2": 0.013490182379819525,
+          "error_square_sum": 0.0003121565870511576,
+          "reference_square_sum": 1.7152872579952636,
+          "pass": true
+        },
+        "decoder.14.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.013883407633127388,
+          "error_square_sum": 4.2430635249375115e-05,
+          "reference_square_sum": 0.22013413089925532,
+          "pass": true
+        },
+        "decoder.14.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 4.1961669921875e-05,
+          "relative_l2": 0.01342101369061924,
+          "error_square_sum": 1.5339621227969738e-08,
+          "reference_square_sum": 8.516163626241303e-05,
+          "pass": true
+        },
+        "decoder.14.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 4.57763671875e-05,
+          "relative_l2": 0.013116223312169174,
+          "error_square_sum": 1.47031043390769e-08,
+          "reference_square_sum": 8.546561749083696e-05,
+          "pass": true
+        },
+        "decoder.15.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 5.340576171875e-05,
+          "relative_l2": 0.015305123605435612,
+          "error_square_sum": 5.5825300337522554e-08,
+          "reference_square_sum": 0.00023831829631529083,
+          "pass": true
+        },
+        "decoder.15.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0009765625,
+          "relative_l2": 0.030035244592634024,
+          "error_square_sum": 0.0001750959115367563,
+          "reference_square_sum": 0.1940946923711713,
+          "pass": true
+        },
+        "decoder.15.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00018310546875,
+          "relative_l2": 0.015568439836659141,
+          "error_square_sum": 1.1575899822832919e-05,
+          "reference_square_sum": 0.0477600281788748,
+          "pass": true
+        },
+        "decoder.15.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 4.57763671875e-05,
+          "relative_l2": 0.02920865047096081,
+          "error_square_sum": 1.1653406761270857e-08,
+          "reference_square_sum": 1.3659346509619676e-05,
+          "pass": true
+        },
+        "decoder.15.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 4.57763671875e-05,
+          "relative_l2": 0.027614217136451093,
+          "error_square_sum": 1.181178223372964e-08,
+          "reference_square_sum": 1.5489948027583994e-05,
+          "pass": true
+        },
+        "decoder.16.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0001220703125,
+          "relative_l2": 0.013084522029024923,
+          "error_square_sum": 2.0231025776368998e-07,
+          "reference_square_sum": 0.001181686238732915,
+          "pass": true
+        },
+        "decoder.16.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00146484375,
+          "relative_l2": 0.019451910754448583,
+          "error_square_sum": 0.00029720434622484135,
+          "reference_square_sum": 0.7854718394217154,
+          "pass": true
+        },
+        "decoder.16.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.018500525401897457,
+          "error_square_sum": 1.4073323820834441e-05,
+          "reference_square_sum": 0.04111767563829495,
+          "pass": true
+        },
+        "decoder.16.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 5.7220458984375e-05,
+          "relative_l2": 0.025332186623241656,
+          "error_square_sum": 2.1503849650212573e-08,
+          "reference_square_sum": 3.350972449508993e-05,
+          "pass": true
+        },
+        "decoder.16.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 5.7220458984375e-05,
+          "relative_l2": 0.026701235292324304,
+          "error_square_sum": 2.2408946090716423e-08,
+          "reference_square_sum": 3.143103803754377e-05,
+          "pass": true
+        },
+        "decoder.17.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000274658203125,
+          "relative_l2": 0.026775386299336394,
+          "error_square_sum": 1.1860892153376171e-07,
+          "reference_square_sum": 0.00016544203615474068,
+          "pass": true
+        },
+        "decoder.17.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001003265380859375,
+          "relative_l2": 0.019948356020442135,
+          "error_square_sum": 0.00012126502035209456,
+          "reference_square_sum": 0.3047342881223481,
+          "pass": true
+        },
+        "decoder.17.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.01606760177087972,
+          "error_square_sum": 1.3389618451606262e-05,
+          "reference_square_sum": 0.05186400886756137,
+          "pass": true
+        },
+        "decoder.17.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 4.1961669921875e-05,
+          "relative_l2": 0.025630855420333436,
+          "error_square_sum": 8.171576742523057e-09,
+          "reference_square_sum": 1.2438833711825303e-05,
+          "pass": true
+        },
+        "decoder.17.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 4.1961669921875e-05,
+          "relative_l2": 0.0257853310452909,
+          "error_square_sum": 8.728652426716332e-09,
+          "reference_square_sum": 1.3128097012795638e-05,
+          "pass": true
+        },
+        "decoder.18.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.000179290771484375,
+          "relative_l2": 0.035471807189594036,
+          "error_square_sum": 7.713165415883765e-08,
+          "reference_square_sum": 6.130078204244689e-05,
+          "pass": true
+        },
+        "decoder.18.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001220703125,
+          "relative_l2": 0.02991961464298262,
+          "error_square_sum": 0.000176494633412756,
+          "reference_square_sum": 0.19716031951279622,
+          "pass": true
+        },
+        "decoder.18.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000152587890625,
+          "relative_l2": 0.015707899222794273,
+          "error_square_sum": 7.731769532777032e-06,
+          "reference_square_sum": 0.03133593715625521,
+          "pass": true
+        },
+        "decoder.18.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 3.814697265625e-05,
+          "relative_l2": 0.026878061183527695,
+          "error_square_sum": 8.98167419258189e-09,
+          "reference_square_sum": 1.243258452988602e-05,
+          "pass": true
+        },
+        "decoder.18.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 3.814697265625e-05,
+          "relative_l2": 0.026141689905419322,
+          "error_square_sum": 8.528754091852164e-09,
+          "reference_square_sum": 1.2480106033455063e-05,
+          "pass": true
+        },
+        "decoder.19.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0003662109375,
+          "relative_l2": 0.023647726515180285,
+          "error_square_sum": 2.569205969651608e-07,
+          "reference_square_sum": 0.000459430829024254,
+          "pass": true
+        },
+        "decoder.19.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.001220703125,
+          "relative_l2": 0.021158949515191972,
+          "error_square_sum": 0.0002396638474158569,
+          "reference_square_sum": 0.5353210513617134,
+          "pass": true
+        },
+        "decoder.19.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.01812621927402977,
+          "error_square_sum": 6.040392011885927e-05,
+          "reference_square_sum": 0.1838445101666566,
+          "pass": true
+        },
+        "decoder.19.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 6.103515625e-05,
+          "relative_l2": 0.024605076419816813,
+          "error_square_sum": 3.292822026699539e-08,
+          "reference_square_sum": 5.4389970312422814e-05,
+          "pass": true
+        },
+        "decoder.19.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 6.103515625e-05,
+          "relative_l2": 0.024060893748512124,
+          "error_square_sum": 3.038003651770205e-08,
+          "reference_square_sum": 5.247649028233825e-05,
+          "pass": true
+        },
+        "decoder.20.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 6.103515625e-05,
+          "relative_l2": 0.010352022351500411,
+          "error_square_sum": 5.193904903524416e-08,
+          "reference_square_sum": 0.0004846671575886197,
+          "pass": true
+        },
+        "decoder.20.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00128173828125,
+          "relative_l2": 0.022300526377142568,
+          "error_square_sum": 0.00022526831139278334,
+          "reference_square_sum": 0.45297045414626347,
+          "pass": true
+        },
+        "decoder.20.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.02078693443289411,
+          "error_square_sum": 2.794072561215857e-05,
+          "reference_square_sum": 0.06466313973322077,
+          "pass": true
+        },
+        "decoder.20.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 3.4332275390625e-05,
+          "relative_l2": 0.02076056649267023,
+          "error_square_sum": 1.2294883451613448e-08,
+          "reference_square_sum": 2.8526337519336337e-05,
+          "pass": true
+        },
+        "decoder.20.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 3.337860107421875e-05,
+          "relative_l2": 0.021147718302346016,
+          "error_square_sum": 1.3193797970822985e-08,
+          "reference_square_sum": 2.9501411554055945e-05,
+          "pass": true
+        },
+        "decoder.21.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 0.0003662109375,
+          "relative_l2": 0.020211681921724827,
+          "error_square_sum": 1.8379029560695913e-07,
+          "reference_square_sum": 0.0004499017332861219,
+          "pass": true
+        },
+        "decoder.21.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0009765625,
+          "relative_l2": 0.0150931315600983,
+          "error_square_sum": 0.00011667082388975252,
+          "reference_square_sum": 0.5121575148740777,
+          "pass": true
+        },
+        "decoder.21.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.013457592631942798,
+          "error_square_sum": 1.6827946958233548e-05,
+          "reference_square_sum": 0.09291725661094424,
+          "pass": true
+        },
+        "decoder.21.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 3.24249267578125e-05,
+          "relative_l2": 0.013767703990572408,
+          "error_square_sum": 9.658198422447806e-09,
+          "reference_square_sum": 5.095339000496524e-05,
+          "pass": true
+        },
+        "decoder.21.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 3.24249267578125e-05,
+          "relative_l2": 0.013505542535374733,
+          "error_square_sum": 1.0023819500132314e-08,
+          "reference_square_sum": 5.4955247429603477e-05,
+          "pass": true
+        },
+        "decoder.22.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 4.57763671875e-05,
+          "relative_l2": 0.013866287415824088,
+          "error_square_sum": 4.78312775431468e-08,
+          "reference_square_sum": 0.00024876632190600737,
+          "pass": true
+        },
+        "decoder.22.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0010986328125,
+          "relative_l2": 0.02272495365783665,
+          "error_square_sum": 0.00014540136995023703,
+          "reference_square_sum": 0.28155450840416474,
+          "pass": true
+        },
+        "decoder.22.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000244140625,
+          "relative_l2": 0.015430165984900194,
+          "error_square_sum": 2.266036507646277e-05,
+          "reference_square_sum": 0.09517561826197428,
+          "pass": true
+        },
+        "decoder.22.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 3.147125244140625e-05,
+          "relative_l2": 0.017780988368675282,
+          "error_square_sum": 9.21537336219004e-09,
+          "reference_square_sum": 2.914748850377084e-05,
+          "pass": true
+        },
+        "decoder.22.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 3.147125244140625e-05,
+          "relative_l2": 0.01703311697793586,
+          "error_square_sum": 8.321116747467966e-09,
+          "reference_square_sum": 2.868093843570599e-05,
+          "pass": true
+        },
+        "decoder.23.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 3.0517578125e-05,
+          "relative_l2": 0.01793872431647478,
+          "error_square_sum": 1.8219619210687807e-08,
+          "reference_square_sum": 5.661821648979227e-05,
+          "pass": true
+        },
+        "decoder.23.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0008544921875,
+          "relative_l2": 0.023913368809186316,
+          "error_square_sum": 6.450673707723315e-05,
+          "reference_square_sum": 0.11280375350161204,
+          "pass": true
+        },
+        "decoder.23.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0003662109375,
+          "relative_l2": 0.017657081113135322,
+          "error_square_sum": 2.4856303674763047e-05,
+          "reference_square_sum": 0.07972576992383981,
+          "pass": true
+        },
+        "decoder.23.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 2.3365020751953125e-05,
+          "relative_l2": 0.03281865099904478,
+          "error_square_sum": 5.086464262264521e-09,
+          "reference_square_sum": 4.722528052744139e-06,
+          "pass": true
+        },
+        "decoder.23.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 1.71661376953125e-05,
+          "relative_l2": 0.030305274571123943,
+          "error_square_sum": 4.47615709797157e-09,
+          "reference_square_sum": 4.873813135499382e-06,
+          "pass": true
+        },
+        "decoder.24.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 5.340576171875e-05,
+          "relative_l2": 0.019827091380141378,
+          "error_square_sum": 6.836242987211871e-08,
+          "reference_square_sum": 0.00017389995694778657,
+          "pass": true
+        },
+        "decoder.24.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.000732421875,
+          "relative_l2": 0.017202721840741154,
+          "error_square_sum": 9.510880253892095e-05,
+          "reference_square_sum": 0.32138557464135764,
+          "pass": true
+        },
+        "decoder.24.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 0.0003662109375,
+          "relative_l2": 0.02056130966647422,
+          "error_square_sum": 2.1539033386745678e-05,
+          "reference_square_sum": 0.05094770924721066,
+          "pass": true
+        },
+        "decoder.24.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 5.7220458984375e-05,
+          "relative_l2": 0.041765702415273,
+          "error_square_sum": 3.152195350802998e-08,
+          "reference_square_sum": 1.8070640439996088e-05,
+          "pass": true
+        },
+        "decoder.24.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 5.7220458984375e-05,
+          "relative_l2": 0.04181652350164744,
+          "error_square_sum": 3.158150307003456e-08,
+          "reference_square_sum": 1.8060798510089078e-05,
+          "pass": true
+        },
+        "decoder.25.ln_cross.weight": {
+          "finite": true,
+          "max_abs": 6.103515625e-05,
+          "relative_l2": 0.018131279109745935,
+          "error_square_sum": 2.9255198115944606e-08,
+          "reference_square_sum": 8.899101427753487e-05,
+          "pass": true
+        },
+        "decoder.25.cross_attn.q_proj.weight": {
+          "finite": true,
+          "max_abs": 0.00048828125,
+          "relative_l2": 0.022159020322015423,
+          "error_square_sum": 3.7280823067367e-05,
+          "reference_square_sum": 0.07592492653487884,
+          "pass": true
+        },
+        "decoder.25.cross_attn.o_proj.weight": {
+          "finite": true,
+          "max_abs": 9.1552734375e-05,
+          "relative_l2": 0.012488594498560506,
+          "error_square_sum": 5.541576924342361e-06,
+          "reference_square_sum": 0.035530902375957504,
+          "pass": true
+        },
+        "decoder.25.cross_attn.q_norm.weight": {
+          "finite": true,
+          "max_abs": 7.62939453125e-05,
+          "relative_l2": 0.017284436566179784,
+          "error_square_sum": 3.249230074234277e-08,
+          "reference_square_sum": 0.0001087602031586421,
+          "pass": true
+        },
+        "decoder.25.cross_attn.k_norm.weight": {
+          "finite": true,
+          "max_abs": 7.62939453125e-05,
+          "relative_l2": 0.01748947107363367,
+          "error_square_sum": 3.202931412107923e-08,
+          "reference_square_sum": 0.00010471147752889876,
+          "pass": true
+        }
+      },
+      "baseline": {
+        "seq_len": 4096,
+        "offload_blocks": true,
+        "loss": 7.647597312927246,
+        "nll": 7.647597312927246,
+        "aux": 0.0,
+        "elapsed_s": 37.16736298397882,
+        "tok_s": 110.20421335152568,
+        "baseline_mib": 1022.09814453125,
+        "peak_mib": 8442.8095703125,
+        "parity_ce_chunk_tokens": 512,
+        "sdpa_counts": {
+          "dense": 0,
+          "masked_bf16": 0,
+          "math_fp32": 120
+        },
+        "gradient_tensors": 132
+      },
+      "candidate": {
+        "seq_len": 4096,
+        "offload_blocks": false,
+        "loss": 7.648525238037109,
+        "nll": 7.648525238037109,
+        "aux": 0.0,
+        "elapsed_s": 5.2599104750552215,
+        "tok_s": 778.7204781193539,
+        "baseline_mib": 4413.94189453125,
+        "peak_mib": 9930.68505859375,
+        "parity_ce_chunk_tokens": 512,
+        "sdpa_counts": {
+          "dense": 0,
+          "masked_bf16": 0,
+          "math_fp32": 120
+        },
+        "gradient_tensors": 132
+      },
+      "forward_backward_speedup": 7.066158855790909
+    },
+    {
+      "event": "parity_complete",
+      "pass": true
+    },
+    {
+      "event": "parity_determinism_restored",
+      "deterministic_algorithms": true,
+      "warn_only": false
+    },
+    {
+      "event": "initial_eval",
+      "step": 53143,
+      "pass": true,
+      "eval_nll": 8.390963150545915,
+      "eval_valid_tokens": 8178.0,
+      "eval_batches": 2,
+      "elapsed_s": 4.274001959012821
+    },
+    {
+      "event": "final_eval",
+      "step": 53145,
+      "pass": true,
+      "eval_nll": 8.470549734450984,
+      "eval_valid_tokens": 8178.0,
+      "eval_batches": 2,
+      "elapsed_s": 4.339523706003092,
+      "eval_nll_change": 0.07958658390506912
+    },
+    {
+      "event": "training_complete",
+      "step": 53145,
+      "nll": 7.644330782624634,
+      "tokens_seen": 237377536.0,
+      "peak_mib": 12007.21484375,
+      "updates": 2,
+      "training_elapsed_s": 41.2210230990313,
+      "stop_reason": "steps",
+      "max_train_seconds": null,
+      "save_dir": "/home/donz/cat-yoko-rocm-20261002/runs/round3-confirm-20261004T0455/deterministic_combined/train",
+      "save_optimizer": true,
+      "source_optimizer_present": true,
+      "optimizer_restored": true,
+      "deterministic_training": true,
+      "deterministic_algorithms": true
+    }
+  ],
+  "parity_deterministic_algorithms": true,
+  "parity_gate": 0.0089013504375,
+  "initial_eval": {
+    "event": "initial_eval",
+    "step": 53143,
+    "pass": true,
+    "eval_nll": 8.390963150545915,
+    "eval_valid_tokens": 8178.0,
+    "eval_batches": 2,
+    "elapsed_s": 4.274001959012821
+  },
+  "final_eval": {
+    "event": "final_eval",
+    "step": 53145,
+    "pass": true,
+    "eval_nll": 8.470549734450984,
+    "eval_valid_tokens": 8178.0,
+    "eval_batches": 2,
+    "elapsed_s": 4.339523706003092,
+    "eval_nll_change": 0.07958658390506912
+  }
+}

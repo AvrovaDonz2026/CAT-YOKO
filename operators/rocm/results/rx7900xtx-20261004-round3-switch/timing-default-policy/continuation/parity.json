@@ -1,0 +1,95 @@
+{
+  "status": "running",
+  "torch": "2.9.1+rocm6.4",
+  "hip": "6.4.43484-123eb5128",
+  "gpu": "Radeon RX 7900 XTX",
+  "device": "cuda:0",
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/round3-switch-20261004T0425/source_checkpoint/trainable.pt",
+  "source_step": 53143,
+  "source_tokens_in_phase": 237369344.0,
+  "dtype": "bf16",
+  "parity_sequences": [
+    4096
+  ],
+  "data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/train.bin",
+  "eval_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin",
+  "eos_id": 1,
+  "eval_eos_id": 1,
+  "eval_every": 250,
+  "eval_batches": 32,
+  "source_stream_kind": "packed",
+  "save_optimizer": true,
+  "save_every_steps": 0,
+  "save_every_seconds": 300.0,
+  "keep_last": 3,
+  "source_optimizer_present": true,
+  "max_train_seconds": null,
+  "requested_updates": 1190,
+  "moe_layout": "shared-storage",
+  "deterministic_parity": true,
+  "reference_repeat": true,
+  "original_deterministic_algorithms": false,
+  "original_deterministic_warn_only": false,
+  "source_code_version": {
+    "git_commit": null,
+    "file_sha256": {
+      "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d",
+      "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+      "cat_yoko/moe.py": "7e35db080dc2af2813db08c92dad46ff0ae8a89fa4a84864d7e1d33d8ab22e82",
+      "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+      "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d",
+      "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+      "cat_yoko/data.py": "b9d9d15ba8a7adcee553ec32ae87b3829dbb77c9cd533f71de3efb1ca8e59831",
+      "cat_yoko/attention.py": "c3076388b4d398370ca0b13f869cd5e36ea93dbeea04c5cc59392c0b332856ed",
+      "cat_yoko/loss.py": "cf187911a8120ffb56f5ae8ea3365749a4aebdd14a2de87c23c28e4be3bee54d"
+    },
+    "experimental_operators": {
+      "packed_attention": true,
+      "packed_attention_tile": 256,
+      "batched_grad_norm": false,
+      "patches_installed_after_native_reference": false,
+      "file_sha256": {
+        "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+        "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7"
+      }
+    },
+    "round3_operators": {
+      "split_attention": false,
+      "cached_cpu_adam": false,
+      "sync_update_timing": false,
+      "file_sha256": {
+        "operators/rocm/round3_candidate_bench.py": "ace6dd0350e5cbca4f9aefea95cacb5b268173175414345ad2a9327f317b2d69",
+        "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+        "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d",
+        "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7",
+        "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+        "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+        "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+        "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d"
+      }
+    }
+  },
+  "updates": 0,
+  "wait_gpu_idle": true,
+  "gpu_idle_max_wait_s": 3600.0,
+  "thresholds": {
+    "loss_atol": 0.02,
+    "gradient_relative_l2_per_tensor_and_global": 0.05,
+    "selected_output_relative_l2": 0.05
+  },
+  "notes": [
+    "One native CPU model is measured, receives the selected MoE layout in place, and moves to GPU.",
+    "Parity uses the same source overlay and batch without optimizer updates or clipping.",
+    "Shared-storage retains native MoE dispatch and reduction order; stride-zero weight broadcasting is unvalidated until parity passes.",
+    "Resident training retains CPU Adam; global clipping differs from baseline per-block clipping.",
+    "Trainer restores compatible CPU Adam state from the source overlay.",
+    "Flash remains disabled by the production ROCm math SDPA path."
+  ],
+  "events": [
+    {
+      "event": "preflight",
+      "free_gpu_mib": 24514.0,
+      "total_gpu_mib": 24560.0
+    }
+  ]
+}

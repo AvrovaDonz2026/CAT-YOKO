@@ -1,0 +1,39 @@
+{
+  "packed_attention": true,
+  "packed_attention_tile": 256,
+  "batched_grad_norm": false,
+  "patches_installed_after_native_reference": true,
+  "file_sha256": {
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7"
+  },
+  "packed_attention_parity_calls": {
+    "optimized_calls": 120,
+    "tiled_calls": 0,
+    "dense_packed_calls": 120,
+    "fallback_calls": 0,
+    "query_tokens": 491520,
+    "tile_batches": 0,
+    "max_mask_elements": 0,
+    "host_plan_builds": 1,
+    "doc_fragment_calls": 480,
+    "max_fragment_score_elements": 71098624,
+    "fragment_score_elements": 13003503360,
+    "cross_attention_calls": 52
+  },
+  "status": "completed",
+  "packed_attention_calls": {
+    "optimized_calls": 2312,
+    "tiled_calls": 0,
+    "dense_packed_calls": 2312,
+    "fallback_calls": 480,
+    "query_tokens": 9469952,
+    "tile_batches": 0,
+    "max_mask_elements": 0,
+    "host_plan_builds": 21,
+    "doc_fragment_calls": 12824,
+    "max_fragment_score_elements": 259983376,
+    "fragment_score_elements": 241717244672,
+    "cross_attention_calls": 988
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "audited_at_utc": "2026-10-04T05:19:12.044405+00:00",
+  "pass": true,
+  "source_step": 53143,
+  "source_cursor": 18341,
+  "source_sha256": "40c8bbb93eb3c6e845232bdd3573dd3ac656d8e8f00d337342041da0f3652ee0",
+  "source_hash_audit": "source_hash_audit.json",
+  "training_policy": {
+    "timing/baseline_before": {
+      "deterministic_training": false,
+      "deterministic_algorithms": false,
+      "consecutive_metric_updates": 20,
+      "policy_evidence": "source-bound native original policy"
+    },
+    "timing/combined": {
+      "deterministic_training": false,
+      "deterministic_algorithms": false,
+      "consecutive_metric_updates": 20,
+      "policy_evidence": "source-bound native original policy"
+    },
+    "timing/baseline_after": {
+      "deterministic_training": false,
+      "deterministic_algorithms": false,
+      "consecutive_metric_updates": 20,
+      "policy_evidence": "source-bound native original policy"
+    },
+    "control/deterministic_baseline": {
+      "deterministic_training": true,
+      "deterministic_algorithms": true,
+      "consecutive_metric_updates": 2,
+      "policy_evidence": "explicit metrics and final receipt"
+    },
+    "control/deterministic_combined": {
+      "deterministic_training": true,
+      "deterministic_algorithms": true,
+      "consecutive_metric_updates": 2,
+      "policy_evidence": "explicit metrics and final receipt"
+    }
+  },
+  "synchronized_timing": {
+    "baseline_before": {
+      "median_completed_update_tokens_s": 741.1404685870693,
+      "aggregate_completed_update_tokens_s": 708.0844725627784
+    },
+    "combined": {
+      "median_completed_update_tokens_s": 763.6120692334034,
+      "aggregate_completed_update_tokens_s": 726.3360201736848
+    },
+    "baseline_after": {
+      "median_completed_update_tokens_s": 740.0418495302375,
+      "aggregate_completed_update_tokens_s": 708.3011294012076
+    }
+  },
+  "conservative_gains": {
+    "median_completed_update_tokens_s": 0.030320299050967447,
+    "aggregate_completed_update_tokens_s": 0.025462179889115477
+  },
+  "default_policy_native_repeat": {
+    "pass": false,
+    "weights_bitwise": false,
+    "moments_bitwise": false,
+    "moments_close": false,
+    "moment_max_abs": 0.0012771436013281345,
+    "parameters": 132,
+    "moments": 264,
+    "moment_atol": 1e-08,
+    "moment_rtol": 1e-06
+  },
+  "controlled_terminal": {
+    "pass": true,
+    "weights_bitwise": true,
+    "moments_bitwise": true,
+    "moments_close": true,
+    "moment_max_abs": 0.0,
+    "parameters": 132,
+    "moments": 264,
+    "moment_atol": 1e-08,
+    "moment_rtol": 1e-06
+  },
+  "selection": "user-requested; automatic five-percent gate not reached",
+  "production_audit_pending": false,
+  "scope": "Two deterministic real updates establish bitwise weights/moments; default-policy 20-step trajectories are not byte-exact.",
+  "production_snapshot_audit": "production-snapshot/production_audit.json",
+  "production_first_checkpoint_verified": true,
+  "production_actual_deterministic_algorithms": false,
+  "native_new_checkpoint_load_export_bitwise": true
+}

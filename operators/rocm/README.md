@@ -1,8 +1,12 @@
 # ROCm operator experiments
 
-[The October 4 operator experiments](OPERATOR_ROUND3_20261004.md) test document
-split backward and a BF16 CPU Adam cache. Both are opt-in candidates; operator
-timings do not qualify them for the active continuation.
+[The October 4 operator adoption](OPERATOR_SWITCH_20261004.md) switches the B0
+continuation to document-split FP32 attention and cached BF16 CPU-shadow Adam,
+after full-model gradient gates, byte-exact deterministic real updates and
+native checkpoint recovery checks. The short whole-update comparison gains
+2.55–3.03%; the user requested adoption below the 5% automatic selection gate.
+[The preceding microbenchmarks](OPERATOR_ROUND3_20261004.md) retain their narrower
+operator-only scope.
 
 [Real-text B0 continuation](REAL_TRAINING.md) describes the bounded corpus,
 held-out evaluation, optimizer-state recovery, and 24-hour training supervisor.
@@ -170,6 +174,7 @@ GPU after the check.
 
 ## Files and reproduction
 
+- [Round-three checkpoint-first adoption](OPERATOR_SWITCH_20261004.md): real-update arithmetic, synchronized old/new/old training comparison, and the active split-attention/cached-Adam continuation. `round3_candidate_bench.py` supplies the isolated entry; `run_round3_switch.py` supervises its acceptance and native recovery checks.
 - [Checkpoint-first real-text operator evaluation](OPERATOR_SWITCH_20261003.md): packed attention, batched gradient clipping, full-model parity, and measured training comparisons.
 - `run_operator_switch.py`: compare each candidate from one verified checkpoint, bracket trials with native baselines, and optionally continue with a validated winner. `--evaluate-only` writes the decision without starting continuation; `--preflight-dir` and `--baseline-run` can reuse validated results. The script never stops an existing GPU process.
 - `frozen_moe.py`: byte-equality guards, normalized gates, native MoE output/input-gradient comparisons, and real base-weight slices.

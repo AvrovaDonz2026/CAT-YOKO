@@ -1,0 +1,20 @@
+{
+  "verified_at_utc": "2026-10-04T05:18:16.254932+00:00",
+  "pass": true,
+  "source_sha256": "40c8bbb93eb3c6e845232bdd3573dd3ac656d8e8f00d337342041da0f3652ee0",
+  "recorded_and_live_sources_match": true,
+  "deployed": {
+    "round3-switch-20261004T0425": {
+      "source_dir": "/home/donz/cat-yoko-rocm-20261002/source-round3-switch-20261004T0425",
+      "controller_sha256": "ee20c361d372e277947e4b85b3ab9df481fb9f40dbddddc2f56f31868f3d2096",
+      "entry_sha256": "ace6dd0350e5cbca4f9aefea95cacb5b268173175414345ad2a9327f317b2d69",
+      "trial_source_hashes_match": true
+    },
+    "round3-confirm-20261004T0455": {
+      "source_dir": "/home/donz/cat-yoko-rocm-20261002/source-round3-confirm-20261004T0455",
+      "controller_sha256": "78dcf7948c22fb4f7db4fd02542f99040849b294f4086d1bfa3852ff1317009d",
+      "entry_sha256": "a92922a223cd528a3d7690a8664b0a838680a13e6b8784303fc21162680c5ab0",
+      "trial_source_hashes_match": true
+    }
+  }
+}

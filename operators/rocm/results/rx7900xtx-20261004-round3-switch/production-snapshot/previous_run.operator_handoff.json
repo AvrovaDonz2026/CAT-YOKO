@@ -1,0 +1,13 @@
+{
+  "superseded_by": "/home/donz/cat-yoko-rocm-20261002/runs/round3-switch-20261004T0425",
+  "source_step": 53143,
+  "at_utc": "2026-10-04T04:35:21.559122+00:00",
+  "reason": "user-requested round-three operator switch after verified save",
+  "active_continuation_run": "/home/donz/cat-yoko-rocm-20261002/runs/round3-confirm-20261004T0455",
+  "active_continuation_status": "/home/donz/cat-yoko-rocm-20261002/runs/round3-confirm-20261004T0455/status.json",
+  "active_supervisor_pid": 1716930,
+  "active_child_pid": 1719057,
+  "accepted_operator_configuration": "packed FP32 split attention/shared-storage MoE/cached BF16 CPU shadow/native FP32 Adam",
+  "first_verified_checkpoint_step": 53201,
+  "active_handoff_updated_at": "2026-10-04T05:31:24.422395+00:00"
+}

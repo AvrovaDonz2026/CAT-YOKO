@@ -1,0 +1,33 @@
+{
+  "split_attention": false,
+  "cached_cpu_adam": false,
+  "sync_update_timing": false,
+  "deterministic_training": true,
+  "original_deterministic_algorithms": false,
+  "patches_installed_after_native_reference": true,
+  "full_model_parity_passed": true,
+  "cached_cpu_adam_training_exercised": false,
+  "file_sha256": {
+    "operators/rocm/round3_candidate_bench.py": "a92922a223cd528a3d7690a8664b0a838680a13e6b8784303fc21162680c5ab0",
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7",
+    "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+    "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+    "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+    "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d"
+  },
+  "optimizer_device": "cpu",
+  "checkpoint_format_changed": false,
+  "persistent_fp32_master": false,
+  "notes": [
+    "Native/reference-repeat captures precede all new context installation.",
+    "The existing loss, sampled-output and all-132-gradient gates remain in force.",
+    "Gradient parity alone does not compare Adam arithmetic; independent optimizer checks are required.",
+    "Parity-only never verifies or claims cached optimizer updates.",
+    "No context changes another process or the source checkpoint."
+  ],
+  "deterministic_algorithms": true,
+  "status": "completed",
+  "restored_deterministic_algorithms": false
+}
