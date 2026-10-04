@@ -40,11 +40,15 @@ CHECKPOINT_CHECK = r'''
 import json, math, sys
 from pathlib import Path
 import torch
-from operators.rocm.profile_training import check_resume
 
-source_path, target_path, data_path, expected, window = sys.argv[1:]
+arguments = sys.argv[1:]
+if len(arguments) not in (5, 6):
+    raise ValueError("checkpoint check needs five arguments and an optional absolute cursor limit")
+source_path, target_path, data_path, expected, window = arguments[:5]
 expected, window = int(expected), int(window)
-if source_path == target_path:
+max_cursor = int(arguments[5]) if len(arguments) == 6 else None
+if max_cursor is None and source_path == target_path:
+    from operators.rocm.profile_training import check_resume
     check_resume(Path(source_path), Path(data_path), 4096, window)
 source = torch.load(source_path, map_location="cpu", weights_only=False)
 target = source if source_path == target_path else torch.load(target_path, map_location="cpu", weights_only=False)
@@ -53,6 +57,9 @@ def need(condition, message):
         raise ValueError(message)
 rows, remainder = divmod(Path(data_path).stat().st_size, 4096 * 4)
 need(not remainder and rows > 0, "invalid packed data length")
+need(max_cursor is None or (max_cursor > 0 and max_cursor >= rows and max_cursor % rows == 0),
+     "max_cursor must be a positive whole-corpus multiple at least one corpus long")
+absolute_limit = rows if max_cursor is None else max_cursor
 def inspect(checkpoint):
     extra = checkpoint.get("extra") or {}
     need(checkpoint.get("kind") == "trainable", "expected trainable overlay")
@@ -75,7 +82,7 @@ def inspect(checkpoint):
     stream = extra.get("stream") or {}
     need(stream.get("kind") == "packed" and stream.get("stride") == 1 and stream.get("nseq") == rows,
          "packed stream kind/stride/nseq mismatch")
-    need(isinstance(stream.get("i"), int) and 0 <= stream["i"] <= rows, "invalid packed cursor")
+    need(isinstance(stream.get("i"), int) and 0 <= stream["i"] <= absolute_limit, "invalid packed cursor")
     optimizer = checkpoint.get("optimizer") or {}
     groups, states = optimizer.get("param_groups") or [], optimizer.get("state") or {}
     ids = [parameter for group in groups for parameter in group.get("params", [])]
@@ -118,13 +125,17 @@ for key in ("tokens_in_phase", "tokens_seen"):
     need(tx[key] == sx[key] + expected * 4096, "token counter delta mismatch")
 need(tx["stream"]["i"] == sx["stream"]["i"] + expected, "packed cursor delta mismatch")
 need(ta == sa + expected, "Adam counter delta mismatch")
-need(sx["stream"]["i"] + window <= rows, "requested window would wrap packed corpus")
+need(sx["stream"]["i"] + window <= absolute_limit,
+     "requested window would wrap packed corpus" if max_cursor is None else "requested window would exceed packed cursor limit")
 result = {"source_checkpoint": str(Path(target_path).resolve()), "source_step": tx["step"],
           "source_adam_step": ta, "source_stream_i": tx["stream"]["i"],
           "source_data_rows": rows, "optimizer_states": 132, "optimizer_moments": 264,
           "source_tokens_in_phase": tx["tokens_in_phase"], "source_tokens_seen": tx["tokens_seen"],
           "trainable_names": list(tw), "trainable_shapes": {name:list(value.shape) for name,value in tw.items()},
           "checkpoint_verified": True}
+if max_cursor is not None:
+    result.update(max_cursor=absolute_limit, source_completed_passes=tx["stream"]["i"] // rows,
+                  source_modulo_row=tx["stream"]["i"] % rows)
 print(json.dumps(result, allow_nan=False), flush=True)
 '''
 
@@ -196,11 +207,20 @@ def steady_metrics(path: Path, *, source_step: int, steps: int, discard=5):
 
 def validate_run(directory: Path, *, source: Path, source_step: int, steps: int | None,
                  variant: str, max_updates: int | None = None, source_dir: Path | None = None,
-                 expected_names: list[str] | None = None, args=None, eval_batches=2):
+                 expected_names: list[str] | None = None, args=None, eval_batches=2,
+                 reference_backend='native'):
     report = json.loads((directory / "parity.json").read_text())
     operators = json.loads((directory / "operators.json").read_text())
     require_finite(report)
     require_finite(operators)
+    if reference_backend == 'previous_packed_production':
+        from operators.rocm.production_continuation import validate_reference_evidence, WRAPPER_SOURCE
+        validate_reference_evidence(report, source_dir=source_dir, source=source)
+        validate_reference_evidence(operators, source_dir=source_dir, source=source)
+        if operators.get('file_sha256', {}).get(WRAPPER_SOURCE) != operators['reference_file_sha256'][WRAPPER_SOURCE]:
+            raise SourceIntegrityError('packed-production wrapper missing from operator source inventory')
+    elif reference_backend != 'native' or report.get('reference_backend', 'native') != 'native' or operators.get('reference_backend', 'native') != 'native':
+        raise ValueError('run used a different reference backend')
     if report.get("status") != "training_complete":
         raise ValueError("run did not finish training and held-out evaluation")
     for key in ("initial_eval", "final_eval"):
@@ -268,7 +288,10 @@ def validate_run(directory: Path, *, source: Path, source_step: int, steps: int 
                     raise ValueError("parity output failed the original numeric threshold")
     attention = "--packed-attention" in FLAGS[variant]
     norm = "--batched-grad-norm" in FLAGS[variant]
-    if (operators.get("status") != "completed" or operators.get("patches_installed_after_native_reference") is not True
+    reference_installed = (operators.get("patches_installed_after_native_reference") is True
+                           if reference_backend == 'native' else
+                           operators.get("patches_installed_after_packed_production_reference") is True)
+    if (operators.get("status") != "completed" or not reference_installed
             or operators.get("packed_attention") is not attention
             or operators.get("batched_grad_norm") is not norm):
         raise ValueError("operator installation does not match the requested candidate")
@@ -411,10 +434,22 @@ def validate_args(args):
             raise FileNotFoundError(f"isolated source lacks {script}")
 
 
-def cpu_check(args, checkpoint: Path, updates: int, log: Path):
+def cpu_check(args, checkpoint: Path, updates: int, log: Path, *, max_cursor: int | None = None):
+    """Audit native state; repeated corpus passes need an explicit cursor cap."""
+    if max_cursor is not None:
+        if type(max_cursor) is not int or max_cursor <= 0:
+            raise ValueError("max_cursor must be a positive integer")
+        rows, remainder = divmod(args.data.stat().st_size, 4096 * 4)
+        if remainder or rows <= 0:
+            raise ValueError("invalid packed data length")
+        if max_cursor < rows or max_cursor % rows:
+            raise ValueError("max_cursor must be a whole-corpus multiple at least one corpus long")
     same_source = checkpoint.resolve() == args.resume
-    result = subprocess.run([args.python, "-c", CHECKPOINT_CHECK, str(args.resume), str(checkpoint),
-                             str(args.data), "0" if same_source else str(updates), str(updates) if same_source else "0"],
+    command = [args.python, "-c", CHECKPOINT_CHECK, str(args.resume), str(checkpoint),
+               str(args.data), "0" if same_source else str(updates), str(updates) if same_source else "0"]
+    if max_cursor is not None:
+        command.append(str(max_cursor))
+    result = subprocess.run(command,
                             cwd=args.source_dir, capture_output=True, text=True, timeout=300,
                             env=dict(os.environ, CUDA_VISIBLE_DEVICES="", HIP_VISIBLE_DEVICES="",
                                      ROCR_VISIBLE_DEVICES="", OMP_NUM_THREADS="1"))

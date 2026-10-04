@@ -82,16 +82,24 @@ def common(args, resume, directory, updates, *, production=False):
            '--gpu-idle-max-wait','3600']
     return flags
 
-def validate_round3_report(args, directory, variant, updates, *, timing):
+def validate_round3_report(args, directory, variant, updates, *, timing, reference_backend='native'):
     report=read(directory/'round3_operators.json')
     enabled=variant=='combined'
-    need(report.get('status')=='completed' and report.get('patches_installed_after_native_reference') is True,
+    if reference_backend=='previous_packed_production':
+        from operators.rocm.production_continuation import validate_reference_evidence, WRAPPER_SOURCE
+        validate_reference_evidence(report,source_dir=args.source_dir,source=args.resume)
+        reference_installed=report.get('patches_installed_after_packed_production_reference') is True
+    else:
+        need(reference_backend=='native' and report.get('reference_backend','native')=='native','round3 reference backend changed')
+        reference_installed=report.get('patches_installed_after_native_reference') is True
+    need(report.get('status')=='completed' and reference_installed,
          'round3 installation did not complete')
     need(report.get('split_attention') is enabled and report.get('cached_cpu_adam') is enabled
          and report.get('sync_update_timing') is timing and report.get('full_model_parity_passed') is True,
          'requested round3 flags differ from actual installation')
     hashes=report.get('file_sha256',{})
     required=ROUND3_SOURCES|({'operators/rocm/split_attention.py','operators/rocm/cpu_adam_cached.py'} if enabled else set())
+    if reference_backend=='previous_packed_production':required=required|{WRAPPER_SOURCE}
     if timing: required=required|{'operators/rocm/update_timing.py'}
     need(set(hashes)==required and all(helpers.digest_file(args.source_dir/name)==sha for name,sha in hashes.items()),
          'round3 code changed or source inventory incomplete')

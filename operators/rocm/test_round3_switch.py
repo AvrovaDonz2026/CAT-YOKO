@@ -78,6 +78,35 @@ class Round3SwitchTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.check_report(lambda d:d['cached_cpu_adam_calls'].update(moment_dtype='bfloat16'))
 
+    def test_packed_production_reference_is_explicit_and_binds_wrapper_inventory(self):
+        from operators.rocm.production_continuation import REFERENCE_BACKEND, WRAPPER_SOURCE, PACKED_SOURCE
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'source.pt';source.write_bytes(b'fixed source')
+            names=switch.ROUND3_SOURCES|{'operators/rocm/split_attention.py','operators/rocm/cpu_adam_cached.py',
+                                         'operators/rocm/update_timing.py',WRAPPER_SOURCE}
+            for name in names:
+                path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text('frozen source')
+            report=self.report_fixture(root)
+            report.update(reference_backend=REFERENCE_BACKEND,patches_installed_after_native_reference=False,
+                          patches_installed_after_packed_production_reference=True,production_reference_context_restored=True,
+                          reference_checkpoint_sha256=switch.helpers.digest_file(source),
+                          reference_file_sha256={name:switch.helpers.digest_file(root/name) for name in (WRAPPER_SOURCE,PACKED_SOURCE)},
+                          production_reference_captures=[dict(status='completed',seq_len=4096,offload_blocks=True,
+                              gradient_tensors=132,packed_attention_calls={'optimized_calls':42}) for _ in range(2)],
+                          file_sha256={name:switch.helpers.digest_file(root/name) for name in names})
+            path=root/'round3_operators.json';path.write_text(json.dumps(report))
+            args=SimpleNamespace(source_dir=root,resume=source)
+            self.assertTrue(switch.validate_round3_report(args,root,'combined',20,timing=True,
+                                                         reference_backend=REFERENCE_BACKEND)['full_model_parity_passed'])
+            with self.assertRaises(ValueError):switch.validate_round3_report(args,root,'combined',20,timing=True)
+            for mutate in (lambda d:d['file_sha256'].pop(WRAPPER_SOURCE),
+                           lambda d:d.update(reference_checkpoint_sha256='wrong'),
+                           lambda d:d['production_reference_captures'][0]['packed_attention_calls'].update(optimized_calls=0),
+                           lambda d:d['cached_cpu_adam_calls'].update(gpu_parameter_updates=2639)):
+                changed=json.loads(json.dumps(report));mutate(changed);path.write_text(json.dumps(changed))
+                with self.subTest(mutate=mutate),self.assertRaises(ValueError):
+                    switch.validate_round3_report(args,root,'combined',20,timing=True,reference_backend=REFERENCE_BACKEND)
+
     def policy_fixture(self,root,*,updates=2,deterministic=True,legacy=False):
         root.mkdir(parents=True,exist_ok=True)
         (root/'train').mkdir(exist_ok=True)

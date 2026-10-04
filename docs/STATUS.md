@@ -7,7 +7,8 @@ Weights live on Hugging Face.
 
 The recommended snapshot is **ROCm real-text B0 step 53307**, saved on
 2026-10-04T05:37:22.748161Z. The 8B-token B0 envelope is still unfinished, and B1 has
-not started. The remote continuation remains active after this immutable save.
+not started. This immutable published save precedes the completed first corpus
+pass; a second pass is being prepared as described below.
 
 | Item | Value |
 | --- | --- |
@@ -39,36 +40,68 @@ intersection. Dataset versions and tokenizer hashes are in the
 Cumulative phase counters include DummyStream and must not be interpreted as
 all real-text training.
 
-The current supervisor is `runs/round3-confirm-20261004T0455/status.json`, with
-the frozen source `source-round3-confirm-20261004T0455`. It resumes the complete
-**step 53143** checkpoint / packed cursor and Adam counter **18341**, using
-document-split FP32 attention and cached BF16 CPU-shadow Adam with shared frozen
-expert storage. The operator switch passed all 132 model-gradient gates and
-byte-exact weights/264 moments after two deterministic real updates. Production
-retains `deterministic_algorithms=False` and native CPU FP32 Adam moments.
-The short old/new/old whole-update comparison gains **2.55–3.03%**; adoption was
+The first corpus pass has completed normally at **step 54333**, with packed
+cursor and native Adam counter both **19531**. It consumed **79,998,976** real
+training tokens and ended at phase token counter **242,243,584**, including the
+earlier DummyStream history. The final held-out NLL is **7.873593728100402** on
+the fixed **32 batches / 130877 valid loss tokens**. This is the held-out pilot
+used throughout the run, not a standard language-quality benchmark.
+
+That completed run used `runs/round3-confirm-20261004T0455/status.json` and
+`source-round3-confirm-20261004T0455`, starting from the complete step-53143
+checkpoint / cursor and Adam counter 18341. It applied document-split packed
+FP32 attention and cached BF16 CPU-shadow Adam with shared frozen expert
+storage. The operator switch passed all 132 model-gradient gates and byte-exact
+weights/264 moments after two deterministic real updates. Ordinary production
+retained `deterministic_algorithms=False` and native CPU FP32 Adam moments.
+The short old/new/old whole-update comparison gained **2.55–3.03%**; adoption was
 user-requested below the 5% automatic selection gate. See the
 [switch and recovery evidence](../operators/rocm/OPERATOR_SWITCH_20261004.md).
 
-The published **53307** checkpoint contains **164** completed updates with
-both new operator flags after the 53143 handoff. CPU verification checked
-all 132 BF16 weights, all 264 retained FP32 moments, optimizer groups and
-state mappings, RNG, token counters and packed cursor **18505**. The light
-export matches all 132 full-checkpoint weights byte-for-byte. The snapshot
-was hardlinked from a completed atomic numbered save while training continued.
-Its first periodic checkpoint at **53201** had already passed the CPU recovery
-audit and a native Adam load/export bitwise check of all 264 moments.
+A second pass is running in **`runs/pass2-54333-20261004T1045`**, using
+the independent source **`source-pass2-20261004T1045`**. It resumes
+the complete first-pass checkpoint, preserve native Adam and RNG state, and
+performs **19531** further updates without resetting the absolute packed cursor.
+The corpus repeats in the same row order; unique training data remains
+**79,998,976 tokens**.
 
-At the published cursor, **1026** additional updates reach **54333** and
-row **19531**, ending the first corpus pass without wrapping. The active run
-targets that boundary without a time cap, saving every **300 seconds** and
-retaining the latest three periodic checkpoints. Fixed 32-batch evaluation
-runs every 250 updates. The new supervisor checks periodic recovery snapshots
-and the exact final source/cursor/Adam boundary. The previous supervisor and
-auditor were superseded at the checkpoint-first handoff. The initial fixed
-evaluation was NLL **10.743914**; the later
-7.885218 observation at step 53250 uses the same held-out pilot, not a
-standard language quality benchmark.
+| Planned second-pass item | Source → target |
+| --- | --- |
+| Global step | **54333 → 73864** |
+| Absolute packed cursor / Adam counter | **19531 → 39062** |
+| Phase token counter, including DummyStream history | **242,243,584 → 322,242,560** |
+| Real training input consumed, including the repeated pass | **79,998,976 → 159,997,952 tokens** |
+| Unique training data | **79,998,976 tokens**, unchanged |
+
+The run retains both new operators, shared frozen expert storage,
+BF16 parameters, FP32 MATH attention, native CPU FP32 moments and the ordinary
+training policy (`deterministic_algorithms=False`). Complete checkpoints are
+scheduled every **300 seconds**,
+retaining the latest **three**, with fixed **32-batch** held-out evaluation every
+**250** updates. The new supervisor audits periodic recovery snapshots and
+the final absolute cursor/Adam boundary. The first dense-native startup failed
+two norm-gradient gates before any updates; its receipt is preserved. The
+separate recovery entry compares against the previous accepted packed
+production backend, passing all 132 gradients and selected outputs with zero
+numeric error, without changing the thresholds or production mathematics.
+Initial fixed held-out NLL is **7.872862032828506** at source step **54333**.
+See [second-pass evidence and recovery checks](../operators/rocm/CORPUS_PASS2_20261004.md).
+
+At **2026-10-04T11:11:22.228406+00:00**, the second pass has completed **67**
+updates through **54400**. Its first periodic checkpoint is **54388**, with
+absolute cursor and Adam counter **19586**. The full 132-weight / 264-moment
+CPU audit passes, and native Adam load/export preserves every FP32 moment
+byte-for-byte. CPU Python/Torch RNG restoration also passes; the CPU audit
+checks the saved GPU RNG tensor schema without allocating on the GPU.
+
+The model remains **B0**, with its original **8B-token phase clock** preserved;
+this repeat is not a B1 transition. The published **53307** snapshot remains
+the immutable HF release: its cursor/Adam counter is **18505**, and it contains
+164 completed updates after the operator handoff. Its light export matches
+all 132 full-checkpoint BF16 weights byte-for-byte. The first new-backend
+periodic save at 53201 had also passed native Adam load/export checks of all
+264 moments. Those release and recovery observations do not describe a new
+second-pass checkpoint.
 
 Use the [real-text recovery guide](../operators/rocm/REAL_TRAINING.md) and
 explicit original `train.bin`/`eval.bin` hashes from the release manifest.
@@ -78,12 +111,12 @@ packed-stream recovery recipe. The earlier
 their narrower scope; the full acceptance and applied continuation are in the
 switch report above. This remains B0 on the bounded pilot; B1 has not started.
 
-At the repository-sync observation **2026-10-04T06:11:47.398890+00:00**, the active run
-has reached **53682** with the latest complete verified checkpoint at
-**53638** / packed cursor **18836**. Both new operators and
-the 300-second/three-checkpoint policy remain active. Repository publication
-did not pause training. [Synchronization receipts](../artifacts/repository-sync/20261004/README.md)
-record the model, kernel archive and observed continuation separately.
+The repository-sync observation at **2026-10-04T06:11:47.398890+00:00** is
+historical: the first pass had reached **53682**, with a verified checkpoint
+at **53638** / cursor **18836**. It has since finished at 54333. Repository
+publication did not pause that run.
+[Synchronization receipts](../artifacts/repository-sync/20261004/README.md)
+record the model, kernel archive and that earlier continuation separately.
 
 ## Previous real-text release
 

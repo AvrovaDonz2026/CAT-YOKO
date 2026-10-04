@@ -1,0 +1,8 @@
+{
+  "source_step": 54333,
+  "python_rng_restore_passed": true,
+  "cpu_torch_rng_restore_passed": true,
+  "gpu_rng_states": 1,
+  "gpu_rng_tensor_schema_passed": true,
+  "gpu_rng_will_restore_in_native_trainer": true
+}

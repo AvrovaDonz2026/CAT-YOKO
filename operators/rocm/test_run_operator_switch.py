@@ -126,6 +126,48 @@ class OperatorSwitchTests(unittest.TestCase):
         deadline = switch.parse_deadline("2026-10-03T14:40:00Z")
         self.assertEqual(switch.remaining_hours(deadline, datetime(2026, 10, 3, 14, 10, tzinfo=timezone.utc)), 0.5)
         self.assertEqual(switch.remaining_hours(deadline, deadline + timedelta(seconds=1)), 0)
+
+    def test_packed_production_reference_requires_explicit_mode_source_and_complete_gates(self):
+        from operators.rocm.production_continuation import REFERENCE_BACKEND, WRAPPER_SOURCE, PACKED_SOURCE
+        directory = self.root / 'production'
+        wrapper = self.source / WRAPPER_SOURCE
+        wrapper.write_text('isolated wrapper fixture\n')
+
+        def fixture():
+            report, operators = self.write_run(directory, 'attention', 130)
+            hashes = {name: switch.digest_file(self.source / name) for name in (WRAPPER_SOURCE, PACKED_SOURCE)}
+            metadata = {'reference_backend': REFERENCE_BACKEND,
+                        'patches_installed_after_native_reference': False,
+                        'patches_installed_after_packed_production_reference': True,
+                        'production_reference_context_restored': True,
+                        'reference_checkpoint_sha256': switch.digest_file(self.resume),
+                        'reference_file_sha256': hashes,
+                        'production_reference_captures': [dict(status='completed', seq_len=4096,
+                            offload_blocks=True, gradient_tensors=132, packed_attention_calls={'optimized_calls': 42}) for _ in range(2)]}
+            report.update(metadata); operators.update(metadata)
+            operators['file_sha256'] = dict(hashes)
+            return report, operators
+
+        def publish(report, operators):
+            (directory / 'parity.json').write_text(json.dumps(report))
+            (directory / 'operators.json').write_text(json.dumps(operators))
+
+        def validate(backend=REFERENCE_BACKEND):
+            return switch.validate_run(directory, source=self.resume, source_step=42100, steps=20,
+                                       variant='attention', source_dir=self.source, reference_backend=backend)
+
+        report, operators = fixture(); publish(report, operators)
+        self.assertTrue(validate()['validated'])
+        with self.assertRaises(ValueError): validate('native')
+        for change in (lambda r,o: o.update(patches_installed_after_native_reference=True),
+                       lambda r,o: r['production_reference_captures'].pop(),
+                       lambda r,o: o['reference_file_sha256'].update({WRAPPER_SOURCE:'wrong'}),
+                       lambda r,o: o['file_sha256'].pop(WRAPPER_SOURCE),
+                       lambda r,o: r.update(reference_checkpoint_sha256='wrong'),
+                       lambda r,o: r['events'][1]['gradients']['p0'].update({'pass':False, 'relative_l2':0.077}),
+                       lambda r,o: r['events'][1].update({'pass':False, 'loss_abs':0.021})):
+            report, operators = fixture(); change(report, operators); publish(report, operators)
+            with self.subTest(change=change), self.assertRaises((ValueError, switch.SourceIntegrityError)): validate()
         with self.assertRaises(ValueError):
             switch.parse_deadline("2026-10-03T14:40:00")
         args = self.args()
@@ -214,6 +256,36 @@ class OperatorSwitchTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "warmup"):
             switch.validate_args(self.args("--benchmark-steps", "5"))
 
+    def test_cpu_check_default_keeps_five_child_arguments_and_explicit_limit_is_sixth(self):
+        args=self.args()
+        result=subprocess.CompletedProcess([],0,stdout=json.dumps(self.metadata)+'\n',stderr='')
+        for limit in (None,200):
+            for same_source in (False,True):
+                with self.subTest(limit=limit,same_source=same_source), \
+                        patch.object(switch.subprocess,'run',return_value=result) as run:
+                    target=self.resume if same_source else self.root/'target.pt'
+                    switch.cpu_check(args,target,100,self.root/'check.log',max_cursor=limit)
+                    command=run.call_args.args[0]
+                    expected=[str(args.resume),str(target),str(args.data),
+                              '0' if same_source else '100','100' if same_source else '0']
+                    if limit is not None:expected.append('200')
+                    self.assertEqual(command[3:],expected)
+                    for variable in ('CUDA_VISIBLE_DEVICES','HIP_VISIBLE_DEVICES','ROCR_VISIBLE_DEVICES'):
+                        self.assertEqual(run.call_args.kwargs['env'][variable],'')
+
+    def test_cpu_check_rejects_invalid_explicit_limit_before_subprocess(self):
+        args=self.args()
+        for limit in (0,-200,True,False,200.0,'200',float('nan'),50,199,201):
+            with self.subTest(limit=limit), patch.object(switch.subprocess,'run') as run:
+                with self.assertRaisesRegex(ValueError,'max_cursor'):
+                    switch.cpu_check(args,self.resume,100,self.root/'check.log',max_cursor=limit)
+                run.assert_not_called()
+        self.data.write_bytes(b'incomplete packed row')
+        with patch.object(switch.subprocess,'run') as run:
+            with self.assertRaisesRegex(ValueError,'packed data'):
+                switch.cpu_check(args,self.resume,100,self.root/'check.log',max_cursor=200)
+            run.assert_not_called()
+
 
 @unittest.skipUnless(importlib.util.find_spec("torch") is not None, "CPU serialization tests require Torch")
 class EmbeddedCheckpointCheckTests(unittest.TestCase):
@@ -276,13 +348,15 @@ class EmbeddedCheckpointCheckTests(unittest.TestCase):
             group["lr"] = 0.0009
         torch.save(self.source, self.source_path)
 
-    def run_verifier(self, target=None, *, same_source=False, window=0):
+    def run_verifier(self, target=None, *, same_source=False, window=0, expected=3, max_cursor=None):
         if not same_source:
             self.torch.save(self.target if target is None else target, self.target_path)
-        return subprocess.run([
+        command=[
             sys.executable, "-c", switch.CHECKPOINT_CHECK, str(self.source_path),
             str(self.source_path if same_source else self.target_path), str(self.data),
-            "0" if same_source else "3", str(window)],
+            "0" if same_source else str(expected), str(window)]
+        if max_cursor is not None:command.append(str(max_cursor))
+        return subprocess.run(command,
             cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=60,
             env=dict(os.environ, CUDA_VISIBLE_DEVICES="", HIP_VISIBLE_DEVICES="", ROCR_VISIBLE_DEVICES="",
                      OMP_NUM_THREADS="1", MKL_NUM_THREADS="1", PYTHONOPTIMIZE="1"))
@@ -301,6 +375,7 @@ class EmbeddedCheckpointCheckTests(unittest.TestCase):
         self.assertEqual((metadata["optimizer_states"], metadata["optimizer_moments"]), (132, 264))
         self.assertEqual(metadata["trainable_names"], list(self.source["trainable"]))
         self.assertEqual(metadata["trainable_shapes"]["layer0.weight"], [2, 3])
+        self.assertFalse(any(key in metadata for key in ("max_cursor", "source_completed_passes", "source_modulo_row")))
         self.assertEqual(self.source_path.read_bytes(), before)
         target = self.torch.load(self.target_path, map_location="cpu", weights_only=False)
         self.assertEqual(target["optimizer"]["state"][0]["exp_avg"].dtype, self.torch.float32)
@@ -344,6 +419,72 @@ class EmbeddedCheckpointCheckTests(unittest.TestCase):
         result = self.run_verifier(same_source=True, window=91)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("wrap", result.stderr)
+
+    def test_explicit_second_pass_preserves_monotonic_cursor_and_complete_state_delta(self):
+        torch=self.torch
+        self.source['extra']['stream']['i']=100
+        torch.save(self.source,self.source_path)
+        default=self.run_verifier(same_source=True,window=1)
+        self.assertNotEqual(default.returncode,0)
+        self.assertIn('wrap',default.stderr)
+        preflight=self.run_verifier(same_source=True,window=100,max_cursor=200)
+        self.assertEqual(preflight.returncode,0,preflight.stderr)
+        metadata=json.loads(preflight.stdout.splitlines()[-1])
+        self.assertEqual((metadata['source_stream_i'],metadata['max_cursor'],metadata['source_completed_passes'],
+                          metadata['source_modulo_row']),(100,200,1,0))
+        target=copy.deepcopy(self.source)
+        target['extra']['step']+=100
+        for key in ('tokens_in_phase','tokens_seen'):target['extra'][key]+=100*4096
+        target['extra']['stream']['i']+=100
+        for state in target['optimizer']['state'].values():state['step']+=100
+        before=self.source_path.read_bytes()
+        result=self.run_verifier(target,expected=100,max_cursor=200)
+        self.assertEqual(result.returncode,0,result.stderr)
+        metadata=json.loads(result.stdout.splitlines()[-1])
+        self.assertEqual((metadata['source_stream_i'],metadata['source_adam_step'],metadata['source_completed_passes'],
+                          metadata['source_modulo_row']),(200,112,2,0))
+        self.assertEqual((metadata['optimizer_states'],metadata['optimizer_moments']),(132,264))
+        self.assertEqual(self.source_path.read_bytes(),before)
+        target['extra']['stream']['i']=0
+        rejected=self.run_verifier(target,expected=100,max_cursor=200)
+        self.assertNotEqual(rejected.returncode,0)
+        self.assertIn('packed cursor delta mismatch',rejected.stderr)
+
+    def test_explicit_cursor_bounds_and_limit_arguments_reject_overflow_or_invalid_values(self):
+        self.source['extra']['stream']['i']=100
+        self.torch.save(self.source,self.source_path)
+        result=self.run_verifier(same_source=True,window=101,max_cursor=200)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('exceed packed cursor limit',result.stderr)
+        for cursor in (-1,201):
+            with self.subTest(cursor=cursor):
+                self.source['extra']['stream']['i']=cursor
+                self.torch.save(self.source,self.source_path)
+                result=self.run_verifier(same_source=True,max_cursor=200)
+                self.assertNotEqual(result.returncode,0)
+                self.assertIn('invalid packed cursor',result.stderr)
+        self.source['extra']['stream']['i']=100
+        self.torch.save(self.source,self.source_path)
+        for limit in (0,-200,50,199,201,'200.0','invalid'):
+            with self.subTest(limit=limit):
+                result=self.run_verifier(same_source=True,max_cursor=limit)
+                self.assertNotEqual(result.returncode,0)
+
+    def test_explicit_mode_does_not_relax_moment_or_counter_checks(self):
+        self.source['extra']['stream']['i']=100
+        self.torch.save(self.source,self.source_path)
+        target=copy.deepcopy(self.target)
+        target['extra']['stream']['i']=103
+        target['optimizer']['state'][0]['exp_avg_sq'][0,0]=-1
+        result=self.run_verifier(target,max_cursor=200)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('negative squared Adam moment',result.stderr)
+        target=copy.deepcopy(self.target)
+        target['extra']['stream']['i']=103
+        target['optimizer']['state'][0]['step']+=1
+        result=self.run_verifier(target,max_cursor=200)
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Adam counters disagree',result.stderr)
 
 
 if __name__ == "__main__":
