@@ -6,29 +6,32 @@ Middle tier: ≈12.25B stored parameters. Encoder ≈2.03B active / input token;
 
 ## Status
 
-Published **B0 is in progress** and has not finished 8e9 tokens. The Vast B200 was recycled on 2026-09-19. The latest overlay lives on Hugging Face, not GitHub.
+Published **B0 is in progress**. The latest recommended snapshot is real-text
+BF16 training on an RX 7900 XTX; the 8B-token envelope is unfinished.
 
-| | |
+| Item | Value |
 | --- | --- |
-| Hub | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
-| step | **26940** |
-| tokens_in_phase | 130,041,856 (≈1.63% of 8e9) |
-| sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| last machine | Vast B200, micro-batch=2, ~15.7k tok/s |
-| logs | [`artifacts/vast-b200/`](artifacts/vast-b200/README.md) |
+| Hub | [`ROCm real-text step 52616`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-rocm-realtext/step-52616) |
+| Full resume file | `trainable.pt`: 132 BF16 weights, 264 CPU FP32 Adam moments, RNG and packed cursor |
+| Total phase tokens | **235,210,752**, including earlier DummyStream history |
+| Real-text tokens | **72,966,144**, packed cursor **17814 / 19531** |
+| SHA256 | `d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df` |
+| Fixed pilot validation | NLL **7.900367** at step **52500**; 32 batches, not a standard benchmark |
 
-Full pin, machine history, and do-nots: [`docs/STATUS.md`](docs/STATUS.md).
-
-If the next GPU is unknown, probe first, then dispatch. Do not default to `run_b0_full_b200.sh` (non-SM100 exits 4). Do not take that as a reason to implement Megatron:
+Download the complete state with:
 
 ```bash
-python3 -m cat_yoko.hw_recipe --json
-python scripts/download_minicpm5.py --local-dir /workspace/hf/MiniCPM5-2B-Base
-python scripts/download_hub_overlay.py --name b0-full --out-dir /workspace/runs/b0-full
-bash scripts/run_b0_next.sh
+python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir runs/b0-rocm-realtext
 ```
 
-Known B200 / SM100 still uses `run_b0_full_b200.sh` in [`docs/B200_TRAIN.md`](docs/B200_TRAIN.md). `MICRO_BATCH=1` is a fallback. Same-phase resume keeps `tokens_in_phase`. **Do not** resume the 32-step `--try` at `checkpoints/b0/`. Do not `--save-full`.
+Rebuild frozen weights from MiniCPM5-2B-Base, then resume with the original
+packed data and native CPU Adam. See the
+[snapshot card](checkpoints/b0-rocm-realtext/step-52616/README.md) for recovery
+commands and the lightweight weights-only option. Training progress and
+historical snapshots: [`docs/STATUS.md`](docs/STATUS.md).
+
+Historical B200 step **26940** and RTX 3090 step **33800** remain available at
+their original Hub paths; the recommended snapshot above is the newer release.
 
 ## Spec
 

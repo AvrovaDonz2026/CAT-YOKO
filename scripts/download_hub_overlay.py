@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Download a CAT-YOKO Hub overlay (weights only). Does not fetch 50B tokens.
+"""Download a CAT-YOKO Hub overlay or complete trainable-state snapshot.
 
-Default: ``AvrovaDonz/CAT-YOKO`` ``checkpoints/b0-full/trainable.pt``.
+Default: ROCm real-text B0 step 52616, including native CPU FP32 Adam state.
+The frozen model must still be reconstructed from MiniCPM5-2B-Base. This
+download does not fetch the training corpus or the full 12B model graph.
 """
 
 from __future__ import annotations
@@ -15,6 +17,14 @@ from pathlib import Path
 
 HUB_REPO = "AvrovaDonz/CAT-YOKO"
 OVERLAYS = {
+    "b0-rocm-realtext": {
+        "filename": "checkpoints/b0-rocm-realtext/step-52616/trainable.pt",
+        "sha256": "d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df",
+    },
+    "b0-rocm-realtext-weights": {
+        "filename": "checkpoints/b0-rocm-realtext/step-52616/weights-only.pt",
+        "sha256": "a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570",
+    },
     "b0-full": {
         "filename": "checkpoints/b0-full/trainable.pt",
         "sha256": "7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955",
@@ -39,7 +49,7 @@ def _sha256(path: Path) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--name", default="b0-full", choices=sorted(OVERLAYS))
+    p.add_argument("--name", default="b0-rocm-realtext", choices=sorted(OVERLAYS))
     p.add_argument("--repo", default=HUB_REPO)
     p.add_argument("--out-dir", type=Path, default=None, help="directory that will hold trainable.pt")
     p.add_argument("--filename", default=None, help="override Hub path")

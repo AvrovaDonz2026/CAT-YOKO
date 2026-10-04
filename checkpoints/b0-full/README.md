@@ -1,6 +1,9 @@
-# B0 published overlay (B200, 8e9 tokens)
+# Historical B0 overlay (B200, 8e9 tokens)
 
-Weights do not live on GitHub. The latest overlay is on Hugging Face:
+This historical snapshot is retained at its original path and SHA256. The
+current recommended release is [ROCm real-text B0](../b0-rocm-realtext/README.md).
+
+Weights do not live on GitHub. This B200 overlay is on Hugging Face:
 
 https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full
 

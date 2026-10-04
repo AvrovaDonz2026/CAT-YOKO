@@ -1,0 +1,31 @@
+{
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "revision": "11cd099c63661d5fc8762a9a9f2cb0c61ea4344d",
+  "commit_url": "https://huggingface.co/AvrovaDonz/CAT-YOKO/commit/11cd099c63661d5fc8762a9a9f2cb0c61ea4344d",
+  "verified_at_utc": "2026-10-04T04:13:38.449067+00:00",
+  "step": 52616,
+  "files": [
+    {
+      "path": "checkpoints/b0-rocm-realtext/step-52616/trainable.pt",
+      "bytes": 2192257315,
+      "sha256": "d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df"
+    },
+    {
+      "path": "checkpoints/b0-rocm-realtext/step-52616/weights-only.pt",
+      "bytes": 438477743,
+      "sha256": "a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570"
+    }
+  ],
+  "cards_downloaded_and_byte_compared": [
+    "README.md",
+    "checkpoints/b0-rocm-realtext/README.md",
+    "checkpoints/b0-rocm-realtext/step-52616/README.md",
+    "checkpoints/b0-rocm-realtext/step-52616/release.json",
+    "checkpoints/b0-full/README.md"
+  ],
+  "historical_weights_preserved": {
+    "checkpoints/b0-full/trainable.pt": "7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955",
+    "checkpoints/b0-3090-bf16/trainable.pt": "2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690"
+  },
+  "validation_scope": "local complete-file SHA256 plus Hub LFS SHA256/size, commit-pinned downloaded cards; complete model graph not uploaded"
+}

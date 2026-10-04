@@ -1,47 +1,58 @@
-# Status (2026-10-02)
+# Status (2026-10-04)
 
-GitHub training-progress pin. Spec knobs stay in [`FROZEN_SPEC.md`](FROZEN_SPEC.md). Weights live on Hugging Face.
+GitHub training-progress pin. Spec knobs stay in [`FROZEN_SPEC.md`](FROZEN_SPEC.md).
+Weights live on Hugging Face.
 
-## One line
+## Current published B0 snapshot
 
-CAT-YOKO-12B is continuing **B0 in BF16 on an AMD RX 7900 XTX**. The completed
-DummyStream continuation reached **step 34802**. A real-text five-update check
-then reached **34807**, saved CPU FP32 Adam state, and handed off to a bounded
-24-hour continuation. The 8B-token B0 envelope is still unfinished.
+The recommended snapshot is **ROCm real-text B0 step 52616**, saved on
+2026-10-04T03:44:25Z. The 8B-token B0 envelope is still unfinished, and B1 has
+not started. The remote continuation remains active after this immutable save.
+
+| Item | Value |
+| --- | --- |
+| Complete trainable-state overlay | [`checkpoints/b0-rocm-realtext/step-52616/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/trainable.pt) |
+| Lightweight weights | [`weights-only.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/weights-only.pt), identical 132 BF16 tensors, no optimizer |
+| Global step | **52616** |
+| Total tokens in phase | **235,210,752** (includes earlier DummyStream history; 2.94% of 8B) |
+| Actual packed real-text tokens | **72,966,144**; next unread row **17814 / 19531** |
+| Native CPU Adam | **132** states, **264** finite FP32 moments, counter **17814** |
+| Full snapshot SHA256 | `d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df` |
+| Machine / runtime | RX 7900 XTX / gfx1100, PyTorch 2.9.1+ROCm 6.4, BF16 |
+| Current operators | Validated packed FP32 attention, shared frozen expert storage, native CPU FP32 Adam |
+| Fixed held-out NLL | **7.900367** at step **52500**, 32 batches / 130877 valid loss tokens |
+
+The full file contains trainable weights, Adam, RNG and the packed cursor; it
+still requires MiniCPM5-2B-Base upcycling to reconstruct the frozen graph.
+The light file cannot preserve the Adam trajectory. See the
+[snapshot card](../checkpoints/b0-rocm-realtext/step-52616/README.md) and
+[release manifest](../checkpoints/b0-rocm-realtext/step-52616/release.json) for
+file sizes, base/tokenizer/data hashes and deployed-source hashes.
 
 ## Current ROCm continuation
 
-The real-text corpus contains **79,998,976 training tokens** and **999,424
-validation tokens**, with a 60% English web / 30% Chinese web / 10% L2 math
-token mixture. Selected normalized-text hashes have zero train/validation
-intersection. The dataset and tokenizer versions are recorded in the
+The pilot corpus has **79,998,976 training tokens** and **999,424 validation
+tokens**, with 60% English web / 30% Chinese web / 10% L2 math. It has no code
+slice. Selected normalized document hashes have zero train/validation
+intersection. Dataset versions and tokenizer hashes are in the
 [corpus manifest](../artifacts/rocm-rx7900xtx/realtext-20261002/manifest.json).
-This pilot does not include the published recipe's 5% code slice.
+Cumulative phase counters include DummyStream and must not be interpreted as
+all real-text training.
 
-Shared frozen storage preserves native expert dispatch and reduction order.
-Real packed batches passed deterministic comparisons at sequence lengths
-64 and 4096 with zero loss, sampled-output, and all-132-gradient error.
-The five-update checkpoint passed checks of all 132 optimizer states,
-264 CPU FP32 moment tensors, and packed cursor `i=5`.
-On four fixed held-out batches (**16,362 valid loss tokens**), NLL fell from
-**11.531286 to 10.758360**. This is an early validation observation, not a
-language-quality benchmark result. See the
-[short-run report](../artifacts/rocm-rx7900xtx/realtext-20261002/parity.json).
+The current supervisor is `runs/longtrain-45024-20261003T1520/status.json`.
+It targets **54333** without a time cap, saving every **300 seconds** and
+retaining the latest three periodic checkpoints. Fixed 32-batch evaluation
+runs every 250 updates. Completion is checked by a separate source/cursor/Adam
+auditor. The initial fixed evaluation was NLL **10.743914**; the later
+7.900367 observation uses the same held-out pilot, not a standard language
+quality benchmark.
 
-The remote supervisor writes live status under
-`runs/b0-realtext-24h-20261002/status.json`. The long run retains B0's existing
-8B-token gate/LR schedule, saves every 100 updates, and evaluates 32 fixed
-held-out batches every 250 updates. Its 24-hour cap starts in the long training
-loop; a second update cap prevents repeating the 19531-row corpus.
-New checkpoints include weights, CPU Adam moments, RNG, and the next unread
-packed-data cursor. Current local checkpoints have not been uploaded to Hub.
-At **2026-10-02T14:41:11Z** the long run had reached **step 34828**, with
-recent median loop throughput **579.51 tokens/s** and peak **12006.77 MiB**.
-Its fixed 32-batch initial validation NLL was **10.743914** over **130877
-valid loss tokens**. The [startup snapshot](../artifacts/rocm-rx7900xtx/realtext-20261002/long-start.json)
-records this observation; subsequent live steps are on the remote machine.
-The [real-text guide](../operators/rocm/REAL_TRAINING.md) gives exact launch
-and recovery commands.
+Use the [real-text recovery guide](../operators/rocm/REAL_TRAINING.md) and
+explicit original `train.bin`/`eval.bin` hashes from the release manifest.
+Older launchers default to DummyStream and cannot be used as a complete
+packed-stream recovery recipe. The new split-attention and cached-Adam
+[operator experiments](../operators/rocm/OPERATOR_ROUND3_20261004.md) remain
+independent candidates and are not installed in the active continuation.
 
 ## Historical published progress (2026-09-20)
 
@@ -69,11 +80,11 @@ and recovery commands.
 | RTX 4080 SUPER | graph / `--try` smoke | Released. Logs: [`artifacts/autodl-rtx4080-super/`](../artifacts/autodl-rtx4080-super/README.md) |
 | RTX 6000D sm_120 | published B0 start (NVFP4 **emu**) | step **16020**, `tokens_in_phase=65,488,896`. Logs: [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md) |
 | Vast B200 SM 10.0 | published B0 continue (hardware NVFP4 FPROP) | step **26940**. Logs: [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md) |
-| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + operator roofline; B0 BF16 **sibling** continue | **142 claims ok**; Flash **85%** / MoE bmm **81%**. Sliding window `BANDED_SEQ_MIN=2048`. **Published** pin remains Hub `b0-full` step **26940** / `7eebc9a4…`. 3090 snapshot is Hub [`checkpoints/b0-3090-bf16/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) step **33800** / `2dc31406…` (≈1.98% of 8e9). `SAVE_EVERY=200`. ~760 tok/s (`adam=ds-cpuadam`). **Pending release** (disk copied 2026-09-20T13:53Z). Logs: [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md), [`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md), [`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md), [`occupancy/`](../artifacts/autodl-rtx3090/occupancy/README.md) |
+| RTX 3090 sm_86 | BF16 `bf16-probe` A→E + operator roofline; B0 BF16 **sibling** continue | **142 claims ok**; Flash **85%** / MoE bmm **81%**. Sliding window `BANDED_SEQ_MIN=2048`. Historical B200 pin: Hub `b0-full` step **26940** / `7eebc9a4…`; the current recommended ROCm snapshot is above. 3090 snapshot is Hub [`checkpoints/b0-3090-bf16/`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) step **33800** / `2dc31406…` (≈1.98% of 8e9). `SAVE_EVERY=200`. ~760 tok/s (`adam=ds-cpuadam`). **Pending release** (disk copied 2026-09-20T13:53Z). Logs: [`bf16-verify/`](../artifacts/autodl-rtx3090/bf16-verify/README.md), [`mfu/`](../artifacts/autodl-rtx3090/bf16-verify/mfu/README.md), [`b0-3090-bf16/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md), [`occupancy/`](../artifacts/autodl-rtx3090/occupancy/README.md) |
 
 Same-phase resume adds `tokens_in_phase` at 8192 tokens/step. At step **22100** it was 90,392,576.
 
-## Next GPU
+## Historical next-GPU recipes
 
 If the next card is unknown, **do not** implement a Megatron EP/TP loop, and **do not** default to the B200-only launch script (non-SM100 exits 4). Pick a B0 recipe from SM / VRAM / TE, then same-phase resume the Hub overlay:
 

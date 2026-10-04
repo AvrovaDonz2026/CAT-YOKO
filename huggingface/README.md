@@ -61,42 +61,60 @@ Theoretical hours on a 50B-token envelope, **not** a measured run. On B200 / SM1
 
 | | |
 | --- | --- |
-| Mix | Ultra-FineWeb en 55% / zh 30% + UltraData-Math 10% + StarCoder **5%** (thinking mix; no 50B download) |
-| Tokenizer | [`openbmb/MiniCPM5-2B`](https://huggingface.co/openbmb/MiniCPM5-2B) |
+| Published recipe | Ultra-FineWeb en 55% / zh 30% + UltraData-Math 10% + StarCoder 5%; planned mixture |
+| Current real-text pilot | Ultra-FineWeb en 60% / zh 30% + UltraData-Math L2 10%; no code slice |
+| Prepared pilot | 79,998,976 training tokens / 999,424 validation tokens, packed at 4096 |
+| Tokenizer | MiniCPM5-2B-Base tokenizer files; identities recorded in the release manifest |
 
 ## Current B0 snapshot
 
-Published envelope **in progress** (DummyStream, 8e9 not finished). Vast B200 **recycled** (2026-09-19). This file is a pre-recycle snapshot, not a finished run. GitHub pin: [`docs/STATUS.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/blob/main/docs/STATUS.md).
+The recommended snapshot is **step 52616**, saved on **2026-10-04T03:44:25.977204Z** during real-text B0 training on an AMD RX 7900 XTX. B0's 8B-token budget is unfinished; this snapshot does not enter B1. The earlier B200 and RTX 3090 releases remain available as historical snapshots.
 
 | | |
 | --- | --- |
-| File | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
-| Folder card | [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md) |
-| step | **26940** |
-| tokens_in_phase | 130,041,856 (≈1.63% of the 8e9 envelope) |
-| sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| Tensors | 132, no Adam |
-| Machine | Vast NVIDIA B200 SM 10.0 (recycled) |
-| Runtime | torch 2.11+cu128 + TE nvcc 12.9 SM100 |
-| Throughput / memory | **micro-batch=2**, ~15.7k tok/s, trainer ~138GiB |
-| Resume | MiniCPM5 upcycle, then overlay this file; same-phase resume keeps `tokens_in_phase`. Unknown next GPU: GitHub `python3 -m cat_yoko.hw_recipe` + `scripts/run_b0_next.sh` |
+| Recovery file | [`checkpoints/b0-rocm-realtext/step-52616/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/trainable.pt) |
+| Recovery file bytes | 2,192,257,315 |
+| Recovery SHA256 | `d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df` |
+| Weights-only file | [`weights-only.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/weights-only.pt), 438,477,743 bytes |
+| Weights-only SHA256 | `a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570` |
+| Saved state | 132 BF16 trainable tensors; recovery file also has 264 CPU FP32 Adam moments, counters, RNG and packed cursor |
+| Global step / Adam counter / cursor | 52616 / 17814 / 17814 |
+| `tokens_in_phase` / `tokens_seen` | 235,210,752, including earlier DummyStream history |
+| Real packed training tokens | **72,966,144** since real-text training began; counted separately from the cumulative clock |
+| Runtime | RX 7900 XTX `gfx1100`; PyTorch 2.9.1 + ROCm 6.4, BF16 |
+| Operators | Packed FP32 MATH attention, shared-storage frozen MoE, original CPU FP32 Adam; round-three candidates are not installed |
+| Code and file identities | [Code pin `341e0ed`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/341e0ed); [release manifest](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/release.json) records deployed source and artifact hashes |
+| Snapshot card | [Recovery instructions and validation scope](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/README.md) |
 
-Code and pointers: [GitHub AvrovaDonz2026/CAT-YOKO](https://github.com/AvrovaDonz2026/CAT-YOKO) (no LFS).
+These files contain the B0 **trainable overlay**, not the complete 12B model. Reconstruct the frozen graph by upcycling MiniCPM5-2B-Base, then load the overlay. Both files have byte-identical trainable weights. The smaller file omits Adam and cannot provide the same optimizer recovery as `trainable.pt`.
+
+The default downloader selects the recovery file:
+
+```sh
+python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir /workspace/hub/b0-rocm-realtext-step-52616
+# Optional smaller weights-only overlay:
+python scripts/download_hub_overlay.py --name b0-rocm-realtext-weights --out-dir /workspace/hub/b0-rocm-realtext-step-52616-weights
+```
+
+For training recovery, follow the [snapshot card](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/README.md) and the [real-text guide](https://github.com/AvrovaDonz2026/CAT-YOKO/blob/main/operators/rocm/REAL_TRAINING.md). They specify the original packed train/evaluation files and CPU Adam path. Historical DummyStream launchers are not the recovery recipe for this real-text snapshot. Weights remain on Hub; GitHub stores code, docs and logs without LFS.
 
 ## Current weights
 
 | Path | Source | Notes |
 | --- | --- | --- |
-| `checkpoints/b0/trainable.pt` | 6000D `--try` **32** steps, MiniCPM5 upcycle | gate 0.301; peak 24244 MiB; sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636` |
-| `checkpoints/b0-nvfp4-try/trainable.pt` | 6000D NVFP4 wrap `--try` **2** steps | `nvfp4_n=2815`; gate 0.301; peak 34442 MiB; sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e` |
-| `checkpoints/b0-full/trainable.pt` | Vast B200 published B0 in progress (8e9 envelope, seq=4096) | See snapshot above. Step **26940**, sha256 `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955`. |
-| `checkpoints/b0-3090-bf16/trainable.pt` | RTX 3090 BF16 sibling (same-phase resume, `--no-nvfp4`) | step **33800**, sha256 `2dc31406…`. **Not** the published pin; does not overwrite `b0-full`. Machine pending release. |
-| `checkpoints/b1/trainable.pt` | 6000D B1 `--try` (waiting on GPU) | decoder + `lm_head` + final RMSNorm; resume B0 overlay + MiniCPM5. Not uploaded yet |
-| `checkpoints/b2/` | 6000D B2 `--try` (waiting on GPU) | full-model overlay; resume B1 + MiniCPM5 encoder/embed. Pointer [`checkpoints/b2/README.md`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/checkpoints/b2) |
+| `checkpoints/b0-rocm-realtext/step-52616/trainable.pt` | Current recommended B0 recovery snapshot | Step 52616; overlay plus CPU Adam, RNG and cursor; identities above |
+| `checkpoints/b0-rocm-realtext/step-52616/weights-only.pt` | Same snapshot, smaller overlay | Same 132 weights byte-for-byte; no Adam |
+| `checkpoints/b0-full/trainable.pt` | Historical Vast B200 DummyStream B0 | Step 26940, 130,041,856 cumulative phase tokens; sha256 `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955`; weights only |
+| `checkpoints/b0-3090-bf16/trainable.pt` | Historical RTX 3090 BF16 DummyStream B0 | Step 33800; sha256 `2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690`; weights only |
+| `checkpoints/b0/trainable.pt` | Historical 6000D `--try`, 32 steps | sha256 `9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636`; smoke snapshot |
+| `checkpoints/b0-nvfp4-try/trainable.pt` | Historical 6000D NVFP4 `--try`, 2 steps | sha256 `461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e`; smoke snapshot |
+| `checkpoints/b1/`, `checkpoints/b2/` | Future stages | No B1/B2 trained snapshot is included in this release |
 
-`checkpoints/b0/` and `checkpoints/b0-nvfp4-try/` are **not** the 8B-token envelope (they are `--try` only). `checkpoints/b0-full/trainable.pt` is the published envelope **in progress** (8e9 not finished). The 23GiB full graph has not been uploaded. Weights do not live on GitHub; GitHub does not use Git LFS. Logs: GitHub [`artifacts/vast-b200/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/vast-b200), [`artifacts/autodl-rtx6000d/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx6000d), [`artifacts/autodl-rtx3090/`](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx3090).
+The historical paths are preserved. The complete 23 GiB graph is not included. Historical logs: [B200](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/vast-b200), [6000D](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx6000d), [3090](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/autodl-rtx3090). ROCm reports: [real-text training](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/artifacts/rocm-rx7900xtx), [operator checks](https://github.com/AvrovaDonz2026/CAT-YOKO/tree/main/operators/rocm).
 
-No public eval scores.
+## Validation observation
+
+The latest fixed held-out evaluation preceding this snapshot was at **step 52500**: NLL **7.900367058954696** across **32 batches and 130,877 valid next-token loss tokens**. This is a sample from the pilot's separate validation bin, not an evaluation of the full validation corpus or a general capability benchmark. The weights in this release were saved 116 updates later, at step 52616. No public generation, reasoning or base-model comparison benchmark is claimed here.
 
 ## License
 

@@ -1,49 +1,63 @@
 # Hugging Face Hub (weights)
 
-Published model repo: [AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO)
+Model repository: [AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO).
+Code, documentation and compact evidence stay on GitHub. Weight files are on
+Hub; GitHub does not use LFS. Code, derived weights and MiniCPM5-2B-Base are
+Apache-2.0.
 
-GitHub **does not use LFS**. Code, docs, and logs stay on GitHub. `trainable.pt` / full graphs / shards go to Hub only. Code and derived weights are **Apache-2.0** ([`LICENSE`](../LICENSE)).
+## Recommended B0 snapshot
 
-Progress pin: [`STATUS.md`](STATUS.md). **Do not** push the entire GitHub tree to Hub.
+The latest recommended release is **ROCm real-text step 52616**, captured on
+2026-10-04. It is an immutable snapshot while training continues.
+
+| File | Role |
+| --- | --- |
+| [`step-52616/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/trainable.pt) | 2,192,257,315 bytes; 132 BF16 trainable tensors + 264 native CPU FP32 Adam moments, RNG, step and packed cursor |
+| [`step-52616/weights-only.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/weights-only.pt) | 438,477,743 bytes; the same 132 tensors, no Adam history |
+| [`release.json`](../checkpoints/b0-rocm-realtext/step-52616/release.json) | Both SHA256 values, model/base/tokenizer/data/source hashes and verified counters |
 
 ```bash
-ssh -T git@hf.co
-./scripts/push_to_hf.sh --dry-run
-./scripts/push_to_hf.sh checkpoints/b0-full/trainable.pt
+python scripts/download_hub_overlay.py --out-dir runs/b0-rocm-realtext
+# optional lightweight file, for weight loading rather than complete Adam recovery:
+python scripts/download_hub_overlay.py --name b0-rocm-realtext-weights --out-dir runs/b0-rocm-realtext-weights
 ```
 
-Each `push_to_hf.sh` run also ships:
+Both files are native trainable overlays. Reconstruct frozen weights from
+MiniCPM5-2B-Base, then load the overlay. They are not a standalone 12B full graph
+or an AutoModelForCausalLM architecture. Complete packed-stream recovery also
+requires the original train/eval/tokenizer hashes and native CPU Adam; old
+DummyStream launchers do not preserve the meaning of this packed cursor.
+See the [snapshot card](../checkpoints/b0-rocm-realtext/step-52616/README.md)
+and [real-text guide](../operators/rocm/REAL_TRAINING.md).
 
-- root card `huggingface/README.md` → Hub `README.md`
-- `checkpoints/b0-full/README.md`
-- `LICENSE`
+The global step is 52616; Adam and packed cursor are 17814. Cumulative
+235,210,752 phase tokens include DummyStream history; actual packed real-text
+training totals 72,966,144 tokens. The latest fixed pilot evaluation before the
+snapshot is NLL7.900367 at step52500, not a downstream benchmark.
 
-Clone: `git clone git@hf.co:AvrovaDonz/CAT-YOKO`
+## Historical snapshots
 
-## Current B0 overlay
+The historical weight files and SHA pins remain available:
 
-The Vast B200 **has been recycled**. The table is the 2026-09-19T06:44Z pre-release snapshot, not a finished run.
+- `checkpoints/b0-full/`: Vast B200 step26940, SHA256 `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955`; weights only, DummyStream, recycled machine.
+- `checkpoints/b0-3090-bf16/`: RTX3090 step33800, SHA256 `2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690`; historical BF16 sibling.
+- `checkpoints/b0/`: 6000D32-step try; `checkpoints/b0-nvfp4-try/`: two-step try.
+- B1/B2 training weights have not been published.
 
-| | |
-| --- | --- |
-| Hub file | [`checkpoints/b0-full/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/trainable.pt) |
-| Hub card | [`checkpoints/b0-full/README.md`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-full/README.md) |
-| step | **26940** |
-| tokens_in_phase | 130,041,856 (≈1.63% of 8e9) |
-| sha256 | `7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955` |
-| next GPU | unknown SKU: `python3 -m cat_yoko.hw_recipe` + `bash scripts/run_b0_next.sh`. Known SM100: [`B200_TRAIN.md`](B200_TRAIN.md). `download_hub_overlay.py --name b0-full` |
+Explicit `download_hub_overlay.py --name b0-full` and `--name b0-3090-bf16`
+continue to fetch those historical files. The default now selects the new
+ROCm complete state. Machine history is in [STATUS.md](STATUS.md).
 
-[`scripts/pull_vast_b0_overlay.sh`](../scripts/pull_vast_b0_overlay.sh) uses SSH Host `vast-b200`. That machine is gone; do not assume it still answers.
+## Publishing
 
-Other Hub paths:
+Publish a curated payload containing only model cards, release metadata and
+explicit weight files, not the whole GitHub checkout. `hf upload` can commit
+that payload once to `AvrovaDonz/CAT-YOKO`. Use an immutable step directory and
+update the root model card and download pin together.
 
-- `checkpoints/b0/` — 6000D `--try` 32 steps, **not** the 8e9 envelope
-- `checkpoints/b0-nvfp4-try/` — 6000D NVFP4 wrap, 2 steps
-- `checkpoints/b0-3090-bf16/` — RTX 3090 BF16 sibling snapshot (step **33800** / sha256 `2dc31406…`; machine pending release). **Not** the published pin; do not overwrite `b0-full`
-- `checkpoints/b1/`, `checkpoints/b2/` — not uploaded yet (waiting on GPU)
+The legacy `scripts/push_to_hf.sh` remains available for explicitly chosen
+historical paths; it also ships the root card, b0-full card and license. It
+uses the existing HF SSH key, which remains outside the checkout. Existing
+HF CLI login credentials likewise stay outside source control.
 
-Logs on GitHub: [`artifacts/vast-b200/`](../artifacts/vast-b200/README.md), [`artifacts/autodl-rtx6000d/`](../artifacts/autodl-rtx6000d/README.md), [`artifacts/autodl-rtx3090/`](../artifacts/autodl-rtx3090/b0-3090-bf16/README.md).
-
-The deploy SSH key stays in `~/.ssh` on the machine (`HF_SSH_KEY` can override the path). Add the public key at https://huggingface.co/settings/keys. **Do not commit it.**
-
-Downloads in China may use `HF_ENDPOINT=https://hf-mirror.com` (`scripts/autodl_env.sh`). **Uploads** go to `huggingface.co` / `hf.co`. Do not reconnect retired AutoDL westc / weste / westd hosts.
+Uploads use `huggingface.co`. Do not reconnect the retired AutoDL machines.

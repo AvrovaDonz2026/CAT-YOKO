@@ -1,0 +1,780 @@
+{
+  "schema_version": 1,
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "phase": "B0",
+  "name": "CAT-YOKO-12B",
+  "snapshot_at_utc": "2026-10-04T03:44:25.977204+00:00",
+  "step": 52616,
+  "adam_step": 17814,
+  "tokens_in_phase": 235210752,
+  "tokens_seen": 235210752,
+  "token_counter_scope": "cumulative phase counter includes prior DummyStream; real_text_tokens_processed is separate",
+  "real_text_tokens_processed": 72966144,
+  "stream": {
+    "kind": "packed",
+    "stride": 1,
+    "next_unread_row": 17814,
+    "nseq": 19531,
+    "seq_len": 4096
+  },
+  "model_format": "native trainable overlay; reconstruct frozen graph by MiniCPM5-2B-Base upcycling",
+  "files": {
+    "trainable.pt": {
+      "sha256": "d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df",
+      "bytes": 2192257315,
+      "trainable_tensors": 132,
+      "optimizer_states": 132,
+      "optimizer_moments": 264,
+      "moment_device": "cpu",
+      "moment_dtype": "float32",
+      "rng_and_stream_saved": true
+    },
+    "weights-only.pt": {
+      "filename": "weights-only.pt",
+      "sha256": "a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570",
+      "bytes": 438477743,
+      "weights_bitwise_equal_full_checkpoint": true,
+      "optimizer_states": 0,
+      "trainable_tensors": 132,
+      "complete_optimizer_resume": false
+    }
+  },
+  "trainable_names": [
+    "cache_k.weight",
+    "cache_v.weight",
+    "decoder.0.ln_cross.weight",
+    "decoder.0.cross_attn.q_proj.weight",
+    "decoder.0.cross_attn.o_proj.weight",
+    "decoder.0.cross_attn.q_norm.weight",
+    "decoder.0.cross_attn.k_norm.weight",
+    "decoder.1.ln_cross.weight",
+    "decoder.1.cross_attn.q_proj.weight",
+    "decoder.1.cross_attn.o_proj.weight",
+    "decoder.1.cross_attn.q_norm.weight",
+    "decoder.1.cross_attn.k_norm.weight",
+    "decoder.2.ln_cross.weight",
+    "decoder.2.cross_attn.q_proj.weight",
+    "decoder.2.cross_attn.o_proj.weight",
+    "decoder.2.cross_attn.q_norm.weight",
+    "decoder.2.cross_attn.k_norm.weight",
+    "decoder.3.ln_cross.weight",
+    "decoder.3.cross_attn.q_proj.weight",
+    "decoder.3.cross_attn.o_proj.weight",
+    "decoder.3.cross_attn.q_norm.weight",
+    "decoder.3.cross_attn.k_norm.weight",
+    "decoder.4.ln_cross.weight",
+    "decoder.4.cross_attn.q_proj.weight",
+    "decoder.4.cross_attn.o_proj.weight",
+    "decoder.4.cross_attn.q_norm.weight",
+    "decoder.4.cross_attn.k_norm.weight",
+    "decoder.5.ln_cross.weight",
+    "decoder.5.cross_attn.q_proj.weight",
+    "decoder.5.cross_attn.o_proj.weight",
+    "decoder.5.cross_attn.q_norm.weight",
+    "decoder.5.cross_attn.k_norm.weight",
+    "decoder.6.ln_cross.weight",
+    "decoder.6.cross_attn.q_proj.weight",
+    "decoder.6.cross_attn.o_proj.weight",
+    "decoder.6.cross_attn.q_norm.weight",
+    "decoder.6.cross_attn.k_norm.weight",
+    "decoder.7.ln_cross.weight",
+    "decoder.7.cross_attn.q_proj.weight",
+    "decoder.7.cross_attn.o_proj.weight",
+    "decoder.7.cross_attn.q_norm.weight",
+    "decoder.7.cross_attn.k_norm.weight",
+    "decoder.8.ln_cross.weight",
+    "decoder.8.cross_attn.q_proj.weight",
+    "decoder.8.cross_attn.o_proj.weight",
+    "decoder.8.cross_attn.q_norm.weight",
+    "decoder.8.cross_attn.k_norm.weight",
+    "decoder.9.ln_cross.weight",
+    "decoder.9.cross_attn.q_proj.weight",
+    "decoder.9.cross_attn.o_proj.weight",
+    "decoder.9.cross_attn.q_norm.weight",
+    "decoder.9.cross_attn.k_norm.weight",
+    "decoder.10.ln_cross.weight",
+    "decoder.10.cross_attn.q_proj.weight",
+    "decoder.10.cross_attn.o_proj.weight",
+    "decoder.10.cross_attn.q_norm.weight",
+    "decoder.10.cross_attn.k_norm.weight",
+    "decoder.11.ln_cross.weight",
+    "decoder.11.cross_attn.q_proj.weight",
+    "decoder.11.cross_attn.o_proj.weight",
+    "decoder.11.cross_attn.q_norm.weight",
+    "decoder.11.cross_attn.k_norm.weight",
+    "decoder.12.ln_cross.weight",
+    "decoder.12.cross_attn.q_proj.weight",
+    "decoder.12.cross_attn.o_proj.weight",
+    "decoder.12.cross_attn.q_norm.weight",
+    "decoder.12.cross_attn.k_norm.weight",
+    "decoder.13.ln_cross.weight",
+    "decoder.13.cross_attn.q_proj.weight",
+    "decoder.13.cross_attn.o_proj.weight",
+    "decoder.13.cross_attn.q_norm.weight",
+    "decoder.13.cross_attn.k_norm.weight",
+    "decoder.14.ln_cross.weight",
+    "decoder.14.cross_attn.q_proj.weight",
+    "decoder.14.cross_attn.o_proj.weight",
+    "decoder.14.cross_attn.q_norm.weight",
+    "decoder.14.cross_attn.k_norm.weight",
+    "decoder.15.ln_cross.weight",
+    "decoder.15.cross_attn.q_proj.weight",
+    "decoder.15.cross_attn.o_proj.weight",
+    "decoder.15.cross_attn.q_norm.weight",
+    "decoder.15.cross_attn.k_norm.weight",
+    "decoder.16.ln_cross.weight",
+    "decoder.16.cross_attn.q_proj.weight",
+    "decoder.16.cross_attn.o_proj.weight",
+    "decoder.16.cross_attn.q_norm.weight",
+    "decoder.16.cross_attn.k_norm.weight",
+    "decoder.17.ln_cross.weight",
+    "decoder.17.cross_attn.q_proj.weight",
+    "decoder.17.cross_attn.o_proj.weight",
+    "decoder.17.cross_attn.q_norm.weight",
+    "decoder.17.cross_attn.k_norm.weight",
+    "decoder.18.ln_cross.weight",
+    "decoder.18.cross_attn.q_proj.weight",
+    "decoder.18.cross_attn.o_proj.weight",
+    "decoder.18.cross_attn.q_norm.weight",
+    "decoder.18.cross_attn.k_norm.weight",
+    "decoder.19.ln_cross.weight",
+    "decoder.19.cross_attn.q_proj.weight",
+    "decoder.19.cross_attn.o_proj.weight",
+    "decoder.19.cross_attn.q_norm.weight",
+    "decoder.19.cross_attn.k_norm.weight",
+    "decoder.20.ln_cross.weight",
+    "decoder.20.cross_attn.q_proj.weight",
+    "decoder.20.cross_attn.o_proj.weight",
+    "decoder.20.cross_attn.q_norm.weight",
+    "decoder.20.cross_attn.k_norm.weight",
+    "decoder.21.ln_cross.weight",
+    "decoder.21.cross_attn.q_proj.weight",
+    "decoder.21.cross_attn.o_proj.weight",
+    "decoder.21.cross_attn.q_norm.weight",
+    "decoder.21.cross_attn.k_norm.weight",
+    "decoder.22.ln_cross.weight",
+    "decoder.22.cross_attn.q_proj.weight",
+    "decoder.22.cross_attn.o_proj.weight",
+    "decoder.22.cross_attn.q_norm.weight",
+    "decoder.22.cross_attn.k_norm.weight",
+    "decoder.23.ln_cross.weight",
+    "decoder.23.cross_attn.q_proj.weight",
+    "decoder.23.cross_attn.o_proj.weight",
+    "decoder.23.cross_attn.q_norm.weight",
+    "decoder.23.cross_attn.k_norm.weight",
+    "decoder.24.ln_cross.weight",
+    "decoder.24.cross_attn.q_proj.weight",
+    "decoder.24.cross_attn.o_proj.weight",
+    "decoder.24.cross_attn.q_norm.weight",
+    "decoder.24.cross_attn.k_norm.weight",
+    "decoder.25.ln_cross.weight",
+    "decoder.25.cross_attn.q_proj.weight",
+    "decoder.25.cross_attn.o_proj.weight",
+    "decoder.25.cross_attn.q_norm.weight",
+    "decoder.25.cross_attn.k_norm.weight"
+  ],
+  "trainable_shapes": {
+    "cache_k.weight": [
+      256,
+      2048
+    ],
+    "cache_v.weight": [
+      256,
+      2048
+    ],
+    "decoder.0.ln_cross.weight": [
+      2048
+    ],
+    "decoder.0.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.0.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.0.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.0.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.1.ln_cross.weight": [
+      2048
+    ],
+    "decoder.1.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.1.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.1.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.1.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.2.ln_cross.weight": [
+      2048
+    ],
+    "decoder.2.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.2.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.2.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.2.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.3.ln_cross.weight": [
+      2048
+    ],
+    "decoder.3.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.3.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.3.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.3.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.4.ln_cross.weight": [
+      2048
+    ],
+    "decoder.4.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.4.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.4.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.4.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.5.ln_cross.weight": [
+      2048
+    ],
+    "decoder.5.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.5.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.5.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.5.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.6.ln_cross.weight": [
+      2048
+    ],
+    "decoder.6.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.6.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.6.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.6.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.7.ln_cross.weight": [
+      2048
+    ],
+    "decoder.7.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.7.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.7.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.7.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.8.ln_cross.weight": [
+      2048
+    ],
+    "decoder.8.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.8.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.8.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.8.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.9.ln_cross.weight": [
+      2048
+    ],
+    "decoder.9.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.9.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.9.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.9.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.10.ln_cross.weight": [
+      2048
+    ],
+    "decoder.10.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.10.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.10.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.10.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.11.ln_cross.weight": [
+      2048
+    ],
+    "decoder.11.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.11.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.11.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.11.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.12.ln_cross.weight": [
+      2048
+    ],
+    "decoder.12.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.12.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.12.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.12.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.13.ln_cross.weight": [
+      2048
+    ],
+    "decoder.13.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.13.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.13.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.13.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.14.ln_cross.weight": [
+      2048
+    ],
+    "decoder.14.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.14.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.14.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.14.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.15.ln_cross.weight": [
+      2048
+    ],
+    "decoder.15.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.15.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.15.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.15.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.16.ln_cross.weight": [
+      2048
+    ],
+    "decoder.16.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.16.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.16.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.16.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.17.ln_cross.weight": [
+      2048
+    ],
+    "decoder.17.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.17.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.17.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.17.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.18.ln_cross.weight": [
+      2048
+    ],
+    "decoder.18.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.18.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.18.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.18.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.19.ln_cross.weight": [
+      2048
+    ],
+    "decoder.19.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.19.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.19.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.19.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.20.ln_cross.weight": [
+      2048
+    ],
+    "decoder.20.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.20.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.20.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.20.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.21.ln_cross.weight": [
+      2048
+    ],
+    "decoder.21.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.21.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.21.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.21.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.22.ln_cross.weight": [
+      2048
+    ],
+    "decoder.22.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.22.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.22.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.22.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.23.ln_cross.weight": [
+      2048
+    ],
+    "decoder.23.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.23.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.23.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.23.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.24.ln_cross.weight": [
+      2048
+    ],
+    "decoder.24.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.24.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.24.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.24.cross_attn.k_norm.weight": [
+      128
+    ],
+    "decoder.25.ln_cross.weight": [
+      2048
+    ],
+    "decoder.25.cross_attn.q_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.25.cross_attn.o_proj.weight": [
+      2048,
+      2048
+    ],
+    "decoder.25.cross_attn.q_norm.weight": [
+      128
+    ],
+    "decoder.25.cross_attn.k_norm.weight": [
+      128
+    ]
+  },
+  "base_model": {
+    "repo_id": "openbmb/MiniCPM5-2B-Base",
+    "model.safetensors": {
+      "sha256": "d80717e7b8eb21ef43070244ecebd85d6694e4a33602fdb817f366bdb04e1e5a",
+      "bytes": 5033557128
+    },
+    "auxiliary_sha256": {
+      "config.json": "19dbdc2f9ba75b336f94975f598db920819045faddd77ca2b5a7260eda95bfbe",
+      "tokenizer.json": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+      "tokenizer_config.json": "daab558a87488612988d1700dc29b9989cc05b061e67d580cebb48cd81839112",
+      "special_tokens_map.json": "82d96d7a9e6ced037f12394b7ea6a5b02e6ca87e0d11edaa8d60d9be857ce7db"
+    }
+  },
+  "tokenizer": {
+    "files_sha256": {
+      "tokenizer.json": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+      "tokenizer_config.json": "daab558a87488612988d1700dc29b9989cc05b061e67d580cebb48cd81839112",
+      "special_tokens_map.json": "82d96d7a9e6ced037f12394b7ea6a5b02e6ca87e0d11edaa8d60d9be857ce7db"
+    },
+    "base_vocab_size": 130072,
+    "total_vocab_size": 130560,
+    "add_special_tokens": false,
+    "append_eos_if_missing": 1
+  },
+  "data": {
+    "train": {
+      "sha256": "0eb30dddd807f8b6aae74ebda0be655b66dae1bf8ceff2b21c5e40ff1095fca7",
+      "bytes": 319995904,
+      "seq_len": 4096
+    },
+    "eval": {
+      "sha256": "22b6312c4e426e49638fe6bbd57a1687ac2b6ee285515259de445c9473307fa6",
+      "bytes": 3997696,
+      "seq_len": 4096
+    }
+  },
+  "corpus_manifest": "https://github.com/AvrovaDonz2026/CAT-YOKO/blob/341e0ed/artifacts/rocm-rx7900xtx/realtext-20261002/manifest.json",
+  "mixture": {
+    "english_web": 0.6,
+    "chinese_web": 0.3,
+    "L2_math": 0.1,
+    "code": 0
+  },
+  "latest_fixed_evaluation": {
+    "step": 52500,
+    "nll": 7.900367058954696,
+    "batches": 32,
+    "valid_loss_tokens": 130877,
+    "scope": "fixed pilot held-out, not a standard downstream benchmark; evaluation predates snapshot"
+  },
+  "runtime": {
+    "gpu": "AMD Radeon RX 7900 XTX",
+    "architecture": "gfx1100",
+    "torch": "2.9.1+rocm6.4",
+    "precision": "bfloat16",
+    "attention": "packed FP32 MATH",
+    "moe_layout": "shared-storage frozen experts",
+    "optimizer": "native CPUOffloadAdamW retained FP32"
+  },
+  "code_commit": "341e0ed",
+  "code_commit_scope": "Reference commit for core model and candidate_bench recovery code. The frozen deployed next_candidate_bench.py wrapper predates this reference; deployed_source_sha256 is authoritative for exact deployed file identities.",
+  "deployed_source_sha256": {
+    "cat_yoko/._ampere_mfu.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._attention.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._blocks.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._checkpoint.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._data.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._deepspeed_zero.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._indexer.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._kda.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._loss.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._model.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._moe.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._offload.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._ops.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._optim.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._phase_train.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._plan_verify.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._prepare.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._recipe.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._rope.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._sparse.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._train.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/._trainer.py": "28b918f4f67c4ff085bd88fdd71581a409fe608b89141dd9137c28320dddf8a6",
+    "cat_yoko/__init__.py": "cc682908f27d43949e5d8c687d8ac0acf6523bde877d25e8e702cbd9d97b3be6",
+    "cat_yoko/ampere_mfu.py": "c4f266acb36a846ab0bee4e5e3ca5b998931d0c7580dec9fc999b082c6145702",
+    "cat_yoko/attention.py": "c3076388b4d398370ca0b13f869cd5e36ea93dbeea04c5cc59392c0b332856ed",
+    "cat_yoko/b0.py": "06d2b46293d43625fca0706c8943af276b9f7105c56f6dcd494224886c1669f7",
+    "cat_yoko/b1.py": "3be3c0adb6e92b29a36136ca628f7578e292eb8161c2afd1680ef19b06c92a1c",
+    "cat_yoko/b2.py": "3e8f57e1dd18e84c6e095a2426c273152f5e0f83f8763919a6cfb3333d180fe2",
+    "cat_yoko/blocks.py": "9a108135b6e1571c5edb7a49e4ae1cd848a8c395fe69572b973b0255b68ae1b7",
+    "cat_yoko/c.py": "e111679ef9ffb11cbb61dd3c0c3832933fef55f20c72f7aa417879e3c5e099d6",
+    "cat_yoko/checkpoint.py": "b00e9b5d53a1ac0ec400f6852256796a1c562275e163516cc2d5481141f6277d",
+    "cat_yoko/config.py": "12b8fea521546f303ae4b7796a35480cb0a9a75a9015306e089bd173bd90a60e",
+    "cat_yoko/d.py": "e925f39cb9364b82dbccf707e7fde8e168e03a466ca35d49d395f4d75a2a1030",
+    "cat_yoko/data.py": "b9d9d15ba8a7adcee553ec32ae87b3829dbb77c9cd533f71de3efb1ca8e59831",
+    "cat_yoko/ddp_smoke.py": "09e9bbaa44df1a6310cb04702265c1c858fbfac64f8acad83d5bcc8bd880289f",
+    "cat_yoko/deepspeed_zero.py": "c4eccdc930d7a57146559e155521ddb1620da78446e92d0a541667caf3eb23e0",
+    "cat_yoko/dist_util.py": "9e44875cde1b273bbdf3ac8abd1acc1d0e52f79b55f1b20bc080238fb50d8961",
+    "cat_yoko/e.py": "5e3f12752c0f9ad16963ad0037e728848294f900f1b9370b0c7fe3f643b47ddb",
+    "cat_yoko/f.py": "786828c40354ed33c00cdad141e0284d4aaa57d02cb954e5ee22300792930aa1",
+    "cat_yoko/fp8.py": "d6f64825d777beaff2f096968a8f214505eee9adbde4769d5bb9d94988b2f8e6",
+    "cat_yoko/freeze.py": "24bc51682c88a2b0de01d4c9373b25d314e5170f89d8555c8847bc8b8b6bef6e",
+    "cat_yoko/fsdp.py": "98b9b99daa7e5937642d5056ba5071708593652659e3cf4c2f4ed63da97ecaf9",
+    "cat_yoko/g.py": "4e8ad25935463cc6d18d34fc4dbb8fab04a80cd85fc0404e546df45676821233",
+    "cat_yoko/gpu_smoke.py": "eaa7b3eb93bf65abd44aff7356b2e25dd6509356eb3dac60569c93749be01745",
+    "cat_yoko/hf_minicpm.py": "9606e2e9109736e7d5c0349e11a8bafeeda56df2c76eab1ce526c581c0e37fd3",
+    "cat_yoko/hw_recipe.py": "d932c1f7bb866909c625365b1ef061c85c054142072de37ff5fc9fbc38947cc5",
+    "cat_yoko/indexer.py": "296e65902a579ddb02a62b1209c35595e81a71df25a54e830a70060178d02751",
+    "cat_yoko/kda.py": "21d100eab327ae37296f10e25f34ce0da3e4b1a350ae490ed6eb5fa879272f2b",
+    "cat_yoko/loss.py": "cf187911a8120ffb56f5ae8ea3365749a4aebdd14a2de87c23c28e4be3bee54d",
+    "cat_yoko/model.py": "64b954e5151229891daf9d4e80edc644aac5d96730fcf27c01e68ae1f202e5da",
+    "cat_yoko/moe.py": "7e35db080dc2af2813db08c92dad46ff0ae8a89fa4a84864d7e1d33d8ab22e82",
+    "cat_yoko/nvfp4.py": "a7158bcf582b80a91fe746d3a4ed8c9030fbd6ce5f41ea1f85772f15a2c39545",
+    "cat_yoko/nvfp4_hw.py": "f976e58e2a5a044f95347aac7b23cb57542997a75d55e2d94296782602aca74b",
+    "cat_yoko/nvfp4_linear.py": "c730abf914c8edcbccb4894e323ecca6b5ac59efed93f7af692e9719705cf027",
+    "cat_yoko/offload.py": "a3a91216c29bf81f59d891dc6ea17ec0fd41a08a8ded94f0ad7894e5e55c1a5c",
+    "cat_yoko/ops.py": "38d0d3581e7c8a7a0ee5cb1eb78dd3db50bd81ac66dc68fadf964b22afea571a",
+    "cat_yoko/optim.py": "e8350821ed14bee2aabcfa8636bc33ee7071b3a58bd49786672fa5f9df5b39d1",
+    "cat_yoko/parallel.py": "4fc84e704cedbc09e14bf3ce1c441997e7f2a373a68daa0754832c15708f0468",
+    "cat_yoko/phase_train.py": "d1cc045c521a2e01d055c3e5192c67c468f38f8e545af73512b7d249aa331277",
+    "cat_yoko/phases.py": "7aab4299d187b4e0d39c27266f8c696325eb1d9d80914b43ae2655a864d222c2",
+    "cat_yoko/plan_verify.py": "8220041af7db8c3fa7cde503679b59b2ae98637f3701517090eee331733ad482",
+    "cat_yoko/prepare.py": "e2d4b178c0961a6e45670b6c8adc7846705b76867ddc8a9057b74339e8c49f41",
+    "cat_yoko/recipe.py": "9cabb900858129ab954b362c96e56230adb4fd8b1758ffe98d02362c5196c782",
+    "cat_yoko/rl.py": "01b94e463fa80f83816c282e26b745958c55f9f10f4e4fe3b273baf0b1e4511b",
+    "cat_yoko/rope.py": "15dbd5e165219467b7d593527fcc376c631099704e97212d52951ad3843cceb0",
+    "cat_yoko/sft.py": "5ee5f55a8c70e316fc792b95d4b1d8131f4f75fcd8296381d257b7d73fc7f546",
+    "cat_yoko/sparse.py": "27709ffdbce01a267b200943b60135354f6a10d1a45e8c6aa106e06beacb233e",
+    "cat_yoko/teacher.py": "58e01592e597660f19877c89e77425f1b7930f56d373e4eb367fc8e8d19d0115",
+    "cat_yoko/tokenizer.py": "a462537ef6390416f64d2bbdd717b7d755921ef904ee17573d7f6989de13aeab",
+    "cat_yoko/train.py": "44d0c8baed210ffdfd533ddc168f35990bae5620158645e22afb382c35637be5",
+    "cat_yoko/trainer.py": "c5c75449a60c9c8b36a91a5cf598376f45d95a132ea2444b3027b55361f48bb3",
+    "cat_yoko/upcycle.py": "6f44d89298a75c32ae61349404919693d15d9028581e3ef99ad65fdccdb382e8",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7",
+    "operators/rocm/shared_storage_moe.py": "57e441066d311f4a3f75065f01f8b0ea69dae956ea9907c49c31f11e8b0fea9c",
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/next_candidate_bench.py": "9f0f734474ebe5c037d8811bdaed68f7ab96d6e1b05734233fbc0cee3761a79b",
+    "operators/rocm/model_bench.py": "c80c40c4a627c913cc1b10705c999a764a1e9325433e9fcf56e6e7ab0419747d"
+  },
+  "checkpoint_verification": {
+    "passed": true,
+    "scope": "all132 finiteBF16weights, all264 finiteCPUmoments, nonnegative squared moments, native groups, source counter/cursor/token deltas; light weights byteexact against full"
+  },
+  "resume_requirements": [
+    "rebuild frozen base with the specified safetensors and source config",
+    "same packed data and tokenizer hashes for original cursor",
+    "native CPU FP32 Adam for state restoration",
+    "weights-only file has no Adam history"
+  ],
+  "full_12b_graph_uploaded": false,
+  "license": "apache-2.0"
+}
