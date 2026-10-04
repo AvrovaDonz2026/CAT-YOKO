@@ -1,0 +1,12 @@
+{
+  "payload": "/private/tmp/CAT-YOKO-KERNEL-update-20261004",
+  "stdlib_integration_tests_passed": 27,
+  "python_sources_parsed": 105,
+  "complete_payload_file_hashes_verified": 196,
+  "preserved_hf_builder_source_files": 12,
+  "no_deletions": true,
+  "actual_file_inventory_matches_sync_plan": true,
+  "no_upload_performed": true,
+  "scope": "No local Torch/GPU runtime available. Numerical/GPU checks are archived remote evidence, not newly rerun.",
+  "test_command": "python3 -m unittest operators.rocm.test_round3_candidate_bench operators.rocm.test_round3_switch -v"
+}

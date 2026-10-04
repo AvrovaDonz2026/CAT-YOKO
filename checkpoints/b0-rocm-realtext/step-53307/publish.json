@@ -1,0 +1,58 @@
+{
+  "status": "published_verified",
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "revision": "5f2fd476c4d669617f758c6f5cffd5e59b007bfb",
+  "parent_commit": "11cd099c63661d5fc8762a9a9f2cb0c61ea4344d",
+  "commit_url": "https://huggingface.co/AvrovaDonz/CAT-YOKO/commit/5f2fd476c4d669617f758c6f5cffd5e59b007bfb",
+  "verified_at_utc": "2026-10-04T06:09:15.691198+00:00",
+  "step": 53307,
+  "files": [
+    {
+      "path": "checkpoints/b0-rocm-realtext/step-53307/trainable.pt",
+      "bytes": 2192257315,
+      "sha256": "3dd9a62f7acfb4ae025ff44b0589b017104f07abc8b177e0098f5c4a910bd2b2"
+    },
+    {
+      "path": "checkpoints/b0-rocm-realtext/step-53307/weights-only.pt",
+      "bytes": 438477679,
+      "sha256": "050a114b43234a441520703ebd9a6b8abfebceaa9ac191fb8d934b3204608ab7"
+    }
+  ],
+  "cards_downloaded_and_byte_compared": [
+    "LICENSE",
+    "README.md",
+    "checkpoints/b0-rocm-realtext/README.md",
+    "checkpoints/b0-rocm-realtext/step-52616/README.md",
+    "checkpoints/b0-rocm-realtext/step-53307/README.md",
+    "checkpoints/b0-rocm-realtext/step-53307/release.json"
+  ],
+  "historical_weights_preserved": {
+    "checkpoints/b0-3090-bf16/trainable.pt": {
+      "sha256": "2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690",
+      "bytes": 438484609
+    },
+    "checkpoints/b0-full/trainable.pt": {
+      "sha256": "7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955",
+      "bytes": 438484353
+    },
+    "checkpoints/b0-nvfp4-try/trainable.pt": {
+      "sha256": "461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e",
+      "bytes": 438482738
+    },
+    "checkpoints/b0-rocm-realtext/step-52616/trainable.pt": {
+      "sha256": "d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df",
+      "bytes": 2192257315
+    },
+    "checkpoints/b0-rocm-realtext/step-52616/weights-only.pt": {
+      "sha256": "a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570",
+      "bytes": 438477743
+    },
+    "checkpoints/b0/trainable.pt": {
+      "sha256": "9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636",
+      "bytes": 438483866
+    }
+  },
+  "source_code_reference": "b27e889291476f9c8c0b296d97f6250982a582e1",
+  "kernel_repository_revision": "e060c89b22b846c3eec5530438469ca8dba46ba7",
+  "validation_scope": "Complete local artifacts SHA256 match the remote fully inspected native checkpoint and light export; Hub LFS SHA256/size match; commit-pinned downloaded cards match; full model graph not uploaded."
+}

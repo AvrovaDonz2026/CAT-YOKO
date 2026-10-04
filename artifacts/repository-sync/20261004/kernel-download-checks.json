@@ -1,0 +1,17 @@
+{
+  "status": "verified",
+  "revision": "e060c89b22b846c3eec5530438469ca8dba46ba7",
+  "commit_pinned_download": true,
+  "all_file_sha256_match_payload": true,
+  "files_verified": 196,
+  "sha256sums_entries_verified": 195,
+  "preserved_files_bitwise": 64,
+  "hf_builder_source_files_bitwise": 12,
+  "source_only_no_weights_or_build_release": true,
+  "card_separates_pytorch_source_from_get_kernel": true,
+  "deleted_paths": [],
+  "snapshot_directory": "/private/tmp/CAT-YOKO-KERNEL-published-e060c89b22b8",
+  "verified_at_utc": "2026-10-04T05:53:38.442003+00:00",
+  "local_tests": "kernel-local-checks.json",
+  "exact_changes_and_payload_sha256": "kernel-plan.json"
+}

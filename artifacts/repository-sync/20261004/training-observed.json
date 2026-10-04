@@ -1,0 +1,18 @@
+{
+  "observed_at_utc": "2026-10-04T06:11:47.398890+00:00",
+  "status": "running_continuation",
+  "source_run": "/home/donz/cat-yoko-rocm-20261002/runs/round3-confirm-20261004T0455",
+  "source_dir": "/home/donz/cat-yoko-rocm-20261002/source-round3-confirm-20261004T0455",
+  "worker_pid": 1719057,
+  "last_step": 53682,
+  "latest_verified_step": 53638,
+  "latest_verified_cursor": 18836,
+  "optimizer_states": 132,
+  "optimizer_moments": 264,
+  "split_attention": true,
+  "cached_cpu_adam": true,
+  "checkpoint_interval_s": 300,
+  "keep_last": 3,
+  "target_step": 54333,
+  "repo_sync_paused_training": false
+}

@@ -11,12 +11,13 @@ BF16 training on an RX 7900 XTX; the 8B-token envelope is unfinished.
 
 | Item | Value |
 | --- | --- |
-| Hub | [`ROCm real-text step 52616`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-rocm-realtext/step-52616) |
+| Hub | [`ROCm real-text step 53307`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-rocm-realtext/step-53307) |
 | Full resume file | `trainable.pt`: 132 BF16 weights, 264 CPU FP32 Adam moments, RNG and packed cursor |
-| Total phase tokens | **235,210,752**, including earlier DummyStream history |
-| Real-text tokens | **72,966,144**, packed cursor **17814 / 19531** |
-| SHA256 | `d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df` |
-| Fixed pilot validation | NLL **7.900367** at step **52500**; 32 batches, not a standard benchmark |
+| Training operators | Document-split FP32 attention, shared frozen expert storage and cached BF16 CPU-shadow Adam; native CPU FP32 moments |
+| Total phase tokens | **238,041,088**, including earlier DummyStream history |
+| Real-text tokens | **75,796,480**, packed cursor **18505 / 19531** |
+| SHA256 | `3dd9a62f7acfb4ae025ff44b0589b017104f07abc8b177e0098f5c4a910bd2b2` |
+| Fixed pilot validation | NLL **7.885218** at step **53250**, 57 updates before the snapshot; 32 batches / 130877 valid loss tokens, not a standard benchmark |
 
 Download the complete state with:
 
@@ -26,12 +27,20 @@ python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir runs/b0
 
 Rebuild frozen weights from MiniCPM5-2B-Base, then resume with the original
 packed data and native CPU Adam. See the
-[snapshot card](checkpoints/b0-rocm-realtext/step-52616/README.md) for recovery
+[snapshot card](checkpoints/b0-rocm-realtext/step-53307/README.md) for recovery
 commands and the lightweight weights-only option. Training progress and
 historical snapshots: [`docs/STATUS.md`](docs/STATUS.md).
 
-Historical B200 step **26940** and RTX 3090 step **33800** remain available at
-their original Hub paths; the recommended snapshot above is the newer release.
+The [operator repository](https://huggingface.co/AvrovaDonz/CAT-YOKO-KERNEL)
+and [switch report](operators/rocm/OPERATOR_SWITCH_20261004.md) record the new
+backend. Two deterministic real updates preserved all weights and moments
+byte-for-byte; production keeps its ordinary `deterministic_algorithms=False`
+policy. Short-window whole-update gains were **2.55–3.03%**, below the 5%
+automatic gate; adoption followed the user request and numerical/recovery checks.
+
+Historical [ROCm step **52616**](checkpoints/b0-rocm-realtext/step-52616/README.md),
+B200 step **26940** and RTX 3090 step **33800** retain their original Hub paths
+and provenance; the recommended snapshot above is the newer release.
 
 ## Spec
 

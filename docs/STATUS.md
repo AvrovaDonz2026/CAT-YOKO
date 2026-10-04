@@ -5,28 +5,28 @@ Weights live on Hugging Face.
 
 ## Current published B0 snapshot
 
-The recommended snapshot is **ROCm real-text B0 step 52616**, saved on
-2026-10-04T03:44:25Z. The 8B-token B0 envelope is still unfinished, and B1 has
+The recommended snapshot is **ROCm real-text B0 step 53307**, saved on
+2026-10-04T05:37:22.748161Z. The 8B-token B0 envelope is still unfinished, and B1 has
 not started. The remote continuation remains active after this immutable save.
 
 | Item | Value |
 | --- | --- |
-| Complete trainable-state overlay | [`checkpoints/b0-rocm-realtext/step-52616/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/trainable.pt) |
-| Lightweight weights | [`weights-only.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-52616/weights-only.pt), identical 132 BF16 tensors, no optimizer |
-| Global step | **52616** |
-| Total tokens in phase | **235,210,752** (includes earlier DummyStream history; 2.94% of 8B) |
-| Actual packed real-text tokens | **72,966,144**; next unread row **17814 / 19531** |
-| Native CPU Adam | **132** states, **264** finite FP32 moments, counter **17814** |
-| Full snapshot SHA256 | `d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df` |
+| Complete trainable-state overlay | [`checkpoints/b0-rocm-realtext/step-53307/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-53307/trainable.pt) |
+| Lightweight weights | [`weights-only.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-53307/weights-only.pt), identical 132 BF16 tensors, no optimizer |
+| Global step | **53307** |
+| Total tokens in phase | **238,041,088** (includes earlier DummyStream history; 2.98% of 8B) |
+| Actual packed real-text tokens | **75,796,480**; next unread row **18505 / 19531** |
+| Native CPU Adam | **132** states, **264** finite FP32 moments, counter **18505** |
+| Full snapshot SHA256 | `3dd9a62f7acfb4ae025ff44b0589b017104f07abc8b177e0098f5c4a910bd2b2` |
 | Machine / runtime | RX 7900 XTX / gfx1100, PyTorch 2.9.1+ROCm 6.4, BF16 |
-| Operators used for this published snapshot | Validated packed FP32 attention, shared frozen expert storage, native CPU FP32 Adam |
-| Fixed held-out NLL | **7.900367** at step **52500**, 32 batches / 130877 valid loss tokens |
+| Operators used for this published snapshot | Document-split packed FP32 attention, shared frozen expert storage, cached BF16 CPU-shadow Adam with native CPU FP32 moments |
+| Fixed held-out NLL | **7.885217772929435** at step **53250**, 32 batches / 130877 valid loss tokens; 57 updates before the snapshot |
 
 The full file contains trainable weights, Adam, RNG and the packed cursor; it
 still requires MiniCPM5-2B-Base upcycling to reconstruct the frozen graph.
 The light file cannot preserve the Adam trajectory. See the
-[snapshot card](../checkpoints/b0-rocm-realtext/step-52616/README.md) and
-[release manifest](../checkpoints/b0-rocm-realtext/step-52616/release.json) for
+[snapshot card](../checkpoints/b0-rocm-realtext/step-53307/README.md) and
+[release manifest](../checkpoints/b0-rocm-realtext/step-53307/release.json) for
 file sizes, base/tokenizer/data hashes and deployed-source hashes.
 
 ## Current ROCm continuation
@@ -45,25 +45,30 @@ the frozen source `source-round3-confirm-20261004T0455`. It resumes the complete
 document-split FP32 attention and cached BF16 CPU-shadow Adam with shared frozen
 expert storage. The operator switch passed all 132 model-gradient gates and
 byte-exact weights/264 moments after two deterministic real updates. Production
-retains its original ordinary training policy and CPU FP32 Adam moments.
+retains `deterministic_algorithms=False` and native CPU FP32 Adam moments.
 The short old/new/old whole-update comparison gains **2.55–3.03%**; adoption was
 user-requested below the 5% automatic selection gate. See the
 [switch and recovery evidence](../operators/rocm/OPERATOR_SWITCH_20261004.md).
 
-At **2026-10-04T05:31:24Z**, the new backend has completed **106** consecutive
-updates to **53249**. Its first periodic complete checkpoint at **53201** /
-cursor and Adam counter **18399** passed the CPU recovery audit and a native
-Adam load/export bitwise check of all 264 moments. The ongoing run remains
-separate from the published step-52616 snapshot above.
+The published **53307** checkpoint contains **164** completed updates with
+both new operator flags after the 53143 handoff. CPU verification checked
+all 132 BF16 weights, all 264 retained FP32 moments, optimizer groups and
+state mappings, RNG, token counters and packed cursor **18505**. The light
+export matches all 132 full-checkpoint weights byte-for-byte. The snapshot
+was hardlinked from a completed atomic numbered save while training continued.
+Its first periodic checkpoint at **53201** had already passed the CPU recovery
+audit and a native Adam load/export bitwise check of all 264 moments.
 
-It targets **54333** without a time cap, saving every **300 seconds** and
+At the published cursor, **1026** additional updates reach **54333** and
+row **19531**, ending the first corpus pass without wrapping. The active run
+targets that boundary without a time cap, saving every **300 seconds** and
 retaining the latest three periodic checkpoints. Fixed 32-batch evaluation
 runs every 250 updates. The new supervisor checks periodic recovery snapshots
 and the exact final source/cursor/Adam boundary. The previous supervisor and
 auditor were superseded at the checkpoint-first handoff. The initial fixed
 evaluation was NLL **10.743914**; the later
-7.900367 observation uses the same held-out pilot, not a standard language
-quality benchmark.
+7.885218 observation at step 53250 uses the same held-out pilot, not a
+standard language quality benchmark.
 
 Use the [real-text recovery guide](../operators/rocm/REAL_TRAINING.md) and
 explicit original `train.bin`/`eval.bin` hashes from the release manifest.
@@ -72,6 +77,20 @@ packed-stream recovery recipe. The earlier
 [operator microbenchmarks](../operators/rocm/OPERATOR_ROUND3_20261004.md) keep
 their narrower scope; the full acceptance and applied continuation are in the
 switch report above. This remains B0 on the bounded pilot; B1 has not started.
+
+At the repository-sync observation **2026-10-04T06:11:47.398890+00:00**, the active run
+has reached **53682** with the latest complete verified checkpoint at
+**53638** / packed cursor **18836**. Both new operators and
+the 300-second/three-checkpoint policy remain active. Repository publication
+did not pause training. [Synchronization receipts](../artifacts/repository-sync/20261004/README.md)
+record the model, kernel archive and observed continuation separately.
+
+## Previous real-text release
+
+[ROCm step **52616**](../checkpoints/b0-rocm-realtext/step-52616/README.md)
+remains downloadable with its original hashes and recovery metadata. It used
+the preceding packed-attention/native CPU Adam backend. Its code, data and
+operator provenance are not rewritten by this newer release.
 
 ## Historical published progress (2026-09-20)
 

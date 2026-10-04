@@ -37,7 +37,7 @@ Use the current repository checkout for the updated download aliases; the releas
 ```sh
 export YOKO_WORK=/workspace/cat-yoko
 python scripts/download_minicpm5.py --check-hash --local-dir "$YOKO_WORK/hf/MiniCPM5-2B-Base"
-python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir "$YOKO_WORK/hub/b0-rocm-realtext-step-52616"
+python scripts/download_hub_overlay.py --name b0-rocm-realtext-52616 --out-dir "$YOKO_WORK/hub/b0-rocm-realtext-step-52616"
 ```
 
 Prepare the original pilot with the [real-text guide](https://github.com/AvrovaDonz2026/CAT-YOKO/blob/main/operators/rocm/REAL_TRAINING.md), then verify the training/evaluation bins and tokenizer files against the release manifest. This snapshot restores a cursor into a **19531-row** training bin with stride 1. The stream loader does not authenticate the corpus contents, so a different `.bin` does not provide the same data continuation merely because it has the same shape. The historical DummyStream and DeepSpeed launchers are not the complete recovery path for this native CPU Adam snapshot.
@@ -64,7 +64,7 @@ This runner reconstructs the MiniCPM5-upcycled graph, loads the overlay, validat
 For a smaller weights-only download:
 
 ```sh
-python scripts/download_hub_overlay.py --name b0-rocm-realtext-weights --out-dir "$YOKO_WORK/hub/b0-rocm-realtext-step-52616-weights"
+python scripts/download_hub_overlay.py --name b0-rocm-realtext-52616-weights --out-dir "$YOKO_WORK/hub/b0-rocm-realtext-step-52616-weights"
 ```
 
 The downloader writes either selected artifact as local `trainable.pt`. Use separate output directories for the two variants. The smaller variant is suitable for loading weights and inspection; its missing moments prevent exact continuation of the saved optimizer trajectory.

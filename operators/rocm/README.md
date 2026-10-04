@@ -8,6 +8,11 @@ native checkpoint recovery checks. The short whole-update comparison gains
 [The preceding microbenchmarks](OPERATOR_ROUND3_20261004.md) retain their narrower
 operator-only scope.
 
+Matching source, tests and selected measured evidence are mirrored in
+[CAT-YOKO-KERNEL](https://huggingface.co/AvrovaDonz/CAT-YOKO-KERNEL). The
+[repository synchronization records](../../artifacts/repository-sync/20261004/README.md)
+pin the published source archive and model recovery snapshot.
+
 [Real-text B0 continuation](REAL_TRAINING.md) describes the bounded corpus,
 held-out evaluation, optimizer-state recovery, and 24-hour training supervisor.
 
