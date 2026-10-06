@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "audited_at_utc": "2026-10-06T07:06:25.187648+00:00",
+  "checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/window4000-73864-20261006T0630/first_inspected_checkpoint/trainable.pt",
+  "checkpoint_bytes": 2192257315,
+  "checkpoint_sha256": "9f3fdb8df14cb888e4ff7751fa93b5ec10efeac449b97c9eb60a9912b59beab4",
+  "step": 74075,
+  "cursor": 39273,
+  "adam_step": 39273,
+  "parameters": 132,
+  "moments": 264,
+  "native_optimizer_load_export_bitwise": true,
+  "optimizer_groups_preserved": true,
+  "python_rng_restored": true,
+  "torch_cpu_rng_restored": true,
+  "serialized_cuda_rng_states": 1,
+  "cuda_rng_restoration_exercised_in_this_cpu_audit": false,
+  "audit_gpu_allocation": false,
+  "checkpoint_format": "trainable"
+}

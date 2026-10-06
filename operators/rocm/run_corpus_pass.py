@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Continue one explicitly bounded packed-corpus pass with complete B0 state.
+"""Continue an explicitly bounded packed-corpus window with complete B0 state.
 
 This supervisor does not reset the packed cursor or optimizer. The native
 stream reads row ``i % nseq`` while retaining monotonically increasing ``i``.
-Only the requested absolute pass boundary changes the first-pass audit policy.
+The audit cap remains a whole-corpus boundary even for a shorter update window.
 """
 from __future__ import annotations
 
@@ -23,13 +23,25 @@ from operators.rocm import run_round3_switch as round3
 from operators.rocm.gpu_wait import wait_for_gpu_idle
 
 
-def pass_plan(metadata, target_cursor):
+def pass_plan(metadata, target_cursor, *, run_updates=None):
     rows, cursor = metadata['source_data_rows'], metadata['source_stream_i']
-    if isinstance(target_cursor, bool) or not isinstance(target_cursor, int):
+    if type(rows) is not int or rows <= 0 or type(cursor) is not int or cursor < 0:
+        raise ValueError('saved corpus rows and cursor must be valid integers')
+    if type(target_cursor) is not int:
         raise ValueError('target cursor must be an integer')
-    if target_cursor != (cursor // rows + 1) * rows:
-        raise ValueError('target must be the next exact corpus-pass boundary')
-    updates = target_cursor - cursor
+    boundary = (cursor // rows + 1) * rows
+    if run_updates is None:
+        if target_cursor != boundary:
+            raise ValueError('target must be the next exact corpus-pass boundary')
+        updates = target_cursor - cursor
+    else:
+        if type(run_updates) is not int or run_updates <= 0:
+            raise ValueError('run updates must be a positive integer')
+        if run_updates > boundary - cursor:
+            raise ValueError('requested updates exceed the next corpus-pass boundary')
+        if target_cursor != cursor + run_updates:
+            raise ValueError('target cursor must equal the saved cursor plus requested updates')
+        updates = run_updates
     if not 0 < updates <= rows:
         raise ValueError('continuation must finish at most one additional pass')
     if metadata['source_adam_step'] != cursor:
@@ -39,11 +51,15 @@ def pass_plan(metadata, target_cursor):
         raise ValueError('bounded pass must remain inside the existing B0 token budget')
     return {'updates': updates, 'target_step': metadata['source_step'] + updates,
             'target_cursor': target_cursor, 'target_adam_step': cursor + updates,
+            'audit_max_cursor': boundary,
             'target_tokens_in_phase': final_tokens, 'data_rows': rows,
             'start_completed_passes': cursor // rows, 'start_next_row': cursor % rows,
             'target_completed_passes': target_cursor // rows,
+            'target_next_row': target_cursor % rows,
             'repeated_corpus': cursor >= rows,
-            'scope': 'One explicitly requested pass over the same packed pilot; repetitions are not new unique data.'}
+            'scope': ('One explicitly requested pass over the same packed pilot; repetitions are not new unique data.'
+                      if run_updates is None else
+                      'An explicitly requested update window within the next packed-pilot pass boundary; repetitions are not new unique data.')}
 
 
 def protected_sources(args):
@@ -53,8 +69,23 @@ def protected_sources(args):
              *args.base.rglob('*.safetensors'), *args.base.glob('*.json')]
     if getattr(args, 'native_failure_receipt', None) is not None:
         paths.append(args.native_failure_receipt)
+    receipt_paths = set()
+    if getattr(args, 'accepted_run', None) is not None:
+        if args.accepted_run.is_file():
+            receipt_paths.add(args.accepted_run)
+        for name, value in args.accepted_run_receipt.items():
+            if name.endswith('_path') or name == 'prior_source_checkpoint':
+                receipt_paths.add(Path(value))
+        if args.accepted_run_receipt.get('math_file_sha256'):
+            prior_source = Path(args.accepted_run_receipt['prior_source_dir']).resolve()
+            for name in args.accepted_run_receipt['math_file_sha256']:
+                path = (prior_source / name).resolve()
+                if not path.is_relative_to(prior_source):
+                    raise ValueError('accepted implementation path escapes its frozen source')
+                receipt_paths.add(path)
+        paths.extend(receipt_paths)
     stamps = {str(p): checks.fingerprint(p) for p in paths}
-    hashes = {str(p): checks.digest_file(p) for p in paths if p.suffix == '.py'}
+    hashes = {str(p): checks.digest_file(p) for p in paths if p.suffix == '.py' or p in receipt_paths}
     source_sha = checks.digest_file(args.resume)
 
     def verify():
@@ -91,10 +122,28 @@ def supervise(args):
     if reference_backend not in ('native', 'previous_packed_production'):
         raise ValueError('unsupported full-model reference backend')
     failure_receipt = getattr(args, 'native_failure_receipt', None)
+    accepted_run = getattr(args, 'accepted_run', None)
+    run_updates = getattr(args, 'run_updates', None)
+    extra_start = getattr(args, 'extra_heldout_start_row', None)
+    extra_batches = getattr(args, 'extra_heldout_batches', 32)
+    if run_updates is not None and (type(run_updates) is not int or run_updates <= 0):
+        raise ValueError('run updates must be a positive integer')
+    if extra_start is not None and (type(extra_start) is not int or extra_start < 32
+                                    or type(extra_batches) is not int or extra_batches != 32):
+        raise ValueError('extra held-out evaluation requires an integer start row at least 32 and exactly 32 batches')
+    if extra_start is not None and reference_backend != 'previous_packed_production':
+        raise ValueError('extra held-out evaluation requires the production continuation entry')
     if reference_backend == 'previous_packed_production':
-        if failure_receipt is None or not failure_receipt.is_file():
-            raise ValueError('production-reference recovery must retain its failed native receipt')
-        args.native_failure_receipt = failure_receipt.resolve()
+        if (failure_receipt is None) == (accepted_run is None):
+            raise ValueError('production-reference recovery requires exactly one failed native receipt or accepted run')
+        if failure_receipt is not None:
+            if not failure_receipt.is_file():
+                raise ValueError('production-reference recovery must retain its failed native receipt')
+            args.native_failure_receipt = failure_receipt.resolve()
+        if accepted_run is not None:
+            args.accepted_run = accepted_run.resolve()
+    elif failure_receipt is not None or accepted_run is not None:
+        raise ValueError('reference receipts require the packed-production reference backend')
     for name in ('source_dir', 'resume', 'base', 'data', 'eval_data', 'out', 'lock_file'):
         setattr(args, name, getattr(args, name).resolve())
     if not args.out.is_dir() or args.resume != args.out / 'source_checkpoint/trainable.pt':
@@ -106,8 +155,10 @@ def supervise(args):
         raise ValueError('use a fresh continuation directory')
     state = {'status': 'preflight', 'supervisor_pid': os.getpid(),
              'source_checkpoint': str(args.resume), 'source_dir': str(args.source_dir),
-             'explicit_target_cursor': args.target_cursor, 'controls_existing_processes': False,
+             'explicit_target_cursor': args.target_cursor, 'requested_run_updates': run_updates,
+             'controls_existing_processes': False,
              'checkpoint_every_seconds': 300, 'keep_last': 3,
+             'extra_heldout_start_row': extra_start, 'extra_heldout_batches': extra_batches,
              'selected_operators': 'split_attention_and_cached_cpu_adam',
              'reference_backend': reference_backend,
              'cursor_reset': False, 'optimizer_reset': False, 'rng_reset': False,
@@ -121,9 +172,13 @@ def supervise(args):
     args.lock_file.parent.mkdir(parents=True, exist_ok=True)
     with args.lock_file.open('a+') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if accepted_run is not None:
+            from operators.rocm.production_continuation import validate_accepted_run
+            args.accepted_run_receipt = validate_accepted_run(args.accepted_run, args.resume, args.source_dir)
+            update(accepted_run=args.accepted_run_receipt)
         verify, source_sha = protected_sources(args)
         update(source_sha256=source_sha)
-        if reference_backend == 'previous_packed_production':
+        if failure_receipt is not None:
             failure = json.loads(args.native_failure_receipt.read_text())
             if not (failure.get('status') == 'parity_failure' and failure.get('updates') == 0
                     and failure.get('source_step') >= 0
@@ -133,19 +188,31 @@ def supervise(args):
                 raise ValueError('failed native receipt is not bound to this unchanged source')
             update(native_failure_receipt=str(args.native_failure_receipt),
                    native_failure_receipt_sha256=checks.digest_file(args.native_failure_receipt))
+        if type(args.target_cursor) is not int or args.target_cursor <= 0:
+            raise ValueError('target cursor must be a positive integer')
+        rows, remainder = divmod(args.data.stat().st_size, 4096 * 4)
+        if remainder or rows <= 0:
+            raise ValueError('invalid packed data length')
+        audit_max_cursor = ((args.target_cursor + rows - 1) // rows) * rows
         metadata = checks.cpu_check(args, args.resume, 0, args.out / 'source_preflight.log',
-                                    max_cursor=args.target_cursor)
-        plan = pass_plan(metadata, args.target_cursor)
+                                    max_cursor=audit_max_cursor)
+        plan = pass_plan(metadata, args.target_cursor, run_updates=run_updates)
+        if metadata['source_data_rows'] != rows or plan['audit_max_cursor'] != audit_max_cursor:
+            raise ValueError('requested target is outside the next audited corpus-pass boundary')
         checks.cpu_check(args, args.resume, plan['updates'], args.out / 'source_window_check.log',
-                         max_cursor=args.target_cursor)
+                         max_cursor=audit_max_cursor)
         update(source_metadata=metadata, plan=plan, target_step=plan['target_step'],
-               target_cursor=plan['target_cursor'], status='waiting_for_gpu')
+               target_cursor=plan['target_cursor'], audit_max_cursor=audit_max_cursor,
+               status='waiting_for_gpu')
         wait_for_gpu_idle(max_wait_seconds=None, on_event=lambda row: update(gpu_wait=row))
         verify()
         flags = round3.common(args, args.resume, args.out / 'continuation', plan['updates'],
                               production=True) + round3.ROUND3_FLAGS
         if reference_backend == 'previous_packed_production':
-            flags += ['--native-failure-receipt', str(args.native_failure_receipt)]
+            flags += (['--native-failure-receipt', str(args.native_failure_receipt)]
+                      if failure_receipt is not None else ['--accepted-run', str(args.accepted_run)])
+        if extra_start is not None:
+            flags += ['--extra-heldout-start-row', str(extra_start), '--extra-heldout-batches', str(extra_batches)]
         entry = ('production_continuation.py' if reference_backend == 'previous_packed_production'
                  else 'round3_candidate_bench.py')
         command = [args.python, '-u', str(args.source_dir / 'operators/rocm' / entry), *flags]
@@ -181,7 +248,7 @@ def supervise(args):
                             if not 0 < delta <= plan['updates']:
                                 raise ValueError('saved step lies outside the requested pass')
                             checked = checks.cpu_check(args, stable, delta, args.out / 'latest_checkpoint_check.log',
-                                                       max_cursor=args.target_cursor)
+                                                       max_cursor=audit_max_cursor)
                             stable.replace(directory / 'latest_verified.pt')
                             seen.add(stamp)
                             update(first_checkpoint_verified=True, latest_verified_checkpoint={**checked,
@@ -198,20 +265,37 @@ def supervise(args):
         if code != 0:
             raise ValueError('continuation exited unsuccessfully; fixed and verified recovery points retained')
         result = checks.validate_run(args.out / 'continuation', source=args.resume,
-                                     source_step=metadata['source_step'], steps=plan['updates'],
+                                     source_step=metadata['source_step'],
+                                     steps=plan['updates'] if plan['updates'] > 5 else None,
+                                     max_updates=plan['updates'],
                                      variant='attention', source_dir=args.source_dir,
                                      expected_names=metadata['trainable_names'], args=args, eval_batches=32,
                                      reference_backend=reference_backend)
+        if result['updates'] != plan['updates']:
+            raise ValueError('continuation did not complete the exact requested update count')
         round3.validate_round3_report(args, args.out / 'continuation', 'combined', plan['updates'], timing=False,
                                      reference_backend=reference_backend)
         round3.validate_training_policy(args.out / 'continuation', source_step=metadata['source_step'],
                                         updates=plan['updates'], deterministic_training=False)
         final = checks.cpu_check(args, Path(result['checkpoint']), plan['updates'],
-                                 args.out / 'final_checkpoint_check.log', max_cursor=args.target_cursor)
+                                 args.out / 'final_checkpoint_check.log', max_cursor=audit_max_cursor)
         if not (final['source_step'] == plan['target_step']
                 and final['source_stream_i'] == final['source_adam_step'] == args.target_cursor
                 and final['source_tokens_in_phase'] == plan['target_tokens_in_phase']):
-            raise ValueError('final checkpoint does not match the exact pass boundary')
+            raise ValueError('final checkpoint does not match the exact requested endpoint')
+        if extra_start is not None:
+            from operators.rocm.continuation_quality import validate_quality_report
+            quality_path = args.out / 'continuation/quality.json'
+            quality = validate_quality_report(quality_path, source_dir=args.source_dir,
+                                              start_row=extra_start, batches=extra_batches)
+            if (Path(quality['eval_data']).resolve() != args.eval_data
+                    or quality['eval_data_sha256'] != checks.digest_file(args.eval_data)
+                    or quality['initial_eval']['step'] != metadata['source_step']
+                    or quality['final_eval']['step'] != plan['target_step']):
+                raise ValueError('extra held-out evaluation used a different corpus or update window')
+            update(final_quality_done=True, final_quality={'path': str(quality_path),
+                   'sha256': checks.digest_file(quality_path),
+                   'initial_eval': quality['initial_eval'], 'final_eval': quality['final_eval']})
         verify()
         update(status='complete', final_checkpoint_verified=final)
     return state
@@ -222,8 +306,15 @@ def main():
     for name in ('source-dir', 'resume', 'base', 'data', 'eval-data', 'out', 'lock-file'):
         parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--target-cursor', type=int, required=True)
+    parser.add_argument('--run-updates', type=int,
+                        help='positive update window ending at target-cursor within the next whole-corpus boundary')
     parser.add_argument('--reference-backend', choices=('native', 'previous_packed_production'), default='native')
     parser.add_argument('--native-failure-receipt', type=Path)
+    parser.add_argument('--accepted-run', type=Path,
+                        help='completed previous packed-production run bound to the new fixed source checkpoint')
+    parser.add_argument('--extra-heldout-start-row', type=int,
+                        help='evaluate another 32-row held-out window starting at row 32 or later')
+    parser.add_argument('--extra-heldout-batches', type=int, default=32)
     parser.add_argument('--python', default=sys.executable)
     args = parser.parse_args()
 

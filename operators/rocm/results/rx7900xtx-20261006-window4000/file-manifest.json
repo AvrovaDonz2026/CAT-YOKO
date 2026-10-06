@@ -1,0 +1,35 @@
+{
+  "sha256": {
+    "README.md": "538167c7f6e8e1712aac7713f835e34bca61455540cc8e4935fa0285a1d71522",
+    "launch/continuation.command.json": "533a9e90e7c72ec0754de15cafdbc78a27d56956ce54118496f25b574571fe39",
+    "launch/launch.json": "65d7a031fc91ecc45584116fbd4be9815e886a77ec5f9a930b53ff9d05005d80",
+    "launch/remote_supervisor_tests.log": "156e2eadae03f5dded103184e4960116010557f39a25304cced37dfcaf39525d",
+    "launch/source_preflight.log": "bf083347c63d413fafa921a62dcc487f2c71a8d0697c7c1d97b4f70e7f69d4eb",
+    "launch/source_window_check.log": "bf083347c63d413fafa921a62dcc487f2c71a8d0697c7c1d97b4f70e7f69d4eb",
+    "launch/supervisor.command.json": "e5a96ac323d27752045322c4578f95e84c29534119134158b0fec90bf44850a9",
+    "previous-completion/continuation/operators.json": "d51e20190afea73c60b6f1ad80411c98da4a6b063de72a721829632413e21f3e",
+    "previous-completion/continuation/parity.json": "8ae9ae77d55ee30c709f7fcb824333dd3a53db152c1d62fc2a1aa58fadcc27ad",
+    "previous-completion/continuation/round3_operators.json": "66e4c35f4cfe1f7fa4f62e264a74e1764e9572d0151c3c8966f8076f65115d60",
+    "previous-completion/final_checkpoint_check.log": "05ff66ee7ab08b1407019d7ff4262f2b62d69f91b60a254142f3561885710265",
+    "previous-completion/status.json": "82333bb24fe30d9565ef60fb817ef0783dba8a6fc9f80aa0f218de7f44d29616",
+    "runtime/continuation/parity.json": "2c0c017ca6888109bc0e16a310264473a7fc0cccbca4264e2a28169facd1e15c",
+    "runtime/continuation/quality.json": "62a6ac224c4cd74a8be38e1c20ade3542fb31be9661456fe86bbf30aacae68fb",
+    "runtime/continuation/train/metrics.jsonl": "17e3228c3b1f146d9a03139d732879b878f1032b2853b2283d8e836363f1ae0d",
+    "runtime/first_inspected_checkpoint/complete_state_check.log": "96a882ce81627d1d0fc9545b165d8982ea6cf48ffd4c4037c24ea0a0fad43841",
+    "runtime/first_inspected_checkpoint/native_recovery.json": "07066361d558b7b7df7c3ebad5d4bc458c58000d97b319acb4786ff6f97c9333",
+    "runtime/first_inspected_checkpoint/native_recovery.log": "c4b2c9d3a50dc65cea78d96343374a1bba9cfaceef50d25429aa17365760b39f",
+    "runtime/latest_checkpoint_check.log": "7c78f576a8eb9acc06f7a9c90c8845e0124bfacb3450a5b596deb498187ada94",
+    "runtime/runtime_observed.json": "ee40db851ff7f5ba85c59f6c414ca7740c2a9d79edbea8116e76504c71beaa1f",
+    "runtime/status.json": "6f840afefb46c468338802dbbdbaf2e11cfaafdec1220aeb74ae69e24b539a63",
+    "source/launch-preparation.json": "921ef86498b4adf00f5cedfbe4d1752b838c38d18bbf3182177bc1e15e2b8f89",
+    "source/previous_completion_metrics_summary.json": "fcde9fa29dc119a9b1d1202d17d6af1d5526f554377103aebe49bf553cd513d9",
+    "source/source_native_recovery.json": "dff46fc5e8e5fa5a995ee38da2f5d1ef625e0abd2b9de79c81cda5fae19096ac",
+    "source/source_native_recovery.log": "561981f3b8935677d96ec73534b1dc9a57205d0038de52cba9f513a7716ea328"
+  },
+  "transfer_archives": {
+    "source-evidence.tar.gz": "f15b676361719c80962c77453372a2ebdcb7caf5a64db680a4c5fe0e074d7dc2",
+    "startup-evidence.tar.gz": "d94560de9021e6661447393ddc22172c26cbb5e03f6b1d9127b18c4c8fb721d2",
+    "runtime-evidence.tar.gz": "9ff3205f1665343d86c4e8eebfb02badf2dfb0bd8c193bb92d06fa2bacc42334"
+  },
+  "scope": "Text receipts only; no checkpoints or credentials. Runtime artifacts were captured sequentially during continued training."
+}

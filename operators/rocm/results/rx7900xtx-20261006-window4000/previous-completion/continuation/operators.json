@@ -1,0 +1,100 @@
+{
+  "packed_attention": true,
+  "packed_attention_tile": 256,
+  "batched_grad_norm": false,
+  "patches_installed_after_native_reference": false,
+  "file_sha256": {
+    "operators/rocm/candidate_bench.py": "6a5fcd12e4012a7168977924630d5b224f02cdf1534bcaa65f00a4ab995e7845",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7",
+    "operators/rocm/production_continuation.py": "8128c88cb835c6cf7df7f58b7c9984cb93651cb41bd5ffe2c713a5941ca21d9a"
+  },
+  "packed_attention_parity_calls": {
+    "optimized_calls": 120,
+    "tiled_calls": 0,
+    "dense_packed_calls": 120,
+    "fallback_calls": 0,
+    "query_tokens": 491520,
+    "tile_batches": 0,
+    "max_mask_elements": 0,
+    "host_plan_builds": 0,
+    "doc_fragment_calls": 720,
+    "max_fragment_score_elements": 25200400,
+    "fragment_score_elements": 6352135680,
+    "cross_attention_calls": 52,
+    "split_optimized_calls": 120,
+    "split_documents": 720
+  },
+  "status": "completed",
+  "packed_attention_calls": {
+    "optimized_calls": 2235360,
+    "tiled_calls": 0,
+    "dense_packed_calls": 2235360,
+    "fallback_calls": 282560,
+    "query_tokens": 9156034560,
+    "tile_batches": 0,
+    "max_mask_elements": 0,
+    "host_plan_builds": 19667,
+    "doc_fragment_calls": 14015920,
+    "max_fragment_score_elements": 268304400,
+    "fragment_score_elements": 193295400872960,
+    "cross_attention_calls": 960336,
+    "split_optimized_calls": 2235360,
+    "split_documents": 14015920
+  },
+  "reference_backend": "previous_packed_production",
+  "patches_installed_after_packed_production_reference": true,
+  "production_reference_context_restored": true,
+  "production_reference_captures": [
+    {
+      "status": "completed",
+      "seq_len": 4096,
+      "offload_blocks": true,
+      "gradient_tensors": 132,
+      "packed_attention_calls": {
+        "optimized_calls": 120,
+        "tiled_calls": 0,
+        "dense_packed_calls": 120,
+        "fallback_calls": 0,
+        "query_tokens": 491520,
+        "tile_batches": 0,
+        "max_mask_elements": 0,
+        "host_plan_builds": 27,
+        "doc_fragment_calls": 720,
+        "max_fragment_score_elements": 25200400,
+        "fragment_score_elements": 6352135680,
+        "cross_attention_calls": 52
+      }
+    },
+    {
+      "status": "completed",
+      "seq_len": 4096,
+      "offload_blocks": true,
+      "gradient_tensors": 132,
+      "packed_attention_calls": {
+        "optimized_calls": 120,
+        "tiled_calls": 0,
+        "dense_packed_calls": 120,
+        "fallback_calls": 0,
+        "query_tokens": 491520,
+        "tile_batches": 0,
+        "max_mask_elements": 0,
+        "host_plan_builds": 26,
+        "doc_fragment_calls": 720,
+        "max_fragment_score_elements": 25200400,
+        "fragment_score_elements": 6352135680,
+        "cross_attention_calls": 52
+      }
+    }
+  ],
+  "reference_checkpoint_sha256": "4966dcddbeb322b3f4e1b75e86cce66d3c5c95402346b853d4dee449a8fd796f",
+  "reference_file_sha256": {
+    "operators/rocm/production_continuation.py": "8128c88cb835c6cf7df7f58b7c9984cb93651cb41bd5ffe2c713a5941ca21d9a",
+    "operators/rocm/packed_attention.py": "e2f65ce40967b276f66ae1a21ff14d3a7c22aa56b4c04b1f2c5f5b0c0e6b01e7"
+  },
+  "reference_scope": "Previous accepted packed FP32 attention with native MoE offload; candidate retains shared storage/split/cached CPU Adam. Dense-native failures are not overridden.",
+  "native_failure_receipt": {
+    "path": "/home/donz/cat-yoko-rocm-20261002/runs/pass2-54333-20261004T1030/continuation/parity.json",
+    "sha256": "cc5e9d5d7fd0b03e9b146586effd373db4333aec9eead6f89e11dbd332cd4b96",
+    "status": "parity_failure"
+  }
+}
