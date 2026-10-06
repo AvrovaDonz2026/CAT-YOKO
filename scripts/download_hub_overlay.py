@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Download a CAT-YOKO Hub overlay or complete trainable-state snapshot.
 
-Default: ROCm real-text B0 step 53307, including native CPU FP32 Adam state.
+Default: ROCm real-text B0 step 77864, including native CPU FP32 Adam state.
 The frozen model must still be reconstructed from MiniCPM5-2B-Base. This
 download does not fetch the training corpus or the full 12B model graph.
 """
@@ -18,12 +18,20 @@ from pathlib import Path
 HUB_REPO = "AvrovaDonz/CAT-YOKO"
 OVERLAYS = {
     "b0-rocm-realtext": {
-        "filename": "checkpoints/b0-rocm-realtext/step-53307/trainable.pt",
-        "sha256": "3dd9a62f7acfb4ae025ff44b0589b017104f07abc8b177e0098f5c4a910bd2b2",
+        "filename": "checkpoints/b0-rocm-realtext/step-77864/trainable.pt",
+        "sha256": "adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676",
     },
     "b0-rocm-realtext-weights": {
-        "filename": "checkpoints/b0-rocm-realtext/step-53307/weights-only.pt",
-        "sha256": "050a114b43234a441520703ebd9a6b8abfebceaa9ac191fb8d934b3204608ab7",
+        "filename": "checkpoints/b0-rocm-realtext/step-77864/weights-only.pt",
+        "sha256": "0ad37d86006fe68d1cf861d4519484ed5ef5bf882af19f803cd3a056db53e84e",
+    },
+    "b0-rocm-realtext-77864": {
+        "filename": "checkpoints/b0-rocm-realtext/step-77864/trainable.pt",
+        "sha256": "adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676",
+    },
+    "b0-rocm-realtext-77864-weights": {
+        "filename": "checkpoints/b0-rocm-realtext/step-77864/weights-only.pt",
+        "sha256": "0ad37d86006fe68d1cf861d4519484ed5ef5bf882af19f803cd3a056db53e84e",
     },
     "b0-rocm-realtext-53307": {
         "filename": "checkpoints/b0-rocm-realtext/step-53307/trainable.pt",

@@ -1,6 +1,13 @@
 {
   "sha256": {
-    "README.md": "538167c7f6e8e1712aac7713f835e34bca61455540cc8e4935fa0285a1d71522",
+    "README.md": "3bd3919caebd3ee272bd3690f8188db1972f96307151bb895f33b22849a76a44",
+    "completion/continuation/operators.json": "03a1d44996314094b929bc898ef7907efb4d143f8ba8cb411d914c97a6ae7b9d",
+    "completion/continuation/parity.json": "30bbf8f905d48d2a803dd3512a2ebc353b92896ac287fae80b59dfa55de7bd52",
+    "completion/continuation/quality.json": "49fa93ccacec1d6d799b9f7b69d8c34a4756665b393594178e27f686e19b3e78",
+    "completion/continuation/round3_operators.json": "a182bf37e653580c91fc5ee67c2fe907f1268c559977ed467771994bc183aa90",
+    "completion/continuation/train/metrics.jsonl": "8a6613b13466a2d0cfe9afdb6d780f163615983f8ae181db907d3d0d1cc5d3fd",
+    "completion/final_checkpoint_check.log": "a0fd0fb18d5e967ed811f6f0c6ab4cd4a9b59450b4d090f8d7657cdfb2f0cec4",
+    "completion/status.json": "9f13f5a26ca2fc5d8a2a35c69ffe11375e952444e6226b13a0b365a136213321",
     "launch/continuation.command.json": "533a9e90e7c72ec0754de15cafdbc78a27d56956ce54118496f25b574571fe39",
     "launch/launch.json": "65d7a031fc91ecc45584116fbd4be9815e886a77ec5f9a930b53ff9d05005d80",
     "launch/remote_supervisor_tests.log": "156e2eadae03f5dded103184e4960116010557f39a25304cced37dfcaf39525d",
@@ -29,7 +36,8 @@
   "transfer_archives": {
     "source-evidence.tar.gz": "f15b676361719c80962c77453372a2ebdcb7caf5a64db680a4c5fe0e074d7dc2",
     "startup-evidence.tar.gz": "d94560de9021e6661447393ddc22172c26cbb5e03f6b1d9127b18c4c8fb721d2",
-    "runtime-evidence.tar.gz": "9ff3205f1665343d86c4e8eebfb02badf2dfb0bd8c193bb92d06fa2bacc42334"
+    "runtime-evidence.tar.gz": "9ff3205f1665343d86c4e8eebfb02badf2dfb0bd8c193bb92d06fa2bacc42334",
+    "completion-evidence.tar.gz": "745f64a0deaa217eaa859dfa99a74cd5f6ca80d695d7afa44b11856cb62d7110"
   },
-  "scope": "Text receipts only; no checkpoints or credentials. Runtime artifacts were captured sequentially during continued training."
+  "scope": "Text receipts only; no checkpoints or credentials. Historical runtime artifacts were captured sequentially during training; separate completion receipts verify the exact 4000-update window and paired held-out evaluations."
 }

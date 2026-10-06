@@ -1,0 +1,20 @@
+{
+  "sha256": {
+    "README.md": "ccca01a3af394da66f9da46a247a6c55962fa19037bbe2afbdefb830c80ed37a",
+    "launch/continuation/parity.json": "0b73a341927c5caefde688bfb254c271cb9ff713d3986d950983d77998c770d9",
+    "launch/continuation/quality.json": "a7ac919aed7ec26c6fcf0cca172867c72abde7c3d3a3baa7d51995a1a4b52f25",
+    "launch/continuation.command.json": "69a8657d3b92bf45b0741e7debd4df583b2046fb18ebce4e3091b1640c10c59f",
+    "launch/latest_checkpoint_check.log": "87b0a059910b171ce6e38b3d99a06a06bceaa58de8775d8cfe6e6b349cf512c4",
+    "launch/launch-preparation.json": "862a502deccc0380f66bbb5f2c8dc835065dc1a3a2600cf7695ebfe1615c251f",
+    "launch/launch.json": "f93cc1636d89a377e34ac816fbdd9a30cedfc915cc4dfe07f85fec82435b7874",
+    "launch/source_preflight.log": "228221866b15d0d2dbce834e0217ee630165d5a879b9ba72777cb41693cb5aa7",
+    "launch/source_window_check.log": "228221866b15d0d2dbce834e0217ee630165d5a879b9ba72777cb41693cb5aa7",
+    "launch/status.json": "2f02aa15ab41ddb736e778ba66bbaaf97737827c6c380733f7ecc8e7fecb971e",
+    "launch/supervisor.command.json": "de4106a78c3c41d423fac76a6be1486bfe1abc39f7b2984e5f85d8d788e59715",
+    "local-upload-watch/command.json": "d68f9e494a1d5d83c20dced468549ac375e4e08ab8641a2372243d7e84b24852",
+    "local-upload-watch/launch.json": "fec8e76205822799898bf8341011355cb5a0b6b02cb85187a90df5088508aea6",
+    "local-upload-watch/status.json": "76517a5965cd7372bc43a04fe057584f010b09e425ba073bd2d4ee08c23bd377"
+  },
+  "transfer_archive_sha256": "3c42f1a376e7450e647b60c7e5b72e3b9fbf4bc354e623229394476e9c0b8707",
+  "scope": "Text-only launch evidence and local upload watcher; training not yet complete."
+}

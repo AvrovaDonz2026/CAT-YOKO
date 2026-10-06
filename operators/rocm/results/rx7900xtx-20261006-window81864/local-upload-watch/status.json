@@ -1,0 +1,10 @@
+{
+  "status": "waiting_for_training",
+  "pid": 44449,
+  "remote_run": "/home/donz/cat-yoko-rocm-20261002/runs/window4000-77864-20261006T1410",
+  "expected_source_step": 77864,
+  "expected_target_step": 81864,
+  "credentials_location": "local_only",
+  "local_stage": "/private/tmp/cat-yoko-hf-watch81864/payload",
+  "updated_at": "2026-10-06T14:55:38Z"
+}

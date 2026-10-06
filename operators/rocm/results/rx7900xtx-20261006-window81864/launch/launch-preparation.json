@@ -1,0 +1,17 @@
+{
+  "created_at_utc": "2026-10-06T14:35:45.194178+00:00",
+  "source_step": 77864,
+  "source_sha256": "adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676",
+  "target_step": 81864,
+  "updates": 4000,
+  "source_cursor": 43062,
+  "target_cursor": 47062,
+  "audit_max_cursor": 58593,
+  "target_tokens_in_phase": 355010560,
+  "unique_training_tokens": 79998976,
+  "real_text_tokens_processed_target": 192765952,
+  "prior_extra_quality_checked": true,
+  "training_code_unchanged": true,
+  "free_disk_bytes": 25779650560,
+  "gpu_pids_before_launch": []
+}

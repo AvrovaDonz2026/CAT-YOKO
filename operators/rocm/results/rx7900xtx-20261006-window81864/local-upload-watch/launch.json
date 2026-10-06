@@ -1,0 +1,8 @@
+{
+  "pid": 44449,
+  "started_at_utc": "2026-10-06T14:51:57.944187+00:00",
+  "target_step": 81864,
+  "checkpoint_upload": "after_exact_completion_and_full_cpu_and_paired_quality_checks",
+  "credentials_location": "local_only",
+  "transport": "authenticated SSH; no HF token sent to remote"
+}

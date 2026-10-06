@@ -1,29 +1,54 @@
 # B0 real-text ROCm snapshots
 
-The recommended release is [step 53307](step-53307/README.md), saved on **2026-10-04T05:37:22.748161Z**. Weights are hosted at [AvrovaDonz/CAT-YOKO](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-rocm-realtext); GitHub stores these cards and release metadata.
+The [model card on Hugging Face](https://huggingface.co/AvrovaDonz/CAT-YOKO)
+identifies the latest completed and published snapshot. Each step directory
+keeps its own weights, recovery metadata and SHA256 identities.
+GitHub stores code and compact release receipts; weight files remain on Hub.
+
+The newly verified release is [step 77864](step-77864/README.md), saved on
+**2026-10-06T13:02:17.286196Z** after a completed 4000-update window.
 
 | Artifact | Hub path | Use |
 | --- | --- | --- |
-| Recovery snapshot | [`step-53307/trainable.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-53307/trainable.pt) | 132 BF16 overlay weights plus CPU FP32 Adam, counters, RNG and packed cursor; 2,192,257,315 bytes |
-| Smaller overlay | [`step-53307/weights-only.pt`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-53307/weights-only.pt) | The same 132 weights, verified byte-for-byte, without Adam; 438,477,679 bytes |
-| Manifest | [`step-53307/release.json`](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-53307/release.json) | Artifact, source, base, tokenizer, data and recovery identities |
+| Complete recovery | [step-77864/trainable.pt](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-77864/trainable.pt) | 2,192,257,315 bytes; 132 BF16 weights, 264 native CPU FP32 Adam moments, RNG and absolute cursor |
+| Weights only | [step-77864/weights-only.pt](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-77864/weights-only.pt) | 438,478,163 bytes; the same 132 weights byte-for-byte, without optimizer history |
+| Release identities | [step-77864/release.json](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-77864/release.json) | Artifact, base, tokenizer, data, code archive and complete-run checks |
 
-These are B0 trainable overlays. Loading either requires the repository's CAT-YOKO graph upcycled from **MiniCPM5-2B-Base**; the frozen 12B graph is not serialized into the files. The recovery file preserves native CPU Adam state. The smaller overlay is useful when only weights are needed and does not provide complete optimizer recovery.
+These are native B0 trainable overlays. Reconstruct the frozen graph by
+upcycling MiniCPM5-2B-Base before loading either file. The complete 12B graph
+is not uploaded; the weights-only file cannot restore the saved Adam trajectory.
+
+The absolute packed cursor and native Adam counter are **43062**, next
+physical row **4000 / 19531**. Actual real-input consumption is
+**176,381,952 tokens**, including repetitions of the **79,998,976-token**
+pilot. Phase clocks total **338,626,560** and include earlier DummyStream
+history. The 8B-token B0 envelope remains unfinished; B1 has not started.
+
+Final fixed NLL is **7.3636053664583905** on validation rows 0–31;
+additional rows 32–63 score **7.503450781393409**. Both use 32 batches from
+the same validation file, and neither is an external capability benchmark.
 
 ```sh
-python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir /workspace/hub/b0-rocm-realtext-step-53307
-# Weights-only alternative:
-python scripts/download_hub_overlay.py --name b0-rocm-realtext-weights --out-dir /workspace/hub/b0-rocm-realtext-step-53307-weights
+python scripts/download_hub_overlay.py --name b0-rocm-realtext-77864 --out-dir /workspace/hub/step-77864
+python scripts/download_hub_overlay.py --name b0-rocm-realtext-77864-weights --out-dir /workspace/hub/step-77864-weights
 ```
 
-The downloader writes the selected artifact as local `trainable.pt`; select a separate output directory for each variant. Follow the [step card](step-53307/README.md) for hashes and the explicit base/data/evaluation recovery command.
+The downloader writes either selected file as local `trainable.pt`; use
+separate directories for the two variants. Explicit step aliases remain
+stable. Consult the Hub model card for releases newer than this checkout's
+pinned default. Complete original corpus/base/tokenizer identities and native
+CPU Adam are required to preserve the meaning of the packed cursor.
+See the [release card](step-77864/README.md) and
+[real-text recovery guide](../../operators/rocm/REAL_TRAINING.md).
 
-At this snapshot, global step is **53307**, native Adam counter and next unread packed cursor are **18505**, and actual packed training consumption is **75,796,480 tokens**. Cumulative phase and total clocks are **238,041,088 tokens**, including earlier DummyStream history. The bounded pilot contains 79,998,976 train / 999,424 validation tokens with a 60% English web / 30% Chinese web / 10% L2 math mixture and no code slice. B0's planned 8B-token budget is unfinished; B1 has not started in this release.
+The operators remain document-split packed FP32 attention, shared frozen MoE
+storage and cached BF16 CPU-shadow Adam with retained native FP32 moments.
+The [operator switch report](../../operators/rocm/OPERATOR_SWITCH_20261004.md)
+records the original numerical/recovery acceptance and user-requested
+adoption after a 2.55–3.03% short-window gain. No new speed claim is made.
 
-The runtime uses RX 7900 XTX `gfx1100`, PyTorch 2.9.1 + ROCm 6.4, BF16, document-split packed FP32 MATH attention, shared-storage frozen MoE and cached BF16 CPU-shadow Adam. Native CPU FP32 moments and checkpoint format remain unchanged; production keeps `deterministic_algorithms=False`. The [switch report](../../operators/rocm/OPERATOR_SWITCH_20261004.md) records all-132-gradient gates, two controlled byte-exact real updates and the user-requested adoption below the 5% automatic speed gate. The measured short-window whole-update gain was 2.55–3.03%, not a corpus-wide result.
-
-The latest fixed evaluation was NLL **7.885217772929435** at **53250**, 57 updates before this snapshot, over 32 batches / 130877 valid loss tokens. From the saved cursor, **1026** updates complete the first 19531-row pass at global step 54333 without wrapping; the step card supplies the new operator recovery command with 300-second saves / keep3 and evaluation every 250 updates over 32 batches.
-
-Historical [ROCm step52616](step-52616/README.md) retains both original artifacts, hashes and its preceding packed-attention/native CPU Adam provenance. The explicit download aliases `b0-rocm-realtext-52616` and `b0-rocm-realtext-52616-weights` remain available.
-
-Historical [`b0-full` step 26940](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full) and [`b0-3090-bf16` step 33800](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16) remain available. Their DummyStream launcher instructions describe those historical releases; use the real-text recovery recipe for this one.
+Historical [step 53307](step-53307/README.md),
+[step 52616](step-52616/README.md),
+[B200 step 26940](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-full)
+and [RTX 3090 step 33800](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-3090-bf16)
+retain their original artifacts and hashes.

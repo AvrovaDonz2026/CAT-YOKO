@@ -1,0 +1,53 @@
+{
+  "status": "published_verified",
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "step": 77864,
+  "revision": "442f3ed801d8ef29901418528765eec2eb15bc24",
+  "parent_commit": "691c5c9c8ed0a33b3afcbe8a2a5718a5c07d9912",
+  "family_index_path": "checkpoints/b0-rocm-realtext/README.md",
+  "family_index_sha256": "dae2cb8827eccc6e988f503843432740fc4929be083cd7506caf322507202f4e",
+  "checkpoint_publication_revision": "691c5c9c8ed0a33b3afcbe8a2a5718a5c07d9912",
+  "historical_and_new_weight_files_preserved": {
+    "checkpoints/b0-3090-bf16/trainable.pt": {
+      "bytes": 438484609,
+      "sha256": "2dc31406c240ee8631eb49c22908e41734c6558325b4c19270dd7ab95679e690"
+    },
+    "checkpoints/b0-full/trainable.pt": {
+      "bytes": 438484353,
+      "sha256": "7eebc9a4da78d79be71bbe52881f2a0eaffd899f58ada3a3325f410eca181955"
+    },
+    "checkpoints/b0-nvfp4-try/trainable.pt": {
+      "bytes": 438482738,
+      "sha256": "461b4ffc05fd46e2668448393789764ccf9dd673644040fe4527259b176a510e"
+    },
+    "checkpoints/b0-rocm-realtext/step-52616/trainable.pt": {
+      "bytes": 2192257315,
+      "sha256": "d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df"
+    },
+    "checkpoints/b0-rocm-realtext/step-52616/weights-only.pt": {
+      "bytes": 438477743,
+      "sha256": "a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570"
+    },
+    "checkpoints/b0-rocm-realtext/step-53307/trainable.pt": {
+      "bytes": 2192257315,
+      "sha256": "3dd9a62f7acfb4ae025ff44b0589b017104f07abc8b177e0098f5c4a910bd2b2"
+    },
+    "checkpoints/b0-rocm-realtext/step-53307/weights-only.pt": {
+      "bytes": 438477679,
+      "sha256": "050a114b43234a441520703ebd9a6b8abfebceaa9ac191fb8d934b3204608ab7"
+    },
+    "checkpoints/b0-rocm-realtext/step-77864/trainable.pt": {
+      "bytes": 2192257315,
+      "sha256": "adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676"
+    },
+    "checkpoints/b0-rocm-realtext/step-77864/weights-only.pt": {
+      "bytes": 438478163,
+      "sha256": "0ad37d86006fe68d1cf861d4519484ed5ef5bf882af19f803cd3a056db53e84e"
+    },
+    "checkpoints/b0/trainable.pt": {
+      "bytes": 438483866,
+      "sha256": "9012e5ac55c2f59ef7cacc34d5769444413d070116dbff0696c7b258b9aa0636"
+    }
+  },
+  "family_index_downloaded_and_byte_compared": true
+}
