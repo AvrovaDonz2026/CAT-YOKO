@@ -195,13 +195,82 @@ def deployed_sources(source_dir):
     return files
 
 
-def verified_assets(args, template):
+def fresh_manifest(handoff, template):
+    """Bind an explicit new corpus to its checked exclusion and tokenizer receipt."""
+    path = Path(handoff['corpus_manifest_path'])
+    need(digest(path) == handoff['corpus_manifest_sha256'], 'fresh corpus manifest changed')
+    manifest = read_json(path)
+    need(manifest.get('status') == 'complete' and manifest.get('dataset_kind') == 'fresh_exact_text_excluded'
+         and manifest.get('seq_len') == 4096 and manifest.get('eos_id') == 1,
+         'fresh corpus format or completion differs')
+    intersections = manifest.get('old_hash_intersections', {})
+    need(set(intersections) == {'new_train_old_train', 'new_train_old_eval', 'new_eval_old_train', 'new_eval_old_eval'}
+         and all(type(value) is int and value == 0 for value in intersections.values())
+         and type(manifest.get('hash_intersection')) is int and manifest['hash_intersection'] == 0,
+         'fresh corpus lacks exact-text exclusion evidence')
+    need(manifest.get('tokenizer', {}).get('files_sha256') == template['tokenizer']['files_sha256'],
+         'fresh corpus tokenizer differs from recovery base')
+    expected_mixture = {'en': .6, 'zh': .3, 'math': .1}
+    sources = manifest.get('sources', [])
+    need([item.get('key') for item in sources] == list(expected_mixture)
+         and all(item.get('weight') == expected_mixture[item['key']]
+                 and re.fullmatch(r'[0-9a-f]{40}', str(item.get('revision', ''))) for item in sources),
+         'fresh corpus source mixture or revisions are not pinned')
+    exclusion = manifest['old_corpus_exclusion']
+    old_path = Path(exclusion['manifest_path'])
+    need(digest(old_path) == exclusion['manifest_sha256'], 'excluded old corpus manifest changed')
+    old = read_json(old_path)
+    for split in ('train', 'eval'):
+        need({key: old['outputs'][split][key] for key in ('bytes', 'sha256')}
+             == {key: template['data'][split][key] for key in ('bytes', 'sha256')},
+             'fresh exclusion belongs to a different old corpus')
+    document_sets = {}
+    for generation, corpus, directory in (('old', old, old_path.parent), ('new', manifest, path.parent)):
+        for split in ('train', 'eval'):
+            record = corpus['hashes'][split]
+            hashes_path = (directory / record['path']).resolve()
+            need(hashes_path.parent == directory.resolve() and digest(hashes_path) == record['sha256'],
+                 'document exclusion evidence changed')
+            lines = hashes_path.read_text(encoding='ascii').splitlines()
+            need(len(lines) == len(set(lines)) == record['documents']
+                 and all(re.fullmatch(r'[0-9a-f]{64}', line) for line in lines), 'document exclusion evidence is incomplete')
+            document_sets[generation, split] = set(lines)
+            if generation == 'old':
+                claimed = exclusion['document_hashes'][split]
+                need(Path(claimed['path']).resolve() == hashes_path and claimed['sha256'] == record['sha256']
+                     and claimed['documents'] == record['documents'], 'old exclusion identities differ')
+    need(not document_sets['new', 'train'] & document_sets['new', 'eval']
+         and all(not document_sets['new', new] & document_sets['old', old_split]
+                 for new in ('train', 'eval') for old_split in ('train', 'eval')),
+         'fresh documents overlap a held-out or historical corpus')
+    for split, name, rows in (('train', 'new_train', handoff['new_nseq']),
+                              ('eval', 'fresh_eval', None)):
+        record = manifest['outputs'][split]
+        actual = file_record(Path(handoff[name + '_path']))
+        need(actual['sha256'] == handoff[name + '_sha256']
+             and actual == {key: record[key] for key in ('bytes', 'sha256')}
+             and type(record.get('sequences')) is int and record['sequences'] > 0
+             and record['tokens'] == record['sequences'] * 4096
+             and record['bytes'] == record['tokens'] * 4
+             and (rows is None or record['sequences'] == rows), 'fresh packed asset differs from manifest')
+    return manifest
+
+
+def verified_assets(args, template, handoff=None):
     """Static mixture/tokenizer metadata is inherited only for the identical assets."""
     assets = {name: file_record(path) for name, path in (('train', args.data), ('eval', args.eval_data))}
+    manifest = fresh_manifest(handoff, template) if handoff else None
+    if handoff:
+        need(Path(handoff['new_train_path']).resolve() == Path(args.data).resolve()
+             and file_record(handoff['old_train_path']) == {key: template['data']['train'][key] for key in ('sha256', 'bytes')},
+             'fresh handoff differs from the historical training corpus')
     for name, record in assets.items():
-        need(record['sha256'] == template['data'][name]['sha256']
-             and record['bytes'] == template['data'][name]['bytes'], 'pilot corpus differs from the release template')
+        expected = manifest['outputs']['train'] if handoff and name == 'train' else template['data'][name]
+        need(record['sha256'] == expected['sha256'] and record['bytes'] == expected['bytes'],
+             'packed corpus differs from its verified release identity')
         record['seq_len'] = 4096
+    if handoff:
+        assets['fresh_eval'] = {**file_record(handoff['fresh_eval_path']), 'seq_len': 4096}
     base = deepcopy(template['base_model'])
     for name, expected in list(base.items()):
         if isinstance(expected, dict) and 'sha256' in expected:
@@ -216,7 +285,8 @@ def verified_assets(args, template):
     return assets, base
 
 
-def build_release(args, template, status, accepted, audit, cpu, quality, parity, operators, files, sources, assets, base):
+def build_release(args, template, status, accepted, audit, cpu, quality, parity, operators, files, sources, assets, base,
+                  *, handoff=None, fresh_quality=None):
     extra, cursor, rows = cpu['extra'], audit['source_stream_i'], audit['source_data_rows']
     primary = parity['final_eval']
     step = audit['source_step']
@@ -264,16 +334,57 @@ def build_release(args, template, status, accepted, audit, cpu, quality, parity,
                   resume_requirements=['Rebuild frozen graph by upcycling the specified MiniCPM5 base.',
                                        'Use identical tokenizer and packed corpora for the saved absolute cursor.',
                                        'Restore native CPU FP32 Adam from trainable.pt; weights-only.pt omits optimizer history.'])
+    if handoff:
+        logical_row = cursor - handoff['absolute_cursor_origin']
+        need(cursor == handoff['target_cursor'] and step == handoff['target_step']
+             and logical_row == handoff['target_logical_row'] and 0 <= logical_row <= rows
+             and extra['tokens_in_phase'] == handoff['target_phase_tokens']
+             and extra['tokens_seen'] == handoff['target_tokens_seen'], 'fresh release counters differ from handoff')
+        saved_stream = extra['stream']
+        need(saved_stream.get('i') == cursor and saved_stream.get('nseq') == rows
+             and saved_stream.get('absolute_cursor_origin') == handoff['absolute_cursor_origin']
+             and saved_stream.get('logical_row_origin') == 0 and saved_stream.get('corpus_row') == logical_row
+             and saved_stream.get('corpus_sha256') == handoff['new_train_sha256']
+             and saved_stream.get('no_wrap') is True, 'fresh checkpoint lacks the saved corpus mapping')
+        result.update(data_handoff=deepcopy(handoff), data_handoff_sha256=status['data_handoff_sha256'],
+                      real_text_tokens_processed=handoff['source_real_tokens'] + logical_row * 4096,
+                      unique_training_tokens=handoff['total_unique_tokens'], active_corpus_prepared_tokens=rows * 4096,
+                      unique_training_token_scope='Prepared tokens across exact-text-disjoint old and fresh corpora; not vocabulary or semantic deduplication.',
+                      completed_corpus_passes=logical_row // rows, completed_corpus_passes_scope='Active fresh corpus only.',
+                      repeated_corpus=False, repetition_scope='Historical inputs contain old-corpus repetitions; this fresh window reads local rows once without wrap.',
+                      stream={**deepcopy(saved_stream), 'next_unread_row': cursor, 'next_row_mod_nseq': cursor % rows,
+                              'next_row_mod_nseq_scope': 'Legacy arithmetic residue; not a fresh-corpus read position.',
+                              'next_corpus_row': logical_row, 'seq_len': 4096},
+                      fresh_fixed_evaluation=deepcopy(fresh_quality['final_eval']),
+                      fresh_initial_evaluation=deepcopy(fresh_quality['initial_eval']),
+                      fresh_evaluation_protocol=fresh_quality['protocol'],
+                      fresh_evaluation_data_sha256=fresh_quality['eval_data_sha256'])
+        result['resume_requirements'][1] = 'Restore the hash-bound fresh corpus adapter and saved absolute/local cursor mapping; preserve the historical held-out corpus.'
     return result
+
+
+def corpus_position(release):
+    if 'data_handoff' in release:
+        return f'Next fresh corpus row **{release["stream"]["next_corpus_row"]}** (no wrap)'
+    return f'Next corpus row **{release["stream"]["next_row_mod_nseq"]}**'
 
 
 def snapshot_card(release):
     step, cursor = release['step'], release['adam_step']
     full, light = release['files']['trainable.pt'], release['files']['weights-only.pt']
+    fresh = 'data_handoff' in release
+    resume = ('Restore with the archived fresh corpus adapter/wrapper and hash-bound handoff manifest. '
+              'The absolute cursor maps to local row `i - absolute_cursor_origin`; the arithmetic '
+              '`next_row_mod_nseq` is a legacy residue and is not a read position. '
+              'A bare legacy Trainer/PackedBinStream would read the wrong row. ' if fresh else
+              'Restore the packed absolute cursor without resetting Adam or RNG; streams read `i % nseq`. ')
+    third = (f'Fresh held-out NLL: **{release["fresh_fixed_evaluation"]["eval_nll"]}**, paired with '
+             f'initial NLL **{release["fresh_initial_evaluation"]["eval_nll"]}** on the separate new validation corpus. '
+             'Its exact-text exclusion receipt covers both old corpus splits and the new training split.\n\n' if fresh else '')
     return (f'# Completed B0 step {step}\n\n'
             f'Global step **{step}**, Adam counter / absolute packed cursor **{cursor}**. '
-            f'Next corpus row **{release["stream"]["next_row_mod_nseq"]}**; '
-            f'{release["unique_training_tokens"]:,} unique training tokens, '
+            f'{corpus_position(release)}; '
+            f'{release["unique_training_tokens"]:,} {"prepared tokens across exact-text-disjoint corpora" if fresh else "unique training tokens"}, '
             f'{release["real_text_tokens_processed"]:,} packed inputs including repeated passes. B0 continues; this is not B1.\n\n'
             f'`trainable.pt` is the native trainable overlay plus optimizer, RNG and cursor: '
             f'{full["bytes"]:,} bytes, SHA256 `{full["sha256"]}`. '
@@ -286,8 +397,9 @@ def snapshot_card(release):
             f'additional NLL: **{release["additional_fixed_evaluation"]["eval_nll"]}** on rows '
             f'{release["additional_fixed_evaluation"]["row_start"]}–{release["additional_fixed_evaluation"]["row_stop"] - 1}. '
             'Both are slices of the same pilot validation corpus, not external benchmarks.\n\n'
+            + third +
             'See `release.json` for verified base/data/source identities and the immutable `source/` archive. '
-            'Restore the packed absolute cursor without resetting Adam or RNG; streams read `i % nseq`. '
+            + resume +
             'The deployed `source/operators/rocm/production_continuation.py` retains the accepted packed reference, '
             'split attention, shared frozen storage and cached CPU Adam. Its `--accepted-run` receipt references the archived complete-run evidence. '
             'Complete original run directories and corpora remain necessary for that supervisor provenance check; '
@@ -307,6 +419,20 @@ def prepare(args, *, status=None):
     status = status or await_completion(args.run_dir)
     need(status.get('status') == 'complete' and status.get('child_pid') is None, 'only a completed run can be staged')
     need(Path(status['source_dir']).resolve() == args.source_dir, 'source directory differs from completed receipt')
+    handoff = fresh_checks = handoff_path = fresh_quality = None
+    if status.get('data_handoff') is not None or getattr(args, 'handoff_manifest', None) is not None:
+        from operators.rocm import fresh_corpus_handoff as fresh_checks
+        handoff_path = Path(status['data_handoff_path']).resolve()
+        if getattr(args, 'handoff_manifest', None) is not None:
+            need(Path(args.handoff_manifest).resolve() == handoff_path, 'handoff path differs from completed run')
+        need(digest(handoff_path) == status['data_handoff_sha256']
+             and read_json(handoff_path) == status['data_handoff'], 'completed handoff manifest changed')
+        handoff = fresh_checks.load_handoff(handoff_path, verify_files=True)
+        need(handoff == status['data_handoff']
+             and Path(handoff['source_checkpoint_path']).resolve() == Path(status['source_checkpoint']).resolve()
+             and handoff['source_checkpoint_sha256'] == status['source_sha256'], 'fresh source checkpoint identity differs')
+        fresh_quality = fresh_checks.validate_fresh_quality_report(
+            args.run_dir / 'continuation/fresh_quality.json', source_dir=args.source_dir, handoff=handoff)
     final = status['final_checkpoint_verified']
     latest = Path(final['source_checkpoint']).resolve()
     numbered = latest.parent / f'trainable_step_{final["source_step"]}.pt'
@@ -341,7 +467,9 @@ def prepare(args, *, status=None):
              and release['publication_source']['source_sha256'] == accepted['checkpoint_sha256']
              and release['deployed_source_sha256'] == {name: digest(path) for name, path in deployed_sources(args.source_dir).items()},
              'existing staging release no longer matches its source')
-        verified_assets(args, read_json(args.template_release))
+        need(prepared.get('data_handoff_sha256') == (status['data_handoff_sha256'] if handoff else None),
+             'existing staging belongs to a different corpus handoff')
+        verified_assets(args, read_json(args.template_release), handoff)
         return prepared
     need(not args.stage_dir.exists() or not any(args.stage_dir.iterdir()), 'use a fresh staging directory')
     need(not args.stage_dir.is_relative_to(args.run_dir) and not args.run_dir.is_relative_to(args.stage_dir)
@@ -350,8 +478,14 @@ def prepare(args, *, status=None):
     audit_cap = status.get('audit_max_cursor', status['plan'].get('audit_max_cursor', status['plan']['target_cursor']))
     cpu_args = SimpleNamespace(python=args.python, source_dir=args.source_dir, data=args.data,
                                resume=Path(status['source_checkpoint']).resolve())
-    audit = checks.cpu_check(cpu_args, numbered, accepted['source_update_params']['updates'],
-                             args.stage_dir / 'cpu-check.log', max_cursor=audit_cap)
+    if handoff:
+        cpu_args.handoff, cpu_args.handoff_manifest = handoff, handoff_path
+        cpu_args.old_data = Path(handoff['old_train_path'])
+        audit = fresh_checks.cpu_check(cpu_args, numbered, accepted['source_update_params']['updates'],
+                                       args.stage_dir / 'cpu-check.log')
+    else:
+        audit = checks.cpu_check(cpu_args, numbered, accepted['source_update_params']['updates'],
+                                 args.stage_dir / 'cpu-check.log', max_cursor=audit_cap)
     need(audit['source_step'] == final['source_step'] and audit['source_stream_i'] == final['source_stream_i']
          and audit['source_adam_step'] == final['source_adam_step'], 'fresh CPU audit differs from completed final state')
     relative = f'{FAMILY}/step-{audit["source_step"]}'
@@ -362,7 +496,7 @@ def prepare(args, *, status=None):
     cpu = cpu_export(args, full, directory / 'weights-only.pt')
     need(digest(full) == accepted['checkpoint_sha256'], 'numbered checkpoint changed during staging')
     template = read_json(args.template_release)
-    assets, base = verified_assets(args, template)
+    assets, base = verified_assets(args, template, handoff)
     sources = deployed_sources(args.source_dir)
     files = {'trainable.pt': {**file_record(full), 'trainable_tensors': 132, 'optimizer_states': 132,
                              'optimizer_moments': 264, 'moment_device': 'cpu', 'moment_dtype': 'float32', 'rng_and_stream_saved': True},
@@ -370,7 +504,7 @@ def prepare(args, *, status=None):
                                  'optimizer_states': 0, 'weights_bitwise_equal_full_checkpoint': True, 'complete_optimizer_resume': False}}
     operators = read_json(args.run_dir / 'continuation/round3_operators.json')
     release = build_release(args, template, status, accepted, audit, cpu, quality, parity, operators,
-                            files, sources, assets, base)
+                            files, sources, assets, base, handoff=handoff, fresh_quality=fresh_quality)
     write_json(directory / 'release.json', release)
     (directory / 'README.md').write_text(snapshot_card(release))
     for name, source in sources.items():
@@ -387,15 +521,33 @@ def prepare(args, *, status=None):
         need(digest(destination) == digest(source), 'run evidence changed while archiving')
     write_json(directory / 'evidence/cpu-check.json', audit)
     write_json(directory / 'evidence/cpu-export.json', cpu)
+    if handoff:
+        for source, name in ((handoff_path, 'data_handoff.json'),
+                             (Path(handoff['corpus_manifest_path']), 'corpus-manifest.json'),
+                             (args.run_dir / 'continuation/fresh_quality.json', 'continuation/fresh_quality.json')):
+            destination = directory / 'evidence' / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+            need(digest(destination) == digest(source), 'fresh evidence changed while archiving')
     # Revalidate all protected receipts and source after the relatively slow exports.
     again = validate_accepted_run(args.run_dir, numbered, args.source_dir)
     need(again == accepted and read_json(args.run_dir / 'status.json') == status, 'completed run changed during staging')
+    if handoff:
+        need(digest(handoff_path) == status['data_handoff_sha256']
+             and fresh_checks.load_handoff(handoff_path, verify_files=True) == handoff
+             and fresh_checks.validate_fresh_quality_report(args.run_dir / 'continuation/fresh_quality.json',
+                                                           source_dir=args.source_dir, handoff=handoff) == fresh_quality,
+             'fresh handoff or held-out evidence changed during staging')
     allowlist = {path.relative_to(args.stage_dir).as_posix(): file_record(path)
                  for path in sorted(directory.rglob('*')) if path.is_file()}
     prepared = {'status': 'prepared', 'step': audit['source_step'], 'repo_id': args.repo_id,
                 'checkpoint_prefix': relative, 'stage_dir': str(args.stage_dir), 'files': allowlist,
                 'run_dir': str(args.run_dir), 'source_dir': str(args.source_dir),
                 'source_checkpoint_sha256': accepted['checkpoint_sha256']}
+    if handoff:
+        prepared.update(data_handoff_sha256=status['data_handoff_sha256'],
+                        original_source_checkpoint_sha256=handoff['source_checkpoint_sha256'],
+                        train_corpus_sha256=handoff['new_train_sha256'])
     write_json(args.stage_dir / 'prepared.json', prepared)
     return prepared
 
@@ -408,15 +560,18 @@ def latest_card(current, release):
     prefix = f'https://huggingface.co/{repo}/blob/main/{FAMILY}/step-{step}'
     note = (f'{MARKER_BEGIN}\n## Current B0 snapshot\n\n'
             f'The latest completed B0 recovery snapshot is **step {step}**. '
-            f'Adam / absolute cursor: **{release["adam_step"]}**; next corpus row: '
-            f'**{release["stream"]["next_row_mod_nseq"]}**. B0 remains in its original budget.\n\n'
+            f'Adam / absolute cursor: **{release["adam_step"]}**; {corpus_position(release)}. '
+            'B0 remains in its original budget.\n\n'
             f'Use [`trainable.pt`]({prefix}/trainable.pt) for optimizer/RNG/cursor recovery or '
             f'[`weights-only.pt`]({prefix}/weights-only.pt) for the identical overlay without Adam. '
             f'Both require MiniCPM5-2B-Base upcycling; no full 12B graph is uploaded. '
             f'[Snapshot instructions]({prefix}/README.md) and [verified manifest]({prefix}/release.json) '
             'record base, data, runtime and archived deployed code. Older downloader pins select historical snapshots.\n\n'
             f'Real packed inputs: **{release["real_text_tokens_processed"]:,}**, including repeated rows; '
-            f'unique training tokens: **{release["unique_training_tokens"]:,}**.\n{MARKER_END}\n')
+            f'{"Prepared tokens across exact-text-disjoint corpora" if "data_handoff" in release else "Unique training tokens"}: '
+            f'**{release["unique_training_tokens"]:,}**. '
+            + ('Recovery requires the archived fresh stream adapter and handoff manifest; a bare legacy stream would read the wrong row. '
+               if 'data_handoff' in release else '') + f'\n{MARKER_END}\n')
     replacement = note + '\n'
     if MARKER_BEGIN in current:
         current = re.sub(re.escape(MARKER_BEGIN) + r'.*?' + re.escape(MARKER_END) + r'\n?',
@@ -435,6 +590,11 @@ def latest_card(current, release):
                   f'Rows {extra["row_start"]}–{extra["row_stop"] - 1} have NLL **{extra["eval_nll"]}** '
                   f'({extra["eval_batches"]} batches, {extra["eval_valid_tokens"]:,} valid tokens). '
                   'These are two slices of the same pilot validation corpus, not external benchmarks.\n\n')
+    if 'fresh_fixed_evaluation' in release:
+        fresh = release['fresh_fixed_evaluation']
+        validation += (f'Separate fresh held-out NLL: **{fresh["eval_nll"]}** at step {step}, from '
+                       f'initial **{release["fresh_initial_evaluation"]["eval_nll"]}**. '
+                       'This corpus excludes exact-text matches to both old splits and new training; it is not an external benchmark.\n\n')
     if '## Validation observation\n' in current:
         current = re.sub(r'(?ms)^## Validation observation\n.*?(?=^## |\Z)', validation, current, count=1)
     return current
@@ -575,6 +735,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for flag in ('run-dir', 'source-dir', 'base', 'data', 'eval-data', 'template-release'):
         parser.add_argument('--' + flag, type=Path)
+    parser.add_argument('--handoff-manifest', type=Path, help='explicit, source-bound fresh-corpus handoff receipt')
     parser.add_argument('--stage-dir', type=Path, required=True)
     parser.add_argument('--python', default=sys.executable)
     parser.add_argument('--code-commit')

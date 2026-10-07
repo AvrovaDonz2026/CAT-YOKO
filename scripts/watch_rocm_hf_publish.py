@@ -35,13 +35,25 @@ class PublicationFailed(RuntimeError):
 
 
 REMOTE_STATUS = r'''
-import json, sys
+import hashlib, json, sys
 from pathlib import Path
 run=Path(sys.argv[1]).resolve(); source=Path(sys.argv[2]).resolve()
 p=run/'status.json'; d=json.loads(p.read_text())
 m=d.get('source_metadata',{}); f=d.get('final_checkpoint_verified',{}); q=d.get('final_quality',{})
+h=d.get('data_handoff'); fresh={}; handoff_sha=None
+if h is not None and d.get('status')=='complete':
+ try:
+  hp=Path(d['data_handoff_path'])
+  if json.loads(hp.read_text())==h:
+   handoff_sha=hashlib.sha256(hp.read_bytes()).hexdigest()
+  fresh=json.loads((run/'continuation/fresh_quality.json').read_text())
+ except (OSError,ValueError,KeyError,TypeError):
+  handoff_sha=None; fresh={}
 print(json.dumps({'status':d.get('status'),'run_path':str(run),
  'source_checkpoint':d.get('source_checkpoint'),'source_dir':d.get('source_dir'),
+ 'source_sha256':d.get('source_sha256'),'data_handoff':h,
+ 'data_handoff_path':d.get('data_handoff_path'),'data_handoff_sha256':d.get('data_handoff_sha256'),
+ 'actual_data_handoff_sha256':handoff_sha,'fresh_quality':fresh,
  'source_step':m.get('source_step'),'source_cursor':m.get('source_stream_i'),
  'source_adam_step':m.get('source_adam_step'),'source_tokens_in_phase':m.get('source_tokens_in_phase'),
  'target_step':d.get('target_step'),'target_cursor':d.get('target_cursor'),
@@ -153,7 +165,7 @@ def completion_verified(row, args):
     cursor = row.get('source_cursor')
     if (row.get('source_step') != args.expected_source_step
             or row.get('target_step') != args.expected_target_step or row.get('updates') != updates
-            or row.get('child_pid') is not None or type(cursor) is not int or cursor != 43062
+            or row.get('child_pid') is not None or type(cursor) is not int or cursor != args.expected_source_cursor
             or row.get('source_adam_step') != cursor
             or row.get('final_verified') is not True
             or row.get('final_step') != args.expected_target_step
@@ -174,6 +186,43 @@ def completion_verified(row, args):
                 or quality.get('eval_batches') != 32 or quality.get('row_start') != 32
                 or quality.get('row_stop') != 64):
             raise ValueError('paired quality evaluation did not cover the complete window')
+    if args.expected_source_sha256 is not None and row.get('source_sha256') != args.expected_source_sha256:
+        raise ValueError('completed source checkpoint SHA differs from the requested window')
+    if args.remote_handoff is not None:
+        handoff = row.get('data_handoff', {})
+        if (row.get('data_handoff_path') != args.remote_handoff
+                or row.get('data_handoff_sha256') != args.expected_handoff_sha256
+                or row.get('actual_data_handoff_sha256') != args.expected_handoff_sha256
+                or handoff.get('source_checkpoint_path') != row['source_checkpoint']
+                or handoff.get('source_checkpoint_sha256') != args.expected_source_sha256
+                or handoff.get('source_step') != args.expected_source_step
+                or handoff.get('target_step') != args.expected_target_step
+                or handoff.get('absolute_cursor_origin') != cursor or handoff.get('logical_row_origin') != 0
+                or handoff.get('updates') != updates or handoff.get('target_cursor') != cursor + updates
+                or handoff.get('target_logical_row') != updates or handoff.get('no_wrap') is not True
+                or handoff.get('mapping') != 'row=i-absolute_cursor_origin'
+                or type(handoff.get('new_nseq')) is not int or handoff['new_nseq'] < updates
+                or handoff.get('new_train_path') != args.remote_data
+                or handoff.get('source_phase_tokens') != row['source_tokens_in_phase']
+                or handoff.get('target_phase_tokens') != row['final_tokens_in_phase']):
+            raise ValueError('completed fresh corpus mapping differs from the requested handoff')
+        fresh = row.get('fresh_quality', {})
+        if (fresh.get('status') != 'completed' or fresh.get('protocol') != 'fresh_validation_corpus_paired_heldout'
+                or fresh.get('data_handoff_sha256') != args.expected_handoff_sha256
+                or fresh.get('eval_data') != handoff.get('fresh_eval_path')
+                or fresh.get('eval_data_sha256') != handoff.get('fresh_eval_sha256')
+                or fresh.get('source_checkpoint_sha256') != args.expected_source_sha256
+                or fresh.get('seq_len') != 4096 or fresh.get('eval_batches') != 32
+                or fresh.get('row_start') != 0 or fresh.get('row_stop') != 32):
+            raise ValueError('fresh held-out corpus did not produce a source-bound paired receipt')
+        for key, step in (('initial_eval', args.expected_source_step), ('final_eval', args.expected_target_step)):
+            observation = fresh.get(key, {})
+            if (observation.get('pass') is not True or observation.get('step') != step
+                    or observation.get('eval_batches') != 32 or observation.get('row_start') != 0
+                    or observation.get('row_stop') != 32):
+                raise ValueError('fresh paired evaluation did not cover the complete window')
+    elif row.get('data_handoff') is not None:
+        raise ValueError('fresh corpus requires an explicitly requested handoff identity')
     return True
 
 
@@ -191,6 +240,7 @@ def allowed_payload_path(name, step):
              'evidence/status.json', 'evidence/cpu-check.json', 'evidence/cpu-export.json',
              'evidence/continuation/parity.json', 'evidence/continuation/operators.json',
              'evidence/continuation/round3_operators.json', 'evidence/continuation/quality.json',
+             'evidence/data_handoff.json', 'evidence/corpus-manifest.json', 'evidence/continuation/fresh_quality.json',
              'evidence/continuation/train/metrics.jsonl'}
     if relative in fixed:
         return True
@@ -302,6 +352,34 @@ def prepared_resume(args):
     manifest = json.loads(manifest_path.read_text())
     if manifest.get('step') != args.expected_target_step or manifest.get('repo_id') != args.repo_id:
         raise ValueError('local publication resume has a different checkpoint')
+    legacy = (args.expected_source_step, args.expected_target_step, args.expected_source_cursor) == (77864, 81864, 43062)
+    if not legacy or args.expected_source_sha256 is not None or args.remote_handoff is not None:
+        if (proof.get('source_cursor') != args.expected_source_cursor
+                or proof.get('original_source_checkpoint_sha256') != args.expected_source_sha256
+                or proof.get('data_handoff_sha256') != args.expected_handoff_sha256):
+            raise ValueError('local publication resume has a different source or handoff')
+    if args.remote_handoff is not None:
+        if (manifest.get('data_handoff_sha256') != args.expected_handoff_sha256
+                or manifest.get('original_source_checkpoint_sha256') != args.expected_source_sha256):
+            raise ValueError('prepared manifest does not bind the requested fresh corpus source')
+        prefix = f'checkpoints/b0-rocm-realtext/step-{args.expected_target_step}'
+        plan_path = prepared / prefix / 'evidence/data_handoff.json'
+        release_path = prepared / prefix / 'release.json'
+        regular_owned_file(plan_path, prepared)
+        regular_owned_file(release_path, prepared)
+        if digest(plan_path) != args.expected_handoff_sha256:
+            raise ValueError('prepared handoff evidence SHA differs')
+        plan = json.loads(plan_path.read_text())
+        release = json.loads(release_path.read_text())
+        if (release.get('data_handoff') != plan or release.get('data_handoff_sha256') != args.expected_handoff_sha256
+                or plan.get('source_checkpoint_sha256') != args.expected_source_sha256
+                or plan.get('source_step') != args.expected_source_step or plan.get('target_step') != args.expected_target_step
+                or plan.get('absolute_cursor_origin') != args.expected_source_cursor
+                or plan.get('target_cursor') != args.expected_source_cursor + 4000
+                or plan.get('new_train_sha256') != manifest.get('train_corpus_sha256')):
+            raise ValueError('prepared fresh corpus provenance differs from the requested window')
+    elif manifest.get('data_handoff_sha256') is not None:
+        raise ValueError('fresh payload cannot resume as a legacy publication')
     return prepared
 
 
@@ -466,11 +544,14 @@ def cleanup_verified_payload(args, prepared):
 
 
 def publish_completed(args):
-    remote(args, [args.remote_python, args.remote_helper, '--prepare-only', '--run-dir', args.remote_run,
+    prepare_command = [args.remote_python, args.remote_helper, '--prepare-only', '--run-dir', args.remote_run,
                   '--source-dir', args.remote_source, '--python', args.remote_python,
                   '--stage-dir', args.remote_stage, '--template-release', args.remote_template,
                   '--base', args.remote_base, '--data', args.remote_data, '--eval-data', args.remote_eval_data,
-                  '--code-commit', args.code_commit, '--repo-id', args.repo_id], prepare=True, timeout=1800)
+                  '--code-commit', args.code_commit, '--repo-id', args.repo_id]
+    if args.remote_handoff is not None:
+        prepare_command += ['--handoff-manifest', args.remote_handoff]
+    remote(args, prepare_command, prepare=True, timeout=1800)
     packed = remote(args, [args.remote_python, '-c', REMOTE_PACK, args.remote_stage,
                            args.expected_target_step], prepare=True, timeout=1800)
     expected_archive = str(PurePosixPath(args.remote_stage) / 'payload.tar.gz')
@@ -495,6 +576,8 @@ def publish_completed(args):
     write_status(args.local_stage / 'watch-prepared.json', {
         'remote_run': args.remote_run, 'remote_source': args.remote_source,
         'source_step': args.expected_source_step, 'step': args.expected_target_step, 'repo_id': args.repo_id,
+        'source_cursor': args.expected_source_cursor, 'original_source_checkpoint_sha256': args.expected_source_sha256,
+        'data_handoff_sha256': args.expected_handoff_sha256,
         'prepared_manifest_sha256': digest(prepared / 'prepared.json'), 'archive_sha256': packed['archive_sha256'],
         'archive_bytes': packed['archive_bytes']})
     receipt = local_publication(args, prepared)
@@ -574,6 +657,10 @@ def build_parser():
     parser.add_argument('--repo-id', default='AvrovaDonz/CAT-YOKO')
     parser.add_argument('--expected-source-step', type=int, default=77864)
     parser.add_argument('--expected-target-step', type=int, default=81864)
+    parser.add_argument('--expected-source-cursor', type=int, default=43062)
+    parser.add_argument('--expected-source-sha256')
+    parser.add_argument('--remote-handoff')
+    parser.add_argument('--expected-handoff-sha256')
     parser.add_argument('--once', action='store_true', help='perform one polling round without waiting')
     return parser
 
@@ -590,10 +677,24 @@ def main(argv=None):
         if not path.is_absolute() or '..' in path.parts:
             parser.error('remote paths must be absolute without traversal')
         setattr(args, name, str(path))
-    if ((args.expected_source_step, args.expected_target_step) != (77864, 81864)
-            or not re.fullmatch(r'[0-9a-f]{40}', args.code_commit)
+    if args.remote_handoff is not None:
+        path = PurePosixPath(args.remote_handoff)
+        if not path.is_absolute() or '..' in path.parts:
+            parser.error('remote handoff must be an absolute path without traversal')
+        args.remote_handoff = str(path)
+    if (args.expected_source_step <= 0 or args.expected_target_step - args.expected_source_step != 4000
+            or args.expected_source_cursor < 0 or not re.fullmatch(r'[0-9a-f]{40}', args.code_commit)
             or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', args.repo_id)):
-        parser.error('this watcher requires the approved 77864 to 81864 window and a fixed code commit')
+        parser.error('this watcher requires an explicit 4000-update window, valid cursor and fixed code commit')
+    if args.expected_source_sha256 is not None and not re.fullmatch(r'[0-9a-f]{64}', args.expected_source_sha256):
+        parser.error('expected source checkpoint SHA must be a full SHA256')
+    if ((args.expected_source_step, args.expected_target_step, args.expected_source_cursor) != (77864, 81864, 43062)
+            and args.expected_source_sha256 is None):
+        parser.error('a new window requires its immutable source checkpoint SHA256')
+    if ((args.remote_handoff is None) != (args.expected_handoff_sha256 is None)
+            or args.remote_handoff is not None and (args.expected_source_sha256 is None
+                or not re.fullmatch(r'[0-9a-f]{64}', args.expected_handoff_sha256))):
+        parser.error('fresh corpus publication requires handoff path/SHA256 and immutable source SHA256')
     args.local_stage = args.local_stage.resolve()
     args.publisher = args.publisher.resolve()
     args.status_file = args.status_file.resolve()

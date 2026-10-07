@@ -69,6 +69,159 @@ class FakeHub:
 
 
 class CompletedPublisherTests(unittest.TestCase):
+    def fresh_fixture(self, root):
+        args, status, accepted, audit, quality, cpu = self.fixture(root)
+        old_data = args.data
+        args.data = root / 'fresh/train.bin'
+        fresh_eval = root / 'fresh/eval.bin'
+        args.data.parent.mkdir()
+        for path, rows in ((args.data, 4000), (fresh_eval, 32)):
+            with path.open('wb') as stream:
+                stream.truncate(rows * 4096 * 4)  # Synthetic sparse bins, never real training data.
+        template = publisher.read_json(args.template_release)
+        old_manifest = root / 'old-manifest.json'
+        old = {'outputs': deepcopy(template['data']), 'hashes': {}}
+        manifest = {'status': 'complete', 'seq_len': 4096, 'eos_id': 1,
+                    'dataset_kind': 'fresh_exact_text_excluded', 'hash_intersection': 0,
+                    'old_hash_intersections': {key: 0 for key in ('new_train_old_train', 'new_train_old_eval',
+                        'new_eval_old_train', 'new_eval_old_eval')}, 'outputs': {}, 'hashes': {},
+                    'tokenizer': deepcopy(template['tokenizer']),
+                    'sources': [{'key': key, 'weight': value, 'revision': 'e' * 40}
+                                for key, value in (('en', .6), ('zh', .3), ('math', .1))]}
+        exclusion = {'manifest_path': str(old_manifest), 'document_hashes': {}}
+        for index, (corpus, directory) in enumerate(((old, root), (manifest, args.data.parent))):
+            for split_index, split in enumerate(('train', 'eval')):
+                path = directory / (('old-' if index == 0 else '') + split + '.docs.sha256')
+                path.write_text(str(index * 2 + split_index + 1) * 64 + '\n')
+                corpus['hashes'][split] = {'path': path.name, 'sha256': publisher.digest(path), 'documents': 1}
+                if index == 0:
+                    exclusion['document_hashes'][split] = {**corpus['hashes'][split], 'path': str(path)}
+        publisher.write_json(old_manifest, old)
+        exclusion['manifest_sha256'] = publisher.digest(old_manifest)
+        manifest['old_corpus_exclusion'] = exclusion
+        for split, path, rows in (('train', args.data, 4000), ('eval', fresh_eval, 32)):
+            manifest['outputs'][split] = {**publisher.file_record(path), 'path': path.name,
+                                          'sequences': rows, 'tokens': rows * 4096}
+        manifest_path = args.data.parent / 'manifest.json'
+        publisher.write_json(manifest_path, manifest)
+        plan = {'schema_version': 1, 'mapping': 'row=i-absolute_cursor_origin', 'no_wrap': True,
+                'source_checkpoint_path': status['source_checkpoint'],
+                'source_checkpoint_sha256': publisher.digest(status['source_checkpoint']),
+                'old_train_path': str(old_data), 'old_train_sha256': publisher.digest(old_data), 'old_nseq': 19531,
+                'new_train_path': str(args.data), 'new_train_sha256': publisher.digest(args.data), 'new_nseq': 4000,
+                'fresh_eval_path': str(fresh_eval), 'fresh_eval_sha256': publisher.digest(fresh_eval),
+                'corpus_manifest_path': str(manifest_path), 'corpus_manifest_sha256': publisher.digest(manifest_path),
+                'absolute_cursor_origin': 47062, 'logical_row_origin': 0, 'source_step': 81864,
+                'source_phase_tokens': 355010560, 'source_tokens_seen': 355010560,
+                'source_real_tokens': 192765952, 'source_unique_tokens': 79998976,
+                'updates': 4000, 'target_step': 85864, 'target_cursor': 51062, 'target_logical_row': 4000,
+                'target_phase_tokens': 371394560, 'target_tokens_seen': 371394560,
+                'target_real_tokens': 209149952, 'new_unique_tokens': 4000 * 4096,
+                'total_unique_tokens': 79998976 + 4000 * 4096}
+        args.handoff_manifest = args.run_dir / 'data_handoff.json'
+        publisher.write_json(args.handoff_manifest, plan)
+        status.update(data_handoff=plan, data_handoff_path=str(args.handoff_manifest),
+                      data_handoff_sha256=publisher.digest(args.handoff_manifest), source_sha256=plan['source_checkpoint_sha256'])
+        checkpoint = Path(accepted['checkpoint_path'])
+        new_checkpoint = checkpoint.with_name('trainable_step_85864.pt')
+        checkpoint.rename(new_checkpoint)
+        accepted.update(checkpoint_path=str(new_checkpoint),
+                        source_update_params={'updates': 4000, 'source_step': 81864})
+        audit.update(source_step=85864, source_stream_i=51062, source_adam_step=51062,
+                     source_data_rows=4000, source_tokens_in_phase=371394560, source_tokens_seen=371394560)
+        status['final_checkpoint_verified'] = audit
+        status['plan'] = {'target_cursor': 51062}
+        cpu['extra'].update(step=85864, tokens_in_phase=371394560, tokens_seen=371394560,
+                            stream={'kind': 'packed', 'i': 51062, 'stride': 1, 'nseq': 4000,
+                                    'absolute_cursor_origin': 47062, 'logical_row_origin': 0,
+                                    'corpus_row': 4000, 'corpus_sha256': plan['new_train_sha256'], 'no_wrap': True})
+        parity = publisher.read_json(args.run_dir / 'continuation/parity.json')
+        parity.update(data=str(args.data)); parity['final_eval']['step'] = 85864
+        quality['initial_eval']['step'] = 81864; quality['final_eval']['step'] = 85864
+        fresh_quality = {'status': 'completed', 'protocol': 'fresh_validation_corpus_paired_heldout',
+                         'eval_data_sha256': plan['fresh_eval_sha256'],
+                         'initial_eval': {'step': 81864, 'eval_nll': 8.2},
+                         'final_eval': {'step': 85864, 'eval_nll': 7.8}}
+        for name, value in (('status.json', status), ('continuation/parity.json', parity),
+                            ('continuation/quality.json', quality), ('continuation/fresh_quality.json', fresh_quality)):
+            publisher.write_json(args.run_dir / name, value)
+        return args, status, accepted, audit, quality, cpu, plan, fresh_quality
+
+    def test_fresh_prepare_routes_complete_cpu_audit_and_archives_all_three_evaluations(self):
+        from operators.rocm import production_continuation, continuation_quality, run_operator_switch, fresh_corpus_handoff
+        with tempfile.TemporaryDirectory() as tmp:
+            args, status, accepted, audit, quality, cpu, plan, fresh_quality = self.fresh_fixture(Path(tmp))
+            def export(_args, full, light):
+                light.write_bytes(b'synthetic light overlay'); return cpu
+            with patch.object(production_continuation, 'validate_accepted_run', return_value=accepted), \
+                    patch.object(continuation_quality, 'validate_quality_report', return_value=quality), \
+                    patch.object(fresh_corpus_handoff, 'load_handoff', return_value=plan), \
+                    patch.object(fresh_corpus_handoff, 'validate_fresh_quality_report', return_value=fresh_quality), \
+                    patch.object(fresh_corpus_handoff, 'cpu_check', return_value=audit) as fresh_check, \
+                    patch.object(run_operator_switch, 'cpu_check') as legacy_check, \
+                    patch.object(publisher, 'cpu_export', side_effect=export):
+                prepared = publisher.prepare(args, status=status)
+            legacy_check.assert_not_called()
+            self.assertEqual(fresh_check.call_args.args[0].resume, Path(plan['source_checkpoint_path']).resolve())
+            self.assertEqual(fresh_check.call_args.args[0].old_data, Path(plan['old_train_path']))
+            self.assertEqual(fresh_check.call_args.args[2], 4000)
+            directory = args.stage_dir / prepared['checkpoint_prefix']
+            release = publisher.read_json(directory / 'release.json')
+            self.assertEqual(release['step'], 85864); self.assertEqual(release['adam_step'], 51062)
+            self.assertEqual(release['stream']['next_unread_row'], 51062)
+            self.assertEqual(release['stream']['next_corpus_row'], 4000)
+            self.assertIn('not a fresh-corpus read position', release['stream']['next_row_mod_nseq_scope'])
+            self.assertEqual(release['real_text_tokens_processed'], 209149952)
+            self.assertEqual(release['unique_training_tokens'], plan['total_unique_tokens'])
+            self.assertEqual(release['fresh_fixed_evaluation']['eval_nll'], 7.8)
+            self.assertEqual(release['data']['eval']['sha256'], publisher.digest(args.eval_data))
+            self.assertEqual(release['data']['fresh_eval']['sha256'], plan['fresh_eval_sha256'])
+            self.assertEqual(prepared['original_source_checkpoint_sha256'], plan['source_checkpoint_sha256'])
+            for name in ('data_handoff.json', 'corpus-manifest.json', 'continuation/fresh_quality.json'):
+                self.assertTrue((directory / 'evidence' / name).is_file())
+            card = (directory / 'README.md').read_text()
+            self.assertIn('Next fresh corpus row **4000**', card)
+            self.assertIn('A bare legacy Trainer/PackedBinStream would read the wrong row', card)
+            root_card = publisher.latest_card(self.original_card(), release)
+            self.assertIn('Separate fresh held-out NLL: **7.8**', root_card)
+            self.assertNotIn('streams read `i % nseq`', card)
+
+    def test_fresh_assets_refuse_wrong_old_corpus_tokenizer_exclusion_or_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args, status, accepted, audit, quality, cpu, plan, fresh_quality = self.fresh_fixture(Path(tmp))
+            template = publisher.read_json(args.template_release)
+            publisher.verified_assets(args, template, plan)
+            wrong = deepcopy(template); wrong['data']['eval']['sha256'] = 'f' * 64
+            with self.assertRaisesRegex(ValueError, 'different old corpus'):
+                publisher.verified_assets(args, wrong, plan)
+            wrong = deepcopy(template); wrong['tokenizer']['files_sha256']['tokenizer.json'] = 'f' * 64
+            with self.assertRaisesRegex(ValueError, 'tokenizer'):
+                publisher.verified_assets(args, wrong, plan)
+            wrong_plan = dict(plan, corpus_manifest_sha256='f' * 64)
+            with self.assertRaisesRegex(ValueError, 'manifest changed'):
+                publisher.verified_assets(args, template, wrong_plan)
+            path = Path(plan['corpus_manifest_path'])
+            manifest = publisher.read_json(path)
+            manifest['old_hash_intersections']['new_train_old_eval'] = 1
+            publisher.write_json(path, manifest)
+            wrong_plan = dict(plan, corpus_manifest_sha256=publisher.digest(path))
+            with self.assertRaisesRegex(ValueError, 'exclusion'):
+                publisher.verified_assets(args, template, wrong_plan)
+
+    def test_fresh_prepare_rejects_changed_handoff_or_failed_fresh_quality_before_cpu_export(self):
+        from operators.rocm import fresh_corpus_handoff
+        with tempfile.TemporaryDirectory() as tmp:
+            args, status, accepted, audit, quality, cpu, plan, fresh_quality = self.fresh_fixture(Path(tmp))
+            changed = deepcopy(status); changed['data_handoff_sha256'] = 'f' * 64
+            with patch.object(publisher, 'cpu_export') as export, self.assertRaisesRegex(ValueError, 'manifest changed'):
+                publisher.prepare(args, status=changed)
+            export.assert_not_called()
+            with patch.object(fresh_corpus_handoff, 'load_handoff', return_value=plan), \
+                    patch.object(fresh_corpus_handoff, 'validate_fresh_quality_report', side_effect=ValueError('fresh quality failed')), \
+                    patch.object(publisher, 'cpu_export') as export, self.assertRaisesRegex(ValueError, 'fresh quality failed'):
+                publisher.prepare(args, status=status)
+            export.assert_not_called()
+
     def fixture(self, root):
         args = SimpleNamespace(run_dir=root / 'run', source_dir=root / 'deployed', python='cpu-python',
                                base=root / 'base', data=root / 'train.bin', eval_data=root / 'eval.bin',

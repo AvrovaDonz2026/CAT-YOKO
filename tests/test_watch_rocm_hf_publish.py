@@ -10,6 +10,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -53,27 +54,38 @@ class WatcherTests(unittest.TestCase):
         return json.loads(self.args.status_file.read_text())
 
     def payload(self):
-        prefix = 'checkpoints/b0-rocm-realtext/step-81864/'
+        step = self.args.expected_target_step
+        prefix = f'checkpoints/b0-rocm-realtext/step-{step}/'
         files = {prefix + name: value for name, value in {
             'trainable.pt': b'complete weights + Adam', 'weights-only.pt': b'132 BF16 weights',
             'release.json': b'{"step":81864}', 'README.md': b'verified checkpoint',
             'source/cat_yoko/model.py': b'previous accepted math',
             'evidence/continuation/quality.json': b'{"status":"completed"}',
             'evidence/continuation/train/metrics.jsonl': b'{"step":81864}\n'}.items()}
-        files[prefix + 'release.json'] = json.dumps({'step': 81864, 'repo_id': self.args.repo_id,
+        release = {'step': step, 'repo_id': self.args.repo_id,
             'files': {name: {'bytes': len(files[prefix + name]),
                 'sha256': watch.hashlib.sha256(files[prefix + name]).hexdigest()}
-                for name in ('trainable.pt', 'weights-only.pt')}}).encode()
+                for name in ('trainable.pt', 'weights-only.pt')}}
+        if self.args.remote_handoff is not None:
+            release.update(data_handoff=self.fresh_plan, data_handoff_sha256=self.args.expected_handoff_sha256)
+            files[prefix + 'evidence/data_handoff.json'] = self.fresh_plan_bytes
+            files[prefix + 'evidence/corpus-manifest.json'] = b'{"fresh":"verified"}'
+            files[prefix + 'evidence/continuation/fresh_quality.json'] = json.dumps(self.row['fresh_quality']).encode()
+        files[prefix + 'release.json'] = json.dumps(release).encode()
         directory = self.root / 'payload'
         directory.mkdir(exist_ok=True)
         for name, value in files.items():
             path = directory / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(value)
-        manifest = {'status': 'prepared', 'step': 81864, 'repo_id': self.args.repo_id,
+        manifest = {'status': 'prepared', 'step': step, 'repo_id': self.args.repo_id,
                     'checkpoint_prefix': prefix[:-1], 'stage_dir': '/remote/stage',
                     'files': {name: {'bytes': len(value), 'sha256': watch.digest(directory / name)}
                               for name, value in files.items()}}
+        if self.args.remote_handoff is not None:
+            manifest.update(data_handoff_sha256=self.args.expected_handoff_sha256,
+                            original_source_checkpoint_sha256=self.args.expected_source_sha256,
+                            train_corpus_sha256=self.fresh_plan['new_train_sha256'])
         (directory / 'prepared.json').write_text(json.dumps(manifest))
         archive = self.root / 'payload.tar.gz'
         with tarfile.open(archive, 'w:gz') as output:
@@ -83,10 +95,12 @@ class WatcherTests(unittest.TestCase):
 
     def stage_payload(self, *, transport=True):
         archive, manifest = self.payload()
-        prepared = watch.extract_payload(archive, self.args.local_stage, step=81864, repo_id=self.args.repo_id)
+        prepared = watch.extract_payload(archive, self.args.local_stage, step=self.args.expected_target_step, repo_id=self.args.repo_id)
         watch.write_status(self.args.local_stage / 'watch-prepared.json', {
             'remote_run': self.args.remote_run, 'remote_source': self.args.remote_source,
-            'source_step': 77864, 'step': 81864, 'repo_id': self.args.repo_id,
+            'source_step': self.args.expected_source_step, 'step': self.args.expected_target_step, 'repo_id': self.args.repo_id,
+            'source_cursor': self.args.expected_source_cursor, 'original_source_checkpoint_sha256': self.args.expected_source_sha256,
+            'data_handoff_sha256': self.args.expected_handoff_sha256,
             'prepared_manifest_sha256': watch.digest(prepared / 'prepared.json'),
             'archive_sha256': watch.digest(archive), 'archive_bytes': archive.stat().st_size})
         if transport:
@@ -97,7 +111,7 @@ class WatcherTests(unittest.TestCase):
         manifest = json.loads((prepared / 'prepared.json').read_text())
         prefix = manifest['checkpoint_prefix']
         (prepared / 'README.md').write_text('Verified latest model card\n')
-        receipt = {'status': 'verified', 'repo_id': self.args.repo_id, 'step': 81864,
+        receipt = {'status': 'verified', 'repo_id': self.args.repo_id, 'step': self.args.expected_target_step,
                    'commit': commit, 'parent_commit': 'a' * 40, 'checkpoint_prefix': prefix,
                    'allowlist': manifest['files'],
                    'checkpoint_lfs_verified': {name: manifest['files'][prefix + '/' + name]
@@ -106,6 +120,125 @@ class WatcherTests(unittest.TestCase):
                         for name in ('README.md', prefix + '/README.md', prefix + '/release.json')}}
         watch.write_status(prepared / 'publish.json', receipt)
         return receipt
+
+    def fresh_window(self):
+        self.args.expected_source_step = 81864; self.args.expected_target_step = 85864
+        self.args.expected_source_cursor = 47062; self.args.expected_source_sha256 = 'd' * 64
+        self.args.remote_handoff = '/remote/run/data_handoff.json'
+        self.args.remote_data = '/remote/fresh/train.bin'
+        self.fresh_plan = {'source_step': 81864, 'target_step': 85864,
+            'source_checkpoint_path': self.row['source_checkpoint'], 'source_checkpoint_sha256': 'd' * 64,
+            'absolute_cursor_origin': 47062, 'logical_row_origin': 0, 'updates': 4000,
+            'target_cursor': 51062, 'target_logical_row': 4000, 'no_wrap': True,
+            'mapping': 'row=i-absolute_cursor_origin', 'new_nseq': 19531,
+            'new_train_path': self.args.remote_data, 'new_train_sha256': 'e' * 64,
+            'fresh_eval_path': '/remote/fresh/eval.bin', 'fresh_eval_sha256': 'f' * 64,
+            'source_phase_tokens': 355010560, 'target_phase_tokens': 371394560}
+        self.fresh_plan_bytes = (json.dumps(self.fresh_plan, sort_keys=True, indent=2) + '\n').encode()
+        self.args.expected_handoff_sha256 = watch.hashlib.sha256(self.fresh_plan_bytes).hexdigest()
+        q = {'pass': True, 'eval_batches': 32, 'row_start': 0, 'row_stop': 32}
+        fresh = {'status': 'completed', 'protocol': 'fresh_validation_corpus_paired_heldout',
+                 'data_handoff_sha256': self.args.expected_handoff_sha256,
+                 'eval_data': self.fresh_plan['fresh_eval_path'], 'eval_data_sha256': 'f' * 64,
+                 'source_checkpoint_sha256': 'd' * 64, 'seq_len': 4096, 'eval_batches': 32,
+                 'row_start': 0, 'row_stop': 32,
+                 'initial_eval': {**q, 'step': 81864}, 'final_eval': {**q, 'step': 85864}}
+        self.row.update(source_step=81864, target_step=85864, source_cursor=47062,
+                        source_adam_step=47062, source_tokens_in_phase=355010560,
+                        target_cursor=51062, final_step=85864, final_cursor=51062,
+                        final_adam_step=51062, final_tokens_in_phase=371394560,
+                        source_sha256='d' * 64, data_handoff=self.fresh_plan,
+                        data_handoff_path=self.args.remote_handoff, data_handoff_sha256=self.args.expected_handoff_sha256,
+                        actual_data_handoff_sha256=self.args.expected_handoff_sha256, fresh_quality=fresh)
+        self.row['quality_initial']['step'] = 81864; self.row['quality_final']['step'] = 85864
+
+    def test_fresh_completion_binds_source_global_and_local_rows_and_third_quality(self):
+        self.fresh_window()
+        self.assertTrue(watch.completion_verified(self.row, self.args))
+        for change in ({'source_sha256': 'a' * 64}, {'actual_data_handoff_sha256': 'b' * 64},
+                       {'data_handoff_path': '/other/plan.json'}, {'source_cursor': 43062},
+                       {'data_handoff': dict(self.fresh_plan, target_logical_row=8000)},
+                       {'data_handoff': dict(self.fresh_plan, new_train_path='/old/train.bin')},
+                       {'fresh_quality': dict(self.row['fresh_quality'], status='failed')},
+                       {'fresh_quality': dict(self.row['fresh_quality'], eval_data_sha256='a' * 64)},
+                       {'fresh_quality': dict(self.row['fresh_quality'], final_eval={'step': 85864, 'pass': False})}):
+            row = copy.deepcopy(self.row); row.update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                watch.completion_verified(row, self.args)
+        self.args.remote_handoff = None
+        with self.assertRaisesRegex(ValueError, 'explicitly requested'):
+            watch.completion_verified(self.row, self.args)
+
+    def test_generic_cli_requires_fixed_source_and_exact_4000_window(self):
+        new = self.argv + ['--expected-source-step', '81864', '--expected-target-step', '85864',
+                           '--expected-source-cursor', '47062', '--expected-source-sha256', 'd' * 64]
+        with patch.object(watch, 'supervise', return_value=0) as supervise:
+            self.assertEqual(watch.main(new), 0)
+        self.assertEqual(supervise.call_args.args[0].expected_source_cursor, 47062)
+        for extra in (['--expected-source-step', '81864', '--expected-target-step', '85864'],
+                      ['--expected-target-step', '81863'], ['--expected-source-cursor', '-1'],
+                      ['--remote-handoff', '/remote/run/plan.json']):
+            with self.subTest(extra=extra), patch('sys.stderr', new=io.StringIO()), self.assertRaises(SystemExit):
+                watch.main(self.argv + extra)
+
+    def test_fresh_verified_payload_cleanup_and_rerun_preserve_evidence_no_reupload(self):
+        self.fresh_window()
+        prepared, manifest = self.stage_payload()
+        self.mark_published(prepared)
+        self.assertEqual(watch.cleanup_verified_payload(self.args, prepared)['local_cleanup_status'], 'complete')
+        for name in ('trainable.pt', 'weights-only.pt'):
+            self.assertFalse((prepared / manifest['checkpoint_prefix'] / name).exists())
+        self.assertTrue((prepared / manifest['checkpoint_prefix'] / 'evidence/data_handoff.json').is_file())
+        with patch.object(watch, 'remote') as remote, patch.object(watch, 'local_publication') as publish, patch('builtins.print'):
+            self.assertEqual(watch.supervise(self.args), 0)
+        remote.assert_not_called(); publish.assert_not_called()
+        self.assertTrue(self.read_status()['publication_resumed_from_verified_receipt'])
+
+    def test_fresh_resume_rejects_different_expected_plan_or_changed_archived_handoff(self):
+        self.fresh_window()
+        prepared, manifest = self.stage_payload()
+        original = self.args.expected_handoff_sha256
+        self.args.expected_handoff_sha256 = 'a' * 64
+        with self.assertRaisesRegex(ValueError, 'different source or handoff'):
+            watch.prepared_resume(self.args)
+        self.args.expected_handoff_sha256 = original
+        (prepared / manifest['checkpoint_prefix'] / 'evidence/data_handoff.json').write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'evidence SHA differs'):
+            watch.prepared_resume(self.args)
+
+    def test_original_published_81864_resume_without_new_fields_still_succeeds(self):
+        prepared, manifest = self.stage_payload()
+        proof_path = self.args.local_stage / 'watch-prepared.json'
+        proof = json.loads(proof_path.read_text())
+        for key in ('source_cursor', 'original_source_checkpoint_sha256', 'data_handoff_sha256'):
+            proof.pop(key)
+        watch.write_status(proof_path, proof)
+        self.mark_published(prepared)
+        watch.cleanup_verified_payload(self.args, prepared)
+        self.assertEqual(watch.prepared_resume(self.args), prepared)
+
+    def test_remote_status_missing_complete_fresh_evidence_is_terminal_invalid_receipt_not_disconnect(self):
+        self.fresh_window()
+        run = self.root / 'remote-status-run'
+        (run / 'continuation').mkdir(parents=True)
+        plan_path = run / 'data_handoff.json'
+        plan_path.write_bytes(self.fresh_plan_bytes)
+        status = {'status': 'complete', 'data_handoff': self.fresh_plan,
+                  'data_handoff_path': str(plan_path), 'data_handoff_sha256': self.args.expected_handoff_sha256}
+        watch.write_status(run / 'status.json', status)
+        command = [sys.executable, '-c', watch.REMOTE_STATUS, str(run), '/remote/source']
+        missing = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(missing.returncode, 0, missing.stderr)
+        receipt = json.loads(missing.stdout)
+        self.assertIsNone(receipt['actual_data_handoff_sha256']); self.assertEqual(receipt['fresh_quality'], {})
+        watch.write_status(run / 'continuation/fresh_quality.json', self.row['fresh_quality'])
+        complete = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(complete.returncode, 0, complete.stderr)
+        self.assertEqual(json.loads(complete.stdout)['actual_data_handoff_sha256'], self.args.expected_handoff_sha256)
+        plan_path.write_text('{}')
+        changed = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(changed.returncode, 0, changed.stderr)
+        self.assertIsNone(json.loads(changed.stdout)['actual_data_handoff_sha256'])
 
     def test_once_waits_without_running_preparer_and_disconnect_is_sanitized(self):
         waiting = dict(self.row, status='running_continuation')
