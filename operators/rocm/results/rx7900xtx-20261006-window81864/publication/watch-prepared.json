@@ -1,0 +1,9 @@
+{
+  "remote_run": "/home/donz/cat-yoko-rocm-20261002/runs/window4000-77864-20261006T1410",
+  "remote_source": "/home/donz/cat-yoko-rocm-20261002/source-window4000-77864-20261006T1410",
+  "source_step": 77864,
+  "step": 81864,
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "prepared_manifest_sha256": "4f9ba792d0787ff050eeb6f4f15e1cfd0ffaab62fa6e6234eb7c153b33f9b667",
+  "archive_sha256": "9866b178857ea17a7261bc8edc7c6b0078dd4ece45a1ecd3946897b2b4c26d45"
+}

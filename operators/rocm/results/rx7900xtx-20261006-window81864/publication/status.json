@@ -1,0 +1,16 @@
+{
+  "status": "published_verified",
+  "pid": 44449,
+  "remote_run": "/home/donz/cat-yoko-rocm-20261002/runs/window4000-77864-20261006T1410",
+  "expected_source_step": 77864,
+  "expected_target_step": 81864,
+  "credentials_location": "local_only",
+  "local_stage": "/private/tmp/cat-yoko-hf-watch81864/payload",
+  "updated_at": "2026-10-07T14:19:34Z",
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "step": 81864,
+  "commit": "da001379d7bcd27c9348bf2ecf99036e6825dde9",
+  "prepared_stage": "/private/tmp/cat-yoko-hf-watch81864/payload/prepared",
+  "publication_attempts": 1,
+  "archive_sha256": "9866b178857ea17a7261bc8edc7c6b0078dd4ece45a1ecd3946897b2b4c26d45"
+}

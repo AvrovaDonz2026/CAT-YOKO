@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "status": "verified",
+  "review_scope": "Read-only independent validation of seven archived text receipts. No checkpoint binary was loaded by this review and no remote process was contacted or started. Native tensor validation is the completed remote CPU audit recorded in status.json and final_checkpoint_check.log.",
+  "completion_archive_sha256": "78546c820528d709c5b7919043e2aeb143e79c30f1a4ccebf4b697ced6cc734d",
+  "receipt_sha256": {
+    "continuation/operators.json": "4367b8c0597c710fcd9c2799696aff78a1556a4f540a475931ff40514c612079",
+    "continuation/parity.json": "aac8a2703ea803f6e5f82b36d978bfdc662620c3eadb10d5e23c65197214f00a",
+    "continuation/quality.json": "7b63bea316604af2304cf5cb4c99a256670ffc16de78784035906b25586b0f3e",
+    "continuation/round3_operators.json": "dbf0a0ee09c0051a6fc935495efdccd0e60f724ff24e50982b43718efeb6b8b4",
+    "continuation/train/metrics.jsonl": "71bbf4447346847af40cc0d81089fa937f4d73230a05e2428aa1f0d631d590c5",
+    "final_checkpoint_check.log": "d13cc6daf425d4171f54a1a9981ff5c0fae461f70f44dc1a818ce382341557f5",
+    "status.json": "bdffa40a6ac719496d628aa084d559a787ca67c0618071270b06b0a4e81e6e39"
+  },
+  "completed_at_utc": "2026-10-06T21:01:53.537453+00:00",
+  "completed_at_asia_shanghai": "2026-10-07T05:01:53.537453+08:00",
+  "window": {
+    "source_step": 77864,
+    "final_step": 81864,
+    "requested_and_completed_updates": 4000,
+    "consecutive_metrics_verified": true,
+    "stop_reason": "steps",
+    "max_train_seconds": null,
+    "source_cursor_and_adam_step": 43062,
+    "final_cursor_and_adam_step": 47062,
+    "source_phase_tokens": 338626560,
+    "final_phase_tokens": 355010560,
+    "phase_budget_tokens": 8000000000,
+    "phase_budget_fraction": 0.04437632,
+    "real_packed_inputs_including_repetitions": 192765952,
+    "unique_prepared_training_tokens": 79998976,
+    "completed_corpus_passes": 2,
+    "next_physical_row": 8000,
+    "nseq": 19531
+  },
+  "native_final_state": {
+    "remote_cpu_audit_passed": true,
+    "final_cpu_log_matches_final_status": true,
+    "trainable_tensor_names_and_shapes": 132,
+    "optimizer_states": 132,
+    "optimizer_moments": 264,
+    "stream_and_adam_counters_agree": true,
+    "all_4000_actual_policy_flags_match": true,
+    "phase": "B0"
+  },
+  "full_model_gates": {
+    "reference_backend": "previous_packed_production",
+    "reference_repeat_and_candidate_passed": true,
+    "gradient_tensors_each": 132,
+    "all_per_tensor_relative_l2": 0.0,
+    "global_gradient_relative_l2": 0.0,
+    "loss_abs": 0.0,
+    "selected_logits_relative_l2": 0.0,
+    "final_hidden_relative_l2": 0.0,
+    "thresholds_unchanged": true,
+    "scope": "Deterministic pre-update arithmetic comparison against the preceding accepted packed-production backend, not a new dense-native or language-quality benchmark."
+  },
+  "quality": {
+    "paired_additional_status": "completed",
+    "source_and_eval_path_bound_to_primary_report": true,
+    "additional_cursor_and_rng_restoration_passed": true,
+    "slices": {
+      "primary": {
+        "row_start": 0,
+        "row_stop": 32,
+        "initial_step": 77864,
+        "final_step": 81864,
+        "initial_nll": 7.363943263994131,
+        "final_nll": 7.29112438273621,
+        "nll_change": -0.07281888125792157,
+        "relative_perplexity_reduction_percent": 7.023078659300519,
+        "valid_loss_tokens": 130877,
+        "eval_batches": 32
+      },
+      "additional": {
+        "row_start": 32,
+        "row_stop": 64,
+        "initial_step": 77864,
+        "final_step": 81864,
+        "initial_nll": 7.5028788111342815,
+        "final_nll": 7.387959246989646,
+        "nll_change": -0.11491956414463544,
+        "relative_perplexity_reduction_percent": 10.85621554113263,
+        "valid_loss_tokens": 130878,
+        "eval_batches": 32
+      }
+    },
+    "periodic_primary": {
+      "count": 16,
+      "first_eight_median_nll": 7.350183368378623,
+      "last_eight_median_nll": 7.312580625589918,
+      "median_change": -0.0376027427887049,
+      "first_eight_mean_nll": 7.358903157888827,
+      "last_eight_mean_nll": 7.320098457067306,
+      "best": {
+        "step": 81500,
+        "eval_nll": 7.261704028714336
+      },
+      "observations": [
+        {
+          "step": 78000,
+          "eval_nll": 7.383279013735925
+        },
+        {
+          "step": 78250,
+          "eval_nll": 7.377758259974625
+        },
+        {
+          "step": 78500,
+          "eval_nll": 7.349577491894069
+        },
+        {
+          "step": 78750,
+          "eval_nll": 7.346114196612808
+        },
+        {
+          "step": 79000,
+          "eval_nll": 7.3507892448631775
+        },
+        {
+          "step": 79250,
+          "eval_nll": 7.346195502363421
+        },
+        {
+          "step": 79500,
+          "eval_nll": 7.382542667344321
+        },
+        {
+          "step": 79750,
+          "eval_nll": 7.33496888632227
+        },
+        {
+          "step": 80000,
+          "eval_nll": 7.382778139269662
+        },
+        {
+          "step": 80250,
+          "eval_nll": 7.361464221612478
+        },
+        {
+          "step": 80500,
+          "eval_nll": 7.3302791601536175
+        },
+        {
+          "step": 80750,
+          "eval_nll": 7.300577308801949
+        },
+        {
+          "step": 81000,
+          "eval_nll": 7.3048338684806575
+        },
+        {
+          "step": 81250,
+          "eval_nll": 7.298823546806569
+        },
+        {
+          "step": 81500,
+          "eval_nll": 7.261704028714336
+        },
+        {
+          "step": 81750,
+          "eval_nll": 7.320327382699179
+        }
+      ]
+    }
+  },
+  "judgment": {
+    "both_slices_improved": true,
+    "periodic_median_improved": true,
+    "conclusion": "The finite same-corpus held-out next-token scores still improve across this window. Another bounded window can be reasonable, but these observations do not justify an unlimited repetition plan or claim broader capability.",
+    "limitations": [
+      "The prepared training corpus remains 79,998,976 tokens; repeated consumption is not new unique data.",
+      "Both evaluation slices come from the same pilot validation corpus, and both have now been observed in preceding windows; they are not fresh external benchmarks.",
+      "Phase clocks include earlier DummyStream history, and the overall 8B-token B0 budget is unfinished.",
+      "Only the B0 trainable overlay is optimized, not all 12B parameters.",
+      "No same-condition base-model/gate-off or generation/downstream benchmark was evaluated here.",
+      "Final score above a single best periodic score does not alone prove overfitting."
+    ],
+    "next_step_suggestion": "Finish publication of the verified 81864 recovery point, then use new or broader data and a larger held-out/capability comparison to guide any further bounded training. No new training was started by this review."
+  }
+}

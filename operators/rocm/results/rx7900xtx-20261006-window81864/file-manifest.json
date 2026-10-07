@@ -1,6 +1,14 @@
 {
   "sha256": {
-    "README.md": "ccca01a3af394da66f9da46a247a6c55962fa19037bbe2afbdefb830c80ed37a",
+    "README.md": "f654aaefbb30826d1b9d28a18657920cfb7ecff31adbf16a85bab5aaf2a0e240",
+    "completion/continuation/operators.json": "4367b8c0597c710fcd9c2799696aff78a1556a4f540a475931ff40514c612079",
+    "completion/continuation/parity.json": "aac8a2703ea803f6e5f82b36d978bfdc662620c3eadb10d5e23c65197214f00a",
+    "completion/continuation/quality.json": "7b63bea316604af2304cf5cb4c99a256670ffc16de78784035906b25586b0f3e",
+    "completion/continuation/round3_operators.json": "dbf0a0ee09c0051a6fc935495efdccd0e60f724ff24e50982b43718efeb6b8b4",
+    "completion/continuation/train/metrics.jsonl": "71bbf4447346847af40cc0d81089fa937f4d73230a05e2428aa1f0d631d590c5",
+    "completion/final_checkpoint_check.log": "d13cc6daf425d4171f54a1a9981ff5c0fae461f70f44dc1a818ce382341557f5",
+    "completion/quality-review.json": "b66291cb37f8ddcf84d278a4809c613a47f0f6e0316f90a88d5fe188bad98f15",
+    "completion/status.json": "bdffa40a6ac719496d628aa084d559a787ca67c0618071270b06b0a4e81e6e39",
     "launch/continuation/parity.json": "0b73a341927c5caefde688bfb254c271cb9ff713d3986d950983d77998c770d9",
     "launch/continuation/quality.json": "a7ac919aed7ec26c6fcf0cca172867c72abde7c3d3a3baa7d51995a1a4b52f25",
     "launch/continuation.command.json": "69a8657d3b92bf45b0741e7debd4df583b2046fb18ebce4e3091b1640c10c59f",
@@ -13,8 +21,17 @@
     "launch/supervisor.command.json": "de4106a78c3c41d423fac76a6be1486bfe1abc39f7b2984e5f85d8d788e59715",
     "local-upload-watch/command.json": "d68f9e494a1d5d83c20dced468549ac375e4e08ab8641a2372243d7e84b24852",
     "local-upload-watch/launch.json": "fec8e76205822799898bf8341011355cb5a0b6b02cb85187a90df5088508aea6",
-    "local-upload-watch/status.json": "76517a5965cd7372bc43a04fe057584f010b09e425ba073bd2d4ee08c23bd377"
+    "local-upload-watch/status.json": "76517a5965cd7372bc43a04fe057584f010b09e425ba073bd2d4ee08c23bd377",
+    "publication/prepared.json": "4f9ba792d0787ff050eeb6f4f15e1cfd0ffaab62fa6e6234eb7c153b33f9b667",
+    "publication/publish.json": "cb594d809e3761a88d2ff9a169cc1b44f6fd2e336ae0b9027efa65678fc978ac",
+    "publication/status.json": "0aed1ae99dee3256c8762da98cddf9fb2b14571bd358169b43c327a5a2bf4eff",
+    "publication/watch-prepared.json": "97220cd63cb264c192c7f7a2f24bc204027925f469622f77bb28802af8e03d38"
   },
-  "transfer_archive_sha256": "3c42f1a376e7450e647b60c7e5b72e3b9fbf4bc354e623229394476e9c0b8707",
-  "scope": "Text-only launch evidence and local upload watcher; training not yet complete."
+  "transfer_archive_sha256": "78546c820528d709c5b7919043e2aeb143e79c30f1a4ccebf4b697ced6cc734d",
+  "launch_transfer_archive_sha256": "3c42f1a376e7450e647b60c7e5b72e3b9fbf4bc354e623229394476e9c0b8707",
+  "scope": "Text-only launch, completion, independent quality review and local publication evidence for the exact 4000-update window; the 81864 snapshot is verified at its pinned Hub commit.",
+  "manifest_note": "Hashes cover every file present, including README and publication metadata, excluding this manifest itself. Refresh if later receipts are added.",
+  "publication_commit": "da001379d7bcd27c9348bf2ecf99036e6825dde9",
+  "publication_transport_archive_sha256": "9866b178857ea17a7261bc8edc7c6b0078dd4ece45a1ecd3946897b2b4c26d45",
+  "family_index_publication_commit": "fcc6b963a078316562889da77b0e1f54f24167c7"
 }

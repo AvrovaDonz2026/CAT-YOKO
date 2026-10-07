@@ -1,35 +1,37 @@
-# Status (2026-10-06)
+# Status (2026-10-07)
 
 GitHub training-progress pin. Spec knobs stay in [`FROZEN_SPEC.md`](FROZEN_SPEC.md).
 Weights live on Hugging Face.
 
 ## Current published B0 snapshot
 
-The pinned published release is **ROCm real-text B0 step 77864**, saved on
-**2026-10-06T13:02:17.286196Z**. The completed 4000-update window ended at
-**21:05:21 Asia/Shanghai**, including final evaluation and full-state checks.
+The pinned published release is **ROCm real-text B0 step 81864**, saved on
+**2026-10-06T20:58:48.075579Z**. The completed 4000-update window ended at
+**2026-10-07 05:01:53 Asia/Shanghai**, including final evaluation and full-state checks.
 The 8B-token B0 envelope remains unfinished; B1 has not started.
 
 | Item | Value |
 | --- | --- |
-| Complete overlay | [step-77864/trainable.pt](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-77864/trainable.pt), 2,192,257,315 bytes |
-| Weights only | [weights-only.pt](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-77864/weights-only.pt), 438,478,163 bytes; 132 byte-identical weights, no Adam |
-| Global step / Adam / absolute cursor | **77864 / 43062 / 43062**, next physical row **4000 / 19531** |
-| Phase token clocks | **338,626,560**, including earlier DummyStream history; 4.23% of the 8B envelope |
-| Real input consumed | **176,381,952**, including repetitions of **79,998,976 unique training tokens** |
+| Complete overlay | [step-81864/trainable.pt](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-81864/trainable.pt), 2,192,257,315 bytes |
+| Weights only | [weights-only.pt](https://huggingface.co/AvrovaDonz/CAT-YOKO/blob/main/checkpoints/b0-rocm-realtext/step-81864/weights-only.pt), 438,478,163 bytes; 132 byte-identical weights, no Adam |
+| Global step / Adam / absolute cursor | **81864 / 47062 / 47062**, next physical row **8000 / 19531** |
+| Phase token clocks | **355,010,560**, including earlier DummyStream history; 4.44% of the 8B envelope |
+| Real input consumed | **192,765,952**, including repetitions of **79,998,976 unique training tokens** |
 | Native recovery state | **132** BF16 weights, **264** CPU FP32 Adam moments, native groups, counters, RNG and packed cursor |
-| Full SHA256 | `adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676` |
-| Light SHA256 | `0ad37d86006fe68d1cf861d4519484ed5ef5bf882af19f803cd3a056db53e84e` |
+| Full SHA256 | `20d3590756955195b8c9e2e8cc40e74767373a3cd1d1fa430ea04023f9b543dc` |
+| Light SHA256 | `74d8a60b9e43613e917a5debd52d27776604ea69e1564e4a891b4f99dd906085` |
 | Runtime | RX 7900 XTX / gfx1100; PyTorch 2.9.1 + ROCm 6.4; BF16 |
 | Backend | Split packed FP32 attention, shared frozen MoE storage, cached BF16 CPU-shadow Adam with native retained FP32 moments |
 
 The release remains a trainable overlay requiring MiniCPM5-2B-Base upcycling,
 not a standalone full 12B graph. Complete CPU inspection, native Adam
-load/export and all-132 light-weight byte comparisons pass. See the
-[snapshot card](../checkpoints/b0-rocm-realtext/step-77864/README.md) and
-[release identities](../checkpoints/b0-rocm-realtext/step-77864/release.json).
-The Hub model card identifies subsequent completed releases if they are
-newer than this checkout's pinned default.
+load/export and all-132 light-weight byte comparisons pass. Python and CPU
+Torch RNG restore checks pass; saved HIP RNG is schema-checked without GPU
+allocation by the publisher. See the
+[snapshot card](../checkpoints/b0-rocm-realtext/step-81864/README.md) and
+[release identities](../checkpoints/b0-rocm-realtext/step-81864/release.json).
+The default and explicit `b0-rocm-realtext-81864` download aliases select the
+same complete recovery file; a weights-only alias selects the smaller overlay.
 
 ## Current ROCm continuation
 
@@ -39,31 +41,14 @@ no code slice. Versions are in the
 [corpus manifest](../artifacts/rocm-rx7900xtx/realtext-20261002/manifest.json).
 Repeated consumption does not add unique data.
 
-The second full pass completed at **73864**, with fixed NLL improving
-**7.872862032828506 → 7.486454654140886**. The following 4000-update window
-completed normally at **77864**, preserving all 4000 consecutive updates,
-operator flags and native state. Its held-out observations improved on both
-slices of the same validation file:
+The second full pass completed at **73864**. The following 4000-update
+window completed at **77864**, and the latest **77864 → 81864** window
+completed all **4000** consecutive updates normally. Its run is
+**`runs/window4000-77864-20261006T1410`**, with independent frozen source
+**`source-window4000-77864-20261006T1410`**. The final supervisor receipt is
+**2026-10-06T21:01:53.537453Z**. No further training run is claimed here.
 
-| Slice, 32 batches | Initial at 73864 | Final at 77864 |
-| --- | ---: | ---: |
-| Primary rows 0–31, 130877 valid loss tokens | 7.4860189283560965 | 7.3636053664583905 |
-| Additional rows 32–63, 130878 valid loss tokens | 7.599186639848141 | 7.503450781393409 |
-
-Periodic primary NLL median declined **7.475844210160067 →
-7.412587716432117** from the first eight evaluations to the last eight.
-These observations support another bounded window; they do not establish
-external generation or reasoning capability. See the
-[completed window report](../operators/rocm/B0_WINDOW4000_20261006.md) and
-[completion receipts](../operators/rocm/results/rx7900xtx-20261006-window4000/completion/status.json).
-
-The user requested further training and checkpoint upload. A new detached
-run, **`runs/window4000-77864-20261006T1410`**, launched at
-**2026-10-06T14:35:45.195196Z** from the complete **77864** state. Its
-independent source **`source-window4000-77864-20261006T1410`** matches all
-preceding frozen training hashes. The new target is exactly **4000** updates:
-
-| Counter | Source → target |
+| Counter | Source → completed endpoint |
 | --- | --- |
 | Global step | **77864 → 81864** |
 | Absolute packed cursor / native Adam counter | **43062 → 47062** |
@@ -71,39 +56,51 @@ preceding frozen training hashes. The new target is exactly **4000** updates:
 | Real input including repetition | **176,381,952 → 192,765,952** |
 | Next physical row | **4000 → 8000** of 19531 |
 
-Adam, RNG, gate/LR clocks and the original B0 schedule are retained.
-Complete saves remain every **300 seconds / keep3**, outside the fixed source
-and independently verified recovery point. Primary evaluation runs every
-250 updates × 32 batches; disjoint rows 32–63 are evaluated at start/end.
-At the archived **2026-10-06T14:54:50Z** observation, actual updates reached
-**77999**, and **77980** passed the complete CPU checkpoint audit.
-Fresh all-132 GPU gradient/output gates have zero error against the accepted
-preceding packed-production backend. The earlier dense-native norm failure
-remains recorded under its original source and is not relabelled a pass.
+Adam, RNG, gate/LR clocks and the original B0 schedule were retained.
+Complete saves remained every **300 seconds / keep3**, outside the fixed
+source and independently verified recovery point. Primary evaluation ran
+every 250 updates × 32 batches; additional rows 32–63 were evaluated at
+start/end. All 4000 metrics retain both selected operators and ordinary
+`deterministic_algorithms=False`. All-132 pre-update GPU gradient/output gates
+have zero error against the preceding accepted packed-production backend.
+The earlier dense-native norm failure remains under its original source and
+is not relabelled a pass. The whole-corpus audit ceiling **58593** did not
+increase the requested stop of **47062**.
 
-Initial primary NLL is **7.363943263994131**; additional NLL is
-**7.5028788111342815**. Each will be compared with its own final score.
-The whole-corpus audit ceiling **58593** does not increase the actual
-requested stop of **47062**.
+| Slice, 32 batches | Initial at 77864 | Final at 81864 |
+| --- | ---: | ---: |
+| Primary rows 0–31, 130877 valid loss tokens | 7.363943263994131 | 7.29112438273621 |
+| Additional rows 32–63, 130878 valid loss tokens | 7.5028788111342815 | 7.387959246989646 |
 
-A detached local upload watcher waits for exact **81864** completion,
-full native-state verification and paired final quality, then exports on
-remote CPU, verifies the downloaded payload and publishes using local HF
-login. The local machine must remain running and connected. Failed or
-incomplete training is not published. See the
-[new continuation/upload report](../operators/rocm/B0_WINDOW4000_77864_20261006.md)
-and [launch receipts](../operators/rocm/results/rx7900xtx-20261006-window81864/README.md).
+The first-eight / last-eight periodic primary NLL medians declined
+**7.350183368378623 → 7.312580625589918**. Both end-to-end slices and this
+periodic comparison improve; these are next-token scores from the same pilot
+validation corpus. Both slices have now been observed across earlier
+windows. They are not fresh external benchmarks, and no matched base-model,
+gate-off, generation or reasoning comparison is claimed. Repeated input
+remains **192,765,952** tokens over the same **79,998,976** unique tokens.
+See the [completed window report](../operators/rocm/B0_WINDOW4000_77864_20261006.md),
+[completion receipts](../operators/rocm/results/rx7900xtx-20261006-window81864/completion/status.json)
+and [independent quality review](../operators/rocm/results/rx7900xtx-20261006-window81864/completion/quality-review.json).
+
+The completed snapshot is published only after complete native-state,
+paired-quality, allowlisted-payload and commit-pinned Hub verification.
+Remote export used CPU only; local HF login remained on the local machine.
+The current default is the verified 81864 release, while prior releases retain
+immutable paths and explicit aliases.
 
 This is still **B0**. Use the [real-text recovery guide](../operators/rocm/REAL_TRAINING.md)
 with original base, tokenizer and packed corpora; default DummyStream
 launchers do not restore this trajectory.
 
-## Previous real-text release
+## Previous real-text releases
 
-[ROCm step **52616**](../checkpoints/b0-rocm-realtext/step-52616/README.md)
-remains downloadable with its original hashes and recovery metadata. It used
-the preceding packed-attention/native CPU Adam backend. Its code, data and
-operator provenance are not rewritten by this newer release.
+[ROCm step **77864**](../checkpoints/b0-rocm-realtext/step-77864/README.md),
+[step **53307**](../checkpoints/b0-rocm-realtext/step-53307/README.md) and
+[step **52616**](../checkpoints/b0-rocm-realtext/step-52616/README.md)
+remain downloadable with their original hashes and explicit step aliases.
+Step 52616 used the preceding packed-attention/native CPU Adam backend;
+these historical provenance records are not rewritten by the new release.
 
 ## Historical published progress (2026-09-20)
 

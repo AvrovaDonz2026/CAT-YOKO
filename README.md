@@ -6,18 +6,18 @@ Middle tier: ≈12.25B stored parameters. Encoder ≈2.03B active / input token;
 
 ## Status
 
-Published **B0 is in progress**. The latest recommended snapshot is real-text
-BF16 training on an RX 7900 XTX; the 8B-token envelope is unfinished.
+Published **B0 is in progress**. The latest recommended snapshot is completed
+real-text BF16 step **81864** on an RX 7900 XTX; the 8B-token envelope is unfinished.
 
 | Item | Value |
 | --- | --- |
-| Hub | [`ROCm real-text step 77864`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-rocm-realtext/step-77864) |
+| Hub | [`ROCm real-text step 81864`](https://huggingface.co/AvrovaDonz/CAT-YOKO/tree/main/checkpoints/b0-rocm-realtext/step-81864) |
 | Full resume file | `trainable.pt`: 132 BF16 weights, 264 CPU FP32 Adam moments, RNG and packed cursor |
 | Training operators | Document-split FP32 attention, shared frozen expert storage and cached BF16 CPU-shadow Adam; native CPU FP32 moments |
-| Total phase tokens | **338,626,560**, including earlier DummyStream history |
-| Real-text inputs | **176,381,952**, including repetition of 79,998,976 unique tokens; absolute cursor **43062**, next physical row **4000 / 19531** |
-| SHA256 | `adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676` |
-| Fixed pilot validation | NLL **7.363605** at saved step **77864**, 32 batches / 130877 valid loss tokens; additional rows 32–63 **7.503451**, same validation corpus |
+| Total phase tokens | **355,010,560**, including earlier DummyStream history |
+| Real-text inputs | **192,765,952**, including repetition of **79,998,976 unique tokens**; absolute cursor **47062**, next physical row **8000 / 19531** |
+| SHA256 | `20d3590756955195b8c9e2e8cc40e74767373a3cd1d1fa430ea04023f9b543dc` |
+| Fixed pilot validation | NLL **7.291124** at saved step **81864**, 32 batches / 130877 valid loss tokens; additional rows 32–63 **7.387959**, same validation corpus |
 
 Download the complete state with:
 
@@ -27,27 +27,30 @@ python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir runs/b0
 
 Rebuild frozen weights from MiniCPM5-2B-Base, then resume with the original
 packed data and native CPU Adam. See the
-[snapshot card](checkpoints/b0-rocm-realtext/step-77864/README.md) for recovery
+[snapshot card](checkpoints/b0-rocm-realtext/step-81864/README.md) for recovery
 requirements and the lightweight weights-only option. Training progress and
 historical snapshots: [`docs/STATUS.md`](docs/STATUS.md).
 
 The [operator repository](https://huggingface.co/AvrovaDonz/CAT-YOKO-KERNEL)
-and [switch report](operators/rocm/OPERATOR_SWITCH_20261004.md) record the new
+and [switch report](operators/rocm/OPERATOR_SWITCH_20261004.md) record the
 backend. Two deterministic real updates preserved all weights and moments
 byte-for-byte; production keeps its ordinary `deterministic_algorithms=False`
 policy. Short-window whole-update gains were **2.55–3.03%**, below the 5%
 automatic gate; adoption followed the user request and numerical/recovery checks.
 
-Remote training continues for another bounded **4000** updates from **77864**
-through **81864**, retaining complete saves every five minutes. A local
-publication watcher waits for final native-state and paired-quality checks
-before uploading the completed checkpoint with local Hugging Face login.
-See the [continuation report](operators/rocm/B0_WINDOW4000_77864_20261006.md).
+The **77864 → 81864** window completed all **4000** updates and native-state
+checks at **2026-10-07 05:01:53 Asia/Shanghai**. Primary held-out NLL fell
+**7.363943 → 7.291124**; additional rows 32–63 fell **7.502879 → 7.387959**.
+Both slices come from the same pilot validation file and were observed in
+prior windows; they do not establish external reasoning or generation quality.
+Complete saves remained every five minutes / keep3. See the
+[completed continuation report](operators/rocm/B0_WINDOW4000_77864_20261006.md).
 
-Historical [ROCm step **53307**](checkpoints/b0-rocm-realtext/step-53307/README.md),
+Historical [ROCm step **77864**](checkpoints/b0-rocm-realtext/step-77864/README.md),
+[step **53307**](checkpoints/b0-rocm-realtext/step-53307/README.md),
 [step **52616**](checkpoints/b0-rocm-realtext/step-52616/README.md),
-B200 step **26940** and RTX 3090 step **33800** retain their original Hub paths
-and provenance; the recommended snapshot above is the newer release.
+B200 step **26940** and RTX 3090 step **33800** retain their original Hub paths,
+hashes and explicit download aliases. B1/B2 have not started.
 
 ## Spec
 

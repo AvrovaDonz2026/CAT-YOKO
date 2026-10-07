@@ -1,0 +1,74 @@
+{
+  "status": "completed",
+  "protocol": "same_validation_corpus_disjoint_rows_not_external_benchmark",
+  "scope": "Rows are disjoint from the repeatedly scored prefix; this is the same validation corpus.",
+  "eval_row_start": 32,
+  "eval_row_stop": 64,
+  "eval_batches": 32,
+  "seq_len": 4096,
+  "file_sha256": {
+    "operators/rocm/continuation_quality.py": "ba66e5da8424b88c084ba39926bf0bea301c002575cee26d073c66c180692ad5"
+  },
+  "eval_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-real-20261002/eval.bin",
+  "eval_data_sha256": "22b6312c4e426e49638fe6bbd57a1687ac2b6ee285515259de445c9473307fa6",
+  "primary_eval_row_stop": 32,
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/window4000-77864-20261006T1410/source_checkpoint/trainable.pt",
+  "initial_eval": {
+    "event": "independent_initial_eval",
+    "step": 77864,
+    "pass": true,
+    "eval_nll": 7.5028788111342815,
+    "eval_valid_tokens": 130878.0,
+    "eval_batches": 32,
+    "elapsed_s": 63.93374355099513,
+    "row_start": 32,
+    "row_stop": 64,
+    "stream_before": {
+      "kind": "packed",
+      "i": 32,
+      "stride": 1,
+      "nseq": 244
+    },
+    "stream_after": {
+      "kind": "packed",
+      "i": 64,
+      "stride": 1,
+      "nseq": 244
+    },
+    "no_wrap": true,
+    "open_restored": true,
+    "model_training_restored": true,
+    "eval_batches_restored": true,
+    "training_stream_untouched": true,
+    "rng_restored": true
+  },
+  "final_eval": {
+    "event": "independent_final_eval",
+    "step": 81864,
+    "pass": true,
+    "eval_nll": 7.387959246989646,
+    "eval_valid_tokens": 130878.0,
+    "eval_batches": 32,
+    "elapsed_s": 64.46806402801303,
+    "row_start": 32,
+    "row_stop": 64,
+    "stream_before": {
+      "kind": "packed",
+      "i": 32,
+      "stride": 1,
+      "nseq": 244
+    },
+    "stream_after": {
+      "kind": "packed",
+      "i": 64,
+      "stride": 1,
+      "nseq": 244
+    },
+    "no_wrap": true,
+    "open_restored": true,
+    "model_training_restored": true,
+    "eval_batches_restored": true,
+    "training_stream_untouched": true,
+    "rng_restored": true
+  }
+}
