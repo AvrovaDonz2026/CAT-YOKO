@@ -102,6 +102,27 @@ class CoordinatesTests(unittest.TestCase):
         self.assertIn("--cached-cpu-adam", command)
         self.assertNotIn("--max-hours", command)
         self.assertNotIn("--deterministic-training", command)
+        fresh_args, native_argv = continuation.parse_fresh_argv(command[3:])
+        expected_native = command[3:]
+        for flag in ("--data-handoff", "--fresh-eval-data"):
+            index = expected_native.index(flag)
+            expected_native = expected_native[:index] + expected_native[index + 2:]
+        self.assertEqual(native_argv, expected_native)
+        self.assertEqual(native_argv[native_argv.index("--data") + 1], str(args.data))
+        self.assertEqual(fresh_args.data_handoff, args.handoff_manifest)
+        self.assertEqual(fresh_args.fresh_eval_data, args.fresh_eval_data)
+
+    def test_fresh_parser_preserves_native_data_with_either_option_order(self):
+        for argv in (("--data", "train.bin", "--data-handoff", "plan.json", "--fresh-eval-data", "fresh.bin"),
+                     ("--data-handoff", "plan.json", "--fresh-eval-data", "fresh.bin", "--data", "train.bin")):
+            with self.subTest(argv=argv):
+                fresh, native = continuation.parse_fresh_argv(argv)
+                self.assertEqual(native, ["--data", "train.bin"])
+                self.assertEqual(fresh.data_handoff, Path("plan.json"))
+
+    def test_missing_native_paths_fail_closed_before_resolve(self):
+        with self.assertRaisesRegex(RuntimeError, "explicit resume"):
+            continuation.validate_worker_args(SimpleNamespace(resume=None, data=None, out=None, eval_data=None), self.plan)
 
 
 class FakePacked:
@@ -247,6 +268,28 @@ class FreshQualityTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec("torch") is not None, "Torch CPU runtime required")
 class NativeCpuTests(unittest.TestCase):
+    def test_actual_production_parser_round_trips_supervisor_worker_command(self):
+        from operators.rocm import round3_candidate_bench
+        root = Path("/tmp/fresh-production-parser").resolve()
+        plan = fixture_plan(root)
+        args = SimpleNamespace(python="python", source_dir=root / "source", resume=Path(plan["source_checkpoint_path"]),
+                               base=root / "base", data=Path(plan["new_train_path"]), eval_data=root / "old-eval.bin",
+                               fresh_eval_data=Path(plan["fresh_eval_path"]), out=root / "run",
+                               accepted_run=root / "accepted", handoff_manifest=root / "handoff.json")
+        command = controller.worker_command(args, plan)
+        fresh, native_argv = continuation.parse_fresh_argv(command[3:])
+        parser = round3_candidate_bench.build_parser()
+        parser.allow_abbrev = False
+        inherited, production_extra = parser.parse_known_args(native_argv)
+        continuation.validate_worker_args(inherited, plan)
+        self.assertEqual(inherited.data, args.data)
+        self.assertEqual(inherited.resume, args.resume)
+        self.assertEqual(inherited.eval_data, args.eval_data)
+        self.assertEqual(inherited.out, args.out / "continuation")
+        self.assertEqual(fresh.data_handoff, args.handoff_manifest)
+        self.assertEqual(production_extra, ["--accepted-run", str(args.accepted_run),
+                                           "--extra-heldout-start-row", "32", "--extra-heldout-batches", "32"])
+
     def test_actual_cpu_adapter_reads_zero_and_resumes_saved_row(self):
         import torch
         from operators.rocm.handoff_stream import FreshPackedBinStream

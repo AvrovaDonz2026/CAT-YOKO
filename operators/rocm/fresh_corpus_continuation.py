@@ -2,6 +2,7 @@
 """Accepted B0 continuation with explicit fresh rows and a third held-out pair."""
 from __future__ import annotations
 
+import argparse
 from contextlib import contextmanager
 from copy import deepcopy
 import json
@@ -22,6 +23,31 @@ def write_json(path, value):
     temporary = path.with_name(path.name + ".tmp")
     temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
     temporary.replace(path)
+
+
+def parse_fresh_argv(argv):
+    """Strip only exact wrapper options; preserve native --data verbatim.
+
+    With argparse's abbreviation default, --data would be consumed as an
+    abbreviation of --data-handoff. A later explicit handoff then hides that
+    loss while the production parser receives no training data.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--data-handoff", type=Path, required=True)
+    parser.add_argument("--fresh-eval-data", type=Path, required=True)
+    return parser.parse_known_args(list(argv))
+
+
+def validate_worker_args(inherited, handoff):
+    need(all(getattr(inherited, name, None) is not None for name in ("resume", "data", "out", "eval_data")),
+         "fresh worker requires explicit resume, training data, output and old held-out paths")
+    need(inherited.resume.resolve() == Path(handoff["source_checkpoint_path"])
+         and inherited.data.resolve() == Path(handoff["new_train_path"])
+         and inherited.run_steps == handoff["updates"]
+         and inherited.eval_every == 250 and inherited.eval_batches == 32
+         and inherited.save_optim and inherited.save_every_seconds == 300 and inherited.keep_last == 3
+         and inherited.max_hours is None,
+         "fresh worker source/corpus/update CLI differs from the explicit handoff")
 
 
 @contextmanager
@@ -117,23 +143,14 @@ def main(argv=None):
     from operators.rocm import model_bench, production_continuation
     from operators.rocm.handoff_stream import handoff_context
     argv = list(sys.argv[1:] if argv is None else argv)
-    import argparse
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--data-handoff", type=Path, required=True)
-    parser.add_argument("--fresh-eval-data", type=Path, required=True)
-    handoff_args, native_argv = parser.parse_known_args(argv)
+    handoff_args, native_argv = parse_fresh_argv(argv)
     handoff = load_handoff(handoff_args.data_handoff)
     need(handoff_args.fresh_eval_data.resolve() == Path(handoff["fresh_eval_path"]), "fresh held-out CLI differs")
     from operators.rocm import round3_candidate_bench
     inherited_parser = round3_candidate_bench.build_parser()
+    inherited_parser.allow_abbrev = False
     inherited, _ = inherited_parser.parse_known_args(native_argv)
-    need(inherited.resume.resolve() == Path(handoff["source_checkpoint_path"])
-         and inherited.data.resolve() == Path(handoff["new_train_path"])
-         and inherited.run_steps == handoff["updates"] and inherited.eval_data is not None
-         and inherited.eval_every == 250 and inherited.eval_batches == 32
-         and inherited.save_optim and inherited.save_every_seconds == 300 and inherited.keep_last == 3
-         and inherited.max_hours is None,
-         "fresh worker source/corpus/update CLI differs from the explicit handoff")
+    validate_worker_args(inherited, handoff)
     inherited.out.mkdir(parents=True, exist_ok=True)
     receipt_path = inherited.out / "data_handoff.json"
     need(not receipt_path.exists(), "refusing to replace an exercised handoff receipt")
