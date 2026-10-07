@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -269,6 +270,7 @@ def local_publication(args, prepared):
                     or receipt.get('repo_id') != args.repo_id
                     or not re.fullmatch(r'[0-9a-f]{40,64}', str(receipt.get('commit', '')))):
                 raise PublicationFailed('local publisher did not return a verified commit')
+            verified_publication(args, prepared, expected_commit=receipt['commit'])
             return {'status': 'published_verified', 'repo_id': args.repo_id, 'step': args.expected_target_step,
                     'commit': receipt['commit'], 'prepared_stage': str(prepared), 'publication_attempts': attempt + 1}
         if result is not None:
@@ -303,18 +305,164 @@ def prepared_resume(args):
     return prepared
 
 
-def discard_verified_transport(args, receipt):
-    archive = args.local_stage / 'incoming-payload.tar.gz'
-    if not archive.exists():
-        return
-    proof = json.loads((args.local_stage / 'watch-prepared.json').read_text())
-    if archive.is_symlink() or digest(archive) != proof.get('archive_sha256'):
-        receipt['transport_retained'] = True
-        return
+def regular_owned_file(path, root, *, missing_ok=False):
+    """Reject links in the file and its relative parents before reading/deleting."""
+    path, root = Path(path), Path(root)
     try:
-        archive.unlink()
-    except OSError as error:
-        receipt['transport_cleanup_error_type'] = type(error).__name__
+        relative = path.relative_to(root)
+    except ValueError:
+        raise ValueError('local publication path escapes its stage') from None
+    parent = root
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('local publication stage is not an owned directory')
+    for part in relative.parts[:-1]:
+        parent = parent / part
+        if parent.is_symlink() or not parent.is_dir():
+            raise ValueError('local publication parent is not a regular directory')
+    try:
+        stamp = path.lstat()
+    except FileNotFoundError:
+        if missing_ok:
+            return None
+        raise ValueError('local publication evidence is missing') from None
+    if not stat.S_ISREG(stamp.st_mode):
+        raise ValueError('local publication file must be regular and not a link')
+    return stamp
+
+
+def artifact_record(path):
+    return {'sha256': digest(path), 'bytes': Path(path).stat().st_size}
+
+
+def file_identity(stamp):
+    # Reads may change atime; only identity/content timestamps bind cleanup.
+    return stamp.st_dev, stamp.st_ino, stamp.st_size, stamp.st_mtime_ns
+
+
+def valid_artifact_record(value):
+    return (isinstance(value, dict) and set(value) == {'sha256', 'bytes'}
+            and type(value['bytes']) is int and value['bytes'] > 0
+            and re.fullmatch(r'[0-9a-f]{64}', str(value['sha256'])) is not None)
+
+
+def verified_publication(args, prepared, *, expected_commit=None):
+    """Bind actual publisher evidence to the previously verified local transport.
+
+    This does not require the weight binaries to remain after successful cleanup.
+    A watcher status string or publisher stdout alone is never sufficient.
+    """
+    prepared = Path(prepared)
+    if prepared != args.local_stage / 'prepared' or prepared_resume(args) != prepared:
+        raise ValueError('verified publication belongs to another prepared stage')
+    for path in (args.local_stage / 'watch-prepared.json', prepared / 'prepared.json', prepared / 'publish.json'):
+        regular_owned_file(path, args.local_stage)
+    manifest = json.loads((prepared / 'prepared.json').read_text())
+    receipt = json.loads((prepared / 'publish.json').read_text())
+    prefix = f'checkpoints/b0-rocm-realtext/step-{args.expected_target_step}'
+    if (manifest.get('status') != 'prepared' or manifest.get('repo_id') != args.repo_id
+            or manifest.get('step') != args.expected_target_step or manifest.get('checkpoint_prefix') != prefix
+            or receipt.get('status') != 'verified' or receipt.get('repo_id') != args.repo_id
+            or receipt.get('step') != args.expected_target_step or receipt.get('checkpoint_prefix') != prefix
+            or not re.fullmatch(r'[0-9a-f]{40}', str(receipt.get('commit', '')))
+            or (expected_commit is not None and receipt['commit'] != expected_commit)
+            or not isinstance(manifest.get('files'), dict) or receipt.get('allowlist') != manifest['files']):
+        raise ValueError('actual publisher receipt does not verify this immutable payload')
+    records = {}
+    for filename in ('trainable.pt', 'weights-only.pt'):
+        name = prefix + '/' + filename
+        expected = manifest['files'].get(name)
+        if (not valid_artifact_record(expected)
+                or receipt.get('checkpoint_lfs_verified', {}).get(filename) != expected):
+            raise ValueError('published checkpoint LFS identities differ from the prepared manifest')
+        records[name] = expected
+    small = receipt.get('download_verified', {})
+    for name in ('README.md', prefix + '/README.md', prefix + '/release.json'):
+        path = prepared / name
+        regular_owned_file(path, prepared)
+        expected = small.get(name)
+        if (not valid_artifact_record(expected) or artifact_record(path) != expected
+                or (name != 'README.md' and manifest['files'].get(name) != expected)):
+            raise ValueError('commit-pinned publication card or manifest evidence changed')
+    release = json.loads((prepared / prefix / 'release.json').read_text())
+    if release.get('step') != args.expected_target_step or release.get('repo_id') != args.repo_id:
+        raise ValueError('publication manifest identifies another checkpoint')
+    for name, expected in records.items():
+        released = release.get('files', {}).get(PurePosixPath(name).name, {})
+        if {key: released.get(key) for key in ('sha256', 'bytes')} != expected:
+            raise ValueError('release artifact identities differ from the publisher LFS proof')
+    return receipt
+
+
+def cleanup_verified_payload(args, prepared):
+    """Remove only this verified pair and transport; preserve evidence and login."""
+    prepared = Path(prepared)
+    receipt = verified_publication(args, prepared)
+    manifest = json.loads((prepared / 'prepared.json').read_text())
+    prefix = manifest['checkpoint_prefix']
+    report = {'status': 'complete', 'repo_id': args.repo_id, 'step': args.expected_target_step,
+              'commit': receipt['commit'], 'publish_receipt_sha256': digest(prepared / 'publish.json'),
+              'prepared_manifest_sha256': digest(prepared / 'prepared.json'),
+              'deleted_weights': [], 'missing_weights': [], 'retained_files': [],
+              'scope': 'Only this verified trainable.pt, weights-only.pt and SHA-bound local transport; other files retained.'}
+    cleanup_path = args.local_stage / 'local-cleanup.json'
+    regular_owned_file(cleanup_path, args.local_stage, missing_ok=True)
+    regular_owned_file(cleanup_path.with_name(cleanup_path.name + '.tmp'), args.local_stage, missing_ok=True)
+    candidates = []
+    # Validate the complete pair before deleting either member.
+    for filename in ('trainable.pt', 'weights-only.pt'):
+        name = prefix + '/' + filename
+        path = prepared / name
+        try:
+            stamp = regular_owned_file(path, prepared, missing_ok=True)
+            if stamp is None:
+                report['missing_weights'].append(name)
+            elif artifact_record(path) != manifest['files'][name]:
+                raise ValueError('local checkpoint bytes changed after publication')
+            else:
+                candidates.append((name, path, stamp))
+        except (ValueError, OSError) as error:
+            report['retained_files'].append({'path': name, 'error_type': type(error).__name__})
+    if report['retained_files']:
+        report['status'] = 'retained'
+        report['retained_files'].extend({'path': name, 'reason': 'paired_checkpoint_validation_failed'}
+                                        for name, _, _ in candidates)
+    else:
+        # Also reject a replaced file between hashing the pair and deletion.
+        changed = [name for name, path, stamp in candidates if file_identity(path.lstat()) != file_identity(stamp)]
+        if changed:
+            report['status'] = 'retained'
+            report['retained_files'].extend({'path': name, 'reason': 'paired_checkpoint_changed'}
+                                            for name, _, _ in candidates)
+        else:
+            for name, path, stamp in candidates:
+                try:
+                    path.unlink()
+                    report['deleted_weights'].append(name)
+                except OSError as error:
+                    report['status'] = 'retained'
+                    report['retained_files'].append({'path': name, 'error_type': type(error).__name__})
+    archive = args.local_stage / 'incoming-payload.tar.gz'
+    if report['status'] == 'complete':
+        try:
+            stamp = regular_owned_file(archive, args.local_stage, missing_ok=True)
+            if stamp is None:
+                report['transport_missing'] = True
+            else:
+                proof = json.loads((args.local_stage / 'watch-prepared.json').read_text())
+                if (digest(archive) != proof.get('archive_sha256')
+                        or ('archive_bytes' in proof and stamp.st_size != proof['archive_bytes'])):
+                    raise ValueError('local transport changed after verification')
+                if file_identity(archive.lstat()) != file_identity(stamp):
+                    raise ValueError('local transport changed before cleanup')
+                archive.unlink()
+                report['transport_deleted'] = True
+        except (ValueError, OSError) as error:
+            report['status'] = 'retained'
+            report['retained_files'].append({'path': archive.name, 'error_type': type(error).__name__})
+    write_status(cleanup_path, report)
+    return {'local_cleanup_status': report['status'], 'local_cleanup_receipt': str(cleanup_path),
+            'local_weight_files_deleted': len(report['deleted_weights']),
+            'local_weight_files_already_missing': len(report['missing_weights'])}
 
 
 def publish_completed(args):
@@ -347,11 +495,10 @@ def publish_completed(args):
     write_status(args.local_stage / 'watch-prepared.json', {
         'remote_run': args.remote_run, 'remote_source': args.remote_source,
         'source_step': args.expected_source_step, 'step': args.expected_target_step, 'repo_id': args.repo_id,
-        'prepared_manifest_sha256': digest(prepared / 'prepared.json'), 'archive_sha256': packed['archive_sha256']})
+        'prepared_manifest_sha256': digest(prepared / 'prepared.json'), 'archive_sha256': packed['archive_sha256'],
+        'archive_bytes': packed['archive_bytes']})
     receipt = local_publication(args, prepared)
-    # This is our verified transport file, outside the curated checkpoint stage.
-    # Preserve prepared binaries/receipts for recovery and independent review.
-    discard_verified_transport(args, receipt)
+    receipt.update(cleanup_verified_payload(args, prepared))
     return {**receipt, 'archive_sha256': packed['archive_sha256']}
 
 
@@ -369,9 +516,18 @@ def supervise(args):
         try:
             existing = prepared_resume(args)
             if existing is not None:
+                if (existing / 'publish.json').exists() or (existing / 'publish.json').is_symlink():
+                    publication = json.loads((existing / 'publish.json').read_text())
+                    if publication.get('status') == 'verified':
+                        publication = verified_publication(args, existing)
+                        cleanup = cleanup_verified_payload(args, existing)
+                        update(status='published_verified', repo_id=args.repo_id, step=args.expected_target_step,
+                               commit=publication['commit'], prepared_stage=str(existing),
+                               publication_resumed_from_verified_receipt=True, **cleanup)
+                        return 0
                 update(status='publishing_prepared_resume')
                 receipt = local_publication(args, existing)
-                discard_verified_transport(args, receipt)
+                receipt.update(cleanup_verified_payload(args, existing))
                 state.pop('exception_type', None)
                 update(**receipt)
                 return 0

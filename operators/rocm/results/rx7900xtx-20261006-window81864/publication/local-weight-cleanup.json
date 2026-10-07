@@ -1,0 +1,62 @@
+{
+  "status": "local_weights_removed",
+  "completed_at_utc": "2026-10-07T14:33:55.695758+00:00",
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "hf_revision": "fcc6b963a078316562889da77b0e1f54f24167c7",
+  "remote_current_step_verified": 81864,
+  "removed_files": 8,
+  "removed_bytes": 10522941008,
+  "files": [
+    {
+      "step": 52616,
+      "filename": "trainable.pt",
+      "bytes": 2192257315,
+      "sha256": "d4c4898be1cd248b2742bd9705a11de8af37003a0d209a91347498d47ec181df"
+    },
+    {
+      "step": 52616,
+      "filename": "weights-only.pt",
+      "bytes": 438477743,
+      "sha256": "a627dfa07a402fe6c3ed9cd5524c7b8cda518dffdfcd03ff3f32759d8a9a7570"
+    },
+    {
+      "step": 53307,
+      "filename": "trainable.pt",
+      "bytes": 2192257315,
+      "sha256": "3dd9a62f7acfb4ae025ff44b0589b017104f07abc8b177e0098f5c4a910bd2b2"
+    },
+    {
+      "step": 53307,
+      "filename": "weights-only.pt",
+      "bytes": 438477679,
+      "sha256": "050a114b43234a441520703ebd9a6b8abfebceaa9ac191fb8d934b3204608ab7"
+    },
+    {
+      "step": 77864,
+      "filename": "trainable.pt",
+      "bytes": 2192257315,
+      "sha256": "adf13e2e44a1fcbabbfc1f60cfab2cc61459d0949c95ec9e6e332287691a8676"
+    },
+    {
+      "step": 77864,
+      "filename": "weights-only.pt",
+      "bytes": 438478163,
+      "sha256": "0ad37d86006fe68d1cf861d4519484ed5ef5bf882af19f803cd3a056db53e84e"
+    },
+    {
+      "step": 81864,
+      "filename": "trainable.pt",
+      "bytes": 2192257315,
+      "sha256": "20d3590756955195b8c9e2e8cc40e74767373a3cd1d1fa430ea04023f9b543dc"
+    },
+    {
+      "step": 81864,
+      "filename": "weights-only.pt",
+      "bytes": 438478163,
+      "sha256": "74d8a60b9e43613e917a5debd52d27776604ea69e1564e4a891b4f99dd906085"
+    }
+  ],
+  "remote_and_hf_preserved": true,
+  "metadata_and_credentials_preserved": true,
+  "future_policy": "Local upload staging weights are removed after verified HF publication; training checkpoints remain on the training host."
+}

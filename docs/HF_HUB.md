@@ -26,6 +26,10 @@ match the curated payload.
 Full recovery SHA256: `20d3590756955195b8c9e2e8cc40e74767373a3cd1d1fa430ea04023f9b543dc`.
 Weights-only SHA256: `74d8a60b9e43613e917a5debd52d27776604ea69e1564e4a891b4f99dd906085`.
 
+For this training workflow, run these downloads on the training machine.
+Keep checkpoint copies on that machine and Hugging Face; the local publishing
+machine does not keep a permanent weight copy.
+
 ```bash
 python scripts/download_hub_overlay.py --name b0-rocm-realtext --out-dir runs/b0-rocm-realtext
 python scripts/download_hub_overlay.py --name b0-rocm-realtext-weights --out-dir runs/b0-rocm-realtext-weights
@@ -101,3 +105,10 @@ commit-pinned SHA/card verification. `scripts/watch_rocm_hf_publish.py`
 connects those steps after the approved run completes; HF credentials never
 leave the local machine. Source archives and compact receipts are included
 under each release directory, while GitHub tracks no weight binaries.
+
+Local weight files are temporary upload staging. After commit-pinned Hub
+verification passes, remove the task's local full and weights-only binaries
+and transport archives, keeping logs, manifests, hashes and publication
+receipts. Complete checkpoints and recovery copies remain on the training
+machine and Hugging Face. This is the storage policy and cleanup procedure;
+the completion of a particular cleanup is recorded separately.

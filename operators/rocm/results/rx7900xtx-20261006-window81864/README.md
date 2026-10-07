@@ -71,3 +71,17 @@ The family index was separately verified at
 preserving the sizes and SHA256 of all **12** historical and new weight files.
 
 No checkpoint binaries or authentication credentials are tracked here.
+
+## Local storage policy (2026-10-07)
+
+The user requested keeping weight copies on the training host and Hugging Face.
+Local upload-staging copies for steps 52616, 53307, 77864 and 81864 were
+removed after all eight files matched the published Hub sizes/SHA256; total
+removed file size is **10,522,941,008 bytes**. Current native 81864 and its
+remote release weights were additionally SHA-checked before cleanup.
+This removes local weight files while retaining code, logs, manifests and
+publication receipts. The watcher now cleans successful staging automatically
+and recognizes a completed task after those binaries have been removed.
+See [cleanup receipt](publication/local-weight-cleanup.json),
+[remote retention check](publication/remote-retention-check.json) and
+[idempotent watcher cleanup](publication/watcher-cleanup.json).

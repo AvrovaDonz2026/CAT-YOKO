@@ -1,0 +1,16 @@
+{
+  "status": "complete",
+  "repo_id": "AvrovaDonz/CAT-YOKO",
+  "step": 81864,
+  "commit": "da001379d7bcd27c9348bf2ecf99036e6825dde9",
+  "publish_receipt_sha256": "cb594d809e3761a88d2ff9a169cc1b44f6fd2e336ae0b9027efa65678fc978ac",
+  "prepared_manifest_sha256": "4f9ba792d0787ff050eeb6f4f15e1cfd0ffaab62fa6e6234eb7c153b33f9b667",
+  "deleted_weights": [],
+  "missing_weights": [
+    "checkpoints/b0-rocm-realtext/step-81864/trainable.pt",
+    "checkpoints/b0-rocm-realtext/step-81864/weights-only.pt"
+  ],
+  "retained_files": [],
+  "scope": "Only this verified trainable.pt, weights-only.pt and SHA-bound local transport; other files retained.",
+  "transport_missing": true
+}
