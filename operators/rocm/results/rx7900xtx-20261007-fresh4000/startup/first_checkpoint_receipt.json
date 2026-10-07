@@ -1,0 +1,28 @@
+{
+  "status": {
+    "status": "running_continuation",
+    "error": null,
+    "completed_updates": 59,
+    "last_completed_step": 81923,
+    "first_checkpoint_verified": true,
+    "latest_verified_at": "2026-10-07T16:02:21.836238+00:00"
+  },
+  "actual_metric_updates": 59,
+  "latest_metric_step": 81923,
+  "last10_median_tok_s": 806.047375794049,
+  "checkpoint": {
+    "source_step": 81921,
+    "source_adam_step": 47119,
+    "source_stream_i": 47119,
+    "source_logical_row": 57,
+    "optimizer_states": 132,
+    "optimizer_moments": 264,
+    "checkpoint_verified": true,
+    "file": "/home/donz/cat-yoko-rocm-20261002/runs/fresh4000-81864-20261007T1550/verified_checkpoint/latest_verified.pt",
+    "source_tokens_in_phase": 355244032.0,
+    "rng_schema_verified": true,
+    "data_handoff_sha256": "411a83bc72620058a42dc9c6cec15c306549d91b2abb810ccfd948b15becbfdb",
+    "actual_sha256": "4f5052e4bc3f633888e579cb014c16a720260509e0b9161f99c32b598af2a330",
+    "bytes": 2192257635
+  }
+}

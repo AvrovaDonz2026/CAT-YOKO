@@ -1,0 +1,47 @@
+{
+  "status": "initial_checked",
+  "protocol": "fresh_validation_corpus_paired_heldout",
+  "seq_len": 4096,
+  "eval_batches": 32,
+  "row_start": 0,
+  "row_stop": 32,
+  "eval_data": "/home/donz/cat-yoko-rocm-20261002/data/phase-b-fresh80m-20261007/eval.bin",
+  "eval_data_sha256": "504c29980b65ee62ee6c16d379451cb5e09b095995397f1cab35669282b6f597",
+  "source_checkpoint": "/home/donz/cat-yoko-rocm-20261002/runs/fresh4000-81864-20261007T1550/source_checkpoint/trainable.pt",
+  "source_checkpoint_sha256": "20d3590756955195b8c9e2e8cc40e74767373a3cd1d1fa430ea04023f9b543dc",
+  "data_handoff_sha256": "411a83bc72620058a42dc9c6cec15c306549d91b2abb810ccfd948b15becbfdb",
+  "file_sha256": {
+    "operators/rocm/fresh_corpus_handoff.py": "72e831ac8097f6d0c4259212ff3158ef3e551f4cf2a7bfcacc9ae45c300c8a3a",
+    "operators/rocm/handoff_stream.py": "e8aeeb21f8acfe91cda3ea90ccca1a39c01c6b696632e46f15e8341e0d775ef5",
+    "operators/rocm/fresh_corpus_continuation.py": "a6bb92b6b325ecae7b278dc5b19724cc64da0887f547f54d3666eaf7fd238e05"
+  },
+  "initial_eval": {
+    "event": "fresh_initial_eval",
+    "step": 81864,
+    "pass": true,
+    "eval_nll": 7.371492111944588,
+    "eval_valid_tokens": 130918.0,
+    "eval_batches": 32,
+    "elapsed_s": 68.05835260200547,
+    "row_start": 0,
+    "row_stop": 32,
+    "stream_before": {
+      "kind": "packed",
+      "i": 0,
+      "stride": 1,
+      "nseq": 244
+    },
+    "stream_after": {
+      "kind": "packed",
+      "i": 32,
+      "stride": 1,
+      "nseq": 244
+    },
+    "no_wrap": true,
+    "open_restored": true,
+    "model_training_restored": true,
+    "eval_batches_restored": true,
+    "training_stream_untouched": true,
+    "rng_restored": true
+  }
+}

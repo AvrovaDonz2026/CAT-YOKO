@@ -52,6 +52,14 @@ Historical [ROCm step **77864**](checkpoints/b0-rocm-realtext/step-77864/README.
 B200 step **26940** and RTX 3090 step **33800** retain their original Hub paths,
 hashes and explicit download aliases. B1/B2 have not started.
 
+A [fresh-data window](operators/rocm/FRESH_CORPUS_20261007.md) is now training
+**81864 → 85864**, retaining native Adam/RNG and reading new rows from zero.
+The new corpus contains **79,998,976 training tokens** and **999,424 validation
+tokens**, with exact-document exclusion against both old splits. The startup
+snapshot confirms **81 updates / step 81945** and the first complete save at
+**81921** passed recovery checks. Five-minute saves continue; final evaluation
+and HF publication are queued. The current published download remains 81864.
+
 ## Spec
 
 | | |

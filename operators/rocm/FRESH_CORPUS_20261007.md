@@ -1,19 +1,25 @@
 # Fresh B0 corpus window — 2026-10-07
 
-At the time this note was written, fresh data preparation was in progress. The
-4000-update training window had not started, and no fresh-corpus quality result
-was available. The authorized experiment continues B0 from the complete native
-checkpoint at step **81864** to step **85864**, using fresh training rows
+Fresh data preparation and its audits completed, and the new B0 window started.
+The startup snapshot reached step **81945**, with **81** consecutive updates, at
+**2026-10-07 16:04:25 UTC**, continuing from the complete native checkpoint at
+step **81864**. The authorized endpoint is **85864**, using fresh training rows
 **0–3999** once each: **16,384,000** training tokens at sequence length 4096.
+The first timed recovery checkpoint passed its native CPU audit. Final quality
+and the step-85864 publication remain pending.
+
+The live remote run is `runs/fresh4000-81864-20261007T1550`, with frozen source
+`source-fresh80m-20261007T1550`, under `/home/donz/cat-yoko-rocm-20261002`.
+Implementation commit: `3428f4ea502a965c7f9632ec106043a518c7799d`.
 
 ## Data and provenance
 
-The preparation target is 80M training tokens and 1M validation tokens. Complete
-4096-token rows yield **19,531 training rows / 79,998,976 tokens** and
-**244 validation rows / 999,424 tokens** when those targets are reached. The
+The completed corpus contains **19,531 training rows / 79,998,976 tokens /
+92,264 documents** and **244 validation rows / 999,424 tokens / 1,171 documents**,
+from preparation targets of 80M training and 1M validation tokens. The
 English/Chinese/math mixture retains the previous **60:30:10** weights and the
 same tokenizer files, vocabulary and EOS ID. The output manifest, rather than
-this target, records the actual completed row counts and SHA256 digests.
+the rounded token target, records the completed row counts and SHA256 digests.
 
 New named Parquet shards use the previous dataset revisions. Their official
 Hugging Face file sizes and whole-file SHA256 identifiers are pinned in a source
@@ -84,6 +90,21 @@ Initial and final paired evaluations use three independent fixed slices:
 2. Old validation rows 32–63: additional continuity comparison (`quality.json`).
 3. Fresh validation rows 0–31: new-data comparison (`fresh_quality.json`).
 
+All three initial evaluations completed at step **81864**, using 32 batches
+each. These are this run's actual paired baselines:
+
+| Initial validation slice | NLL | Valid tokens |
+| --- | ---: | ---: |
+| Old primary, rows 0–31 | 7.291744287131125 | 130,877 |
+| Old additional, rows 32–63 | 7.388477264365619 | 130,878 |
+| Fresh, rows 0–31 | 7.371492111944588 | 130,918 |
+
+The initial old-data values differ slightly from the previous run's final
+evaluations; comparisons for this window must use these new initial receipts.
+The GPU numerical acceptance checks passed for all **132 trainable tensors**;
+the reported output and gradient differences were zero. No final evaluation
+receipt was available at the startup snapshot above.
+
 Fresh evaluation restores training RNG, model mode and evaluation settings, and
 does not advance the training stream. Completion requires all three receipts,
 the existing all-132-tensor numerical operator checks, and the exact native
@@ -97,9 +118,20 @@ for five source-sized checkpoints plus 1 GiB for atomic writes and recovery.
 Training waits for an idle GPU under the existing run lock and does not control
 other training processes.
 
+The first timed complete save is **step 81921**, audited at
+**2026-10-07T16:02:21.836238Z**. Native Adam and absolute stream cursor are
+**47119**, mapping to next fresh row **57**. Its 132 weights, 264 FP32 moments,
+clocks and RNG schema passed CPU checks. The full file contains **2,192,257,635
+bytes**, SHA256 `4f5052e4bc3f633888e579cb014c16a720260509e0b9161f99c32b598af2a330`.
+This is a recorded rolling recovery point; later saves advance the latest link.
+The [startup receipts](results/rx7900xtx-20261007-fresh4000/README.md) preserve
+the checkpoint identity and the actual initial evaluations.
+
 Weights stay on the remote host and Hugging Face; the local development machine
 does not retain checkpoint weights. The final native/export publication enters
-the HF publication queue after run completion and validation. Remote cleanup
+the HF publication queue after run completion and validation. The local watcher
+is already waiting with the exact source, corpus-handoff SHA and endpoint;
+successful Hub verification clears temporary local weight files. Remote cleanup
 must retain recovery points until the relevant uploaded artifacts are verified.
 
 ## Launch interface
@@ -109,6 +141,13 @@ Select the actual frozen source and new run directories through `SOURCE` and
 contain its immutable step-81864 checkpoint at `source_checkpoint/trainable.pt`
 (a remote hardlink avoids an extra copy). Launch only after the fresh manifest is
 complete and the CPU checks and disk preflight pass.
+
+An earlier launch, `runs/fresh4000-81864-20261007T1510` with frozen source ending
+`T1535`, stopped before model/GPU execution and made zero optimizer updates. Its
+failure receipts remain intact. The wrapper now uses `allow_abbrev=False` so
+native `--data` cannot be consumed as an abbreviation of `--data-handoff`;
+supervisor-command round-trip and actual production-parser CPU tests cover this
+failure. The live `T1550` run uses the corrected wrapper.
 
 ```sh
 ROOT=/home/donz/cat-yoko-rocm-20261002

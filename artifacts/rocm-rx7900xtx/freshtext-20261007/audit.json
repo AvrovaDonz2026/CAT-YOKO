@@ -1,0 +1,32 @@
+{
+  "verified_at": "2026-10-07T15:46:13.501919+00:00",
+  "outputs": {
+    "train": {
+      "sha256": "1391928b2d01abd3b2c35f1b708619e3d352fa6bdbf8e222296c591c2f02bb63",
+      "bytes": 319995904,
+      "tokens": 79998976,
+      "token_id_min": 0,
+      "token_id_max": 130080,
+      "documents": 92264
+    },
+    "eval": {
+      "sha256": "504c29980b65ee62ee6c16d379451cb5e09b095995397f1cab35669282b6f597",
+      "bytes": 3997696,
+      "tokens": 999424,
+      "token_id_min": 1,
+      "token_id_max": 130069,
+      "documents": 1171
+    }
+  },
+  "actual_hash_intersections": {
+    "new_train_new_eval": 0,
+    "new_train_old_train": 0,
+    "new_train_old_eval": 0,
+    "new_eval_old_train": 0,
+    "new_eval_old_eval": 0
+  },
+  "old_and_new_exact_text_exclusion_verified": true,
+  "near_duplicate_checked": false,
+  "whole_parquet_sha_recomputed": false,
+  "manifest_sha256": "2ae4cfa49d78b6a128d2f129182f122312311be84ade1a6c6074a8c13444a415"
+}

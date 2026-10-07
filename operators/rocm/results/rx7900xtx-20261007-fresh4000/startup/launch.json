@@ -1,0 +1,6 @@
+{
+  "supervisor_pid": 1020697,
+  "code_commit": "3428f4ea502a965c7f9632ec106043a518c7799d",
+  "remote_cpu_tests": "17 passed including actual production parser",
+  "previous_zero_update_failure": "/home/donz/cat-yoko-rocm-20261002/runs/fresh4000-81864-20261007T1510"
+}

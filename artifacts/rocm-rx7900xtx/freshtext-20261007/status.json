@@ -1,0 +1,40 @@
+{
+  "status": "complete",
+  "outputs": {
+    "train": {
+      "path": "train.bin",
+      "sequences": 19531,
+      "tokens": 79998976,
+      "bytes": 319995904,
+      "sha256": "1391928b2d01abd3b2c35f1b708619e3d352fa6bdbf8e222296c591c2f02bb63"
+    },
+    "eval": {
+      "path": "eval.bin",
+      "sequences": 244,
+      "tokens": 999424,
+      "bytes": 3997696,
+      "sha256": "504c29980b65ee62ee6c16d379451cb5e09b095995397f1cab35669282b6f597"
+    }
+  },
+  "hash_intersection": 0,
+  "old_hash_intersections": {
+    "new_train_old_train": 0,
+    "new_train_old_eval": 0,
+    "new_eval_old_train": 0,
+    "new_eval_old_eval": 0
+  },
+  "excluded_source_stats": {
+    "en": {
+      "old_train_excluded": 355,
+      "old_eval_excluded": 2
+    },
+    "zh": {
+      "old_train_excluded": 2,
+      "old_eval_excluded": 0
+    },
+    "math": {
+      "old_train_excluded": 0,
+      "old_eval_excluded": 0
+    }
+  }
+}

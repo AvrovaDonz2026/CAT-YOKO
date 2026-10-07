@@ -1,4 +1,4 @@
-# Status (2026-10-07)
+# Status (2026-10-08)
 
 GitHub training-progress pin. Spec knobs stay in [`FROZEN_SPEC.md`](FROZEN_SPEC.md).
 Weights live on Hugging Face.
@@ -46,7 +46,8 @@ window completed at **77864**, and the latest **77864 → 81864** window
 completed all **4000** consecutive updates normally. Its run is
 **`runs/window4000-77864-20261006T1410`**, with independent frozen source
 **`source-window4000-77864-20261006T1410`**. The final supervisor receipt is
-**2026-10-06T21:01:53.537453Z**. No further training run is claimed here.
+**2026-10-06T21:01:53.537453Z**. A fresh-data continuation has now started,
+as recorded below.
 
 | Counter | Source → completed endpoint |
 | --- | --- |
@@ -92,6 +93,44 @@ immutable paths and explicit aliases.
 This is still **B0**. Use the [real-text recovery guide](../operators/rocm/REAL_TRAINING.md)
 with original base, tokenizer and packed corpora; default DummyStream
 launchers do not restore this trajectory.
+
+## Active fresh-data window
+
+The independent **81864 → 85864** run started with the complete source state,
+retaining native Adam, RNG, phase/global clocks and the accepted backend.
+Fresh preparation completed **79,998,976 training tokens / 92,264 documents**
+and **999,424 validation tokens / 1,171 documents**, retaining the 60:30:10
+English/Chinese/math mix. All five exact-document hash intersections passed
+independent rechecks: new train/new validation and both new splits against both
+old splits. See the [data audit](../artifacts/rocm-rx7900xtx/freshtext-20261007/README.md).
+
+The absolute cursor **47062** now explicitly maps to fresh row **0**, with
+no modulo or wrapping. The window consumes **4000** new rows / **16,384,000**
+input tokens; the prepared 80M-token pool is larger than this window.
+The **2026-10-08 00:04:25 Asia/Shanghai** startup snapshot records **81945 /
+81 updates**. All-132 output/gradient gates passed with zero reported error.
+
+| Initial slice at 81864, 32 batches | NLL |
+| --- | ---: |
+| Old primary rows 0–31 | 7.291744287131125 |
+| Old additional rows 32–63 | 7.388477264365619 |
+| Fresh validation rows 0–31 | 7.371492111944588 |
+
+Complete saves remain **300 seconds / keep3**. The first save, **81921**, passed
+native CPU recovery checks: **132 weights / 264 FP32 moments**, Adam/cursor
+**47119**, next fresh row **57**, with intact clocks and RNG schema. Its recorded
+SHA256 is `4f5052e4bc3f633888e579cb014c16a720260509e0b9161f99c32b598af2a330`.
+The final 85864 quality checks and HF publication are pending; the local
+publication watcher is running, with credentials retained locally and verified
+temporary weights removed after upload. No weights or corpus bins are stored
+in the development repository.
+
+Run `runs/fresh4000-81864-20261007T1550` uses frozen source
+`source-fresh80m-20261007T1550`, code commit
+`3428f4ea502a965c7f9632ec106043a518c7799d`. The earlier argument-parser failure
+made zero updates and its receipts are retained separately. See the
+[fresh-window guide](../operators/rocm/FRESH_CORPUS_20261007.md) and
+[startup evidence](../operators/rocm/results/rx7900xtx-20261007-fresh4000/README.md).
 
 ## Previous real-text releases
 

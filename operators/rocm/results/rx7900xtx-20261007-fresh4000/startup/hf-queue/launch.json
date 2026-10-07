@@ -1,0 +1,13 @@
+{
+  "pid": 56052,
+  "caffeinate_pid": 56053,
+  "remote_run": "/home/donz/cat-yoko-rocm-20261002/runs/fresh4000-81864-20261007T1550",
+  "target_step": 85864,
+  "code_commit": "3428f4ea502a965c7f9632ec106043a518c7799d",
+  "credentials_location": "local_only",
+  "cleanup_after_verified_publish": true,
+  "frozen_helper_sha256": {
+    "watch_rocm_hf_publish.py": "a911f3dc59461d6260d11e06d0ffdce5c63c62abdc9bdcfe50b23a5d24f044c6",
+    "publish_completed_run.py": "4acf20669e5bafcc5e2be82f4cb274f6a8b39bf19b429a8bcf221a93d1a74bf4"
+  }
+}

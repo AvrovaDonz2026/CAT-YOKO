@@ -1,0 +1,76 @@
+{
+  "captured_at": "2026-10-07T16:04:25.594763+00:00",
+  "scope": "Live startup snapshot; run incomplete, final checkpoint/quality/publication not claimed.",
+  "metrics_scope": "Complete JSONL prefix, excluding any partial last line.",
+  "metric_updates": 81,
+  "latest_metric_step": 81945,
+  "source_step": 81864,
+  "target_step": 85864,
+  "no_weight_or_corpus_binary_included": true,
+  "files": {
+    "status.json": {
+      "bytes": 45269,
+      "sha256": "2aaf8728e521088e5aa7e27ade500fadb2b756ab6163d109eccc21c499b7898c"
+    },
+    "launch.json": {
+      "bytes": 269,
+      "sha256": "dfa438c9c38ad530ebde71b26476bc191b8ab13cb6774fa995ff7406db4ba196"
+    },
+    "supervisor.command.json": {
+      "bytes": 1424,
+      "sha256": "6ecabe6554273be6e5d4c69f7c2232e358a4403d66110b582b5e28ea8ae3e968"
+    },
+    "continuation.command.json": {
+      "bytes": 1736,
+      "sha256": "97cf59a0b68d1c85d86e9d64877a934dea8b5b79b87bfa63c63a46111436e7af"
+    },
+    "data_handoff.json": {
+      "bytes": 1551,
+      "sha256": "411a83bc72620058a42dc9c6cec15c306549d91b2abb810ccfd948b15becbfdb"
+    },
+    "remote_cpu_tests.log": {
+      "bytes": 3176,
+      "sha256": "ffafa8252e6b8215a40e1bd870ea4239cba7f475fc792744b6b4a59123efaf78"
+    },
+    "source_preflight.log": {
+      "bytes": 11785,
+      "sha256": "5c899bef51e9552d7c5a041b13c6240a4374df6ae2969b21b0c228086e483a23"
+    },
+    "old_source_preflight.log": {
+      "bytes": 11472,
+      "sha256": "3b462fe11cd9d4f64a180d3eb5578f87e8ae14928ea6e9e03be61b1522e3029a"
+    },
+    "latest_checkpoint_check.log": {
+      "bytes": 11786,
+      "sha256": "cdf2a14f94f5f6562d57ae4e4c0e62f09d249ea61d6af26fede32443b291c336"
+    },
+    "first_checkpoint_receipt.json": {
+      "bytes": 986,
+      "sha256": "2994eb984e04d4124e4eea71257a680b1c689de574f6c4f17efae23328d39b5f"
+    },
+    "continuation/parity.json": {
+      "bytes": 100524,
+      "sha256": "7df2fa0aeef8c1f198eb2e618b4427d7f2ada225ea0546347c2e75a0fbf52c0f"
+    },
+    "continuation/quality.json": {
+      "bytes": 1443,
+      "sha256": "80a751ad99898216fc4aededf9766606cc7dbd86051cf93b1ecc478b3e030eed"
+    },
+    "continuation/fresh_quality.json": {
+      "bytes": 1691,
+      "sha256": "c72d636996e4601710122f766e9665bde2ee5ef8bc947cf9093c596324a25177"
+    },
+    "continuation/data_handoff.json": {
+      "bytes": 2260,
+      "sha256": "4798d00ebee469ea9c9e8883d8b34b033b0016a95f943ed17ae89b7de551dcd2"
+    },
+    "continuation/train/metrics.jsonl": {
+      "bytes": 84434,
+      "sha256": "8e7aac94bb1457d6d9c206a5e8aee446234225ae989d80ed953e1d74e249fdb4"
+    },
+    "source-deployment.json": {
+      "bytes": 13937,
+      "sha256": "0c52a2cca0ef8216a40d5148b699d817f5b4ef421c59d3fb839cef5c834e8b3e"
+    }
+  }
+}

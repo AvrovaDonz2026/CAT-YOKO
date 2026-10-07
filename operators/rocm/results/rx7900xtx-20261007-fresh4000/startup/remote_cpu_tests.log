@@ -1,0 +1,22 @@
+test_end_of_corpus_refuses_wrap_and_preserves_cursor (operators.rocm.test_fresh_corpus_handoff.AdapterLogicTests.test_end_of_corpus_refuses_wrap_and_preserves_cursor) ... ok
+test_native_failure_does_not_consume_row (operators.rocm.test_fresh_corpus_handoff.AdapterLogicTests.test_native_failure_does_not_consume_row) ... ok
+test_reads_actual_row_zero_not_old_cursor_modulo (operators.rocm.test_fresh_corpus_handoff.AdapterLogicTests.test_reads_actual_row_zero_not_old_cursor_modulo) ... ok
+test_saved_offset_resume_continues_without_skip (operators.rocm.test_fresh_corpus_handoff.AdapterLogicTests.test_saved_offset_resume_continues_without_skip) ... ok
+test_canonical_json_identity_cannot_be_relabelled (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_canonical_json_identity_cannot_be_relabelled) ... ok
+test_exact_source_and_endpoint_preserve_learning_clocks (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_exact_source_and_endpoint_preserve_learning_clocks) ... ok
+test_fresh_parser_preserves_native_data_with_either_option_order (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_fresh_parser_preserves_native_data_with_either_option_order) ... ok
+test_invalid_authorization_or_wrapping_plans_reject (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_invalid_authorization_or_wrapping_plans_reject) ... ok
+test_legacy_restore_requires_explicit_exact_source (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_legacy_restore_requires_explicit_exact_source) ... ok
+test_missing_native_paths_fail_closed_before_resolve (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_missing_native_paths_fail_closed_before_resolve) ... ok
+test_worker_command_has_no_time_cap_and_restores_correct_source (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_worker_command_has_no_time_cap_and_restores_correct_source) ... ok
+test_wrong_corpus_hash_offset_counter_and_extra_fields_fail_closed (operators.rocm.test_fresh_corpus_handoff.CoordinatesTests.test_wrong_corpus_hash_offset_counter_and_extra_fields_fail_closed) ... ok
+test_fresh_failure_restores_every_training_state_and_marks_failed (operators.rocm.test_fresh_corpus_handoff.FreshQualityTests.test_fresh_failure_restores_every_training_state_and_marks_failed) ... ok
+test_fresh_pair_restores_rng_eval_path_mode_and_open (operators.rocm.test_fresh_corpus_handoff.FreshQualityTests.test_fresh_pair_restores_rng_eval_path_mode_and_open) ... ok
+test_actual_cpu_adapter_reads_zero_and_resumes_saved_row (operators.rocm.test_fresh_corpus_handoff.NativeCpuTests.test_actual_cpu_adapter_reads_zero_and_resumes_saved_row) ... ok
+test_actual_production_parser_round_trips_supervisor_worker_command (operators.rocm.test_fresh_corpus_handoff.NativeCpuTests.test_actual_production_parser_round_trips_supervisor_worker_command) ... ok
+test_native_132_weight_264_moment_audit_allows_only_explicit_stream_mapping (operators.rocm.test_fresh_corpus_handoff.NativeCpuTests.test_native_132_weight_264_moment_audit_allows_only_explicit_stream_mapping) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 1.735s
+
+OK
