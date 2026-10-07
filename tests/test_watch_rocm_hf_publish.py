@@ -240,6 +240,12 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(changed.returncode, 0, changed.stderr)
         self.assertIsNone(json.loads(changed.stdout)['actual_data_handoff_sha256'])
 
+    def test_worker_exercise_archive_path_is_fixed_and_does_not_allow_arbitrary_receipts(self):
+        prefix = 'checkpoints/b0-rocm-realtext/step-85864/evidence/continuation/'
+        self.assertTrue(watch.allowed_payload_path(prefix + 'data_handoff.json', 85864))
+        self.assertFalse(watch.allowed_payload_path(prefix + 'unverified_handoff.json', 85864))
+        self.assertFalse(watch.allowed_payload_path(prefix + 'data_handoff.pt', 85864))
+
     def test_once_waits_without_running_preparer_and_disconnect_is_sanitized(self):
         waiting = dict(self.row, status='running_continuation')
         with patch.object(watch.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, json.dumps(waiting), '')), \

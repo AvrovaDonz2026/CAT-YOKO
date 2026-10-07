@@ -285,6 +285,37 @@ def verified_assets(args, template, handoff=None):
     return assets, base
 
 
+def validate_exercised_handoff(path, *, source_dir, handoff, handoff_sha256, checks):
+    """Require the worker's actual stream exercise, independently of status.json."""
+    report = read_json(path)
+    need(report.get('status') == 'completed' and report.get('data_handoff') == handoff
+         and report.get('data_handoff_sha256') == handoff_sha256
+         and report.get('file_sha256') == {name: digest(Path(source_dir) / name) for name in checks.HANDOFF_FILES}
+         and type(report.get('completed_updates')) is int and report['completed_updates'] == handoff['updates']
+         and type(report.get('first_training_row')) is int and report['first_training_row'] == 0
+         and type(report.get('last_training_row')) is int and report['last_training_row'] == handoff['updates'] - 1
+         and report.get('no_wrap') is True, 'worker did not exercise the source-bound fresh row window')
+    streams = report.get('opened_train_streams')
+    need(isinstance(streams, list) and streams, 'worker handoff lacks actual stream observations')
+    trained = []
+    for row in streams:
+        need(isinstance(row, dict) and type(row.get('batch_calls')) is int
+             and 0 <= row['batch_calls'] <= handoff['new_nseq'], 'worker stream batch count is invalid')
+        calls = row['batch_calls']
+        state = row.get('stream', {})
+        expected_cursor = handoff['absolute_cursor_origin'] + calls
+        need(state == checks.stream_state(handoff, expected_cursor)
+             and row.get('first_batch_row') == (0 if calls else None)
+             and row.get('last_batch_row') == (calls - 1 if calls else None),
+             'worker stream evidence skipped, repeated or mis-mapped a fresh row')
+        if calls == handoff['updates']:
+            trained.append(row)
+    need(len(trained) == 1 and trained[0]['stream']['i'] == handoff['target_cursor']
+         and trained[0]['stream']['corpus_row'] == handoff['target_logical_row'],
+         'worker must identify exactly one complete fresh training stream')
+    return report
+
+
 def build_release(args, template, status, accepted, audit, cpu, quality, parity, operators, files, sources, assets, base,
                   *, handoff=None, fresh_quality=None):
     extra, cursor, rows = cpu['extra'], audit['source_stream_i'], audit['source_data_rows']
@@ -419,7 +450,7 @@ def prepare(args, *, status=None):
     status = status or await_completion(args.run_dir)
     need(status.get('status') == 'complete' and status.get('child_pid') is None, 'only a completed run can be staged')
     need(Path(status['source_dir']).resolve() == args.source_dir, 'source directory differs from completed receipt')
-    handoff = fresh_checks = handoff_path = fresh_quality = None
+    handoff = fresh_checks = handoff_path = fresh_quality = exercised = exercised_record = None
     if status.get('data_handoff') is not None or getattr(args, 'handoff_manifest', None) is not None:
         from operators.rocm import fresh_corpus_handoff as fresh_checks
         handoff_path = Path(status['data_handoff_path']).resolve()
@@ -433,6 +464,11 @@ def prepare(args, *, status=None):
              and handoff['source_checkpoint_sha256'] == status['source_sha256'], 'fresh source checkpoint identity differs')
         fresh_quality = fresh_checks.validate_fresh_quality_report(
             args.run_dir / 'continuation/fresh_quality.json', source_dir=args.source_dir, handoff=handoff)
+        exercised_path = args.run_dir / 'continuation/data_handoff.json'
+        exercised_record = file_record(exercised_path)
+        exercised = validate_exercised_handoff(exercised_path, source_dir=args.source_dir, handoff=handoff,
+                                               handoff_sha256=status['data_handoff_sha256'], checks=fresh_checks)
+        need(file_record(exercised_path) == exercised_record, 'worker handoff receipt changed during validation')
     final = status['final_checkpoint_verified']
     latest = Path(final['source_checkpoint']).resolve()
     numbered = latest.parent / f'trainable_step_{final["source_step"]}.pt'
@@ -469,6 +505,10 @@ def prepare(args, *, status=None):
              'existing staging release no longer matches its source')
         need(prepared.get('data_handoff_sha256') == (status['data_handoff_sha256'] if handoff else None),
              'existing staging belongs to a different corpus handoff')
+        if handoff:
+            need(file_record(args.stage_dir / prefix / 'evidence/continuation/data_handoff.json') == exercised_record
+                 and {key: release['data_handoff_exercise'][key] for key in ('sha256', 'bytes')} == exercised_record,
+                 'existing staged worker exercise differs from the completed receipt')
         verified_assets(args, read_json(args.template_release), handoff)
         return prepared
     need(not args.stage_dir.exists() or not any(args.stage_dir.iterdir()), 'use a fresh staging directory')
@@ -505,6 +545,10 @@ def prepare(args, *, status=None):
     operators = read_json(args.run_dir / 'continuation/round3_operators.json')
     release = build_release(args, template, status, accepted, audit, cpu, quality, parity, operators,
                             files, sources, assets, base, handoff=handoff, fresh_quality=fresh_quality)
+    if handoff:
+        release['data_handoff_exercise'] = {'status': 'completed', 'file': 'evidence/continuation/data_handoff.json',
+                                          **exercised_record, 'completed_updates': exercised['completed_updates'],
+                                          'first_training_row': 0, 'last_training_row': handoff['updates'] - 1}
     write_json(directory / 'release.json', release)
     (directory / 'README.md').write_text(snapshot_card(release))
     for name, source in sources.items():
@@ -524,6 +568,7 @@ def prepare(args, *, status=None):
     if handoff:
         for source, name in ((handoff_path, 'data_handoff.json'),
                              (Path(handoff['corpus_manifest_path']), 'corpus-manifest.json'),
+                             (exercised_path, 'continuation/data_handoff.json'),
                              (args.run_dir / 'continuation/fresh_quality.json', 'continuation/fresh_quality.json')):
             destination = directory / 'evidence' / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -538,6 +583,10 @@ def prepare(args, *, status=None):
              and fresh_checks.validate_fresh_quality_report(args.run_dir / 'continuation/fresh_quality.json',
                                                            source_dir=args.source_dir, handoff=handoff) == fresh_quality,
              'fresh handoff or held-out evidence changed during staging')
+        need(file_record(exercised_path) == exercised_record
+             and validate_exercised_handoff(exercised_path, source_dir=args.source_dir, handoff=handoff,
+                                           handoff_sha256=status['data_handoff_sha256'], checks=fresh_checks) == exercised,
+             'worker handoff exercise changed during staging')
     allowlist = {path.relative_to(args.stage_dir).as_posix(): file_record(path)
                  for path in sorted(directory.rglob('*')) if path.is_file()}
     prepared = {'status': 'prepared', 'step': audit['source_step'], 'repo_id': args.repo_id,

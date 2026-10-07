@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -130,7 +131,7 @@ class FreshDataTests(unittest.TestCase):
                 yield types.SimpleNamespace(column=lambda n: column)
         with patch.dict('sys.modules', {'fsspec': types.SimpleNamespace(open=open_file),
             'pyarrow': types.SimpleNamespace(parquet=types.SimpleNamespace(ParquetFile=ParquetFile))}):
-            reader = fresh.iter_fresh_rows(source, sha, endpoint='https://hf-mirror.com', log=events.append)
+            reader = fresh.iter_fresh_rows(source, sha, endpoint='https://hf-mirror.com', http_reader='fsspec', log=events.append)
             self.assertEqual(next(reader), {'content': 'fresh sample'}); reader.close()
         self.assertTrue(handles[0].closed)
         self.assertTrue(calls[0][0].startswith('https://hf-mirror.com/'))
@@ -163,6 +164,96 @@ class FreshDataTests(unittest.TestCase):
                             '--tokenizer-dir', str(self.root / 'tokenizer'), '--out-dir', str(out)])
         self.assertEqual(json.loads((out / 'status.json').read_text()), {'status': 'failed', 'error_type': 'ImportError'})
         self.assertFalse((out / 'manifest.json').exists())
+
+    def test_cli_selects_requests_reader_without_changing_source_evidence(self):
+        out = self.root / 'fresh'
+        with patch.object(base, 'load_local_tokenizer', return_value=(FakeTokenizer(), self.tokenizer_metadata)), \
+             patch.object(fresh, 'prepare_fresh', return_value={}) as prepare:
+            self.assertEqual(fresh.main(['--exclude-data-dir', str(self.old), '--source-lock', str(self.lock_path),
+                '--tokenizer-dir', str(self.root / 'tokenizer'), '--out-dir', str(out)]), 0)
+        self.assertEqual(prepare.call_args.kwargs['http_reader'], 'requests')
+        self.assertEqual(prepare.call_args.kwargs['source_lock'], self.lock_path)
+
+
+class RangeReaderTests(unittest.TestCase):
+    def session(self, content, *, changes=None, failures=0):
+        calls, responses = [], []
+        class Response:
+            def __init__(self, start, end):
+                self.status_code = 206
+                self.headers = {'Content-Range': f'bytes {start}-{end}/{len(content)}',
+                                'Content-Length': str(end - start + 1)}
+                self.raw = io.BytesIO(content[start:end + 1])
+                self.raw.decode_content = True
+                if changes is not None: changes(self)
+            def __enter__(self): return self
+            def __exit__(self, *args): self.raw.close()
+        class Session:
+            trust_env = True
+            closed = False
+            def get(self, url, **kwargs):
+                calls.append(kwargs)
+                if len(calls) <= failures: raise TimeoutError('transport failure')
+                start, end = map(int, kwargs['headers']['Range'].removeprefix('bytes=').split('-'))
+                response = Response(start, end); responses.append(response); return response
+            def close(self): self.closed = True
+        return Session(), calls, responses
+
+    def test_seek_read_cache_readinto_and_eof_are_bounded(self):
+        content = bytes(range(256)) * 1000
+        session, calls, responses = self.session(content)
+        with fresh.RequestsRangeReader('https://public.example/shard', len(content),
+                                      block_size=4096, session=session) as reader:
+            self.assertEqual(reader.read(8), content[:8])
+            self.assertEqual(reader.read(8), content[8:16])
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(reader.tell(), 16)
+            reader.seek(-8, io.SEEK_END)
+            buffer = bytearray(8)
+            self.assertEqual(reader.readinto(buffer), 8)
+            self.assertEqual(bytes(buffer), content[-8:])
+            self.assertEqual(reader.read(5), b'')
+            reader.seek(4090)
+            self.assertEqual(reader.read(10000), content[4090:14090])
+            self.assertLessEqual(len(reader._cache), 4096)
+            with self.assertRaisesRegex(ValueError, 'unbounded'): reader.read()
+            self.assertTrue(all(int(call['headers']['Range'].split('-')[1])
+                - int(call['headers']['Range'].split('=')[1].split('-')[0]) + 1 <= 4096 for call in calls))
+            self.assertTrue(all(call['headers']['Accept-Encoding'] == 'identity' for call in calls))
+            self.assertTrue(all(call['stream'] for call in calls))
+            self.assertFalse(session.trust_env)
+        self.assertTrue(session.closed)
+        self.assertTrue(all(response.raw.closed for response in responses))
+
+    def test_full_get_wrong_range_compression_or_length_rejected_without_retry(self):
+        mutations = [lambda r: setattr(r, 'status_code', 200),
+                     lambda r: r.headers.update({'Content-Range': 'bytes 0-7/999'}),
+                     lambda r: r.headers.update({'Content-Encoding': 'gzip'}),
+                     lambda r: r.headers.update({'Content-Length': '999'})]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                session, calls, _ = self.session(b'a' * 100, changes=mutation)
+                with fresh.RequestsRangeReader('https://public.example/shard', 100, session=session,
+                                              sleep=lambda _: self.fail('identity errors must not retry')) as reader:
+                    with self.assertRaises(ValueError): reader.read(8)
+                self.assertEqual(len(calls), 1)
+
+    def test_truncated_range_body_is_not_accepted(self):
+        session, _, _ = self.session(b'a' * 100, changes=lambda r: setattr(r, 'raw', io.BytesIO(b'a')))
+        with fresh.RequestsRangeReader('https://public.example/shard', 100, session=session) as reader:
+            with self.assertRaisesRegex(ValueError, 'body length'): reader.read(8)
+
+    def test_transport_retries_are_bounded_and_position_not_advanced_on_failure(self):
+        session, calls, _ = self.session(b'a' * 100, failures=2); sleeps = []
+        with fresh.RequestsRangeReader('https://public.example/shard', 100, session=session, sleep=sleeps.append) as reader:
+            self.assertEqual(reader.read(8), b'a' * 8)
+            self.assertEqual(len(calls), 3)
+            self.assertEqual(sleeps, [2, 4])
+        session, calls, _ = self.session(b'a' * 100, failures=10)
+        with fresh.RequestsRangeReader('https://public.example/shard', 100, session=session, sleep=lambda _: None) as reader:
+            with self.assertRaises(TimeoutError): reader.read(8)
+            self.assertEqual(len(calls), 3)
+            self.assertEqual(reader.tell(), 0)
 
 
 if __name__ == '__main__':

@@ -70,6 +70,7 @@ class FakeHub:
 
 class CompletedPublisherTests(unittest.TestCase):
     def fresh_fixture(self, root):
+        from operators.rocm import fresh_corpus_handoff
         args, status, accepted, audit, quality, cpu = self.fixture(root)
         old_data = args.data
         args.data = root / 'fresh/train.bin'
@@ -105,6 +106,7 @@ class CompletedPublisherTests(unittest.TestCase):
         manifest_path = args.data.parent / 'manifest.json'
         publisher.write_json(manifest_path, manifest)
         plan = {'schema_version': 1, 'mapping': 'row=i-absolute_cursor_origin', 'no_wrap': True,
+                'seq_len': 4096, 'eos_id': 1, 'fresh_eval_nseq': 32,
                 'source_checkpoint_path': status['source_checkpoint'],
                 'source_checkpoint_sha256': publisher.digest(status['source_checkpoint']),
                 'old_train_path': str(old_data), 'old_train_sha256': publisher.digest(old_data), 'old_nseq': 19531,
@@ -134,7 +136,8 @@ class CompletedPublisherTests(unittest.TestCase):
         cpu['extra'].update(step=85864, tokens_in_phase=371394560, tokens_seen=371394560,
                             stream={'kind': 'packed', 'i': 51062, 'stride': 1, 'nseq': 4000,
                                     'absolute_cursor_origin': 47062, 'logical_row_origin': 0,
-                                    'corpus_row': 4000, 'corpus_sha256': plan['new_train_sha256'], 'no_wrap': True})
+                                    'corpus_row': 4000, 'corpus_sha256': plan['new_train_sha256'], 'no_wrap': True,
+                                    'data_handoff_sha256': fresh_corpus_handoff.plan_digest(plan)})
         parity = publisher.read_json(args.run_dir / 'continuation/parity.json')
         parity.update(data=str(args.data)); parity['final_eval']['step'] = 85864
         quality['initial_eval']['step'] = 81864; quality['final_eval']['step'] = 85864
@@ -145,6 +148,16 @@ class CompletedPublisherTests(unittest.TestCase):
         for name, value in (('status.json', status), ('continuation/parity.json', parity),
                             ('continuation/quality.json', quality), ('continuation/fresh_quality.json', fresh_quality)):
             publisher.write_json(args.run_dir / name, value)
+        for name in fresh_corpus_handoff.HANDOFF_FILES:
+            path = args.source_dir / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('# synthetic deployed handoff source\n')
+        exercised = {'status': 'completed', 'data_handoff': plan, 'data_handoff_sha256': status['data_handoff_sha256'],
+                     'file_sha256': {name: publisher.digest(args.source_dir / name) for name in fresh_corpus_handoff.HANDOFF_FILES},
+                     'no_wrap': True, 'completed_updates': 4000, 'first_training_row': 0, 'last_training_row': 3999,
+                     'opened_train_streams': [{'batch_calls': 4000, 'first_batch_row': 0, 'last_batch_row': 3999,
+                                               'stream': deepcopy(cpu['extra']['stream'])}]}
+        publisher.write_json(args.run_dir / 'continuation/data_handoff.json', exercised)
         return args, status, accepted, audit, quality, cpu, plan, fresh_quality
 
     def test_fresh_prepare_routes_complete_cpu_audit_and_archives_all_three_evaluations(self):
@@ -156,6 +169,7 @@ class CompletedPublisherTests(unittest.TestCase):
             with patch.object(production_continuation, 'validate_accepted_run', return_value=accepted), \
                     patch.object(continuation_quality, 'validate_quality_report', return_value=quality), \
                     patch.object(fresh_corpus_handoff, 'load_handoff', return_value=plan), \
+                    patch.object(fresh_corpus_handoff, 'validate_handoff', return_value=plan), \
                     patch.object(fresh_corpus_handoff, 'validate_fresh_quality_report', return_value=fresh_quality), \
                     patch.object(fresh_corpus_handoff, 'cpu_check', return_value=audit) as fresh_check, \
                     patch.object(run_operator_switch, 'cpu_check') as legacy_check, \
@@ -177,8 +191,9 @@ class CompletedPublisherTests(unittest.TestCase):
             self.assertEqual(release['data']['eval']['sha256'], publisher.digest(args.eval_data))
             self.assertEqual(release['data']['fresh_eval']['sha256'], plan['fresh_eval_sha256'])
             self.assertEqual(prepared['original_source_checkpoint_sha256'], plan['source_checkpoint_sha256'])
-            for name in ('data_handoff.json', 'corpus-manifest.json', 'continuation/fresh_quality.json'):
+            for name in ('data_handoff.json', 'corpus-manifest.json', 'continuation/fresh_quality.json', 'continuation/data_handoff.json'):
                 self.assertTrue((directory / 'evidence' / name).is_file())
+            self.assertEqual(release['data_handoff_exercise']['sha256'], publisher.digest(args.run_dir / 'continuation/data_handoff.json'))
             card = (directory / 'README.md').read_text()
             self.assertIn('Next fresh corpus row **4000**', card)
             self.assertIn('A bare legacy Trainer/PackedBinStream would read the wrong row', card)
@@ -221,6 +236,51 @@ class CompletedPublisherTests(unittest.TestCase):
                     patch.object(publisher, 'cpu_export') as export, self.assertRaisesRegex(ValueError, 'fresh quality failed'):
                 publisher.prepare(args, status=status)
             export.assert_not_called()
+
+    def test_actual_worker_receipt_rejects_wrong_source_hash_row_counts_and_saved_coordinates(self):
+        from operators.rocm import fresh_corpus_handoff
+        with tempfile.TemporaryDirectory() as tmp:
+            args, status, accepted, audit, quality, cpu, plan, fresh_quality = self.fresh_fixture(Path(tmp))
+            path = args.run_dir / 'continuation/data_handoff.json'
+            original = publisher.read_json(path)
+            options = dict(source_dir=args.source_dir, handoff=plan, handoff_sha256=status['data_handoff_sha256'],
+                           checks=fresh_corpus_handoff)
+            with patch.object(fresh_corpus_handoff, 'validate_handoff', return_value=plan):
+                self.assertEqual(publisher.validate_exercised_handoff(path, **options), original)
+                for key, value in (('file_sha256', {}), ('first_training_row', 1), ('last_training_row', 3998),
+                                   ('completed_updates', 3999), ('data_handoff_sha256', 'f' * 64), ('no_wrap', False)):
+                    wrong = deepcopy(original); wrong[key] = value; publisher.write_json(path, wrong)
+                    with self.subTest(key=key), self.assertRaises(ValueError):
+                        publisher.validate_exercised_handoff(path, **options)
+                wrong = deepcopy(original); wrong['opened_train_streams'][0]['stream']['i'] = 51061
+                publisher.write_json(path, wrong)
+                with self.assertRaisesRegex(ValueError, 'mis-mapped'):
+                    publisher.validate_exercised_handoff(path, **options)
+                wrong = deepcopy(original); wrong['opened_train_streams'].append(deepcopy(wrong['opened_train_streams'][0]))
+                publisher.write_json(path, wrong)
+                with self.assertRaisesRegex(ValueError, 'exactly one'):
+                    publisher.validate_exercised_handoff(path, **options)
+
+    def test_worker_receipt_change_during_cpu_export_refuses_prepared_inventory(self):
+        from operators.rocm import production_continuation, continuation_quality, fresh_corpus_handoff
+        with tempfile.TemporaryDirectory() as tmp:
+            args, status, accepted, audit, quality, cpu, plan, fresh_quality = self.fresh_fixture(Path(tmp))
+            path = args.run_dir / 'continuation/data_handoff.json'
+            def export(_args, full, light):
+                light.write_bytes(b'synthetic light overlay')
+                receipt = publisher.read_json(path); receipt['unexpected_change'] = True
+                publisher.write_json(path, receipt)
+                return cpu
+            with patch.object(production_continuation, 'validate_accepted_run', return_value=accepted), \
+                    patch.object(continuation_quality, 'validate_quality_report', return_value=quality), \
+                    patch.object(fresh_corpus_handoff, 'load_handoff', return_value=plan), \
+                    patch.object(fresh_corpus_handoff, 'validate_handoff', return_value=plan), \
+                    patch.object(fresh_corpus_handoff, 'validate_fresh_quality_report', return_value=fresh_quality), \
+                    patch.object(fresh_corpus_handoff, 'cpu_check', return_value=audit), \
+                    patch.object(publisher, 'cpu_export', side_effect=export), \
+                    self.assertRaisesRegex(ValueError, 'exercise changed during staging'):
+                publisher.prepare(args, status=status)
+            self.assertFalse((args.stage_dir / 'prepared.json').exists())
 
     def fixture(self, root):
         args = SimpleNamespace(run_dir=root / 'run', source_dir=root / 'deployed', python='cpu-python',

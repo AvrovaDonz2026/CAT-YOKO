@@ -241,6 +241,7 @@ def allowed_payload_path(name, step):
              'evidence/continuation/parity.json', 'evidence/continuation/operators.json',
              'evidence/continuation/round3_operators.json', 'evidence/continuation/quality.json',
              'evidence/data_handoff.json', 'evidence/corpus-manifest.json', 'evidence/continuation/fresh_quality.json',
+             'evidence/continuation/data_handoff.json',
              'evidence/continuation/train/metrics.jsonl'}
     if relative in fixed:
         return True

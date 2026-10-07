@@ -6,18 +6,110 @@ first, then prepare with the existing local MiniCPM5 tokenizer. No torch imports
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import sys
 import tempfile
+import time
 from typing import Mapping
 
 from operators.rocm import prepare_real_data as base
 
 WEIGHTS = {'en': 6, 'zh': 3, 'math': 1}
 HASH = re.compile(r'[0-9a-f]{64}')
+
+
+class RequestsRangeReader(io.RawIOBase):
+    """Seekable, bounded HTTP ranges; never fall back to a whole-file GET.
+
+    The locked total size is checked on every response. One cache holds at most
+    eight MiB; Arrow may separately allocate its requested row-group buffer.
+    Public dataset reads use a session with no ambient authentication/proxies.
+    """
+    def __init__(self, url, size, *, block_size=8 << 20, attempts=3, session=None, sleep=time.sleep):
+        super().__init__()
+        need(type(size) is int and size > 0 and type(block_size) is int and 0 < block_size <= 16 << 20,
+             'invalid bounded HTTP range size')
+        need(type(attempts) is int and 0 < attempts <= 3, 'invalid bounded HTTP retry count')
+        if session is None:
+            import requests
+            session = requests.Session()
+            self._transport_errors = (OSError, requests.exceptions.RequestException,
+                                      requests.packages.urllib3.exceptions.HTTPError)
+        else:
+            self._transport_errors = (OSError,)
+        session.trust_env = False
+        self._session, self._url, self.size = session, url, size
+        self._block_size, self._attempts, self._sleep = block_size, attempts, sleep
+        self._position, self._cache_start, self._cache = 0, 0, b''
+
+    def readable(self): return True
+    def seekable(self): return True
+    def tell(self):
+        self._checkClosed()
+        return self._position
+
+    def seek(self, offset, whence=io.SEEK_SET):
+        self._checkClosed()
+        need(type(offset) is int and whence in (io.SEEK_SET, io.SEEK_CUR, io.SEEK_END), 'invalid HTTP seek')
+        position = offset + (self._position if whence == io.SEEK_CUR else self.size if whence == io.SEEK_END else 0)
+        need(position >= 0, 'negative HTTP seek')
+        self._position = position
+        return position
+
+    def _fetch(self, start, amount):
+        end = min(self.size - 1, start + amount - 1)
+        expected = end - start + 1
+        for attempt in range(self._attempts):
+            try:
+                with self._session.get(self._url, stream=True, allow_redirects=True, timeout=(10, 60),
+                    headers={'Range': f'bytes={start}-{end}', 'Accept-Encoding': 'identity'}) as response:
+                    need(response.status_code == 206, 'HTTP source did not honor a bounded range')
+                    need(response.headers.get('Content-Range') == f'bytes {start}-{end}/{self.size}',
+                         'HTTP range identity or locked total size differs')
+                    need(response.headers.get('Content-Encoding', 'identity').lower() == 'identity'
+                         and response.headers.get('Content-Length') == str(expected),
+                         'HTTP range compression or length differs')
+                    response.raw.decode_content = False
+                    data = response.raw.read(expected + 1)
+                    need(len(data) == expected, 'HTTP range body length differs')
+                    self._cache_start, self._cache = start, data
+                    return
+            except ValueError:
+                raise  # Identity/range violations are not transient network errors.
+            except self._transport_errors:
+                if attempt + 1 == self._attempts: raise
+                self._sleep(2 * (attempt + 1))
+
+    def read(self, size=-1):
+        self._checkClosed()
+        need(type(size) is int and size >= 0, 'unbounded HTTP reads are prohibited')
+        remaining = min(size, max(0, self.size - self._position))
+        pieces = []
+        while remaining:
+            cache_offset = self._position - self._cache_start
+            if not 0 <= cache_offset < len(self._cache):
+                self._fetch(self._position, min(self._block_size, max(64 << 10, remaining)))
+                cache_offset = 0
+            count = min(remaining, len(self._cache) - cache_offset)
+            pieces.append(self._cache[cache_offset:cache_offset + count])
+            self._position += count
+            remaining -= count
+        return b''.join(pieces)
+
+    def readinto(self, buffer):
+        data = self.read(len(buffer))
+        buffer[:len(data)] = data
+        return len(data)
+
+    def close(self):
+        if not self.closed:
+            self._cache = b''
+            self._session.close()
+        super().close()
 
 
 def need(value, message):
@@ -144,7 +236,7 @@ def validate_lock(lock, old, old_evidence):
     return tuple(sources), sha
 
 
-def iter_fresh_rows(source, sha, *, endpoint, source_dir=None, log=base.emit):
+def iter_fresh_rows(source, sha, *, endpoint, source_dir=None, http_reader='requests', log=base.emit):
     from pyarrow import parquet
     for (name, size), official in zip(source.files, source.urls):
         event = {'event': 'open_file', 'source': source.key, 'url': official,
@@ -160,10 +252,15 @@ def iter_fresh_rows(source, sha, *, endpoint, source_dir=None, log=base.emit):
                 for batch in parquet.ParquetFile(handle).iter_batches(batch_size=128, columns=['content']):
                     yield from ({'content': value} for value in batch.column(0).to_pylist())
         else:
-            import fsspec
             url = base.normalize_endpoint(endpoint) + official.removeprefix('https://huggingface.co')
-            log({**event, 'download_url': url})
-            with fsspec.open(url, mode='rb', block_size=16 << 20, cache_type='readahead', timeout=30) as handle:
+            log({**event, 'download_url': url, 'http_reader': http_reader})
+            need(http_reader in ('requests', 'fsspec'), 'unknown HTTP range reader')
+            if http_reader == 'requests':
+                handle_context = RequestsRangeReader(url, size)
+            else:
+                import fsspec
+                handle_context = fsspec.open(url, mode='rb', block_size=8 << 20, cache_type='readahead', timeout=60)
+            with handle_context as handle:
                 need(handle.size == size, 'fresh range source size differs from official lock')
                 for batch in parquet.ParquetFile(handle).iter_batches(batch_size=128, columns=['content']):
                     yield from ({'content': value} for value in batch.column(0).to_pylist())
@@ -171,7 +268,7 @@ def iter_fresh_rows(source, sha, *, endpoint, source_dir=None, log=base.emit):
 
 def prepare_fresh(*, exclude_data_dir, source_lock, tokenizer, tokenizer_metadata, out_dir,
                   train_tokens=80_000_000, eval_tokens=1_000_000, seq_len=4096, seed=20261007,
-                  endpoint='https://huggingface.co', source_dir=None, row_loader=None, log=base.emit):
+                  endpoint='https://huggingface.co', source_dir=None, http_reader='requests', row_loader=None, log=base.emit):
     old, excluded, old_evidence = read_old(exclude_data_dir)
     source_lock = Path(source_lock).resolve()
     lock_hash = base.file_digest(source_lock)
@@ -190,7 +287,7 @@ def prepare_fresh(*, exclude_data_dir, source_lock, tokenizer, tokenizer_metadat
         log({key: value for key, value in event.items() if key != 'error'})
     def filtered(source):
         rows = iter(row_loader(source) if row_loader else iter_fresh_rows(
-            source, sha, endpoint=endpoint, source_dir=source_dir, log=record))
+            source, sha, endpoint=endpoint, source_dir=source_dir, http_reader=http_reader, log=record))
         try:
             for row in rows:
                 text = row.get('content')
@@ -223,6 +320,7 @@ def prepare_fresh(*, exclude_data_dir, source_lock, tokenizer, tokenizer_metadat
                 old_corpus_exclusion=old_evidence, old_hash_intersections=intersections,
                 excluded_source_stats=counters, source_lock={'path': str(source_lock), 'sha256': lock_hash},
                 input_files_read=input_files,
+                http_reader=http_reader,
                 freshness_scope=lock['freshness_scope'],
                 validation_protocol='New eval full-text hashes are disjoint from new train and both old splits; old eval remains a separate baseline.')
             for info, locked in zip(manifest['sources'], lock['sources']): info['files'] = locked['files']
@@ -254,6 +352,7 @@ def main(argv=None):
     parser.add_argument('--seq-len', type=int, default=4096)
     parser.add_argument('--seed', type=int, default=20261007)
     parser.add_argument('--endpoint', default='https://huggingface.co')
+    parser.add_argument('--http-reader', choices=('requests', 'fsspec'), default='requests')
     parser.add_argument('--source-dir', type=Path, help='optional complete local shards, verified against official size/SHA')
     args = parser.parse_args(argv)
     if args.resolve_only:
@@ -276,7 +375,8 @@ def main(argv=None):
         prepare_fresh(exclude_data_dir=args.exclude_data_dir, source_lock=args.source_lock,
             tokenizer=tokenizer, tokenizer_metadata=metadata, out_dir=args.out_dir,
             train_tokens=args.train_tokens, eval_tokens=args.eval_tokens, seq_len=args.seq_len,
-            seed=args.seed, endpoint=base.normalize_endpoint(args.endpoint), source_dir=args.source_dir)
+            seed=args.seed, endpoint=base.normalize_endpoint(args.endpoint), source_dir=args.source_dir,
+            http_reader=args.http_reader)
     except Exception as error:
         args.out_dir.mkdir(parents=True, exist_ok=True)
         base.write_json(args.out_dir / 'status.json', {'status': 'failed', 'error_type': type(error).__name__})
